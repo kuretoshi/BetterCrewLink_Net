@@ -67,6 +67,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 _ = RunPeerOperationAsync(() => peerManager.ReconnectAsync(remoteSocketId));
             }
         };
+        peerManager.PeerConnectionStateChanged += (remoteSocketId, state) =>
+        {
+            if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
+            {
+                PeerConnectionStatusChanged?.Invoke(clientId, state.ToString());
+            }
+        };
 
         RegisterHandlers();
     }
@@ -88,6 +95,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public event Action<bool>? LocalVadChanged;
 
     public event Action<string>? ConnectionStatusChanged;
+
+    public event Action<int, string>? PeerConnectionStatusChanged;
 
     public void ApplyGameState(AmongUsState state)
     {

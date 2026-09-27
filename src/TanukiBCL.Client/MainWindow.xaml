@@ -1,7 +1,7 @@
 <Window x:Class="TanukiBCL.Client.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="TanukiBCL" Width="620" Height="500" MinWidth="540" MinHeight="440"
+        Title="TanukiBCL" Width="720" Height="650" MinWidth="620" MinHeight="540"
         Background="#15181D" Foreground="#F5F7FA" WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <Style TargetType="TextBlock">
@@ -59,13 +59,31 @@
         </Grid>
 
         <Border Grid.Row="2" Background="#20252D" CornerRadius="8" Padding="18" Margin="0,14,0,8">
-            <StackPanel>
-                <TextBlock x:Name="StatusText" Text="Among Usを検出してください" FontSize="18" FontWeight="SemiBold" />
-                <TextBlock x:Name="GameText" Text="ゲーム状態: 未接続" Foreground="#B8C0CC" Margin="0,10,0,0" />
-                <TextBlock x:Name="LobbyText" Text="ロビー: —" Foreground="#B8C0CC" Margin="0,6,0,0" />
-                <TextBlock x:Name="PlayersText" Text="参加者: —" Foreground="#B8C0CC" Margin="0,6,0,0" />
-                <TextBlock x:Name="VadText" Text="マイク: 待機中" Foreground="#B8C0CC" Margin="0,6,0,0" />
-            </StackPanel>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="StatusText" Text="Among Usを検出してください" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock x:Name="GameText" Text="ゲーム状態: 未接続" Foreground="#B8C0CC" Margin="0,10,0,0" />
+                    <TextBlock x:Name="LobbyText" Text="ロビー: —" Foreground="#B8C0CC" Margin="0,6,0,0" />
+                    <TextBlock x:Name="PlayersText" Text="参加者: —" Foreground="#B8C0CC" Margin="0,6,0,0" />
+                    <TextBlock x:Name="VadText" Text="マイク: 待機中" Foreground="#B8C0CC" Margin="0,6,0,0" />
+                </StackPanel>
+                <DataGrid x:Name="PeerGrid" Grid.Row="1" Margin="0,16,0,0"
+                          AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                          Background="#20252D" Foreground="#F5F7FA" BorderThickness="0"
+                          RowBackground="#20252D" AlternatingRowBackground="#252B34">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="プレイヤー" Binding="{Binding Name}" Width="*" />
+                        <DataGridTextColumn Header="Peer" Binding="{Binding Connection}" Width="110" />
+                        <DataGridTextColumn Header="音声" Binding="{Binding Voice}" Width="150" />
+                        <DataGridTextColumn Header="音量" Binding="{Binding Gain}" Width="70" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
         </Border>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal">

@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
@@ -9,10 +12,13 @@ public partial class MainWindow : Window
 {
     private CancellationTokenSource? runCancellation;
     private VoiceServerProbe? probe;
+    private readonly ObservableCollection<PeerRow> peers = [];
+    private AmongUsState? currentState;
 
     public MainWindow()
     {
         InitializeComponent();
+        PeerGrid.ItemsSource = peers;
         InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
         OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
         InputCombo.SelectedIndex = InputCombo.Items.Count > 0 ? 0 : -1;
@@ -60,6 +66,8 @@ public partial class MainWindow : Window
         probe = new VoiceServerProbe(options, "client");
         probe.ConnectionStatusChanged += status => Dispatch(() => StatusText.Text = status);
         probe.GameStateApplied += state => Dispatch(() => ShowGameState(state));
+        probe.PeerMixChanged += (clientId, mix) => Dispatch(() => UpdatePeerMix(clientId, mix));
+        probe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(() => UpdatePeerConnection(clientId, status));
         probe.LocalVadChanged += talking => Dispatch(() =>
         {
             VadText.Text = talking ? "マイク: 発話中" : "マイク: 待機中";
@@ -101,10 +109,62 @@ public partial class MainWindow : Window
 
     private void ShowGameState(AmongUsState state)
     {
+        currentState = state;
         GameText.Text = $"ゲーム状態: {state.GameState}";
         LobbyText.Text = $"ロビー: {(state.GameState == GameState.Menu ? "—" : state.LobbyCode)}";
-        PlayersText.Text = $"参加者: {state.Players.Count}人（生存 {state.Players.Count(p => !p.IsDead && !p.Disconnected)}人）";
+        PlayersText.Text = $"参加者: {state.Players.Count(player => !player.Disconnected)}人";
+        var remotePlayers = state.Players.Where(player => !player.IsLocal).OrderBy(player => player.ClientId).ToArray();
+        foreach (var player in remotePlayers)
+        {
+            FindOrCreatePeer(player.ClientId, player.Name).Name = player.Name;
+        }
+        foreach (var stale in peers.Where(row => remotePlayers.All(player => player.ClientId != row.ClientId)).ToArray())
+        {
+            peers.Remove(stale);
+        }
     }
+
+    private void UpdatePeerMix(int clientId, PeerVoiceMix mix)
+    {
+        var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+        var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
+        row.Voice = mix.Audible ? "聞こえる" : LocalizeReason(mix.Reason);
+        row.Gain = mix.Audible ? $"{mix.Gain * 100:0}%" : "0%";
+    }
+
+    private void UpdatePeerConnection(int clientId, string status)
+    {
+        var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+        FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}").Connection = status switch
+        {
+            "connected" => "接続済み",
+            "connecting" => "接続中",
+            "failed" => "再接続中",
+            "closed" => "切断",
+            _ => status
+        };
+    }
+
+    private PeerRow FindOrCreatePeer(int clientId, string name)
+    {
+        var row = peers.SingleOrDefault(candidate => candidate.ClientId == clientId);
+        if (row is not null)
+        {
+            return row;
+        }
+        row = new PeerRow(clientId, name);
+        peers.Add(row);
+        return row;
+    }
+
+    private static string LocalizeReason(string reason) => reason switch
+    {
+        "out-of-range" => "距離外",
+        "living-cannot-hear-ghost" or "peer-in-vent" or "dead-only" or "meeting-ghost-only" => "ルールで遮断",
+        "disconnected" => "退出済み",
+        "not-in-game" => "ゲーム外",
+        _ => "ミュート"
+    };
 
     private void SetRunning(bool running)
     {
@@ -127,5 +187,30 @@ public partial class MainWindow : Window
     private sealed record ProcessChoice(int Id)
     {
         public string DisplayName => $"Among Us (PID {Id})";
+    }
+
+    private sealed class PeerRow(int clientId, string name) : INotifyPropertyChanged
+    {
+        private string currentName = name;
+        private string connection = "待機中";
+        private string voice = "待機中";
+        private string gain = "—";
+
+        public int ClientId { get; } = clientId;
+        public string Name { get => currentName; set => Set(ref currentName, value); }
+        public string Connection { get => connection; set => Set(ref connection, value); }
+        public string Voice { get => voice; set => Set(ref voice, value); }
+        public string Gain { get => gain; set => Set(ref gain, value); }
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        private void Set(ref string field, string value, [CallerMemberName] string? propertyName = null)
+        {
+            if (field == value)
+            {
+                return;
+            }
+            field = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
     }
 }

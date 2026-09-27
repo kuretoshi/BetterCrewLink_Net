@@ -37,6 +37,8 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string>? PeerConnectionFailed;
 
+    public event Action<string, RTCPeerConnectionState>? PeerConnectionStateChanged;
+
     public void BroadcastMonoPcm48k(ReadOnlySpan<byte> pcm16Mono)
     {
         if (pcm16Mono.Length < sizeof(short))
@@ -252,6 +254,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         connection.onconnectionstatechange += state =>
         {
             Log($"peer {Short(remoteSocketId)} state={state}");
+            PeerConnectionStateChanged?.Invoke(remoteSocketId, state);
             if (state == RTCPeerConnectionState.connected &&
                 sendTestTone &&
                 Interlocked.Exchange(ref peer.TestToneStarted, 1) == 0)
