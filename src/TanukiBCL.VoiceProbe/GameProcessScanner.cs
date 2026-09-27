@@ -145,10 +145,28 @@ internal static class GameProcessScanner
                      localPlayers.Select(player => player!.ClientId).Distinct().Count() == 5 &&
                      localPlayers.Count(player => player!.IsImpostor) == 1;
 
+        var proximityPassed = states.All(state =>
+        {
+            var me = state.Players.Single(player => player.IsLocal);
+            var mixes = state.Players
+                .Where(player => !player.IsLocal)
+                .Select(player => (Player: player, Mix: SpatialVoicePolicy.Calculate(state, me, player, new SpatialVoiceSettings())))
+                .ToArray();
+
+            return me.IsDead
+                ? mixes.All(item => item.Mix.Audible && item.Mix.Reason == "proximity")
+                : mixes.All(item => item.Player.IsDead
+                    ? !item.Mix.Audible && item.Mix.Reason == "living-cannot-hear-ghost"
+                    : item.Mix.Audible && item.Mix.Reason == "proximity");
+        });
+
         Console.WriteLine(passed
             ? "[PASS] 5プロセス、4生存/1死亡、4クルーメイト/1インポスターを全視点で確認しました。"
             : "[FAIL] 期待した5プロセスのゲーム状態と一致しません。上のPID別結果を確認してください。");
-        return passed;
+        Console.WriteLine(proximityPassed
+            ? "[PASS] 近距離の生存者同士と死亡者視点は可聴、生存者から死亡者は遮断されています。"
+            : "[FAIL] 近接音声の可聴条件が現在の配置・生死状態と一致しません。");
+        return passed && proximityPassed;
     }
 
     private static bool IsProcess64Bit(Process process)
