@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
+using SIPSorcery.Media;
 using SIPSorcery.Net;
+using SIPSorceryMedia.Abstractions;
 
 namespace TanukiBCL.VoiceProbe;
 
@@ -8,9 +10,14 @@ internal sealed record IceServer(string Url, string? Username, string? Credentia
 
 internal sealed class WebRtcPeerManager : IDisposable
 {
+    private static readonly AudioFormat OpusFormat = new(AudioCodecsEnum.OPUS, 111, 48_000, 2, "useinbandfec=1");
+    private const int SamplesPerChannel = 960;
+    private const int Channels = 2;
     private readonly string owner;
     private readonly Func<string, object, Task> sendSignal;
     private readonly Dictionary<string, Peer> peers = [];
+    private readonly AudioEncoder audioEncoder = new(true, true);
+    private readonly object audioCodecLock = new();
     private IReadOnlyList<IceServer> iceServers = [new("stun:stun.l.google.com:19302", null, null)];
     private bool forceRelayOnly;
 
@@ -21,6 +28,8 @@ internal sealed class WebRtcPeerManager : IDisposable
     }
 
     public event Action<string>? PeerVerified;
+
+    public event Action<string, AudioTestResult>? AudioVerified;
 
     public void Configure(JsonElement configuration)
     {
@@ -168,6 +177,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         var connection = new RTCPeerConnection(configuration);
         var peer = new Peer(remoteSocketId, Guid.NewGuid().ToString("N"), connection, initiator);
         peers[remoteSocketId] = peer;
+        connection.addTrack(new MediaStreamTrack([OpusFormat], MediaStreamStatusEnum.SendRecv));
 
         connection.onicecandidate += candidate =>
         {
@@ -190,6 +200,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         };
         connection.onconnectionstatechange += state => Log($"peer {Short(remoteSocketId)} state={state}");
         connection.ondatachannel += channel => ConfigureDataChannel(peer, channel);
+        connection.OnAudioFrameReceived += frame => ReceiveAudio(peer, frame);
         return peer;
     }
 
@@ -200,6 +211,10 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             Log($"data channel open: {Short(peer.RemoteSocketId)}");
             channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
+            if (peer.Initiator)
+            {
+                _ = SendTestToneAsync(peer);
+            }
         };
         channel.onmessage += (_, _, data) =>
         {
@@ -217,6 +232,100 @@ internal sealed class WebRtcPeerManager : IDisposable
             }
         };
         channel.onclose += () => Log($"data channel closed: {Short(peer.RemoteSocketId)}");
+    }
+
+    private async Task SendTestToneAsync(Peer peer)
+    {
+        // 440Hz、48kHz、stereo、20ms x 30フレーム（600ms）。
+        const double frequency = 440d;
+        const double amplitude = short.MaxValue * 0.25d;
+        for (var frameIndex = 0; frameIndex < 30; frameIndex++)
+        {
+            if (peer.Connection.connectionState != RTCPeerConnectionState.connected)
+            {
+                return;
+            }
+
+            var pcm = new short[SamplesPerChannel * Channels];
+            for (var sampleIndex = 0; sampleIndex < SamplesPerChannel; sampleIndex++)
+            {
+                var absoluteSample = frameIndex * SamplesPerChannel + sampleIndex;
+                var sample = (short)(Math.Sin(2d * Math.PI * frequency * absoluteSample / 48_000d) * amplitude);
+                pcm[sampleIndex * 2] = sample;
+                pcm[sampleIndex * 2 + 1] = sample;
+            }
+
+            byte[] encoded;
+            lock (audioCodecLock)
+            {
+                encoded = audioEncoder.EncodeAudio(pcm, OpusFormat);
+            }
+
+            peer.Connection.SendAudio(SamplesPerChannel, encoded);
+            await Task.Delay(20);
+        }
+
+        Log($"Opus test tone > {Short(peer.RemoteSocketId)} frames=30 frequency={frequency:0}Hz");
+    }
+
+    private void ReceiveAudio(Peer peer, EncodedAudioFrame frame)
+    {
+        short[] pcm;
+        lock (audioCodecLock)
+        {
+            pcm = audioEncoder.DecodeAudio(frame.EncodedAudio, frame.AudioFormat.Codec == AudioCodecsEnum.Unknown
+                ? OpusFormat
+                : frame.AudioFormat);
+        }
+
+        if (pcm.Length == 0)
+        {
+            return;
+        }
+
+        AudioTestResult? result;
+        lock (peer.AudioGate)
+        {
+            if (peer.AudioReported)
+            {
+                return;
+            }
+
+            peer.AudioFrames++;
+            for (var index = 0; index < pcm.Length; index += Channels)
+            {
+                var sample = pcm[index];
+                var normalized = sample / 32768d;
+                peer.SumSquares += normalized * normalized;
+                peer.SampleCount++;
+
+                if (peer.HasPreviousSample && ((peer.PreviousSample < 0 && sample >= 0) || (peer.PreviousSample >= 0 && sample < 0)))
+                {
+                    peer.ZeroCrossings++;
+                }
+                peer.PreviousSample = sample;
+                peer.HasPreviousSample = true;
+            }
+
+            if (peer.AudioFrames < 10 || peer.SampleCount == 0)
+            {
+                return;
+            }
+
+            var durationSeconds = peer.SampleCount / 48_000d;
+            var frequency = peer.ZeroCrossings / (2d * durationSeconds);
+            var rms = Math.Sqrt(peer.SumSquares / peer.SampleCount);
+            if (rms < 0.02d || frequency is < 350d or > 550d)
+            {
+                return;
+            }
+
+            peer.AudioReported = true;
+            result = new AudioTestResult(peer.AudioFrames, rms, frequency);
+        }
+
+        Log($"Opus audio < {Short(peer.RemoteSocketId)} frames={result.Frames} rms={result.Rms:0.000} frequency={result.FrequencyHz:0.0}Hz");
+        AudioVerified?.Invoke(peer.RemoteSocketId, result);
     }
 
     private Task SendSignalAsync(Peer peer, object signal)
@@ -293,5 +402,15 @@ internal sealed class WebRtcPeerManager : IDisposable
     {
         public RTCDataChannel? Channel { get; set; }
         public List<RTCIceCandidateInit> PendingCandidates { get; } = [];
+        public object AudioGate { get; } = new();
+        public int AudioFrames { get; set; }
+        public long SampleCount { get; set; }
+        public double SumSquares { get; set; }
+        public long ZeroCrossings { get; set; }
+        public short PreviousSample { get; set; }
+        public bool HasPreviousSample { get; set; }
+        public bool AudioReported { get; set; }
     }
 }
+
+internal sealed record AudioTestResult(int Frames, double Rms, double FrequencyHz);

@@ -43,9 +43,10 @@ internal static class SelfTestRunner
 
             await Task.WhenAll(
                 first.PeerVerified.WaitAsync(timeout, cancellation.Token),
-                second.PeerVerified.WaitAsync(timeout, cancellation.Token));
+                second.PeerVerified.WaitAsync(timeout, cancellation.Token),
+                second.AudioVerified.WaitAsync(timeout, cancellation.Token));
 
-            Console.WriteLine("[PASS] Socket.IOシグナリングとWebRTCデータチャネルの双方向通信に成功しました。");
+            Console.WriteLine("[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラックの検証に成功しました。");
             cancellation.Cancel();
             await IgnoreCancellationAsync(firstRun);
             await IgnoreCancellationAsync(secondRun);

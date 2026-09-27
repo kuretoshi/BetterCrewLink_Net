@@ -11,6 +11,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly SocketIOClient.SocketIO socket;
     private readonly TaskCompletionSource connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource peerVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<AudioTestResult> audioVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly WebRtcPeerManager peerManager;
 
     public VoiceServerProbe(ProbeOptions options, string label = "probe")
@@ -32,6 +33,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             Log("OK", $"P2P双方向通信成功 peer={socketId}");
             peerVerified.TrySetResult();
         };
+        peerManager.AudioVerified += (socketId, result) =>
+        {
+            Log("OK", $"Opus音声検証成功 peer={socketId} rms={result.Rms:0.000} frequency={result.FrequencyHz:0.0}Hz");
+            audioVerified.TrySetResult(result);
+        };
 
         RegisterHandlers();
     }
@@ -39,6 +45,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public Task Connected => connected.Task;
 
     public Task PeerVerified => peerVerified.Task;
+
+    public Task<AudioTestResult> AudioVerified => audioVerified.Task;
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {

@@ -53,6 +53,8 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 - ICE candidateの交換
 - WebRTC接続の確立
 - データチャネル上のprobe / ACK双方向通信
+- 440Hzテスト信号のOpusエンコード、RTP送信、受信、デコード
+- 復号PCMのフレーム数、RMS、推定周波数の検証
 
 ```powershell
 dotnet run --project src/TanukiBCL.VoiceProbe -- `
@@ -61,9 +63,9 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
   --seconds 30
 ```
 
-成功時は `[PASS] Socket.IOシグナリングとWebRTCデータチャネルの双方向通信に成功しました。` と表示し、一時ロビーから退出します。サーバーから受け取るTURN認証情報はログへ出力しません。
+成功時は `[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラックの検証に成功しました。` と表示し、一時ロビーから退出します。サーバーから受け取るTURN認証情報はログへ出力しません。
 
-現在はP2P経路の検証までです。マイク取得、Opus音声トラック、VAD、近接音量計算は後続段階で追加します。
+現在は合成音によるP2P音声経路の検証までです。マイク取得、スピーカー再生、VAD、近接音量計算は後続段階で追加します。
 
 ## 旧実装
 
