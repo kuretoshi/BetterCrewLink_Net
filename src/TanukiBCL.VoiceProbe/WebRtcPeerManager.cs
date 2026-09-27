@@ -122,6 +122,14 @@ internal sealed class WebRtcPeerManager : IDisposable
         await InitiateAsync(remoteSocketId);
     }
 
+    public void RemoveAllPeers()
+    {
+        foreach (var remoteSocketId in peers.Keys.ToArray())
+        {
+            RemovePeer(remoteSocketId);
+        }
+    }
+
     public async Task ApplySignalAsync(string remoteSocketId, JsonElement data)
     {
         var type = data.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
@@ -449,10 +457,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public void Dispose()
     {
-        foreach (var socketId in peers.Keys.ToArray())
-        {
-            RemovePeer(socketId);
-        }
+        RemoveAllPeers();
     }
 
     private void Log(string message) => Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss.fff} [{owner}/RTC] {message}");

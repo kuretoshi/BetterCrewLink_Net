@@ -98,6 +98,39 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         return peerManager.ReconnectAsync(socketId);
     }
 
+    public async Task RejoinCurrentGameLobbyAsync()
+    {
+        await gameStateGate.WaitAsync();
+        try
+        {
+            var state = currentGameState ?? throw new InvalidOperationException("ゲーム状態をまだ取得していません。");
+            var local = state.Players.SingleOrDefault(player => player.IsLocal)
+                ?? throw new InvalidOperationException("ローカルプレイヤーを特定できません。");
+            await socket.EmitAsync("leave");
+            peerManager.RemoveAllPeers();
+            foreach (var socketId in peerClientIds.Keys.ToArray())
+            {
+                audioSession?.RemovePeer(socketId);
+            }
+            peerClientIds.Clear();
+            currentJoinedLobby = "MENU";
+            await Task.Delay(500);
+            await socket.EmitAsync("id", local.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString());
+            await socket.EmitAsync("join", state.LobbyCode, local.Id, state.ClientId, state.IsHost);
+            currentJoinedLobby = state.LobbyCode;
+            await Task.Delay(500);
+            foreach (var remoteSocketId in peerClientIds.Keys.ToArray())
+            {
+                await peerManager.InitiateAsync(remoteSocketId);
+            }
+            Log("INFO", $"復旧試験でロビー再参加 code={state.LobbyCode} client={state.ClientId}");
+        }
+        finally
+        {
+            gameStateGate.Release();
+        }
+    }
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         Log("INFO", $"接続開始: {options.Server}");

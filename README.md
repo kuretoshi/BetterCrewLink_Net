@@ -144,6 +144,16 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 WebRTC接続を切らずに `Tasks → Discussion → Tasks` の各段階で、計20方向の音量・パン・生死による遮断が更新されたことを検証します。
 
+ロビー退出・再参加後の音声復旧も検証できます。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --game-audio-recovery-test `
+  --seconds 60
+```
+
+最初に計20方向の音声を確認し、1クライアントを同じロビーへ再参加させます。古いpeerを破棄したうえで参加者一覧から接続を張り直し、対象に関係する8方向を含む全20方向へ復旧したことを検証します。
+
 1つの視点だけ実マイク・スピーカーを使用し、残り4視点から仮想Opus音声を送るハイブリッド試験も実行できます。ヘッドホンを使用してください。
 
 ```powershell

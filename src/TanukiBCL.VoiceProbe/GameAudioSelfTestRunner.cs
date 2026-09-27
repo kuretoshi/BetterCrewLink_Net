@@ -6,11 +6,13 @@ namespace TanukiBCL.VoiceProbe;
 
 internal static class GameAudioSelfTestRunner
 {
-    public static Task<int> RunAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, transitionTest: false);
+    public static Task<int> RunAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, TestMode.Snapshot);
 
-    public static Task<int> RunTransitionAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, transitionTest: true);
+    public static Task<int> RunTransitionAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, TestMode.Transition);
 
-    private static async Task<int> RunAsync(ProbeOptions baseOptions, bool transitionTest)
+    public static Task<int> RunRecoveryAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, TestMode.Recovery);
+
+    private static async Task<int> RunAsync(ProbeOptions baseOptions, TestMode mode)
     {
         var processes = Process.GetProcessesByName("Among Us")
             .OrderBy(process => process.Id)
@@ -22,12 +24,18 @@ internal static class GameAudioSelfTestRunner
             return 1;
         }
 
-        var timeout = baseOptions.Duration ?? TimeSpan.FromSeconds(transitionTest ? 180 : 45);
+        var timeout = baseOptions.Duration ?? TimeSpan.FromSeconds(mode == TestMode.Transition ? 180 : 60);
         using var cancellation = new CancellationTokenSource(timeout);
         var nodes = processes.Select(process => new TestNode(process.Id)).ToArray();
         DisposeProcesses(processes);
 
-        Console.WriteLine($"ゲーム音声{(transitionTest ? "状態遷移" : "統合")}テスト開始: pids={string.Join(',', nodes.Select(node => node.ProcessId))} timeout={timeout.TotalSeconds:0}s");
+        var testName = mode switch
+        {
+            TestMode.Transition => "状態遷移",
+            TestMode.Recovery => "再参加復旧",
+            _ => "統合"
+        };
+        Console.WriteLine($"ゲーム音声{testName}テスト開始: pids={string.Join(',', nodes.Select(node => node.ProcessId))} timeout={timeout.TotalSeconds:0}s");
         try
         {
             foreach (var node in nodes)
@@ -39,6 +47,7 @@ internal static class GameAudioSelfTestRunner
                     GameAudioSelfTest = false,
                     GameAudioTransitionTest = false,
                     LiveGameAudioTest = false,
+                    GameAudioRecoveryTest = false,
                     LiveAudio = false,
                     GameProcessId = node.ProcessId,
                     Duration = null
@@ -52,7 +61,7 @@ internal static class GameAudioSelfTestRunner
                 await Task.Delay(250, cancellation.Token);
             }
 
-            if (transitionTest)
+            if (mode == TestMode.Transition)
             {
                 return await WaitForTransitionsAsync(nodes, cancellation.Token);
             }
@@ -60,6 +69,11 @@ internal static class GameAudioSelfTestRunner
             while (!cancellation.IsCancellationRequested && !IsComplete(nodes))
             {
                 await Task.Delay(250, cancellation.Token);
+            }
+
+            if (mode == TestMode.Recovery)
+            {
+                return await RunRecoveryStageAsync(nodes, cancellation.Token);
             }
 
             var passed = Validate(nodes);
@@ -87,6 +101,41 @@ internal static class GameAudioSelfTestRunner
 
             await Task.WhenAll(nodes.Where(node => node.RunTask is not null).Select(node => IgnoreCancellationAsync(node.RunTask!)));
         }
+    }
+
+    private static async Task<int> RunRecoveryStageAsync(
+        IReadOnlyCollection<TestNode> nodes,
+        CancellationToken cancellationToken)
+    {
+        if (!Validate(nodes, printDetails: false))
+        {
+            Console.Error.WriteLine("[FAIL] 再参加前の音声メッシュが不正です。");
+            return 1;
+        }
+
+        Console.WriteLine("[PASS] 再参加前の20方向音声メッシュを確認しました。");
+        var target = nodes.OrderBy(node => node.ProcessId).First();
+        var targetClientId = target.State!.Players.Single(player => player.IsLocal).ClientId;
+        target.Audio.Clear();
+        target.Mixes.Clear();
+        foreach (var node in nodes.Where(node => node != target))
+        {
+            node.Audio.TryRemove(targetClientId, out _);
+            node.Mixes.TryRemove(targetClientId, out _);
+        }
+
+        Console.WriteLine($"[TEST] PID {target.ProcessId} / client {targetClientId}をロビーから退出・再参加させます。");
+        await target.Probe!.RejoinCurrentGameLobbyAsync();
+        while (!IsComplete(nodes))
+        {
+            await Task.Delay(250, cancellationToken);
+        }
+
+        var passed = Validate(nodes, printDetails: false);
+        Console.WriteLine(passed
+            ? "[PASS] ロビー再参加後に対象8方向が復旧し、全20方向の音声メッシュへ戻りました。"
+            : "[FAIL] ロビー再参加後の音声メッシュに不一致があります。");
+        return passed ? 0 : 1;
     }
 
     private static async Task<int> WaitForTransitionsAsync(
@@ -206,5 +255,12 @@ internal static class GameAudioSelfTestRunner
         public AmongUsState? State { get; set; }
         public ConcurrentDictionary<int, PeerVoiceMix> Mixes { get; } = [];
         public ConcurrentDictionary<int, AudioTestResult> Audio { get; } = [];
+    }
+
+    private enum TestMode
+    {
+        Snapshot,
+        Transition,
+        Recovery
     }
 }
