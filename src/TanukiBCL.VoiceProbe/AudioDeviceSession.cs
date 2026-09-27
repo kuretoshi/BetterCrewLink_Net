@@ -198,6 +198,26 @@ internal sealed class AudioDeviceSession : IDisposable
         }
     }
 
+    public static IReadOnlyList<AudioDeviceInfo> GetInputDevices() =>
+        Enumerable.Range(0, WaveInEvent.DeviceCount)
+            .Select(index => new AudioDeviceInfo(index, WaveInEvent.GetCapabilities(index).ProductName))
+            .ToArray();
+
+    public static IReadOnlyList<AudioDeviceInfo> GetOutputDevices()
+    {
+        var devices = new List<AudioDeviceInfo>();
+        var count = checked((int)waveOutGetNumDevs());
+        for (var index = 0; index < count; index++)
+        {
+            var result = waveOutGetDevCaps(
+                checked((nuint)index),
+                out var capabilities,
+                Marshal.SizeOf<WaveOutCapabilities>());
+            devices.Add(new AudioDeviceInfo(index, result == 0 ? capabilities.ProductName : $"出力デバイス {index}"));
+        }
+        return devices;
+    }
+
     private static void ValidateDeviceNumbers(int inputDevice, int outputDevice)
     {
         if (inputDevice < 0 || inputDevice >= WaveInEvent.DeviceCount)
@@ -230,4 +250,9 @@ internal sealed class AudioDeviceSession : IDisposable
         BufferedWaveProvider Buffer,
         PanningSampleProvider Panning,
         VolumeSampleProvider Volume);
+}
+
+internal sealed record AudioDeviceInfo(int Id, string Name)
+{
+    public override string ToString() => $"{Id}: {Name}";
 }

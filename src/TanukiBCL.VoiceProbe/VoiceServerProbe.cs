@@ -87,6 +87,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public event Action<bool>? LocalVadChanged;
 
+    public event Action<string>? ConnectionStatusChanged;
+
     public void ApplyGameState(AmongUsState state)
     {
         currentGameState = state;
@@ -221,12 +223,25 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         socket.OnConnected += (_, _) =>
         {
             Log("OK", $"Socket.IO接続成功 socketId={socket.Id}");
+            ConnectionStatusChanged?.Invoke("ボイスサーバー接続済み");
             connected.TrySetResult();
         };
 
-        socket.OnDisconnected += (_, reason) => Log("WARN", $"切断: {reason}");
-        socket.OnError += (_, error) => Log("ERROR", error);
-        socket.OnReconnectAttempt += (_, attempt) => Log("INFO", $"再接続試行: {attempt}");
+        socket.OnDisconnected += (_, reason) =>
+        {
+            Log("WARN", $"切断: {reason}");
+            ConnectionStatusChanged?.Invoke($"切断: {reason}");
+        };
+        socket.OnError += (_, error) =>
+        {
+            Log("ERROR", error);
+            ConnectionStatusChanged?.Invoke($"接続エラー: {error}");
+        };
+        socket.OnReconnectAttempt += (_, attempt) =>
+        {
+            Log("INFO", $"再接続試行: {attempt}");
+            ConnectionStatusChanged?.Invoke($"再接続中（{attempt}）");
+        };
 
         socket.On("clientPeerConfig", response =>
         {

@@ -1,8 +1,12 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TanukiBCL.VoiceProbe", "src\TanukiBCL.VoiceProbe\TanukiBCL.VoiceProbe.csproj", "{7296AF14-8354-4D16-AB70-FB554F3326A6}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{5674AD05-2177-4665-B1C1-45A51CF9BBD7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TanukiBCL.Client", "src\TanukiBCL.Client\TanukiBCL.Client.csproj", "{764DC16D-89DC-4810-9DE7-8EC53B2B2F5C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,5 +18,12 @@ Global
 		{7296AF14-8354-4D16-AB70-FB554F3326A6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7296AF14-8354-4D16-AB70-FB554F3326A6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7296AF14-8354-4D16-AB70-FB554F3326A6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{764DC16D-89DC-4810-9DE7-8EC53B2B2F5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{764DC16D-89DC-4810-9DE7-8EC53B2B2F5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{764DC16D-89DC-4810-9DE7-8EC53B2B2F5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{764DC16D-89DC-4810-9DE7-8EC53B2B2F5C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{764DC16D-89DC-4810-9DE7-8EC53B2B2F5C} = {5674AD05-2177-4665-B1C1-45A51CF9BBD7}
 	EndGlobalSection
 EndGlobal
