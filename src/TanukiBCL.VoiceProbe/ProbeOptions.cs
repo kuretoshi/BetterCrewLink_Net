@@ -6,7 +6,8 @@ internal sealed record ProbeOptions(
     int PlayerId,
     int ClientId,
     bool IsHost,
-    TimeSpan? Duration)
+    TimeSpan? Duration,
+    bool SelfTest)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -16,7 +17,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host")
+            if (argument is "--host" or "--self-test")
             {
                 switches.Add(argument);
                 continue;
@@ -51,7 +52,8 @@ internal sealed record ProbeOptions(
             switches.Contains("--host"),
             values.TryGetValue("--seconds", out var secondsText)
                 ? TimeSpan.FromSeconds(ParsePositiveInt(secondsText, "--seconds"))
-                : null);
+                : null,
+            switches.Contains("--self-test"));
     }
 
     private static int ParseInt(IReadOnlyDictionary<string, string> values, string name, int fallback)

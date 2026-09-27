@@ -42,7 +42,28 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 2. `id(playerId, clientId, friendCode, playerUid, playerIdentifier)`
 3. `join(lobbyCode, playerId, clientId, isHost)`
 
-受信した `clientPeerConfig`、`setClients`、`join`、`signal` などは標準出力へ記録します。この段階ではWebRTCのoffer/answer処理や音声送受信はまだ行いません。
+受信した `clientPeerConfig`、`setClients`、`join`、`signal` などは標準出力へ記録します。別クライアントが同じロビーへ参加した場合はWebRTC接続も開始しますが、音声送受信はまだ行いません。
+
+## WebRTCセルフテスト
+
+2つのSocket.IOクライアントを一時ロビーへ参加させ、次を自動検証します。
+
+- `join`イベントの受信
+- offer / answerの交換
+- ICE candidateの交換
+- WebRTC接続の確立
+- データチャネル上のprobe / ACK双方向通信
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --server https://bettercrewl.ink `
+  --self-test `
+  --seconds 30
+```
+
+成功時は `[PASS] Socket.IOシグナリングとWebRTCデータチャネルの双方向通信に成功しました。` と表示し、一時ロビーから退出します。サーバーから受け取るTURN認証情報はログへ出力しません。
+
+現在はP2P経路の検証までです。マイク取得、Opus音声トラック、VAD、近接音量計算は後続段階で追加します。
 
 ## 旧実装
 

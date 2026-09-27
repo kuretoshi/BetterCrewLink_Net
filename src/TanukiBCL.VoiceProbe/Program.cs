@@ -13,6 +13,11 @@ internal static class Program
         try
         {
             var options = ProbeOptions.Parse(args);
+            if (options.SelfTest)
+            {
+                return await SelfTestRunner.RunAsync(options);
+            }
+
             using var cancellation = new CancellationTokenSource();
             if (options.Duration is { } duration)
             {
@@ -57,6 +62,7 @@ internal static class Program
               --client-id <number> クライアントID（既定: 0）
               --host               ホストとして参加
               --seconds <number>   指定秒数後に自動終了
+              --self-test         2クライアントでP2Pデータチャネルを自動検証
               --help, -h           このヘルプを表示
             """);
     }

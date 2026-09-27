@@ -7,12 +7,16 @@ namespace TanukiBCL.VoiceProbe;
 internal sealed class VoiceServerProbe : IAsyncDisposable
 {
     private readonly ProbeOptions options;
+    private readonly string label;
     private readonly SocketIOClient.SocketIO socket;
     private readonly TaskCompletionSource connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource peerVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly WebRtcPeerManager peerManager;
 
-    public VoiceServerProbe(ProbeOptions options)
+    public VoiceServerProbe(ProbeOptions options, string label = "probe")
     {
         this.options = options;
+        this.label = label;
         socket = new SocketIOClient.SocketIO(options.Server, new SocketIOOptions
         {
             Transport = TransportProtocol.WebSocket,
@@ -22,9 +26,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ReconnectionDelayMax = 2_000,
             ConnectionTimeout = TimeSpan.FromSeconds(10)
         });
+        peerManager = new WebRtcPeerManager(label, SendSignalAsync);
+        peerManager.PeerVerified += socketId =>
+        {
+            Log("OK", $"P2P双方向通信成功 peer={socketId}");
+            peerVerified.TrySetResult();
+        };
 
         RegisterHandlers();
     }
+
+    public Task Connected => connected.Task;
+
+    public Task PeerVerified => peerVerified.Task;
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
@@ -58,15 +72,60 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         socket.OnError += (_, error) => Log("ERROR", error);
         socket.OnReconnectAttempt += (_, attempt) => Log("INFO", $"再接続試行: {attempt}");
 
-        Observe("clientPeerConfig");
+        socket.On("clientPeerConfig", response =>
+        {
+            var configuration = response.GetValue<JsonElement>();
+            peerManager.Configure(configuration);
+            Log("EVENT", "clientPeerConfig received (credentials redacted)");
+        });
         Observe("setHost");
         Observe("setClient");
         Observe("setClients");
-        Observe("join");
-        Observe("leave");
+        socket.On("join", response =>
+        {
+            var remoteSocketId = response.GetValue<string>(0);
+            Log("EVENT", $"join peer={remoteSocketId}");
+            _ = RunPeerOperationAsync(() => peerManager.InitiateAsync(remoteSocketId));
+        });
+        socket.On("leave", response =>
+        {
+            var remoteSocketId = response.GetValue<string>();
+            Log("EVENT", $"leave peer={remoteSocketId}");
+            peerManager.RemovePeer(remoteSocketId);
+        });
         Observe("VAD");
-        Observe("signal");
+        socket.On("signal", response =>
+        {
+            var envelope = response.GetValue<JsonElement>();
+            if (!envelope.TryGetProperty("from", out var fromElement) ||
+                !envelope.TryGetProperty("data", out var data) ||
+                fromElement.GetString() is not { Length: > 0 } remoteSocketId)
+            {
+                return;
+            }
+
+            var type = data.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : "other";
+            Log("EVENT", $"signal {type} < {remoteSocketId}");
+            _ = RunPeerOperationAsync(() => peerManager.ApplySignalAsync(remoteSocketId, data.Clone()));
+        });
         Observe("error");
+    }
+
+    private async Task RunPeerOperationAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (Exception exception)
+        {
+            Log("ERROR", $"WebRTC処理失敗: {exception.Message}");
+        }
+    }
+
+    private Task SendSignalAsync(string remoteSocketId, object data)
+    {
+        return socket.EmitAsync("signal", new { to = remoteSocketId, data });
     }
 
     private void Observe(string eventName)
@@ -105,11 +164,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
         }
 
+        peerManager.Dispose();
         socket.Dispose();
     }
 
-    private static void Log(string level, string message)
+    private void Log(string level, string message)
     {
-        Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss.fff} [{level}] {message}");
+        Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss.fff} [{label}/{level}] {message}");
     }
 }
