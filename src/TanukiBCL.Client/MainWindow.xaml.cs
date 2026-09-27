@@ -14,6 +14,8 @@ public partial class MainWindow : Window
     private VoiceServerProbe? probe;
     private readonly ObservableCollection<PeerRow> peers = [];
     private AmongUsState? currentState;
+    private bool microphoneMuted;
+    private bool deafened;
 
     public MainWindow()
     {
@@ -70,8 +72,8 @@ public partial class MainWindow : Window
         probe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(() => UpdatePeerConnection(clientId, status));
         probe.LocalVadChanged += talking => Dispatch(() =>
         {
-            VadText.Text = talking ? "マイク: 発話中" : "マイク: 待機中";
-            VadText.Foreground = talking
+            VadText.Text = microphoneMuted ? "マイク: ミュート中" : talking ? "マイク: 発話中" : "マイク: 待機中";
+            VadText.Foreground = talking && !microphoneMuted
                 ? System.Windows.Media.Brushes.LightGreen
                 : System.Windows.Media.Brushes.LightGray;
         });
@@ -106,6 +108,21 @@ public partial class MainWindow : Window
     }
 
     private void StopButton_Click(object sender, RoutedEventArgs e) => runCancellation?.Cancel();
+
+    private void MuteButton_Click(object sender, RoutedEventArgs e)
+    {
+        microphoneMuted = !microphoneMuted;
+        probe?.SetMicrophoneMuted(microphoneMuted);
+        MuteButton.Content = microphoneMuted ? "マイクミュート解除" : "マイクをミュート";
+        VadText.Text = microphoneMuted ? "マイク: ミュート中" : "マイク: 待機中";
+    }
+
+    private void DeafenButton_Click(object sender, RoutedEventArgs e)
+    {
+        deafened = !deafened;
+        probe?.SetDeafened(deafened);
+        DeafenButton.Content = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
+    }
 
     private void ShowGameState(AmongUsState state)
     {
@@ -170,10 +187,20 @@ public partial class MainWindow : Window
     {
         StartButton.IsEnabled = !running;
         StopButton.IsEnabled = running;
+        MuteButton.IsEnabled = running;
+        DeafenButton.IsEnabled = running;
         ProcessCombo.IsEnabled = !running;
         InputCombo.IsEnabled = !running;
         OutputCombo.IsEnabled = !running;
         RefreshButton.IsEnabled = !running;
+        if (!running)
+        {
+            microphoneMuted = false;
+            deafened = false;
+            MuteButton.Content = "マイクをミュート";
+            DeafenButton.Content = "スピーカーをミュート";
+            VadText.Text = "マイク: 待機中";
+        }
     }
 
     private void Dispatch(Action action) => Dispatcher.BeginInvoke(action);

@@ -16,6 +16,7 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
     private readonly Action<bool> onVadChanged;
     private bool? lastVadState;
+    private volatile bool microphoneMuted;
     private bool disposed;
 
     [DllImport("winmm.dll")]
@@ -68,6 +69,21 @@ internal sealed class AudioDeviceSession : IDisposable
         playback.Play();
         capture.StartRecording();
         Console.WriteLine("実音声モード開始: マイク → Opus/WebRTC → 相手のスピーカー");
+    }
+
+    public void SetMicrophoneMuted(bool muted)
+    {
+        microphoneMuted = muted;
+        if (muted && lastVadState != false)
+        {
+            lastVadState = false;
+            onVadChanged(false);
+        }
+    }
+
+    public void SetDeafened(bool value)
+    {
+        playback.Volume = value ? 0f : 1f;
     }
 
     public void SubmitPlayback(string peerId, ReadOnlySpan<short> stereoPcm)
@@ -133,6 +149,11 @@ internal sealed class AudioDeviceSession : IDisposable
     private void OnDataAvailable(object? sender, WaveInEventArgs args)
     {
         if (disposed || args.BytesRecorded <= 0)
+        {
+            return;
+        }
+
+        if (microphoneMuted)
         {
             return;
         }

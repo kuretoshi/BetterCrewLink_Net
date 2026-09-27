@@ -22,6 +22,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private string currentJoinedLobby = "MENU";
     private string lastMixSignature = string.Empty;
     private AudioDeviceSession? audioSession;
+    private bool microphoneMuted;
+    private bool deafened;
 
     public VoiceServerProbe(ProbeOptions options, string label = "probe")
     {
@@ -103,6 +105,18 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         currentGameState = state;
         GameStateApplied?.Invoke(state);
         RefreshPeerMixes();
+    }
+
+    public void SetMicrophoneMuted(bool muted)
+    {
+        microphoneMuted = muted;
+        audioSession?.SetMicrophoneMuted(muted);
+    }
+
+    public void SetDeafened(bool value)
+    {
+        deafened = value;
+        audioSession?.SetDeafened(value);
     }
 
     public Task ReconnectClientAsync(int clientId)
@@ -211,6 +225,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     _ = socket.EmitAsync("VAD", talking);
                 });
             audioSession.Start();
+            audioSession.SetMicrophoneMuted(microphoneMuted);
+            audioSession.SetDeafened(deafened);
         }
 
         if (options.LobbyCode is not null)

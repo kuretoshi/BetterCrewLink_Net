@@ -91,6 +91,10 @@
                     Foreground="White" Click="StartButton_Click" />
             <Button x:Name="StopButton" Content="停止" Width="100" IsEnabled="False"
                     Click="StopButton_Click" />
+            <Button x:Name="MuteButton" Content="マイクをミュート" Width="150" IsEnabled="False"
+                    Click="MuteButton_Click" />
+            <Button x:Name="DeafenButton" Content="スピーカーをミュート" Width="170" IsEnabled="False"
+                    Click="DeafenButton_Click" />
         </StackPanel>
     </Grid>
 </Window>
