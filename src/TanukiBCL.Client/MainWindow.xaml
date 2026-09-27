@@ -70,6 +70,7 @@
                     <TextBlock x:Name="LobbyText" Text="ロビー: —" Foreground="#B8C0CC" Margin="0,6,0,0" />
                     <TextBlock x:Name="PlayersText" Text="参加者: —" Foreground="#B8C0CC" Margin="0,6,0,0" />
                     <TextBlock x:Name="VadText" Text="マイク: 待機中" Foreground="#B8C0CC" Margin="0,6,0,0" />
+                    <TextBlock x:Name="SentText" Text="Opus送信: 待機中" Foreground="#B8C0CC" Margin="0,6,0,0" />
                 </StackPanel>
                 <DataGrid x:Name="PeerGrid" Grid.Row="1" Margin="0,16,0,0"
                           AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"

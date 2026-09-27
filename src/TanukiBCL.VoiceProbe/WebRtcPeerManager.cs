@@ -41,11 +41,11 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string>? TestToneSent;
 
-    public void BroadcastMonoPcm48k(ReadOnlySpan<byte> pcm16Mono)
+    public int BroadcastMonoPcm48k(ReadOnlySpan<byte> pcm16Mono)
     {
         if (pcm16Mono.Length < sizeof(short))
         {
-            return;
+            return 0;
         }
 
         var monoCount = Math.Min(pcm16Mono.Length / sizeof(short), SamplesPerChannel);
@@ -63,13 +63,16 @@ internal sealed class WebRtcPeerManager : IDisposable
             encoded = audioEncoder.EncodeAudio(stereo, OpusFormat);
         }
 
+        var sentPeers = 0;
         foreach (var peer in peers.Values.ToArray())
         {
             if (peer.Connection.connectionState == RTCPeerConnectionState.connected)
             {
                 peer.Connection.SendAudio(SamplesPerChannel, encoded);
+                sentPeers++;
             }
         }
+        return sentPeers;
     }
 
     public void Configure(JsonElement configuration)

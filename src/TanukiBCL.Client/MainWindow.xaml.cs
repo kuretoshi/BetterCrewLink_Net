@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private AmongUsState? currentState;
     private bool microphoneMuted;
     private bool deafened;
+    private long sentAudioFrames;
 
     public MainWindow()
     {
@@ -75,6 +76,11 @@ public partial class MainWindow : Window
         {
             var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
             FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}").IncrementReceived();
+        });
+        probe.LocalAudioFrameSent += peerCount => Dispatch(() =>
+        {
+            sentAudioFrames++;
+            SentText.Text = $"Opus送信: {sentAudioFrames} frame / {peerCount} peer";
         });
         probe.LocalVadChanged += talking => Dispatch(() =>
         {
@@ -201,11 +207,13 @@ public partial class MainWindow : Window
         RefreshButton.IsEnabled = !running;
         if (!running)
         {
+            sentAudioFrames = 0;
             microphoneMuted = false;
             deafened = false;
             MuteButton.Content = "マイクをミュート";
             DeafenButton.Content = "スピーカーをミュート";
             VadText.Text = "マイク: 待機中";
+            SentText.Text = "Opus送信: 待機中";
         }
     }
 

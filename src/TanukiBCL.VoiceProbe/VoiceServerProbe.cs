@@ -103,6 +103,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public event Action<bool>? LocalVadChanged;
 
+    public event Action<int>? LocalAudioFrameSent;
+
     public event Action<string>? ConnectionStatusChanged;
 
     public event Action<int, string>? PeerConnectionStatusChanged;
@@ -227,7 +229,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             audioSession = new AudioDeviceSession(
                 options.InputDevice,
                 options.OutputDevice,
-                pcm => peerManager.BroadcastMonoPcm48k(pcm.Span),
+                pcm =>
+                {
+                    var peerCount = peerManager.BroadcastMonoPcm48k(pcm.Span);
+                    if (peerCount > 0)
+                    {
+                        LocalAudioFrameSent?.Invoke(peerCount);
+                    }
+                },
                 talking =>
                 {
                     LocalVadChanged?.Invoke(talking);
