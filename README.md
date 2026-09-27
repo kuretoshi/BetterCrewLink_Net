@@ -144,6 +144,19 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 WebRTC接続を切らずに `Tasks → Discussion → Tasks` の各段階で、計20方向の音量・パン・生死による遮断が更新されたことを検証します。
 
+1つの視点だけ実マイク・スピーカーを使用し、残り4視点から仮想Opus音声を送るハイブリッド試験も実行できます。ヘッドホンを使用してください。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --live-game-audio-test `
+  --game-process-id 2892 `
+  --input-device 0 `
+  --output-device 0 `
+  --seconds 60
+```
+
+対象視点で4方向の音声を復号し、ゲーム状態から求めた音量・パンを実再生ミキサーへ適用します。距離外または生存者から見た死亡者の音声は、受信できていても規則どおり無音になります。
+
 オフセットはTanukiBCL v3.2.5と同様にBetterCrewLink offsetsから取得し、GameAssemblyのシグネチャで現在の実アドレスを解決します。プロセスメモリへの書き込みは行いません。
 
 ## ゲーム状態と音声を連動
