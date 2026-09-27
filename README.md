@@ -134,6 +134,16 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 5視点から相手4人への計20方向について、WebRTC接続、双方向Opusテスト音の受信、client IDの対応、ゲーム状態から算出した音量・パン・遮断理由を検証します。実マイクやスピーカーは使用しません。
 
+会議開始・終了をまたぐ追従テストも実行できます。開始後の案内に従って、`Tasks`状態から会議を開始し、その後会議を終了します。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --game-audio-transition-test `
+  --seconds 180
+```
+
+WebRTC接続を切らずに `Tasks → Discussion → Tasks` の各段階で、計20方向の音量・パン・生死による遮断が更新されたことを検証します。
+
 オフセットはTanukiBCL v3.2.5と同様にBetterCrewLink offsetsから取得し、GameAssemblyのシグネチャで現在の実アドレスを解決します。プロセスメモリへの書き込みは行いません。
 
 ## ゲーム状態と音声を連動

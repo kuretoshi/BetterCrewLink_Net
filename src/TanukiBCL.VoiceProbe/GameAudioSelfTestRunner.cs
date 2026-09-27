@@ -6,7 +6,11 @@ namespace TanukiBCL.VoiceProbe;
 
 internal static class GameAudioSelfTestRunner
 {
-    public static async Task<int> RunAsync(ProbeOptions baseOptions)
+    public static Task<int> RunAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, transitionTest: false);
+
+    public static Task<int> RunTransitionAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, transitionTest: true);
+
+    private static async Task<int> RunAsync(ProbeOptions baseOptions, bool transitionTest)
     {
         var processes = Process.GetProcessesByName("Among Us")
             .OrderBy(process => process.Id)
@@ -18,12 +22,12 @@ internal static class GameAudioSelfTestRunner
             return 1;
         }
 
-        var timeout = baseOptions.Duration ?? TimeSpan.FromSeconds(45);
+        var timeout = baseOptions.Duration ?? TimeSpan.FromSeconds(transitionTest ? 180 : 45);
         using var cancellation = new CancellationTokenSource(timeout);
         var nodes = processes.Select(process => new TestNode(process.Id)).ToArray();
         DisposeProcesses(processes);
 
-        Console.WriteLine($"ゲーム音声統合テスト開始: pids={string.Join(',', nodes.Select(node => node.ProcessId))} timeout={timeout.TotalSeconds:0}s");
+        Console.WriteLine($"ゲーム音声{(transitionTest ? "状態遷移" : "統合")}テスト開始: pids={string.Join(',', nodes.Select(node => node.ProcessId))} timeout={timeout.TotalSeconds:0}s");
         try
         {
             foreach (var node in nodes)
@@ -33,6 +37,7 @@ internal static class GameAudioSelfTestRunner
                     LobbyCode = null,
                     SelfTest = false,
                     GameAudioSelfTest = false,
+                    GameAudioTransitionTest = false,
                     LiveAudio = false,
                     GameProcessId = node.ProcessId,
                     Duration = null
@@ -44,6 +49,11 @@ internal static class GameAudioSelfTestRunner
                 node.RunTask = node.Probe.RunAsync(cancellation.Token);
                 await node.Probe.Connected.WaitAsync(TimeSpan.FromSeconds(10), cancellation.Token);
                 await Task.Delay(250, cancellation.Token);
+            }
+
+            if (transitionTest)
+            {
+                return await WaitForTransitionsAsync(nodes, cancellation.Token);
             }
 
             while (!cancellation.IsCancellationRequested && !IsComplete(nodes))
@@ -78,18 +88,55 @@ internal static class GameAudioSelfTestRunner
         }
     }
 
+    private static async Task<int> WaitForTransitionsAsync(
+        IReadOnlyCollection<TestNode> nodes,
+        CancellationToken cancellationToken)
+    {
+        var sequence = new[] { GameState.Tasks, GameState.Discussion, GameState.Tasks };
+        for (var index = 0; index < sequence.Length; index++)
+        {
+            var expected = sequence[index];
+            Console.WriteLine(index switch
+            {
+                0 => "[WAIT] まずTasks状態と20方向の音声接続を確認します。",
+                1 => "[WAIT] 会議を開始してください。Discussionへの切り替えを待っています。",
+                _ => "[WAIT] 会議を終了してください。Tasksへの復帰を待っています。"
+            });
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (IsComplete(nodes) &&
+                    nodes.All(node => node.State?.GameState == expected) &&
+                    Validate(nodes, printDetails: false))
+                {
+                    Console.WriteLine($"[PASS] {expected}: 全20方向の音声ミックスが一致しました。");
+                    break;
+                }
+
+                await Task.Delay(250, cancellationToken);
+            }
+        }
+
+        Console.WriteLine("[PASS] WebRTC接続を維持したままTasks→Discussion→Tasksへ音声ルールが追従しました。");
+        return 0;
+    }
+
     private static bool IsComplete(IEnumerable<TestNode> nodes) => nodes.All(node =>
         node.State is { Players.Count: 5 } state &&
         node.Mixes.Keys.Intersect(OtherClientIds(state)).Count() == 4 &&
         node.Audio.Keys.Intersect(OtherClientIds(state)).Count() == 4);
 
-    private static bool Validate(IReadOnlyCollection<TestNode> nodes)
+    private static bool Validate(IReadOnlyCollection<TestNode> nodes, bool printDetails = true)
     {
         if (nodes.Any(node => node.State is null) ||
             nodes.Select(node => node.State!.LobbyCode).Distinct(StringComparer.Ordinal).Count() != 1 ||
             nodes.Select(node => node.State!.GameState).Distinct().Count() != 1)
         {
-            PrintProgress(nodes);
+            if (printDetails)
+            {
+                PrintProgress(nodes);
+            }
             return false;
         }
 
@@ -105,10 +152,13 @@ internal static class GameAudioSelfTestRunner
                 var hasAudio = node.Audio.TryGetValue(other.ClientId, out var audio) &&
                                audio.Frames >= 10 && audio.Rms > 0.01d;
                 passed &= hasMix && hasAudio;
-                Console.WriteLine(
-                    $"PID {node.ProcessId} client={me.ClientId} <- {other.ClientId}: " +
-                    $"audio={(hasAudio ? "OK" : "NG")} mix={(hasMix ? "OK" : "NG")} " +
-                    $"gain={actual?.Gain ?? 0:0.000} pan={actual?.Pan ?? 0:+0.00;-0.00;0.00} reason={actual?.Reason ?? "missing"}");
+                if (printDetails)
+                {
+                    Console.WriteLine(
+                        $"PID {node.ProcessId} client={me.ClientId} <- {other.ClientId}: " +
+                        $"audio={(hasAudio ? "OK" : "NG")} mix={(hasMix ? "OK" : "NG")} " +
+                        $"gain={actual?.Gain ?? 0:0.000} pan={actual?.Pan ?? 0:+0.00;-0.00;0.00} reason={actual?.Reason ?? "missing"}");
+                }
             }
         }
 

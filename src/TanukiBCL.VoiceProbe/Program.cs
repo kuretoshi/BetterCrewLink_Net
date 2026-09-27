@@ -36,6 +36,11 @@ internal static class Program
                 return await GameAudioSelfTestRunner.RunAsync(options);
             }
 
+            if (options.GameAudioTransitionTest)
+            {
+                return await GameAudioSelfTestRunner.RunTransitionAsync(options);
+            }
+
             if (options.SelfTest)
             {
                 return await SelfTestRunner.RunAsync(options);
@@ -95,6 +100,7 @@ internal static class Program
               --list-audio-devices 入出力デバイスの番号と名前を表示
               --scan-game         起動中の全Among Usプロセスを読み取り検証
               --game-audio-self-test 5プロセスと仮想音声クライアントの統合検証
+              --game-audio-transition-test Tasks→会議→Tasksの連続追従検証
               --expected-game-state <state> 期待するTasks / Discussion等
               --expected-alive <n> 期待する生存者数
               --expected-dead <n> 期待する死亡者数
