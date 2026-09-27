@@ -57,14 +57,35 @@ internal static class LiveGameAudioTestRunner
                 node.Probe.GameStateApplied += state => node.State = state;
                 node.Probe.PeerMixChanged += (clientId, mix) => node.Mixes[clientId] = mix;
                 node.Probe.PeerAudioVerified += (clientId, result) => node.Audio[clientId] = result;
+                node.Probe.PeerPcmReceived += (clientId, _) => node.PcmFrames.AddOrUpdate(clientId, 1, (_, count) => count + 1);
+                node.Probe.LocalVadChanged += talking => node.TalkingObserved |= talking;
                 node.RunTask = node.Probe.RunAsync(cancellation.Token);
                 await node.Probe.Connected.WaitAsync(TimeSpan.FromSeconds(10), cancellation.Token);
                 await Task.Delay(250, cancellation.Token);
             }
 
             var liveNode = nodes.Single(node => node.IsLive);
-            while (!IsLivePathReady(liveNode))
+            var waitStarted = Stopwatch.StartNew();
+            var reconnectedClientIds = new HashSet<int>();
+            while (!IsBidirectionalPathReady(nodes, liveNode))
             {
+                if (waitStarted.Elapsed >= TimeSpan.FromSeconds(10) &&
+                    liveNode.State is { } currentState)
+                {
+                    var liveClientId = currentState.Players.Single(player => player.IsLocal).ClientId;
+                    foreach (var simulatedNode in nodes.Where(node => !node.IsLive))
+                    {
+                        var remoteClientId = simulatedNode.State?.Players.SingleOrDefault(player => player.IsLocal)?.ClientId;
+                        if (remoteClientId is { } id &&
+                            simulatedNode.PcmFrames.GetValueOrDefault(liveClientId) < 10 &&
+                            reconnectedClientIds.Add(id))
+                        {
+                            Console.WriteLine($"[RETRY] client {id}への片方向メディアを再接続します。");
+                            await liveNode.Probe!.ReconnectClientAsync(id);
+                        }
+                    }
+                }
+
                 await Task.Delay(250, cancellation.Token);
             }
 
@@ -83,14 +104,38 @@ internal static class LiveGameAudioTestRunner
                     $"pan={actual?.Pan ?? 0:+0.00;-0.00;0.00} reason={actual?.Reason ?? "missing"}");
             }
 
+            foreach (var simulatedNode in nodes.Where(node => !node.IsLive))
+            {
+                var frames = simulatedNode.PcmFrames.GetValueOrDefault(me.ClientId);
+                var sent = frames >= 10;
+                passed &= sent;
+                Console.WriteLine(
+                    $"MIC client {me.ClientId} -> PID {simulatedNode.ProcessId}: " +
+                    $"audio={(sent ? "OK" : "NG")} pcmFrames={frames}");
+            }
+
+            passed &= liveNode.TalkingObserved;
+            Console.WriteLine($"VAD talking=true: {(liveNode.TalkingObserved ? "OK" : "NG")}");
+
             Console.WriteLine(passed
-                ? "[PASS] 4仮想クライアントのOpus音声が実音声視点の再生ミキサーまで到達しました。"
-                : "[FAIL] 実音声視点の受信またはミックスに不一致があります。");
+                ? "[PASS] 4方向の実再生と、実マイク/VADから4仮想視点への送信を確認しました。"
+                : "[FAIL] 実音声の受信、送信、VAD、またはミックスに不一致があります。");
             return passed ? 0 : 1;
         }
         catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
         {
             Console.Error.WriteLine("[FAIL] 制限時間内に実音声視点の4方向受信を確認できませんでした。");
+            var liveNode = nodes.Single(node => node.IsLive);
+            var liveClientId = liveNode.State?.Players.SingleOrDefault(player => player.IsLocal)?.ClientId;
+            Console.WriteLine(
+                $"LIVE PID {liveNode.ProcessId}: state={liveNode.State?.GameState.ToString() ?? "未取得"} " +
+                $"vad={liveNode.TalkingObserved} incomingAudio={liveNode.Audio.Count}/4 mixes={liveNode.Mixes.Count}/4 client={liveClientId}");
+            foreach (var node in nodes.Where(node => !node.IsLive))
+            {
+                Console.WriteLine(
+                    $"SIM PID {node.ProcessId}: micFrames=" +
+                    (liveClientId is { } id ? node.PcmFrames.GetValueOrDefault(id) : 0));
+            }
             return 1;
         }
         finally
@@ -108,10 +153,19 @@ internal static class LiveGameAudioTestRunner
         }
     }
 
-    private static bool IsLivePathReady(TestNode node) =>
-        node.State is { Players.Count: 5 } state &&
-        node.Mixes.Keys.Intersect(OtherClientIds(state)).Count() == 4 &&
-        node.Audio.Keys.Intersect(OtherClientIds(state)).Count() == 4;
+    private static bool IsBidirectionalPathReady(IReadOnlyCollection<TestNode> nodes, TestNode liveNode)
+    {
+        if (liveNode.State is not { Players.Count: 5 } state ||
+            !liveNode.TalkingObserved ||
+            liveNode.Mixes.Keys.Intersect(OtherClientIds(state)).Count() != 4 ||
+            liveNode.Audio.Keys.Intersect(OtherClientIds(state)).Count() != 4)
+        {
+            return false;
+        }
+
+        var local = state.Players.Single(player => player.IsLocal);
+        return nodes.Where(node => !node.IsLive).All(node => node.PcmFrames.GetValueOrDefault(local.ClientId) >= 10);
+    }
 
     private static IEnumerable<int> OtherClientIds(AmongUsState state) =>
         state.Players.Where(player => !player.IsLocal).Select(player => player.ClientId);
@@ -136,5 +190,7 @@ internal static class LiveGameAudioTestRunner
         public AmongUsState? State { get; set; }
         public ConcurrentDictionary<int, PeerVoiceMix> Mixes { get; } = [];
         public ConcurrentDictionary<int, AudioTestResult> Audio { get; } = [];
+        public ConcurrentDictionary<int, int> PcmFrames { get; } = [];
+        public bool TalkingObserved { get; set; }
     }
 }

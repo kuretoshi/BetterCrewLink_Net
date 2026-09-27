@@ -51,7 +51,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 PeerAudioVerified?.Invoke(clientId, result);
             }
         };
-        peerManager.PcmReceived += (socketId, pcm) => audioSession?.SubmitPlayback(socketId, pcm);
+        peerManager.PcmReceived += (socketId, pcm) =>
+        {
+            audioSession?.SubmitPlayback(socketId, pcm);
+            if (peerClientIds.TryGetValue(socketId, out var clientId))
+            {
+                PeerPcmReceived?.Invoke(clientId, pcm);
+            }
+        };
 
         RegisterHandlers();
     }
@@ -68,11 +75,27 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public event Action<int, AudioTestResult>? PeerAudioVerified;
 
+    public event Action<int, short[]>? PeerPcmReceived;
+
+    public event Action<bool>? LocalVadChanged;
+
     public void ApplyGameState(AmongUsState state)
     {
         currentGameState = state;
         GameStateApplied?.Invoke(state);
         RefreshPeerMixes();
+    }
+
+    public Task ReconnectClientAsync(int clientId)
+    {
+        var socketId = peerClientIds.SingleOrDefault(pair => pair.Value == clientId).Key;
+        if (string.IsNullOrEmpty(socketId))
+        {
+            throw new InvalidOperationException($"再接続対象のclient IDが見つかりません: {clientId}");
+        }
+
+        Log("INFO", $"音声メディアを再接続 client={clientId}");
+        return peerManager.ReconnectAsync(socketId);
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -94,7 +117,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 options.InputDevice,
                 options.OutputDevice,
                 pcm => peerManager.BroadcastMonoPcm48k(pcm.Span),
-                talking => _ = socket.EmitAsync("VAD", talking));
+                talking =>
+                {
+                    LocalVadChanged?.Invoke(talking);
+                    _ = socket.EmitAsync("VAD", talking);
+                });
             audioSession.Start();
         }
 

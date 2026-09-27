@@ -116,6 +116,12 @@ internal sealed class WebRtcPeerManager : IDisposable
         await SendSignalAsync(peer, new { type = "offer", sdp = offer.sdp });
     }
 
+    public async Task ReconnectAsync(string remoteSocketId)
+    {
+        RemovePeer(remoteSocketId);
+        await InitiateAsync(remoteSocketId);
+    }
+
     public async Task ApplySignalAsync(string remoteSocketId, JsonElement data)
     {
         var type = data.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
