@@ -93,6 +93,25 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 同じ部屋で2台を試す場合は、ハウリング防止のため両方でヘッドホンを使用してください。
 
+## Among Us状態の読み取り
+
+起動中の全Among Usプロセスを読み取り専用でスキャンします。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- --scan-game
+```
+
+各プロセスについて、ロビーコード、ゲーム状態、ローカルプレイヤー、役職、生死、全プレイヤーの座標を表示します。5プロセスでの検証では、次の条件が揃うとPASSになります。
+
+- 全5プロセスの読み取りに成功
+- 全プロセスが同じロビーを認識
+- 各視点でプレイヤーが5人
+- ローカルプレイヤーのclient IDが5種類
+- 生存4人、死亡1人
+- クルーメイト4人、インポスター1人
+
+オフセットはTanukiBCL v3.2.5と同様にBetterCrewLink offsetsから取得し、GameAssemblyのシグネチャで現在の実アドレスを解決します。プロセスメモリへの書き込みは行いません。
+
 ## 旧実装
 
 作り直し前の.NET/WPF実装は、次のGit参照に保存しています。

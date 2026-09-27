@@ -10,6 +10,7 @@ internal sealed record ProbeOptions(
     bool SelfTest,
     bool LiveAudio,
     bool ListAudioDevices,
+    bool ScanGame,
     int InputDevice,
     int OutputDevice)
 {
@@ -21,7 +22,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--live-audio" or "--list-audio-devices")
+            if (argument is "--host" or "--self-test" or "--live-audio" or "--list-audio-devices" or "--scan-game")
             {
                 switches.Add(argument);
                 continue;
@@ -60,6 +61,7 @@ internal sealed record ProbeOptions(
             switches.Contains("--self-test"),
             switches.Contains("--live-audio"),
             switches.Contains("--list-audio-devices"),
+            switches.Contains("--scan-game"),
             ParseInt(values, "--input-device", 0),
             ParseInt(values, "--output-device", 0));
     }

@@ -19,6 +19,11 @@ internal static class Program
                 return 0;
             }
 
+            if (options.ScanGame)
+            {
+                return await GameProcessScanner.RunAsync(TimeSpan.FromSeconds(20));
+            }
+
             if (options.SelfTest)
             {
                 return await SelfTestRunner.RunAsync(options);
@@ -76,6 +81,7 @@ internal static class Program
               --self-test         2クライアントでP2Pデータチャネルを自動検証
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
+              --scan-game         起動中の全Among Usプロセスを読み取り検証
               --input-device <n>  マイク番号（既定: 0）
               --output-device <n> スピーカー番号（既定: 0）
               --help, -h           このヘルプを表示
