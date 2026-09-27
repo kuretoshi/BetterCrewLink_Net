@@ -35,6 +35,8 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string, short[]>? PcmReceived;
 
+    public event Action<string>? PeerConnectionFailed;
+
     public void BroadcastMonoPcm48k(ReadOnlySpan<byte> pcm16Mono)
     {
         if (pcm16Mono.Length < sizeof(short))
@@ -255,6 +257,10 @@ internal sealed class WebRtcPeerManager : IDisposable
                 Interlocked.Exchange(ref peer.TestToneStarted, 1) == 0)
             {
                 _ = SendTestToneAsync(peer);
+            }
+            else if (state == RTCPeerConnectionState.failed)
+            {
+                PeerConnectionFailed?.Invoke(remoteSocketId);
             }
         };
         connection.ondatachannel += channel => ConfigureDataChannel(peer, channel);

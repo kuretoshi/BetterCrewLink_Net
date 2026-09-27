@@ -12,6 +12,8 @@ internal static class GameAudioSelfTestRunner
 
     public static Task<int> RunRecoveryAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, TestMode.Recovery);
 
+    public static Task<int> RunServerRecoveryAsync(ProbeOptions baseOptions) => RunAsync(baseOptions, TestMode.ServerRecovery);
+
     private static async Task<int> RunAsync(ProbeOptions baseOptions, TestMode mode)
     {
         var processes = Process.GetProcessesByName("Among Us")
@@ -33,6 +35,7 @@ internal static class GameAudioSelfTestRunner
         {
             TestMode.Transition => "状態遷移",
             TestMode.Recovery => "再参加復旧",
+            TestMode.ServerRecovery => "サーバー再接続復旧",
             _ => "統合"
         };
         Console.WriteLine($"ゲーム音声{testName}テスト開始: pids={string.Join(',', nodes.Select(node => node.ProcessId))} timeout={timeout.TotalSeconds:0}s");
@@ -48,6 +51,7 @@ internal static class GameAudioSelfTestRunner
                     GameAudioTransitionTest = false,
                     LiveGameAudioTest = false,
                     GameAudioRecoveryTest = false,
+                    GameAudioServerRecoveryTest = false,
                     LiveAudio = false,
                     GameProcessId = node.ProcessId,
                     Duration = null
@@ -71,9 +75,9 @@ internal static class GameAudioSelfTestRunner
                 await Task.Delay(250, cancellation.Token);
             }
 
-            if (mode == TestMode.Recovery)
+            if (mode is TestMode.Recovery or TestMode.ServerRecovery)
             {
-                return await RunRecoveryStageAsync(nodes, cancellation.Token);
+                return await RunRecoveryStageAsync(nodes, mode, cancellation.Token);
             }
 
             var passed = Validate(nodes);
@@ -105,6 +109,7 @@ internal static class GameAudioSelfTestRunner
 
     private static async Task<int> RunRecoveryStageAsync(
         IReadOnlyCollection<TestNode> nodes,
+        TestMode mode,
         CancellationToken cancellationToken)
     {
         if (!Validate(nodes, printDetails: false))
@@ -124,17 +129,26 @@ internal static class GameAudioSelfTestRunner
             node.Mixes.TryRemove(targetClientId, out _);
         }
 
-        Console.WriteLine($"[TEST] PID {target.ProcessId} / client {targetClientId}をロビーから退出・再参加させます。");
-        await target.Probe!.RejoinCurrentGameLobbyAsync();
+        if (mode == TestMode.ServerRecovery)
+        {
+            Console.WriteLine($"[TEST] PID {target.ProcessId} / client {targetClientId}のサーバー接続を切断・再接続させます。");
+            await target.Probe!.RestartServerConnectionAsync(cancellationToken);
+        }
+        else
+        {
+            Console.WriteLine($"[TEST] PID {target.ProcessId} / client {targetClientId}をロビーから退出・再参加させます。");
+            await target.Probe!.RejoinCurrentGameLobbyAsync();
+        }
         while (!IsComplete(nodes))
         {
             await Task.Delay(250, cancellationToken);
         }
 
         var passed = Validate(nodes, printDetails: false);
+        var recoveryName = mode == TestMode.ServerRecovery ? "サーバー再接続" : "ロビー再参加";
         Console.WriteLine(passed
-            ? "[PASS] ロビー再参加後に対象8方向が復旧し、全20方向の音声メッシュへ戻りました。"
-            : "[FAIL] ロビー再参加後の音声メッシュに不一致があります。");
+            ? $"[PASS] {recoveryName}後に対象8方向が復旧し、全20方向の音声メッシュへ戻りました。"
+            : $"[FAIL] {recoveryName}後の音声メッシュに不一致があります。");
         return passed ? 0 : 1;
     }
 
@@ -261,6 +275,7 @@ internal static class GameAudioSelfTestRunner
     {
         Snapshot,
         Transition,
-        Recovery
+        Recovery,
+        ServerRecovery
     }
 }

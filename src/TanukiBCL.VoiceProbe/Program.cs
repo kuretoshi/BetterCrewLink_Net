@@ -51,6 +51,11 @@ internal static class Program
                 return await GameAudioSelfTestRunner.RunRecoveryAsync(options);
             }
 
+            if (options.GameAudioServerRecoveryTest)
+            {
+                return await GameAudioSelfTestRunner.RunServerRecoveryAsync(options);
+            }
+
             if (options.SelfTest)
             {
                 return await SelfTestRunner.RunAsync(options);
@@ -113,6 +118,7 @@ internal static class Program
               --game-audio-transition-test Tasks→会議→Tasksの連続追従検証
               --live-game-audio-test 1視点を実音声、残り4視点を仮想音声で検証
               --game-audio-recovery-test ロビー退出・再参加後の音声復旧を検証
+              --game-audio-server-recovery-test サーバー再接続後の音声復旧を検証
               --expected-game-state <state> 期待するTasks / Discussion等
               --expected-alive <n> 期待する生存者数
               --expected-dead <n> 期待する死亡者数

@@ -15,6 +15,7 @@ internal sealed record ProbeOptions(
     bool GameAudioTransitionTest,
     bool LiveGameAudioTest,
     bool GameAudioRecoveryTest,
+    bool GameAudioServerRecoveryTest,
     int? GameProcessId,
     string? ExpectedGameState,
     int? ExpectedAlive,
@@ -32,7 +33,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--expect-nearby")
+            if (argument is "--host" or "--self-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby")
             {
                 switches.Add(argument);
                 continue;
@@ -76,6 +77,7 @@ internal sealed record ProbeOptions(
             switches.Contains("--game-audio-transition-test"),
             switches.Contains("--live-game-audio-test"),
             switches.Contains("--game-audio-recovery-test"),
+            switches.Contains("--game-audio-server-recovery-test"),
             values.TryGetValue("--game-process-id", out var processIdText)
                 ? ParsePositiveInt(processIdText, "--game-process-id")
                 : null,

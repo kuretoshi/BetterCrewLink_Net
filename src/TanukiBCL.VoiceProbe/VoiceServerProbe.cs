@@ -59,6 +59,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 PeerPcmReceived?.Invoke(clientId, pcm);
             }
         };
+        peerManager.PeerConnectionFailed += remoteSocketId =>
+        {
+            if (string.CompareOrdinal(socket.Id, remoteSocketId) < 0)
+            {
+                Log("INFO", $"失敗したpeerを自動再接続 peer={remoteSocketId}");
+                _ = RunPeerOperationAsync(() => peerManager.ReconnectAsync(remoteSocketId));
+            }
+        };
 
         RegisterHandlers();
     }
@@ -107,12 +115,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             var local = state.Players.SingleOrDefault(player => player.IsLocal)
                 ?? throw new InvalidOperationException("ローカルプレイヤーを特定できません。");
             await socket.EmitAsync("leave");
-            peerManager.RemoveAllPeers();
-            foreach (var socketId in peerClientIds.Keys.ToArray())
-            {
-                audioSession?.RemovePeer(socketId);
-            }
-            peerClientIds.Clear();
+            ResetPeerState();
             currentJoinedLobby = "MENU";
             await Task.Delay(500);
             await socket.EmitAsync("id", local.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString());
@@ -129,6 +132,47 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             gameStateGate.Release();
         }
+    }
+
+    public async Task RestartServerConnectionAsync(CancellationToken cancellationToken)
+    {
+        await gameStateGate.WaitAsync(cancellationToken);
+        try
+        {
+            var state = currentGameState ?? throw new InvalidOperationException("ゲーム状態をまだ取得していません。");
+            var local = state.Players.SingleOrDefault(player => player.IsLocal)
+                ?? throw new InvalidOperationException("ローカルプレイヤーを特定できません。");
+
+            ResetPeerState();
+            currentJoinedLobby = "MENU";
+            await socket.DisconnectAsync();
+            await Task.Delay(500, cancellationToken);
+            await socket.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            await socket.EmitAsync("id", local.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString());
+            await socket.EmitAsync("join", state.LobbyCode, local.Id, state.ClientId, state.IsHost);
+            currentJoinedLobby = state.LobbyCode;
+            await Task.Delay(500, cancellationToken);
+            foreach (var remoteSocketId in peerClientIds.Keys.ToArray())
+            {
+                await peerManager.InitiateAsync(remoteSocketId);
+            }
+
+            Log("INFO", $"復旧試験でサーバー再接続 code={state.LobbyCode} client={state.ClientId} socketId={socket.Id}");
+        }
+        finally
+        {
+            gameStateGate.Release();
+        }
+    }
+
+    private void ResetPeerState()
+    {
+        peerManager.RemoveAllPeers();
+        foreach (var socketId in peerClientIds.Keys.ToArray())
+        {
+            audioSession?.RemovePeer(socketId);
+        }
+        peerClientIds.Clear();
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -244,6 +288,16 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         if (client.TryGetProperty("clientId", out var clientIdElement) && clientIdElement.TryGetInt32(out var clientId))
         {
+            foreach (var staleSocketId in peerClientIds
+                         .Where(pair => pair.Value == clientId && pair.Key != socketId)
+                         .Select(pair => pair.Key)
+                         .ToArray())
+            {
+                Log("INFO", $"同一clientの旧peerを除去 client={clientId} peer={staleSocketId}");
+                peerClientIds.Remove(staleSocketId);
+                peerManager.RemovePeer(staleSocketId);
+                audioSession?.RemovePeer(staleSocketId);
+            }
             peerClientIds[socketId] = clientId;
             RefreshPeerMix(socketId, clientId);
         }

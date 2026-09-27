@@ -50,6 +50,7 @@ internal static class LiveGameAudioTestRunner
                     GameAudioTransitionTest = false,
                     LiveGameAudioTest = false,
                     GameAudioRecoveryTest = false,
+                    GameAudioServerRecoveryTest = false,
                     LiveAudio = node.IsLive,
                     GameProcessId = node.ProcessId,
                     Duration = null

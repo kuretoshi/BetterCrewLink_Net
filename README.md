@@ -154,6 +154,16 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 最初に計20方向の音声を確認し、1クライアントを同じロビーへ再参加させます。古いpeerを破棄したうえで参加者一覧から接続を張り直し、対象に関係する8方向を含む全20方向へ復旧したことを検証します。
 
+ボイスサーバー接続そのものを切断・再接続する復旧試験も実行できます。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --game-audio-server-recovery-test `
+  --seconds 60
+```
+
+新しいSocket.IO socket IDでロビーへ戻り、同一client IDに残った旧peerを除去します。WebRTCの再接続が競合して失敗した場合はsocket IDの順序で片側だけが再オファーし、全20方向へ自動復旧することを検証します。
+
 1つの視点だけ実マイク・スピーカーを使用し、残り4視点から仮想Opus音声を送るハイブリッド試験も実行できます。ヘッドホンを使用してください。
 
 ```powershell
