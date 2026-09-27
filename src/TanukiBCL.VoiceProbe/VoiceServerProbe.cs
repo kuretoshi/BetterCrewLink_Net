@@ -76,6 +76,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 PeerConnectionStatusChanged?.Invoke(clientId, state.ToString());
             }
         };
+        peerManager.TestToneSent += remoteSocketId =>
+        {
+            if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
+            {
+                PeerTestToneSent?.Invoke(clientId);
+            }
+        };
 
         RegisterHandlers();
     }
@@ -99,6 +106,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public event Action<string>? ConnectionStatusChanged;
 
     public event Action<int, string>? PeerConnectionStatusChanged;
+
+    public event Action<int>? PeerTestToneSent;
 
     public void ApplyGameState(AmongUsState state)
     {
@@ -290,6 +299,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 RegisterPeerClient(client.Name, client.Value);
             }
             Log("EVENT", $"setClients count={peerClientIds.Count}");
+            foreach (var remoteSocketId in peerClientIds.Keys.Where(remote => string.CompareOrdinal(socket.Id, remote) < 0).ToArray())
+            {
+                _ = RunPeerOperationAsync(() => peerManager.InitiateAsync(remoteSocketId));
+            }
         });
         socket.On("join", response =>
         {
@@ -318,7 +331,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
 
             var type = data.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : "other";
-            Log("EVENT", $"signal {type} < {remoteSocketId}");
+            if (type == "offer" &&
+                string.CompareOrdinal(socket.Id, remoteSocketId) < 0 &&
+                peerManager.IsInitiating(remoteSocketId))
+            {
+                Log("EVENT", $"signal offer ignored by glare rule < {remoteSocketId}");
+                return;
+            }
+            var detail = type == "candidate" ? DescribeCandidate(data) : string.Empty;
+            Log("EVENT", $"signal {type}{detail} < {remoteSocketId}");
             _ = RunPeerOperationAsync(() => peerManager.ApplySignalAsync(remoteSocketId, data.Clone()));
         });
         Observe("error");
@@ -472,6 +493,28 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private Task SendSignalAsync(string remoteSocketId, object data)
     {
         return socket.EmitAsync("signal", new { to = remoteSocketId, data });
+    }
+
+    private static string DescribeCandidate(JsonElement signal)
+    {
+        if (!signal.TryGetProperty("candidate", out var candidate))
+        {
+            return string.Empty;
+        }
+        var text = candidate.ValueKind == JsonValueKind.String
+            ? candidate.GetString()
+            : candidate.TryGetProperty("candidate", out var value) ? value.GetString() : null;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var typeIndex = Array.IndexOf(parts, "typ");
+        var candidateType = typeIndex >= 0 && typeIndex + 1 < parts.Length ? parts[typeIndex + 1] : "unknown";
+        var addressKind = parts.Length > 4 && parts[4].EndsWith(".local", StringComparison.OrdinalIgnoreCase)
+            ? "mdns"
+            : "ip";
+        return $"({candidateType}/{addressKind})";
     }
 
     private void Observe(string eventName)

@@ -61,6 +61,11 @@ internal static class Program
                 return await SelfTestRunner.RunAsync(options);
             }
 
+            if (options.TanukiInteropTest)
+            {
+                return await TanukiInteropTestRunner.RunAsync(options);
+            }
+
             if (options.LiveAudio && options.LobbyCode is null && options.GameProcessId is null)
             {
                 throw new ArgumentException("--live-audio には --lobby または --game-process-id の指定が必要です。");
@@ -111,6 +116,7 @@ internal static class Program
               --host               ホストとして参加
               --seconds <number>   指定秒数後に自動終了
               --self-test         2クライアントでP2Pデータチャネルを自動検証
+              --tanuki-interop-test 起動中のTanukiBCLとのWebRTC・Opus相互接続を検証
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
               --scan-game         起動中の全Among Usプロセスを読み取り検証

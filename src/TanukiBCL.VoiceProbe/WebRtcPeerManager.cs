@@ -39,6 +39,8 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string, RTCPeerConnectionState>? PeerConnectionStateChanged;
 
+    public event Action<string>? TestToneSent;
+
     public void BroadcastMonoPcm48k(ReadOnlySpan<byte> pcm16Mono)
     {
         if (pcm16Mono.Length < sizeof(short))
@@ -120,6 +122,9 @@ internal sealed class WebRtcPeerManager : IDisposable
         await SendSignalAsync(peer, new { type = "offer", sdp = offer.sdp });
     }
 
+    public bool IsInitiating(string remoteSocketId) =>
+        peers.TryGetValue(remoteSocketId, out var peer) && peer.Initiator;
+
     public async Task ReconnectAsync(string remoteSocketId)
     {
         RemovePeer(remoteSocketId);
@@ -149,7 +154,10 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         if (!peers.TryGetValue(remoteSocketId, out var peer))
         {
-            peer = CreatePeer(remoteSocketId, initiator: false);
+            var connectionId = data.TryGetProperty("connectionId", out var connectionIdElement)
+                ? connectionIdElement.GetString()
+                : null;
+            peer = CreatePeer(remoteSocketId, initiator: false, connectionId);
         }
 
         if (type == "candidate")
@@ -215,7 +223,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         peer.Connection.Dispose();
     }
 
-    private Peer CreatePeer(string remoteSocketId, bool initiator)
+    private Peer CreatePeer(string remoteSocketId, bool initiator, string? connectionId = null)
     {
         var configuration = new RTCConfiguration
         {
@@ -228,7 +236,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             }).ToList()
         };
         var connection = new RTCPeerConnection(configuration);
-        var peer = new Peer(remoteSocketId, Guid.NewGuid().ToString("N"), connection, initiator);
+        var peer = new Peer(remoteSocketId, connectionId ?? Guid.NewGuid().ToString("N"), connection, initiator);
         peers[remoteSocketId] = peer;
         connection.addTrack(new MediaStreamTrack([OpusFormat], MediaStreamStatusEnum.SendRecv));
 
@@ -239,13 +247,16 @@ internal sealed class WebRtcPeerManager : IDisposable
                 return;
             }
 
+            var candidateText = candidate.candidate.StartsWith("candidate:", StringComparison.OrdinalIgnoreCase)
+                ? candidate.candidate
+                : $"candidate:{candidate.candidate}";
             Log($"candidate > {Short(remoteSocketId)}");
             _ = SendSignalAsync(peer, new
             {
                 type = "candidate",
                 candidate = new
                 {
-                    candidate = candidate.candidate,
+                    candidate = candidateText,
                     sdpMLineIndex = candidate.sdpMLineIndex,
                     sdpMid = candidate.sdpMid
                 }
@@ -329,6 +340,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         }
 
         Log($"Opus test tone > {Short(peer.RemoteSocketId)} frames=30 frequency={frequency:0}Hz");
+        TestToneSent?.Invoke(peer.RemoteSocketId);
     }
 
     private void ReceiveAudio(Peer peer, EncodedAudioFrame frame)

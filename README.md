@@ -75,6 +75,17 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 成功時は `[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラックの検証に成功しました。` と表示し、一時ロビーから退出します。サーバーから受け取るTURN認証情報はログへ出力しません。
 
+起動中のTanukiBCLと同じAmong Usロビーへ参加し、実装間の互換性を確認する場合は、TanukiBCLが追跡していない別視点のプロセスIDを指定します。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --tanuki-interop-test `
+  --game-process-id 19600 `
+  --seconds 30
+```
+
+WebRTC接続とTanukiBCLへのOpusテスト音送信を必須判定し、TanukiBCLから音声フレームを受信できた場合はそのclient IDも表示します。
+
 合成音による自動検証に加えて、実マイク入力、スピーカー再生、簡易VADまで実装しています。ゲーム状態に応じた近接音量計算は後続段階で追加します。
 
 ## 実マイク・スピーカーで確認

@@ -8,6 +8,7 @@ internal sealed record ProbeOptions(
     bool IsHost,
     TimeSpan? Duration,
     bool SelfTest,
+    bool TanukiInteropTest,
     bool LiveAudio,
     bool ListAudioDevices,
     bool ScanGame,
@@ -33,7 +34,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby")
+            if (argument is "--host" or "--self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby")
             {
                 switches.Add(argument);
                 continue;
@@ -70,6 +71,7 @@ internal sealed record ProbeOptions(
                 ? TimeSpan.FromSeconds(ParsePositiveInt(secondsText, "--seconds"))
                 : null,
             switches.Contains("--self-test"),
+            switches.Contains("--tanuki-interop-test"),
             switches.Contains("--live-audio"),
             switches.Contains("--list-audio-devices"),
             switches.Contains("--scan-game"),
