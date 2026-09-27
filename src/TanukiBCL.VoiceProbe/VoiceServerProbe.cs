@@ -13,6 +13,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly TaskCompletionSource peerVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<AudioTestResult> audioVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly WebRtcPeerManager peerManager;
+    private AudioDeviceSession? audioSession;
 
     public VoiceServerProbe(ProbeOptions options, string label = "probe")
     {
@@ -27,7 +28,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ReconnectionDelayMax = 2_000,
             ConnectionTimeout = TimeSpan.FromSeconds(10)
         });
-        peerManager = new WebRtcPeerManager(label, SendSignalAsync);
+        peerManager = new WebRtcPeerManager(label, SendSignalAsync, sendTestTone: !options.LiveAudio);
         peerManager.PeerVerified += socketId =>
         {
             Log("OK", $"P2P双方向通信成功 peer={socketId}");
@@ -38,6 +39,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             Log("OK", $"Opus音声検証成功 peer={socketId} rms={result.Rms:0.000} frequency={result.FrequencyHz:0.0}Hz");
             audioVerified.TrySetResult(result);
         };
+        peerManager.PcmReceived += (_, pcm) => audioSession?.SubmitPlayback(pcm);
 
         RegisterHandlers();
     }
@@ -55,6 +57,16 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         // 内部TaskCompletionSourceを再度完了させようとするため、待機側で制限する。
         await socket.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
         await connected.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+
+        if (options.LiveAudio)
+        {
+            audioSession = new AudioDeviceSession(
+                options.InputDevice,
+                options.OutputDevice,
+                pcm => peerManager.BroadcastMonoPcm48k(pcm.Span),
+                talking => _ = socket.EmitAsync("VAD", talking));
+            audioSession.Start();
+        }
 
         if (options.LobbyCode is not null)
         {
@@ -172,6 +184,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
         }
 
+        audioSession?.Dispose();
         peerManager.Dispose();
         socket.Dispose();
     }

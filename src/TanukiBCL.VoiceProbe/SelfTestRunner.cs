@@ -15,7 +15,8 @@ internal static class SelfTestRunner
             ClientId = seed,
             IsHost = true,
             Duration = null,
-            SelfTest = false
+            SelfTest = false,
+            LiveAudio = false
         };
         var secondOptions = baseOptions with
         {
@@ -24,7 +25,8 @@ internal static class SelfTestRunner
             ClientId = seed + 1,
             IsHost = false,
             Duration = null,
-            SelfTest = false
+            SelfTest = false,
+            LiveAudio = false
         };
 
         Console.WriteLine($"P2Pセルフテスト開始: lobby={lobby} timeout={timeout.TotalSeconds:0}s");

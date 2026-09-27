@@ -14,6 +14,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private const int SamplesPerChannel = 960;
     private const int Channels = 2;
     private readonly string owner;
+    private readonly bool sendTestTone;
     private readonly Func<string, object, Task> sendSignal;
     private readonly Dictionary<string, Peer> peers = [];
     private readonly AudioEncoder audioEncoder = new(true, true);
@@ -21,15 +22,49 @@ internal sealed class WebRtcPeerManager : IDisposable
     private IReadOnlyList<IceServer> iceServers = [new("stun:stun.l.google.com:19302", null, null)];
     private bool forceRelayOnly;
 
-    public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal)
+    public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal, bool sendTestTone)
     {
         this.owner = owner;
         this.sendSignal = sendSignal;
+        this.sendTestTone = sendTestTone;
     }
 
     public event Action<string>? PeerVerified;
 
     public event Action<string, AudioTestResult>? AudioVerified;
+
+    public event Action<string, short[]>? PcmReceived;
+
+    public void BroadcastMonoPcm48k(ReadOnlySpan<byte> pcm16Mono)
+    {
+        if (pcm16Mono.Length < sizeof(short))
+        {
+            return;
+        }
+
+        var monoCount = Math.Min(pcm16Mono.Length / sizeof(short), SamplesPerChannel);
+        var stereo = new short[SamplesPerChannel * Channels];
+        for (var index = 0; index < monoCount; index++)
+        {
+            var sample = BitConverter.ToInt16(pcm16Mono.Slice(index * sizeof(short), sizeof(short)));
+            stereo[index * 2] = sample;
+            stereo[index * 2 + 1] = sample;
+        }
+
+        byte[] encoded;
+        lock (audioCodecLock)
+        {
+            encoded = audioEncoder.EncodeAudio(stereo, OpusFormat);
+        }
+
+        foreach (var peer in peers.Values.ToArray())
+        {
+            if (peer.Connection.connectionState == RTCPeerConnectionState.connected)
+            {
+                peer.Connection.SendAudio(SamplesPerChannel, encoded);
+            }
+        }
+    }
 
     public void Configure(JsonElement configuration)
     {
@@ -211,7 +246,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             Log($"data channel open: {Short(peer.RemoteSocketId)}");
             channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
-            if (peer.Initiator)
+            if (peer.Initiator && sendTestTone)
             {
                 _ = SendTestToneAsync(peer);
             }
@@ -283,6 +318,8 @@ internal sealed class WebRtcPeerManager : IDisposable
             return;
         }
 
+        PcmReceived?.Invoke(peer.RemoteSocketId, EnsureStereo(pcm, frame.AudioFormat.ChannelCount));
+
         AudioTestResult? result;
         lock (peer.AudioGate)
         {
@@ -326,6 +363,22 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         Log($"Opus audio < {Short(peer.RemoteSocketId)} frames={result.Frames} rms={result.Rms:0.000} frequency={result.FrequencyHz:0.0}Hz");
         AudioVerified?.Invoke(peer.RemoteSocketId, result);
+    }
+
+    private static short[] EnsureStereo(short[] pcm, int advertisedChannels)
+    {
+        if (advertisedChannels == 2)
+        {
+            return pcm;
+        }
+
+        var stereo = new short[pcm.Length * 2];
+        for (var index = 0; index < pcm.Length; index++)
+        {
+            stereo[index * 2] = pcm[index];
+            stereo[index * 2 + 1] = pcm[index];
+        }
+        return stereo;
     }
 
     private Task SendSignalAsync(Peer peer, object signal)

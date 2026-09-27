@@ -65,7 +65,33 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 成功時は `[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラックの検証に成功しました。` と表示し、一時ロビーから退出します。サーバーから受け取るTURN認証情報はログへ出力しません。
 
-現在は合成音によるP2P音声経路の検証までです。マイク取得、スピーカー再生、VAD、近接音量計算は後続段階で追加します。
+合成音による自動検証に加えて、実マイク入力、スピーカー再生、簡易VADまで実装しています。ゲーム状態に応じた近接音量計算は後続段階で追加します。
+
+## 実マイク・スピーカーで確認
+
+利用可能なデバイス番号を表示します。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- --list-audio-devices
+```
+
+2台で同じロビーコードを指定して起動します。`client-id` と `player-id` は重複させないでください。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --server https://bettercrewl.ink `
+  --lobby ABCDEF `
+  --player-id 0 `
+  --client-id 10001 `
+  --host `
+  --live-audio `
+  --input-device 0 `
+  --output-device 0
+```
+
+マイクは48kHz / 16bit / monoで20ms単位に取得し、stereo Opusへ変換して送信します。受信Opusは48kHz / 16bit / stereo PCMへ復号し、400msのバッファを介して再生します。RMSによる簡易VADもサーバーへ通知します。
+
+同じ部屋で2台を試す場合は、ハウリング防止のため両方でヘッドホンを使用してください。
 
 ## 旧実装
 
