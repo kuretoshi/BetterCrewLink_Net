@@ -86,6 +86,14 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 WebRTC接続とTanukiBCLへのOpusテスト音送信を必須判定し、TanukiBCLから音声フレームを受信できた場合はそのclient IDも表示します。
 
+WPFクライアントは起動時に追跡対象のAmong Usプロセスを選択できます。
+
+```powershell
+dotnet run --project src/TanukiBCL.Client -- --game-process-id 19600
+```
+
+Peer一覧の「Opus受信」が増えていれば、相手からの音声データを実際に受信・復号できています。
+
 合成音による自動検証に加えて、実マイク入力、スピーカー再生、簡易VADまで実装しています。ゲーム状態に応じた近接音量計算は後続段階で追加します。
 
 ## 実マイク・スピーカーで確認

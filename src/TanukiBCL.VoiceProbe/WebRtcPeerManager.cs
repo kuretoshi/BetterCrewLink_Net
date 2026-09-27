@@ -288,7 +288,10 @@ internal sealed class WebRtcPeerManager : IDisposable
         channel.onopen += () =>
         {
             Log($"data channel open: {Short(peer.RemoteSocketId)}");
-            channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
+            if (sendTestTone)
+            {
+                channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
+            }
         };
         channel.onmessage += (_, _, data) =>
         {

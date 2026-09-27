@@ -26,6 +26,7 @@ public partial class MainWindow : Window
         InputCombo.SelectedIndex = InputCombo.Items.Count > 0 ? 0 : -1;
         OutputCombo.SelectedIndex = OutputCombo.Items.Count > 0 ? 0 : -1;
         RefreshProcesses();
+        SelectProcessFromCommandLine();
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e) => RefreshProcesses();
@@ -70,6 +71,11 @@ public partial class MainWindow : Window
         probe.GameStateApplied += state => Dispatch(() => ShowGameState(state));
         probe.PeerMixChanged += (clientId, mix) => Dispatch(() => UpdatePeerMix(clientId, mix));
         probe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(() => UpdatePeerConnection(clientId, status));
+        probe.PeerPcmReceived += (clientId, _) => Dispatch(() =>
+        {
+            var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+            FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}").IncrementReceived();
+        });
         probe.LocalVadChanged += talking => Dispatch(() =>
         {
             VadText.Text = microphoneMuted ? "マイク: ミュート中" : talking ? "マイク: 発話中" : "マイク: 待機中";
@@ -205,6 +211,23 @@ public partial class MainWindow : Window
 
     private void Dispatch(Action action) => Dispatcher.BeginInvoke(action);
 
+    private void SelectProcessFromCommandLine()
+    {
+        var args = Environment.GetCommandLineArgs();
+        var optionIndex = Array.IndexOf(args, "--game-process-id");
+        if (optionIndex < 0 || optionIndex + 1 >= args.Length || !int.TryParse(args[optionIndex + 1], out var processId))
+        {
+            return;
+        }
+
+        if (ProcessCombo.ItemsSource is IEnumerable<ProcessChoice> choices &&
+            choices.SingleOrDefault(choice => choice.Id == processId) is { } choice)
+        {
+            ProcessCombo.SelectedItem = choice;
+            StatusText.Text = $"Among Us PID {processId}を選択しました";
+        }
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         runCancellation?.Cancel();
@@ -221,14 +244,22 @@ public partial class MainWindow : Window
         private string currentName = name;
         private string connection = "待機中";
         private string voice = "待機中";
+        private long receivedFrames;
         private string gain = "—";
 
         public int ClientId { get; } = clientId;
         public string Name { get => currentName; set => Set(ref currentName, value); }
         public string Connection { get => connection; set => Set(ref connection, value); }
         public string Voice { get => voice; set => Set(ref voice, value); }
+        public string Received => receivedFrames == 0 ? "待機中" : $"{receivedFrames} frame";
         public string Gain { get => gain; set => Set(ref gain, value); }
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        public void IncrementReceived()
+        {
+            receivedFrames++;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Received)));
+        }
 
         private void Set(ref string field, string value, [CallerMemberName] string? propertyName = null)
         {
