@@ -233,7 +233,16 @@ internal sealed class WebRtcPeerManager : IDisposable
                 }
             });
         };
-        connection.onconnectionstatechange += state => Log($"peer {Short(remoteSocketId)} state={state}");
+        connection.onconnectionstatechange += state =>
+        {
+            Log($"peer {Short(remoteSocketId)} state={state}");
+            if (state == RTCPeerConnectionState.connected &&
+                sendTestTone &&
+                Interlocked.Exchange(ref peer.TestToneStarted, 1) == 0)
+            {
+                _ = SendTestToneAsync(peer);
+            }
+        };
         connection.ondatachannel += channel => ConfigureDataChannel(peer, channel);
         connection.OnAudioFrameReceived += frame => ReceiveAudio(peer, frame);
         return peer;
@@ -246,10 +255,6 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             Log($"data channel open: {Short(peer.RemoteSocketId)}");
             channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
-            if (peer.Initiator && sendTestTone)
-            {
-                _ = SendTestToneAsync(peer);
-            }
         };
         channel.onmessage += (_, _, data) =>
         {
@@ -463,6 +468,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         public short PreviousSample { get; set; }
         public bool HasPreviousSample { get; set; }
         public bool AudioReported { get; set; }
+        public int TestToneStarted;
     }
 }
 

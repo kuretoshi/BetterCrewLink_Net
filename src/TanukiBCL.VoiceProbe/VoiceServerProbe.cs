@@ -46,6 +46,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             Log("OK", $"Opus音声検証成功 peer={socketId} rms={result.Rms:0.000} frequency={result.FrequencyHz:0.0}Hz");
             audioVerified.TrySetResult(result);
+            if (peerClientIds.TryGetValue(socketId, out var clientId))
+            {
+                PeerAudioVerified?.Invoke(clientId, result);
+            }
         };
         peerManager.PcmReceived += (socketId, pcm) => audioSession?.SubmitPlayback(socketId, pcm);
 
@@ -58,9 +62,16 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public Task<AudioTestResult> AudioVerified => audioVerified.Task;
 
+    public event Action<AmongUsState>? GameStateApplied;
+
+    public event Action<int, PeerVoiceMix>? PeerMixChanged;
+
+    public event Action<int, AudioTestResult>? PeerAudioVerified;
+
     public void ApplyGameState(AmongUsState state)
     {
         currentGameState = state;
+        GameStateApplied?.Invoke(state);
         RefreshPeerMixes();
     }
 
@@ -190,7 +201,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private void RefreshPeerMix(string socketId, int clientId)
     {
-        if (audioSession is null || currentGameState is null)
+        if (currentGameState is null)
         {
             return;
         }
@@ -199,12 +210,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var other = currentGameState.Players.SingleOrDefault(player => player.ClientId == clientId);
         if (me is null || other is null)
         {
-            audioSession.SetPeerMix(socketId, new PeerVoiceMix(0d, 0d, 0d, "unmapped-player"));
+            var unmappedMix = new PeerVoiceMix(0d, 0d, 0d, "unmapped-player");
+            audioSession?.SetPeerMix(socketId, unmappedMix);
+            PeerMixChanged?.Invoke(clientId, unmappedMix);
             return;
         }
 
         var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, new SpatialVoiceSettings());
-        audioSession.SetPeerMix(socketId, mix);
+        audioSession?.SetPeerMix(socketId, mix);
+        PeerMixChanged?.Invoke(clientId, mix);
     }
 
     private void StartGameTracking(int processId)

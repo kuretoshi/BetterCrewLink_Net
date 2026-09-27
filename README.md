@@ -122,6 +122,18 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- --scan-game `
 
 `Tasks`中に全員が近距離であることも検証する場合は `--expect-nearby` を追加します。
 
+## 5クライアント音声統合テスト
+
+起動中の5つのAmong Usプロセスへ仮想音声クライアントを1つずつ対応させ、同じ実ロビーへ接続します。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --game-audio-self-test `
+  --seconds 45
+```
+
+5視点から相手4人への計20方向について、WebRTC接続、双方向Opusテスト音の受信、client IDの対応、ゲーム状態から算出した音量・パン・遮断理由を検証します。実マイクやスピーカーは使用しません。
+
 オフセットはTanukiBCL v3.2.5と同様にBetterCrewLink offsetsから取得し、GameAssemblyのシグネチャで現在の実アドレスを解決します。プロセスメモリへの書き込みは行いません。
 
 ## ゲーム状態と音声を連動
