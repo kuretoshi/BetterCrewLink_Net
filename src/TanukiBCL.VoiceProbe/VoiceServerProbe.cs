@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Text.Json;
 using SocketIOClient;
 using SocketIOClient.Transport;
+using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
 
@@ -13,6 +15,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly TaskCompletionSource peerVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<AudioTestResult> audioVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly WebRtcPeerManager peerManager;
+    private readonly Dictionary<string, int> peerClientIds = [];
+    private AmongUsState? currentGameState;
+    private AmongUsMemoryReaderService? gameReader;
+    private readonly SemaphoreSlim gameStateGate = new(1, 1);
+    private string currentJoinedLobby = "MENU";
+    private string lastMixSignature = string.Empty;
     private AudioDeviceSession? audioSession;
 
     public VoiceServerProbe(ProbeOptions options, string label = "probe")
@@ -39,7 +47,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             Log("OK", $"Opus音声検証成功 peer={socketId} rms={result.Rms:0.000} frequency={result.FrequencyHz:0.0}Hz");
             audioVerified.TrySetResult(result);
         };
-        peerManager.PcmReceived += (_, pcm) => audioSession?.SubmitPlayback(pcm);
+        peerManager.PcmReceived += (socketId, pcm) => audioSession?.SubmitPlayback(socketId, pcm);
 
         RegisterHandlers();
     }
@@ -50,6 +58,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public Task<AudioTestResult> AudioVerified => audioVerified.Task;
 
+    public void ApplyGameState(AmongUsState state)
+    {
+        currentGameState = state;
+        RefreshPeerMixes();
+    }
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         Log("INFO", $"接続開始: {options.Server}");
@@ -57,6 +71,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         // 内部TaskCompletionSourceを再度完了させようとするため、待機側で制限する。
         await socket.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
         await connected.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+
+        if (options.GameProcessId is { } gameProcessId)
+        {
+            StartGameTracking(gameProcessId);
+        }
 
         if (options.LiveAudio)
         {
@@ -74,7 +93,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
         else
         {
-            Log("INFO", "疎通確認モードです。ロビー参加は行いません。");
+            Log("INFO", options.GameProcessId is null
+                ? "疎通確認モードです。ロビー参加は行いません。"
+                : "ゲーム状態からロビー参加情報を待機しています。");
         }
 
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
@@ -99,11 +120,26 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             Log("EVENT", "clientPeerConfig received (credentials redacted)");
         });
         Observe("setHost");
-        Observe("setClient");
-        Observe("setClients");
+        socket.On("setClient", response =>
+        {
+            var remoteSocketId = response.GetValue<string>(0);
+            var client = response.GetValue<JsonElement>(1);
+            RegisterPeerClient(remoteSocketId, client);
+        });
+        socket.On("setClients", response =>
+        {
+            var clients = response.GetValue<JsonElement>();
+            peerClientIds.Clear();
+            foreach (var client in clients.EnumerateObject())
+            {
+                RegisterPeerClient(client.Name, client.Value);
+            }
+            Log("EVENT", $"setClients count={peerClientIds.Count}");
+        });
         socket.On("join", response =>
         {
             var remoteSocketId = response.GetValue<string>(0);
+            RegisterPeerClient(remoteSocketId, response.GetValue<JsonElement>(1));
             Log("EVENT", $"join peer={remoteSocketId}");
             _ = RunPeerOperationAsync(() => peerManager.InitiateAsync(remoteSocketId));
         });
@@ -111,7 +147,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             var remoteSocketId = response.GetValue<string>();
             Log("EVENT", $"leave peer={remoteSocketId}");
+            peerClientIds.Remove(remoteSocketId);
             peerManager.RemovePeer(remoteSocketId);
+            audioSession?.RemovePeer(remoteSocketId);
         });
         Observe("VAD");
         socket.On("signal", response =>
@@ -129,6 +167,126 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             _ = RunPeerOperationAsync(() => peerManager.ApplySignalAsync(remoteSocketId, data.Clone()));
         });
         Observe("error");
+    }
+
+    private void RegisterPeerClient(string socketId, JsonElement client)
+    {
+        if (client.TryGetProperty("clientId", out var clientIdElement) && clientIdElement.TryGetInt32(out var clientId))
+        {
+            peerClientIds[socketId] = clientId;
+            RefreshPeerMix(socketId, clientId);
+        }
+    }
+
+    private void RefreshPeerMixes()
+    {
+        foreach (var (socketId, clientId) in peerClientIds)
+        {
+            RefreshPeerMix(socketId, clientId);
+        }
+
+        LogMixSnapshot();
+    }
+
+    private void RefreshPeerMix(string socketId, int clientId)
+    {
+        if (audioSession is null || currentGameState is null)
+        {
+            return;
+        }
+
+        var me = currentGameState.Players.SingleOrDefault(player => player.IsLocal);
+        var other = currentGameState.Players.SingleOrDefault(player => player.ClientId == clientId);
+        if (me is null || other is null)
+        {
+            audioSession.SetPeerMix(socketId, new PeerVoiceMix(0d, 0d, 0d, "unmapped-player"));
+            return;
+        }
+
+        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, new SpatialVoiceSettings());
+        audioSession.SetPeerMix(socketId, mix);
+    }
+
+    private void StartGameTracking(int processId)
+    {
+        using var process = Process.GetProcessById(processId);
+        var processInfo = GameProcessScanner.CreateProcessInfo(process);
+        gameReader = new AmongUsMemoryReaderService();
+        gameReader.Error += (_, message) => Log("ERROR", $"game reader: {message}");
+        gameReader.StateChanged += (_, state) => _ = SynchronizeGameStateAsync(state);
+        gameReader.SetProcess(processInfo);
+        gameReader.Start();
+        Log("INFO", $"Among Us状態追跡開始 pid={processId}");
+    }
+
+    private async Task SynchronizeGameStateAsync(AmongUsState state)
+    {
+        await gameStateGate.WaitAsync();
+        try
+        {
+            ApplyGameState(state);
+            var local = state.Players.SingleOrDefault(player => player.IsLocal);
+            var targetLobby = state.GameState == GameState.Menu || local is null ? "MENU" : state.LobbyCode;
+            if (string.Equals(targetLobby, currentJoinedLobby, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            await socket.EmitAsync("leave");
+            currentJoinedLobby = "MENU";
+            if (targetLobby == "MENU")
+            {
+                Log("INFO", "ゲーム状態に追従してロビー退出");
+                return;
+            }
+
+            await socket.EmitAsync("id", local!.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString());
+            await socket.EmitAsync("join", targetLobby, local.Id, state.ClientId, state.IsHost);
+            currentJoinedLobby = targetLobby;
+            Log("INFO", $"ゲーム状態に追従してロビー参加 code={targetLobby} client={state.ClientId} player={local.Id}");
+        }
+        catch (Exception exception)
+        {
+            Log("ERROR", $"ゲーム状態同期失敗: {exception.Message}");
+        }
+        finally
+        {
+            gameStateGate.Release();
+        }
+    }
+
+    private void LogMixSnapshot()
+    {
+        if (currentGameState is null || peerClientIds.Count == 0)
+        {
+            return;
+        }
+
+        var me = currentGameState.Players.SingleOrDefault(player => player.IsLocal);
+        if (me is null)
+        {
+            return;
+        }
+
+        var mixes = peerClientIds
+            .Select(pair =>
+            {
+                var player = currentGameState.Players.SingleOrDefault(candidate => candidate.ClientId == pair.Value);
+                var mix = player is null
+                    ? new PeerVoiceMix(0d, 0d, 0d, "unmapped-player")
+                    : SpatialVoicePolicy.Calculate(currentGameState, me, player, new SpatialVoiceSettings());
+                return $"{pair.Value}:{mix.Gain:0.000}:{mix.Pan:0.00}:{mix.Reason}";
+            })
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var signature = string.Join('|', mixes);
+        if (signature == lastMixSignature)
+        {
+            return;
+        }
+
+        lastMixSignature = signature;
+        Log("MIX", signature);
     }
 
     private async Task RunPeerOperationAsync(Func<Task> operation)
@@ -167,6 +325,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         await socket.EmitAsync("leave");
         await socket.EmitAsync("id", options.PlayerId, options.ClientId, string.Empty, string.Empty, string.Empty);
         await socket.EmitAsync("join", options.LobbyCode!, options.PlayerId, options.ClientId, options.IsHost);
+        currentJoinedLobby = options.LobbyCode!;
     }
 
     public async ValueTask DisposeAsync()
@@ -184,9 +343,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
         }
 
+        gameReader?.Dispose();
         audioSession?.Dispose();
         peerManager.Dispose();
         socket.Dispose();
+        gameStateGate.Dispose();
     }
 
     private void Log(string level, string message)

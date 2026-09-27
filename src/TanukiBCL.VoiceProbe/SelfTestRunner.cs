@@ -16,7 +16,8 @@ internal static class SelfTestRunner
             IsHost = true,
             Duration = null,
             SelfTest = false,
-            LiveAudio = false
+            LiveAudio = false,
+            GameProcessId = null
         };
         var secondOptions = baseOptions with
         {
@@ -26,7 +27,8 @@ internal static class SelfTestRunner
             IsHost = false,
             Duration = null,
             SelfTest = false,
-            LiveAudio = false
+            LiveAudio = false,
+            GameProcessId = null
         };
 
         Console.WriteLine($"P2Pセルフテスト開始: lobby={lobby} timeout={timeout.TotalSeconds:0}s");

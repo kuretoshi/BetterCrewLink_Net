@@ -11,6 +11,7 @@ internal sealed record ProbeOptions(
     bool LiveAudio,
     bool ListAudioDevices,
     bool ScanGame,
+    int? GameProcessId,
     int InputDevice,
     int OutputDevice)
 {
@@ -62,6 +63,9 @@ internal sealed record ProbeOptions(
             switches.Contains("--live-audio"),
             switches.Contains("--list-audio-devices"),
             switches.Contains("--scan-game"),
+            values.TryGetValue("--game-process-id", out var processIdText)
+                ? ParsePositiveInt(processIdText, "--game-process-id")
+                : null,
             ParseInt(values, "--input-device", 0),
             ParseInt(values, "--output-device", 0));
     }

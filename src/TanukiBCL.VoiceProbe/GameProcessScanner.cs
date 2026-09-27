@@ -34,18 +34,7 @@ internal static class GameProcessScanner
     {
         try
         {
-            var processPath = process.MainModule?.FileName ?? string.Empty;
-            var hasGameAssembly = process.Modules.Cast<ProcessModule>()
-                .Any(module => string.Equals(module.ModuleName, "GameAssembly.dll", StringComparison.OrdinalIgnoreCase));
-            var info = new AmongUsProcessInfo
-            {
-                ProcessId = process.Id,
-                ProcessPath = processPath,
-                GameDirectory = Path.GetDirectoryName(processPath) ?? string.Empty,
-                HasGameAssembly = hasGameAssembly,
-                Is64Bit = IsProcess64Bit(process),
-                InstalledMod = AmongUsMod.KnownMods[0]
-            };
+            var info = CreateProcessInfo(process);
 
             using var reader = new AmongUsMemoryReaderService();
             var completion = new TaskCompletionSource<AmongUsState>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -83,6 +72,22 @@ internal static class GameProcessScanner
         }
     }
 
+    internal static AmongUsProcessInfo CreateProcessInfo(Process process)
+    {
+        var processPath = process.MainModule?.FileName ?? string.Empty;
+        var hasGameAssembly = process.Modules.Cast<ProcessModule>()
+            .Any(module => string.Equals(module.ModuleName, "GameAssembly.dll", StringComparison.OrdinalIgnoreCase));
+        return new AmongUsProcessInfo
+        {
+            ProcessId = process.Id,
+            ProcessPath = processPath,
+            GameDirectory = Path.GetDirectoryName(processPath) ?? string.Empty,
+            HasGameAssembly = hasGameAssembly,
+            Is64Bit = IsProcess64Bit(process),
+            InstalledMod = AmongUsMod.KnownMods[0]
+        };
+    }
+
     private static void PrintResults(IEnumerable<ProcessReadResult> results)
     {
         foreach (var result in results.OrderBy(result => result.ProcessId))
@@ -109,6 +114,19 @@ internal static class GameProcessScanner
                     $"  {(player.IsLocal ? '*' : ' ')} id={player.Id} client={player.ClientId} name={player.Name} " +
                     $"role={(player.IsImpostor ? "Impostor" : "Crewmate")} dead={player.IsDead} " +
                     $"pos=({player.X:0.0000},{player.Y:0.0000})");
+            }
+
+            if (local is not null)
+            {
+                var settings = new SpatialVoiceSettings();
+                Console.WriteLine("  voice mix (TanukiBCL v3.2.5 defaults):");
+                foreach (var other in result.State.Players.Where(player => !player.IsLocal).OrderBy(player => player.ClientId))
+                {
+                    var mix = SpatialVoicePolicy.Calculate(result.State, local, other, settings);
+                    Console.WriteLine(
+                        $"    client={other.ClientId} name={other.Name} gain={mix.Gain:0.000} " +
+                        $"pan={mix.Pan:+0.00;-0.00;0.00} distance={mix.Distance:0.00} reason={mix.Reason}");
+                }
             }
         }
     }

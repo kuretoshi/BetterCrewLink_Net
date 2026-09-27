@@ -1,4 +1,5 @@
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using System.Runtime.InteropServices;
 
 namespace TanukiBCL.VoiceProbe;
@@ -9,7 +10,9 @@ internal sealed class AudioDeviceSession : IDisposable
     private static readonly WaveFormat PlaybackFormat = new(48_000, 16, 2);
     private readonly WaveInEvent capture;
     private readonly WaveOutEvent playback;
-    private readonly BufferedWaveProvider playbackBuffer;
+    private readonly MixingSampleProvider playbackMixer;
+    private readonly Dictionary<string, PeerPlayback> peerPlayback = [];
+    private readonly object playbackGate = new();
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
     private readonly Action<bool> onVadChanged;
     private bool? lastVadState;
@@ -47,10 +50,8 @@ internal sealed class AudioDeviceSession : IDisposable
             }
         };
 
-        playbackBuffer = new BufferedWaveProvider(PlaybackFormat)
+        playbackMixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(48_000, 2))
         {
-            BufferDuration = TimeSpan.FromMilliseconds(400),
-            DiscardOnBufferOverflow = true,
             ReadFully = true
         };
         playback = new WaveOutEvent
@@ -59,7 +60,7 @@ internal sealed class AudioDeviceSession : IDisposable
             DesiredLatency = 100,
             NumberOfBuffers = 3
         };
-        playback.Init(playbackBuffer);
+        playback.Init(playbackMixer.ToWaveProvider());
     }
 
     public void Start()
@@ -69,16 +70,64 @@ internal sealed class AudioDeviceSession : IDisposable
         Console.WriteLine("実音声モード開始: マイク → Opus/WebRTC → 相手のスピーカー");
     }
 
-    public void SubmitPlayback(ReadOnlySpan<short> stereoPcm)
+    public void SubmitPlayback(string peerId, ReadOnlySpan<short> stereoPcm)
     {
         if (disposed || stereoPcm.IsEmpty)
         {
             return;
         }
 
+        var peer = GetOrCreatePeerPlayback(peerId);
         var bytes = new byte[stereoPcm.Length * sizeof(short)];
         Buffer.BlockCopy(stereoPcm.ToArray(), 0, bytes, 0, bytes.Length);
-        playbackBuffer.AddSamples(bytes, 0, bytes.Length);
+        peer.Buffer.AddSamples(bytes, 0, bytes.Length);
+    }
+
+    public void SetPeerMix(string peerId, PeerVoiceMix mix)
+    {
+        var peer = GetOrCreatePeerPlayback(peerId);
+        peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
+        peer.Panning.Pan = (float)Math.Clamp(mix.Pan, -1d, 1d);
+    }
+
+    public void RemovePeer(string peerId)
+    {
+        lock (playbackGate)
+        {
+            if (peerPlayback.Remove(peerId, out var peer))
+            {
+                playbackMixer.RemoveMixerInput(peer.Volume);
+            }
+        }
+    }
+
+    private PeerPlayback GetOrCreatePeerPlayback(string peerId)
+    {
+        lock (playbackGate)
+        {
+            if (peerPlayback.TryGetValue(peerId, out var existing))
+            {
+                return existing;
+            }
+
+            var buffer = new BufferedWaveProvider(PlaybackFormat)
+            {
+                BufferDuration = TimeSpan.FromMilliseconds(400),
+                DiscardOnBufferOverflow = true,
+                ReadFully = true
+            };
+            var mono = new StereoToMonoSampleProvider(buffer.ToSampleProvider())
+            {
+                LeftVolume = 0.5f,
+                RightVolume = 0.5f
+            };
+            var panning = new PanningSampleProvider(mono);
+            var volume = new VolumeSampleProvider(panning);
+            var created = new PeerPlayback(buffer, panning, volume);
+            peerPlayback[peerId] = created;
+            playbackMixer.AddMixerInput(volume);
+            return created;
+        }
     }
 
     private void OnDataAvailable(object? sender, WaveInEventArgs args)
@@ -176,4 +225,9 @@ internal sealed class AudioDeviceSession : IDisposable
         capture.Dispose();
         playback.Dispose();
     }
+
+    private sealed record PeerPlayback(
+        BufferedWaveProvider Buffer,
+        PanningSampleProvider Panning,
+        VolumeSampleProvider Volume);
 }

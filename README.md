@@ -112,6 +112,30 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- --scan-game
 
 オフセットはTanukiBCL v3.2.5と同様にBetterCrewLink offsetsから取得し、GameAssemblyのシグネチャで現在の実アドレスを解決します。プロセスメモリへの書き込みは行いません。
 
+## ゲーム状態と音声を連動
+
+対象のAmong Usプロセスを指定すると、ロビーコード、player ID、client ID、ホスト状態を自動取得してボイスサーバーへ参加します。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- `
+  --server https://bettercrewl.ink `
+  --game-process-id 3192 `
+  --live-audio `
+  --input-device 0 `
+  --output-device 0
+```
+
+ゲーム状態は500ms周期で更新し、Socket.IOのsocket IDとAmong Usのclient IDを対応付けます。受信音声には次を適用します。
+
+- TanukiBCL v3.2.5既定値と同じ最大距離5.32
+- Web Audioのlinear距離モデル相当の音量減衰
+- 左右位置によるパン
+- 生存者から死亡者の音声を遮断
+- 会議中は距離とパンを無効化し、生存者から死亡者だけを遮断
+- 通気口内音声と切断済みプレイヤーを遮断
+
+複数peerのPCMはpeer別バッファから同じタイムライン上でミックスしてスピーカーへ出力します。
+
 ## 旧実装
 
 作り直し前の.NET/WPF実装は、次のGit参照に保存しています。
