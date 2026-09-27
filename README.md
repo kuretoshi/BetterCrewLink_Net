@@ -2,7 +2,7 @@
 
 TanukiBCL v3.2.5 (`33f8d252400d74756ce3bfd7e59b8011bf76d798`) を通信仕様の基準に、.NET 8で段階的に作り直すプロジェクトです。
 
-最初の段階では、音声デバイスやゲームメモリ読み取りを実装せず、ボイスサーバーとの Socket.IO 通信だけを検証します。
+Socket.IO、WebRTC、Opus音声、音声デバイス、ゲームメモリ読み取り、ゲーム状態に応じた音声ミックスまで段階的に実装しています。
 
 ## 必要環境
 
@@ -107,8 +107,20 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- --scan-game
 - 全プロセスが同じロビーを認識
 - 各視点でプレイヤーが5人
 - ローカルプレイヤーのclient IDが5種類
-- 生存4人、死亡1人
-- クルーメイト4人、インポスター1人
+- 全視点でゲーム状態と人数が一致
+- 現在のゲーム状態に応じた音声ルールが一致
+
+状態や人数を指定して、状態変化を明示的に検証できます。期待する状態が通知されるまで最大20秒待つため、起動直後の古い状態を誤採用しません。
+
+```powershell
+dotnet run --project src/TanukiBCL.VoiceProbe -- --scan-game `
+  --expected-game-state Discussion `
+  --expected-alive 3 `
+  --expected-dead 2 `
+  --expected-impostors 1
+```
+
+`Tasks`中に全員が近距離であることも検証する場合は `--expect-nearby` を追加します。
 
 オフセットはTanukiBCL v3.2.5と同様にBetterCrewLink offsetsから取得し、GameAssemblyのシグネチャで現在の実アドレスを解決します。プロセスメモリへの書き込みは行いません。
 

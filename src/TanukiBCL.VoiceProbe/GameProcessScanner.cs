@@ -6,8 +6,20 @@ namespace TanukiBCL.VoiceProbe;
 
 internal static class GameProcessScanner
 {
-    public static async Task<int> RunAsync(TimeSpan timeout)
+    public static async Task<int> RunAsync(TimeSpan timeout, GameScanExpectation expectation)
     {
+        GameState? expectedGameState = null;
+        if (expectation.GameState is not null)
+        {
+            if (!Enum.TryParse<GameState>(expectation.GameState, true, out var parsedGameState))
+            {
+                Console.Error.WriteLine($"ゲーム状態の期待値が不正です: {expectation.GameState}");
+                return 1;
+            }
+
+            expectedGameState = parsedGameState;
+        }
+
         var processes = Process.GetProcessesByName("Among Us")
             .OrderBy(process => process.Id)
             .ToArray();
@@ -19,7 +31,7 @@ internal static class GameProcessScanner
 
         Console.WriteLine($"Among Usを{processes.Length}プロセス検出しました: {string.Join(", ", processes.Select(p => p.Id))}");
         using var cancellation = new CancellationTokenSource(timeout);
-        var tasks = processes.Select(process => ReadProcessAsync(process, cancellation.Token)).ToArray();
+        var tasks = processes.Select(process => ReadProcessAsync(process, expectedGameState, cancellation.Token)).ToArray();
         var results = await Task.WhenAll(tasks);
         foreach (var process in processes)
         {
@@ -27,10 +39,13 @@ internal static class GameProcessScanner
         }
 
         PrintResults(results);
-        return Validate(results) ? 0 : 1;
+        return Validate(results, expectation, expectedGameState) ? 0 : 1;
     }
 
-    private static async Task<ProcessReadResult> ReadProcessAsync(Process process, CancellationToken cancellationToken)
+    private static async Task<ProcessReadResult> ReadProcessAsync(
+        Process process,
+        GameState? expectedGameState,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -44,7 +59,9 @@ internal static class GameProcessScanner
             reader.Error += (_, message) => error = message;
             reader.StateChanged += (_, state) =>
             {
-                if (state.GameState is GameState.Tasks or GameState.Discussion && state.Players.Count > 0)
+                if (state.GameState is GameState.Tasks or GameState.Discussion &&
+                    state.Players.Count > 0 &&
+                    (expectedGameState is null || state.GameState == expectedGameState))
                 {
                     completion.TrySetResult(state);
                 }
@@ -131,21 +148,27 @@ internal static class GameProcessScanner
         }
     }
 
-    private static bool Validate(IReadOnlyCollection<ProcessReadResult> results)
+    private static bool Validate(
+        IReadOnlyCollection<ProcessReadResult> results,
+        GameScanExpectation expectation,
+        GameState? expectedGameState)
     {
         var states = results.Where(result => result.State is not null).Select(result => result.State!).ToArray();
         var localPlayers = states.Select(state => state.Players.SingleOrDefault(player => player.IsLocal)).Where(player => player is not null).ToArray();
         var passed = results.Count == 5 &&
                      states.Length == 5 &&
                      states.Select(state => state.LobbyCode).Distinct(StringComparer.Ordinal).Count() == 1 &&
+                     states.Select(state => state.GameState).Distinct().Count() == 1 &&
                      states.All(state => state.Players.Count == 5) &&
-                     states.All(state => state.Players.Count(player => player.IsDead && !player.Disconnected) == 1) &&
-                     states.All(state => state.Players.Count(player => player.IsImpostor && !player.Disconnected) == 1) &&
+                     (expectedGameState is null || states.All(state => state.GameState == expectedGameState)) &&
+                     (expectation.Alive is null || states.All(state => CountAlive(state) == expectation.Alive)) &&
+                     (expectation.Dead is null || states.All(state => CountDead(state) == expectation.Dead)) &&
+                     (expectation.Impostors is null || states.All(state => CountImpostors(state) == expectation.Impostors)) &&
                      localPlayers.Length == 5 &&
                      localPlayers.Select(player => player!.ClientId).Distinct().Count() == 5 &&
-                     localPlayers.Count(player => player!.IsImpostor) == 1;
+                     localPlayers.Count(player => player!.IsImpostor) == CountImpostors(states.FirstOrDefault());
 
-        var proximityPassed = states.All(state =>
+        var voiceRulesPassed = states.All(state =>
         {
             var me = state.Players.Single(player => player.IsLocal);
             var mixes = state.Players
@@ -153,21 +176,43 @@ internal static class GameProcessScanner
                 .Select(player => (Player: player, Mix: SpatialVoicePolicy.Calculate(state, me, player, new SpatialVoiceSettings())))
                 .ToArray();
 
-            return me.IsDead
-                ? mixes.All(item => item.Mix.Audible && item.Mix.Reason == "proximity")
-                : mixes.All(item => item.Player.IsDead
-                    ? !item.Mix.Audible && item.Mix.Reason == "living-cannot-hear-ghost"
-                    : item.Mix.Audible && item.Mix.Reason == "proximity");
+            return state.GameState switch
+            {
+                GameState.Discussion => me.IsDead
+                    ? mixes.All(item => item.Mix.Audible && item.Mix.Gain == 1d && item.Mix.Pan == 0d && item.Mix.Reason == "meeting")
+                    : mixes.All(item => item.Player.IsDead
+                        ? !item.Mix.Audible && item.Mix.Pan == 0d && item.Mix.Reason == "living-cannot-hear-ghost"
+                        : item.Mix.Audible && item.Mix.Gain == 1d && item.Mix.Pan == 0d && item.Mix.Reason == "meeting"),
+                GameState.Tasks when expectation.ExpectNearby => me.IsDead
+                    ? mixes.All(item => item.Mix.Audible && item.Mix.Reason == "proximity")
+                    : mixes.All(item => item.Player.IsDead
+                        ? !item.Mix.Audible && item.Mix.Reason == "living-cannot-hear-ghost"
+                        : item.Mix.Audible && item.Mix.Reason == "proximity"),
+                GameState.Tasks => mixes.All(item => me.IsDead || !item.Player.IsDead
+                    ? item.Mix.Reason is "proximity" or "out-of-range"
+                    : !item.Mix.Audible && item.Mix.Reason == "living-cannot-hear-ghost"),
+                GameState.Lobby => mixes.All(item => item.Mix.Audible && item.Mix.Gain == 1d && item.Mix.Pan == 0d && item.Mix.Reason == "lobby"),
+                _ => false
+            };
         });
 
         Console.WriteLine(passed
-            ? "[PASS] 5プロセス、4生存/1死亡、4クルーメイト/1インポスターを全視点で確認しました。"
-            : "[FAIL] 期待した5プロセスのゲーム状態と一致しません。上のPID別結果を確認してください。");
-        Console.WriteLine(proximityPassed
-            ? "[PASS] 近距離の生存者同士と死亡者視点は可聴、生存者から死亡者は遮断されています。"
-            : "[FAIL] 近接音声の可聴条件が現在の配置・生死状態と一致しません。");
-        return passed && proximityPassed;
+            ? "[PASS] 全5プロセスでゲーム状態と指定した期待値が一致しました。"
+            : "[FAIL] ゲーム状態が指定した期待値と一致しません。上のPID別結果を確認してください。");
+        Console.WriteLine(voiceRulesPassed
+            ? "[PASS] 現在のゲーム状態に応じた音声の可聴・遮断・定位ルールが一致しました。"
+            : "[FAIL] 音声ルールが現在のゲーム状態または生死状態と一致しません。");
+        return passed && voiceRulesPassed;
     }
+
+    private static int CountAlive(AmongUsState state) =>
+        state.Players.Count(player => !player.IsDead && !player.Disconnected);
+
+    private static int CountDead(AmongUsState state) =>
+        state.Players.Count(player => player.IsDead && !player.Disconnected);
+
+    private static int CountImpostors(AmongUsState? state) =>
+        state?.Players.Count(player => player.IsImpostor && !player.Disconnected) ?? -1;
 
     private static bool IsProcess64Bit(Process process)
     {
@@ -189,3 +234,10 @@ internal static class GameProcessScanner
         string Diagnostic,
         string? Error);
 }
+
+internal sealed record GameScanExpectation(
+    string? GameState,
+    int? Alive,
+    int? Dead,
+    int? Impostors,
+    bool ExpectNearby);

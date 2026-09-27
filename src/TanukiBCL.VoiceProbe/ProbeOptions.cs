@@ -12,6 +12,11 @@ internal sealed record ProbeOptions(
     bool ListAudioDevices,
     bool ScanGame,
     int? GameProcessId,
+    string? ExpectedGameState,
+    int? ExpectedAlive,
+    int? ExpectedDead,
+    int? ExpectedImpostors,
+    bool ExpectNearby,
     int InputDevice,
     int OutputDevice)
 {
@@ -23,7 +28,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--live-audio" or "--list-audio-devices" or "--scan-game")
+            if (argument is "--host" or "--self-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--expect-nearby")
             {
                 switches.Add(argument);
                 continue;
@@ -66,8 +71,28 @@ internal sealed record ProbeOptions(
             values.TryGetValue("--game-process-id", out var processIdText)
                 ? ParsePositiveInt(processIdText, "--game-process-id")
                 : null,
+            values.GetValueOrDefault("--expected-game-state"),
+            ParseOptionalInt(values, "--expected-alive"),
+            ParseOptionalInt(values, "--expected-dead"),
+            ParseOptionalInt(values, "--expected-impostors"),
+            switches.Contains("--expect-nearby"),
             ParseInt(values, "--input-device", 0),
             ParseInt(values, "--output-device", 0));
+    }
+
+    private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)
+    {
+        if (!values.TryGetValue(name, out var text))
+        {
+            return null;
+        }
+
+        if (!int.TryParse(text, out var value) || value < 0)
+        {
+            throw new ArgumentException($"{name} には0以上の整数を指定してください。");
+        }
+
+        return value;
     }
 
     private static int ParseInt(IReadOnlyDictionary<string, string> values, string name, int fallback)

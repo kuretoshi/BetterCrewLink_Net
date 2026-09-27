@@ -21,7 +21,14 @@ internal static class Program
 
             if (options.ScanGame)
             {
-                return await GameProcessScanner.RunAsync(TimeSpan.FromSeconds(20));
+                return await GameProcessScanner.RunAsync(
+                    TimeSpan.FromSeconds(20),
+                    new GameScanExpectation(
+                        options.ExpectedGameState,
+                        options.ExpectedAlive,
+                        options.ExpectedDead,
+                        options.ExpectedImpostors,
+                        options.ExpectNearby));
             }
 
             if (options.SelfTest)
@@ -82,6 +89,11 @@ internal static class Program
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
               --scan-game         起動中の全Among Usプロセスを読み取り検証
+              --expected-game-state <state> 期待するTasks / Discussion等
+              --expected-alive <n> 期待する生存者数
+              --expected-dead <n> 期待する死亡者数
+              --expected-impostors <n> 期待するインポスター数
+              --expect-nearby     生存者同士が距離内であることも検証
               --game-process-id <pid> ゲーム状態を追跡してロビー・音量を自動更新
               --input-device <n>  マイク番号（既定: 0）
               --output-device <n> スピーカー番号（既定: 0）
