@@ -1,0 +1,16 @@
+<Window x:Class="BetterCrewLinkKai.DotNet.MeetingOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="BetterCrewLinkKai.net Meeting Overlay"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        IsHitTestVisible="False">
+    <Canvas x:Name="MeetingCanvas"
+            Background="Transparent"
+            IsHitTestVisible="False" />
+</Window>
