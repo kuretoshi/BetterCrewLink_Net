@@ -12,7 +12,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 {
     private static readonly AudioFormat OpusFormat = new(AudioCodecsEnum.OPUS, 111, 48_000, 2, "useinbandfec=1");
     private const int SamplesPerChannel = 960;
-    private const int Channels = 2;
+    private const int PlaybackChannels = 2;
     private readonly string owner;
     private readonly bool sendTestTone;
     private readonly Func<string, object, Task> sendSignal;
@@ -49,18 +49,16 @@ internal sealed class WebRtcPeerManager : IDisposable
         }
 
         var monoCount = Math.Min(pcm16Mono.Length / sizeof(short), SamplesPerChannel);
-        var stereo = new short[SamplesPerChannel * Channels];
+        var mono = new short[SamplesPerChannel];
         for (var index = 0; index < monoCount; index++)
         {
-            var sample = BitConverter.ToInt16(pcm16Mono.Slice(index * sizeof(short), sizeof(short)));
-            stereo[index * 2] = sample;
-            stereo[index * 2 + 1] = sample;
+            mono[index] = BitConverter.ToInt16(pcm16Mono.Slice(index * sizeof(short), sizeof(short)));
         }
 
         byte[] encoded;
         lock (audioCodecLock)
         {
-            encoded = audioEncoder.EncodeAudio(stereo, OpusFormat);
+            encoded = audioEncoder.EncodeAudio(mono, OpusFormat);
         }
 
         var sentPeers = 0;
@@ -326,13 +324,11 @@ internal sealed class WebRtcPeerManager : IDisposable
                 return;
             }
 
-            var pcm = new short[SamplesPerChannel * Channels];
+            var pcm = new short[SamplesPerChannel];
             for (var sampleIndex = 0; sampleIndex < SamplesPerChannel; sampleIndex++)
             {
                 var absoluteSample = frameIndex * SamplesPerChannel + sampleIndex;
-                var sample = (short)(Math.Sin(2d * Math.PI * frequency * absoluteSample / 48_000d) * amplitude);
-                pcm[sampleIndex * 2] = sample;
-                pcm[sampleIndex * 2 + 1] = sample;
+                pcm[sampleIndex] = (short)(Math.Sin(2d * Math.PI * frequency * absoluteSample / 48_000d) * amplitude);
             }
 
             byte[] encoded;
@@ -364,7 +360,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             return;
         }
 
-        PcmReceived?.Invoke(peer.RemoteSocketId, EnsureStereo(pcm, frame.AudioFormat.ChannelCount));
+        PcmReceived?.Invoke(peer.RemoteSocketId, MonoToStereo(pcm));
 
         AudioTestResult? result;
         lock (peer.AudioGate)
@@ -375,7 +371,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             }
 
             peer.AudioFrames++;
-            for (var index = 0; index < pcm.Length; index += Channels)
+            for (var index = 0; index < pcm.Length; index++)
             {
                 var sample = pcm[index];
                 var normalized = sample / 32768d;
@@ -411,14 +407,9 @@ internal sealed class WebRtcPeerManager : IDisposable
         AudioVerified?.Invoke(peer.RemoteSocketId, result);
     }
 
-    private static short[] EnsureStereo(short[] pcm, int advertisedChannels)
+    private static short[] MonoToStereo(short[] pcm)
     {
-        if (advertisedChannels == 2)
-        {
-            return pcm;
-        }
-
-        var stereo = new short[pcm.Length * 2];
+        var stereo = new short[pcm.Length * PlaybackChannels];
         for (var index = 0; index < pcm.Length; index++)
         {
             stereo[index * 2] = pcm[index];
