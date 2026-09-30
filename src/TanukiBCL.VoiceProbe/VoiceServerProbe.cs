@@ -22,6 +22,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly SemaphoreSlim gameStateGate = new(1, 1);
     private string currentJoinedLobby = "MENU";
     private string lastMixSignature = string.Empty;
+    private SpatialVoiceSettings spatialVoiceSettings = new();
+    private int? hostClientId;
     private AudioDeviceSession? audioSession;
     private bool microphoneMuted;
     private bool deafened;
@@ -62,6 +64,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 PeerPcmReceived?.Invoke(clientId, pcm);
             }
         };
+        peerManager.PeerDataReceived += ApplyPeerData;
         peerManager.PeerConnectionFailed += remoteSocketId =>
         {
             if (string.CompareOrdinal(socket.Id, remoteSocketId) < 0)
@@ -293,7 +296,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             peerManager.Configure(configuration);
             Log("EVENT", "clientPeerConfig received (credentials redacted)");
         });
-        Observe("setHost");
+        socket.On("setHost", response =>
+        {
+            hostClientId = response.GetValue<int>();
+            Log("EVENT", $"setHost client={hostClientId}");
+        });
         socket.On("setClient", response =>
         {
             var remoteSocketId = response.GetValue<string>(0);
@@ -341,6 +348,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
 
             var type = data.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : "other";
+            if (type == "bcl-control" && data.TryGetProperty("payload", out var payload) && payload.ValueKind == JsonValueKind.String)
+            {
+                ApplyPeerData(remoteSocketId, payload.GetString() ?? string.Empty);
+                return;
+            }
             if (type == "offer" &&
                 string.CompareOrdinal(socket.Id, remoteSocketId) < 0 &&
                 peerManager.IsInitiating(remoteSocketId))
@@ -374,6 +386,55 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
     }
 
+    private void ApplyPeerData(string remoteSocketId, string message)
+    {
+        if (!peerClientIds.TryGetValue(remoteSocketId, out var clientId) ||
+            (hostClientId is int host && clientId != host))
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(message);
+            var data = document.RootElement;
+            if (data.ValueKind != JsonValueKind.Object ||
+                !data.TryGetProperty("maxDistance", out var maxDistance) ||
+                !maxDistance.TryGetDouble(out var distance))
+            {
+                return;
+            }
+
+            var current = spatialVoiceSettings;
+            var next = current with
+            {
+                MaxDistance = distance,
+                HearImpostorsInVents = ReadBool(data, "hearImpostorsInVents", current.HearImpostorsInVents),
+                ImpostorsHearImpostorsInVents = ReadBool(data, "impostersHearImpostersInvent", current.ImpostorsHearImpostorsInVents),
+                Haunting = ReadBool(data, "haunting", current.Haunting),
+                DeadOnly = ReadBool(data, "deadOnly", current.DeadOnly),
+                MeetingGhostOnly = ReadBool(data, "meetingGhostOnly", current.MeetingGhostOnly)
+            };
+            if (next == current)
+            {
+                return;
+            }
+
+            spatialVoiceSettings = next;
+            Log("INFO", $"ロビー音声設定更新: distance={next.MaxDistance:0.##} vent={next.HearImpostorsInVents} impostorVent={next.ImpostorsHearImpostorsInVents}");
+            RefreshPeerMixes();
+        }
+        catch (JsonException)
+        {
+            // Other peer messages are not necessarily lobby settings.
+        }
+    }
+
+    private static bool ReadBool(JsonElement data, string name, bool fallback) =>
+        data.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : fallback;
+
     private void RefreshPeerMixes()
     {
         foreach (var (socketId, clientId) in peerClientIds)
@@ -401,7 +462,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             return;
         }
 
-        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, new SpatialVoiceSettings());
+        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings);
         audioSession?.SetPeerMix(socketId, mix);
         PeerMixChanged?.Invoke(clientId, mix);
     }
@@ -433,6 +494,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
             await socket.EmitAsync("leave");
             currentJoinedLobby = "MENU";
+            spatialVoiceSettings = new SpatialVoiceSettings();
+            hostClientId = null;
             if (targetLobby == "MENU")
             {
                 Log("INFO", "ゲーム状態に追従してロビー退出");
@@ -473,7 +536,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 var player = currentGameState.Players.SingleOrDefault(candidate => candidate.ClientId == pair.Value);
                 var mix = player is null
                     ? new PeerVoiceMix(0d, 0d, 0d, "unmapped-player")
-                    : SpatialVoicePolicy.Calculate(currentGameState, me, player, new SpatialVoiceSettings());
+                    : SpatialVoicePolicy.Calculate(currentGameState, me, player, spatialVoiceSettings);
                 return $"{pair.Value}:{mix.Gain:0.000}:{mix.Pan:0.00}:{mix.Reason}";
             })
             .Order(StringComparer.Ordinal)

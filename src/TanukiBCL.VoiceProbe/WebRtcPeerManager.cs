@@ -36,6 +36,8 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string, short[]>? PcmReceived;
 
+    public event Action<string, string>? PeerDataReceived;
+
     public event Action<string>? PeerConnectionFailed;
 
     public event Action<string, RTCPeerConnectionState>? PeerConnectionStateChanged;
@@ -76,9 +78,10 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public void Configure(JsonElement configuration)
     {
-        forceRelayOnly = configuration.TryGetProperty("forceRelayOnly", out var relay) && relay.GetBoolean();
+        var serverRequiresRelay = configuration.TryGetProperty("forceRelayOnly", out var relay) && relay.GetBoolean();
         if (!configuration.TryGetProperty("iceServers", out var servers) || servers.ValueKind != JsonValueKind.Array)
         {
+            forceRelayOnly = serverRequiresRelay;
             return;
         }
 
@@ -104,6 +107,11 @@ internal sealed class WebRtcPeerManager : IDisposable
             iceServers = parsed;
         }
 
+        // The TanukiBCL desktop client can use TURN-only NAT mode. With mixed
+        // relay/direct ICE in this interop path, peers may repeatedly time out.
+        // Prefer the server-provided TURN when available; keep STUN-only servers usable.
+        forceRelayOnly = serverRequiresRelay || iceServers.Any(server => server.Url.StartsWith("turn:", StringComparison.OrdinalIgnoreCase) ||
+                                                                          server.Url.StartsWith("turns:", StringComparison.OrdinalIgnoreCase));
         Log($"ICE設定受信: servers={iceServers.Count} relayOnly={forceRelayOnly}");
     }
 
@@ -122,6 +130,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         await peer.Connection.setLocalDescription(offer);
         Log($"offer > {Short(remoteSocketId)}");
         await SendSignalAsync(peer, new { type = "offer", sdp = offer.sdp });
+        FlushLocalCandidates(peer);
     }
 
     public bool IsInitiating(string remoteSocketId) =>
@@ -225,6 +234,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             await peer.Connection.setLocalDescription(answer);
             Log($"answer > {Short(remoteSocketId)}");
             await SendSignalAsync(peer, new { type = "answer", sdp = answer.sdp });
+            FlushLocalCandidates(peer);
         }
     }
 
@@ -267,17 +277,25 @@ internal sealed class WebRtcPeerManager : IDisposable
             var candidateText = candidate.candidate.StartsWith("candidate:", StringComparison.OrdinalIgnoreCase)
                 ? candidate.candidate
                 : $"candidate:{candidate.candidate}";
-            Log($"candidate > {Short(remoteSocketId)}");
-            _ = SendSignalAsync(peer, new
+            var signal = new
             {
                 type = "candidate",
                 candidate = new
                 {
                     candidate = candidateText,
                     sdpMLineIndex = candidate.sdpMLineIndex,
-                    sdpMid = candidate.sdpMid
+                    sdpMid = candidate.sdpMid ?? "0"
                 }
-            });
+            };
+            lock (peer.LocalCandidateGate)
+            {
+                if (!peer.LocalDescriptionSent)
+                {
+                    peer.PendingLocalCandidates.Add(signal);
+                    return;
+                }
+            }
+            _ = SendSignalAsync(peer, signal);
         };
         connection.onconnectionstatechange += state =>
         {
@@ -298,6 +316,8 @@ internal sealed class WebRtcPeerManager : IDisposable
                 PeerConnectionFailed?.Invoke(remoteSocketId);
             }
         };
+        connection.oniceconnectionstatechange += state => Log($"peer {Short(remoteSocketId)} ice={state}");
+        connection.onicecandidateerror += (_, error) => Log($"peer {Short(remoteSocketId)} ice-candidate-error={error}");
         connection.ondatachannel += channel => ConfigureDataChannel(peer, channel);
         connection.OnAudioFrameReceived += frame => ReceiveAudio(peer, frame);
         return peer;
@@ -318,6 +338,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             var message = Encoding.UTF8.GetString(data);
             Log($"data < {Short(peer.RemoteSocketId)} {message}");
+            PeerDataReceived?.Invoke(peer.RemoteSocketId, message);
             if (message.StartsWith("tanuki-probe:", StringComparison.Ordinal))
             {
                 channel.send($"tanuki-ack:{owner}");
@@ -450,6 +471,21 @@ internal sealed class WebRtcPeerManager : IDisposable
         return sendSignal(peer.RemoteSocketId, payload);
     }
 
+    private void FlushLocalCandidates(Peer peer)
+    {
+        object[] pending;
+        lock (peer.LocalCandidateGate)
+        {
+            peer.LocalDescriptionSent = true;
+            pending = peer.PendingLocalCandidates.ToArray();
+            peer.PendingLocalCandidates.Clear();
+        }
+        foreach (var signal in pending)
+        {
+            _ = SendSignalAsync(peer, signal);
+        }
+    }
+
     private static RTCIceCandidateInit? ReadCandidate(JsonElement signal)
     {
         if (!signal.TryGetProperty("candidate", out var candidateElement))
@@ -510,6 +546,9 @@ internal sealed class WebRtcPeerManager : IDisposable
         public AudioEncoder Decoder { get; } = new(true, true);
         public RTCDataChannel? Channel { get; set; }
         public List<RTCIceCandidateInit> PendingCandidates { get; } = [];
+        public object LocalCandidateGate { get; } = new();
+        public List<object> PendingLocalCandidates { get; } = [];
+        public bool LocalDescriptionSent { get; set; }
         public object AudioGate { get; } = new();
         public int AudioFrames { get; set; }
         public long SampleCount { get; set; }
