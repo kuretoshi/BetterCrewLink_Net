@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using SIPSorcery.Media;
@@ -16,7 +17,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private readonly string owner;
     private readonly bool sendTestTone;
     private readonly Func<string, object, Task> sendSignal;
-    private readonly Dictionary<string, Peer> peers = [];
+    private readonly ConcurrentDictionary<string, Peer> peers = new();
     private readonly AudioEncoder audioEncoder = new(true, true);
     private readonly object audioCodecLock = new();
     private IReadOnlyList<IceServer> iceServers = [new("stun:stun.l.google.com:19302", null, null)];
@@ -229,7 +230,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public void RemovePeer(string remoteSocketId)
     {
-        if (!peers.Remove(remoteSocketId, out var peer))
+        if (!peers.TryRemove(remoteSocketId, out var peer))
         {
             return;
         }

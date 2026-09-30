@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using SocketIOClient;
@@ -15,7 +16,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly TaskCompletionSource peerVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<AudioTestResult> audioVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly WebRtcPeerManager peerManager;
-    private readonly Dictionary<string, int> peerClientIds = [];
+    private readonly ConcurrentDictionary<string, int> peerClientIds = new();
     private AmongUsState? currentGameState;
     private AmongUsMemoryReaderService? gameReader;
     private readonly SemaphoreSlim gameStateGate = new(1, 1);
@@ -324,7 +325,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             var remoteSocketId = response.GetValue<string>();
             Log("EVENT", $"leave peer={remoteSocketId}");
-            peerClientIds.Remove(remoteSocketId);
+            peerClientIds.TryRemove(remoteSocketId, out _);
             peerManager.RemovePeer(remoteSocketId);
             audioSession?.RemovePeer(remoteSocketId);
         });
@@ -364,7 +365,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                          .ToArray())
             {
                 Log("INFO", $"同一clientの旧peerを除去 client={clientId} peer={staleSocketId}");
-                peerClientIds.Remove(staleSocketId);
+                peerClientIds.TryRemove(staleSocketId, out _);
                 peerManager.RemovePeer(staleSocketId);
                 audioSession?.RemovePeer(staleSocketId);
             }
