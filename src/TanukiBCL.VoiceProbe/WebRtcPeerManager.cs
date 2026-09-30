@@ -143,6 +143,9 @@ internal sealed class WebRtcPeerManager : IDisposable
     public async Task ApplySignalAsync(string remoteSocketId, JsonElement data)
     {
         var type = data.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
+        var incomingConnectionId = data.TryGetProperty("connectionId", out var connectionIdElement)
+            ? connectionIdElement.GetString()
+            : null;
         if (string.IsNullOrWhiteSpace(type))
         {
             return;
@@ -150,15 +153,26 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         if (type == "offer")
         {
+            if (peers.TryGetValue(remoteSocketId, out var existingPeer) &&
+                !existingPeer.Initiator &&
+                !string.IsNullOrWhiteSpace(incomingConnectionId) &&
+                incomingConnectionId == existingPeer.ConnectionId)
+            {
+                return;
+            }
             RemovePeer(remoteSocketId);
+        }
+        else if (peers.TryGetValue(remoteSocketId, out var existingPeer) &&
+                 !string.IsNullOrWhiteSpace(incomingConnectionId) &&
+                 incomingConnectionId != existingPeer.ConnectionId)
+        {
+            Log($"stale {type} ignored < {Short(remoteSocketId)}");
+            return;
         }
 
         if (!peers.TryGetValue(remoteSocketId, out var peer))
         {
-            var connectionId = data.TryGetProperty("connectionId", out var connectionIdElement)
-                ? connectionIdElement.GetString()
-                : null;
-            peer = CreatePeer(remoteSocketId, initiator: false, connectionId);
+            peer = CreatePeer(remoteSocketId, initiator: false, incomingConnectionId);
         }
 
         if (type == "candidate")
@@ -222,6 +236,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         peer.Connection.close();
         peer.Connection.Dispose();
+        peer.Decoder.Dispose();
     }
 
     private Peer CreatePeer(string remoteSocketId, bool initiator, string? connectionId = null)
@@ -265,6 +280,10 @@ internal sealed class WebRtcPeerManager : IDisposable
         };
         connection.onconnectionstatechange += state =>
         {
+            if (!peers.TryGetValue(remoteSocketId, out var currentPeer) || !ReferenceEquals(currentPeer, peer))
+            {
+                return;
+            }
             Log($"peer {Short(remoteSocketId)} state={state}");
             PeerConnectionStateChanged?.Invoke(remoteSocketId, state);
             if (state == RTCPeerConnectionState.connected &&
@@ -348,9 +367,9 @@ internal sealed class WebRtcPeerManager : IDisposable
     private void ReceiveAudio(Peer peer, EncodedAudioFrame frame)
     {
         short[] pcm;
-        lock (audioCodecLock)
+        lock (peer.AudioGate)
         {
-            pcm = audioEncoder.DecodeAudio(frame.EncodedAudio, frame.AudioFormat.Codec == AudioCodecsEnum.Unknown
+            pcm = peer.Decoder.DecodeAudio(frame.EncodedAudio, frame.AudioFormat.Codec == AudioCodecsEnum.Unknown
                 ? OpusFormat
                 : frame.AudioFormat);
         }
@@ -487,6 +506,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         RTCPeerConnection Connection,
         bool Initiator)
     {
+        public AudioEncoder Decoder { get; } = new(true, true);
         public RTCDataChannel? Channel { get; set; }
         public List<RTCIceCandidateInit> PendingCandidates { get; } = [];
         public object AudioGate { get; } = new();
