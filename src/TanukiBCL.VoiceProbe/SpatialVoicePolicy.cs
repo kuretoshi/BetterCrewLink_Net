@@ -7,6 +7,8 @@ internal sealed record SpatialVoiceSettings(
     bool SpatialAudio = true,
     bool HearImpostorsInVents = false,
     bool ImpostorsHearImpostorsInVents = false,
+    bool ImpostorRadioEnabled = false,
+    bool ImpostorRadioOnlyMode = false,
     bool Haunting = false,
     double GhostVolumeAsImpostor = 1d,
     double CrewVolumeAsGhost = 1d,
@@ -30,7 +32,8 @@ internal static class SpatialVoicePolicy
         AmongUsState state,
         Player me,
         Player other,
-        SpatialVoiceSettings settings)
+        SpatialVoiceSettings settings,
+        bool otherUsingImpostorRadio = false)
     {
         var deltaX = other.X - me.X;
         var deltaY = other.Y - me.Y;
@@ -67,9 +70,21 @@ internal static class SpatialVoicePolicy
                 break;
         }
 
+        if ((settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&
+            otherUsingImpostorRadio && me.IsImpostor && other.IsImpostor &&
+            !me.IsDead && !other.IsDead)
+        {
+            return new PeerVoiceMix(1d, 0d, distance, "impostor-radio");
+        }
+
         if (settings.MeetingGhostOnly)
         {
             return Muted(pan, distance, "meeting-ghost-only");
+        }
+
+        if (settings.ImpostorRadioOnlyMode && !me.IsDead)
+        {
+            return Muted(pan, distance, "radio-only");
         }
 
         if (other.InVent &&

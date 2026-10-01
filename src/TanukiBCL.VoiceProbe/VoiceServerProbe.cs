@@ -17,6 +17,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly TaskCompletionSource<AudioTestResult> audioVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly WebRtcPeerManager peerManager;
     private readonly ConcurrentDictionary<string, int> peerClientIds = new();
+    private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
     private AmongUsState? currentGameState;
     private AmongUsMemoryReaderService? gameReader;
     private readonly SemaphoreSlim gameStateGate = new(1, 1);
@@ -332,7 +333,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             var remoteSocketId = response.GetValue<string>();
             Log("EVENT", $"leave peer={remoteSocketId}");
-            peerClientIds.TryRemove(remoteSocketId, out _);
+            if (peerClientIds.TryRemove(remoteSocketId, out var departedClientId))
+            {
+                impostorRadioStates.TryRemove(departedClientId, out _);
+            }
             peerManager.RemovePeer(remoteSocketId);
             audioSession?.RemovePeer(remoteSocketId);
         });
@@ -388,8 +392,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private void ApplyPeerData(string remoteSocketId, string message)
     {
-        if (!peerClientIds.TryGetValue(remoteSocketId, out var clientId) ||
-            (hostClientId is int host && clientId != host))
+        if (!peerClientIds.TryGetValue(remoteSocketId, out var clientId))
         {
             return;
         }
@@ -398,7 +401,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             using var document = JsonDocument.Parse(message);
             var data = document.RootElement;
-            if (data.ValueKind != JsonValueKind.Object ||
+            if (data.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            if (data.TryGetProperty("impostorRadio", out var radio) &&
+                radio.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                ApplyImpostorRadioStatus(clientId, data, radio.GetBoolean());
+                return;
+            }
+
+            if ((hostClientId is int host && clientId != host) ||
                 !data.TryGetProperty("maxDistance", out var maxDistance) ||
                 !maxDistance.TryGetDouble(out var distance))
             {
@@ -411,6 +426,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 MaxDistance = distance,
                 HearImpostorsInVents = ReadBool(data, "hearImpostorsInVents", current.HearImpostorsInVents),
                 ImpostorsHearImpostorsInVents = ReadBool(data, "impostersHearImpostersInvent", current.ImpostorsHearImpostorsInVents),
+                ImpostorRadioEnabled = ReadBool(data, "impostorRadioEnabled", current.ImpostorRadioEnabled),
+                ImpostorRadioOnlyMode = ReadBool(data, "impostorRadioOnlyMode", current.ImpostorRadioOnlyMode),
                 Haunting = ReadBool(data, "haunting", current.Haunting),
                 DeadOnly = ReadBool(data, "deadOnly", current.DeadOnly),
                 MeetingGhostOnly = ReadBool(data, "meetingGhostOnly", current.MeetingGhostOnly)
@@ -434,6 +451,35 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         data.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? value.GetBoolean()
             : fallback;
+
+    private void ApplyImpostorRadioStatus(int clientId, JsonElement data, bool active)
+    {
+        var sender = currentGameState?.Players.SingleOrDefault(player => player.ClientId == clientId);
+        if (active && (sender is null || !sender.IsImpostor || sender.IsDead))
+        {
+            return;
+        }
+
+        var version = data.TryGetProperty("impostorRadioVersion", out var versionElement) &&
+                      versionElement.TryGetInt64(out var parsedVersion)
+            ? parsedVersion
+            : -1;
+        if (impostorRadioStates.TryGetValue(clientId, out var previous) && version < previous.Version)
+        {
+            return;
+        }
+
+        impostorRadioStates[clientId] = new RadioStatus(version, active, DateTimeOffset.UtcNow);
+        if (previous?.Active != active)
+        {
+            Log("INFO", $"インポスターラジオ: client={clientId} active={active}");
+            RefreshPeerMixes();
+        }
+    }
+
+    private bool IsImpostorRadioActive(int clientId) =>
+        impostorRadioStates.TryGetValue(clientId, out var status) &&
+        status.Active && DateTimeOffset.UtcNow - status.SeenAt < TimeSpan.FromSeconds(3);
 
     private void RefreshPeerMixes()
     {
@@ -462,7 +508,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             return;
         }
 
-        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings);
+        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings, IsImpostorRadioActive(clientId));
         audioSession?.SetPeerMix(socketId, mix);
         PeerMixChanged?.Invoke(clientId, mix);
     }
@@ -496,6 +542,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             currentJoinedLobby = "MENU";
             spatialVoiceSettings = new SpatialVoiceSettings();
             hostClientId = null;
+            impostorRadioStates.Clear();
             if (targetLobby == "MENU")
             {
                 Log("INFO", "ゲーム状態に追従してロビー退出");
@@ -536,7 +583,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 var player = currentGameState.Players.SingleOrDefault(candidate => candidate.ClientId == pair.Value);
                 var mix = player is null
                     ? new PeerVoiceMix(0d, 0d, 0d, "unmapped-player")
-                    : SpatialVoicePolicy.Calculate(currentGameState, me, player, spatialVoiceSettings);
+                    : SpatialVoicePolicy.Calculate(currentGameState, me, player, spatialVoiceSettings, IsImpostorRadioActive(pair.Value));
                 return $"{pair.Value}:{mix.Gain:0.000}:{mix.Pan:0.00}:{mix.Reason}";
             })
             .Order(StringComparer.Ordinal)
@@ -638,4 +685,6 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss.fff} [{label}/{level}] {message}");
     }
+
+    private sealed record RadioStatus(long Version, bool Active, DateTimeOffset SeenAt);
 }
