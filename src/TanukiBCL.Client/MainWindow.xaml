@@ -88,7 +88,8 @@
             </Grid>
         </Border>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal">
+        <StackPanel Grid.Row="3">
+          <StackPanel Orientation="Horizontal">
             <Button x:Name="StartButton" Content="接続開始" Width="130" Background="#42A66B"
                     Foreground="White" Click="StartButton_Click" />
             <Button x:Name="StopButton" Content="停止" Width="100" IsEnabled="False"
@@ -97,6 +98,9 @@
                     Click="MuteButton_Click" />
             <Button x:Name="DeafenButton" Content="スピーカーをミュート" Width="170" IsEnabled="False"
                     Click="DeafenButton_Click" />
+          </StackPanel>
+          <Button x:Name="RadioButton" Content="インポスターラジオ: OFF" Width="210" HorizontalAlignment="Left"
+                  IsEnabled="False" Click="RadioButton_Click" />
         </StackPanel>
     </Grid>
 </Window>

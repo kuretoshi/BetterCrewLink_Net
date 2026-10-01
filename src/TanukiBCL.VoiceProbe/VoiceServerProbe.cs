@@ -28,6 +28,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private AudioDeviceSession? audioSession;
     private bool microphoneMuted;
     private bool deafened;
+    private readonly object radioTransmitGate = new();
+    private bool impostorRadioTransmitting;
+    private long impostorRadioVersion;
+    private DateTimeOffset lastRadioStatusSentAt;
 
     public VoiceServerProbe(ProbeOptions options, string label = "probe")
     {
@@ -116,10 +120,50 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public event Action<int>? PeerTestToneSent;
 
+    public event Action<bool>? ImpostorRadioTransmitChanged;
+
+    public event Action<bool>? ImpostorRadioAvailabilityChanged;
+
+    public bool CanUseImpostorRadio =>
+        currentGameState is { GameState: GameState.Tasks or GameState.Discussion } state &&
+        state.Players.Any(player => player.IsLocal && player.IsImpostor && !player.IsDead) &&
+        (spatialVoiceSettings.ImpostorRadioEnabled || spatialVoiceSettings.ImpostorRadioOnlyMode);
+
+    public bool SetImpostorRadioTransmitting(bool active)
+    {
+        if (active && !CanUseImpostorRadio)
+        {
+            return false;
+        }
+
+        lock (radioTransmitGate)
+        {
+            if (impostorRadioTransmitting == active)
+            {
+                return true;
+            }
+            impostorRadioTransmitting = active;
+            impostorRadioVersion = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), impostorRadioVersion + 1);
+        }
+
+        SendImpostorRadioStatus();
+        ImpostorRadioTransmitChanged?.Invoke(active);
+        return true;
+    }
+
     public void ApplyGameState(AmongUsState state)
     {
         currentGameState = state;
+        if (impostorRadioTransmitting && !CanUseImpostorRadio)
+        {
+            SetImpostorRadioTransmitting(false);
+        }
+        else if (impostorRadioTransmitting && DateTimeOffset.UtcNow - lastRadioStatusSentAt >= TimeSpan.FromSeconds(1))
+        {
+            SendImpostorRadioStatus();
+        }
         GameStateApplied?.Invoke(state);
+        ImpostorRadioAvailabilityChanged?.Invoke(CanUseImpostorRadio);
         RefreshPeerMixes();
     }
 
@@ -155,6 +199,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             var state = currentGameState ?? throw new InvalidOperationException("ゲーム状態をまだ取得していません。");
             var local = state.Players.SingleOrDefault(player => player.IsLocal)
                 ?? throw new InvalidOperationException("ローカルプレイヤーを特定できません。");
+            if (impostorRadioTransmitting)
+            {
+                SetImpostorRadioTransmitting(false);
+            }
             await socket.EmitAsync("leave");
             ResetPeerState();
             currentJoinedLobby = "MENU";
@@ -438,6 +486,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
 
             spatialVoiceSettings = next;
+            if (impostorRadioTransmitting && !CanUseImpostorRadio)
+            {
+                SetImpostorRadioTransmitting(false);
+            }
+            ImpostorRadioAvailabilityChanged?.Invoke(CanUseImpostorRadio);
             Log("INFO", $"ロビー音声設定更新: distance={next.MaxDistance:0.##} vent={next.HearImpostorsInVents} impostorVent={next.ImpostorsHearImpostorsInVents}");
             RefreshPeerMixes();
         }
@@ -451,6 +504,38 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         data.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
             ? value.GetBoolean()
             : fallback;
+
+    private void SendImpostorRadioStatus()
+    {
+        var state = currentGameState;
+        if (state is null || !socket.Connected)
+        {
+            return;
+        }
+
+        bool active;
+        long version;
+        lock (radioTransmitGate)
+        {
+            active = impostorRadioTransmitting;
+            version = impostorRadioVersion;
+            lastRadioStatusSentAt = DateTimeOffset.UtcNow;
+        }
+
+        var payload = JsonSerializer.Serialize(new { impostorRadio = active, impostorRadioVersion = version });
+        foreach (var (socketId, clientId) in peerClientIds)
+        {
+            var player = state.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+            if (active && player is not { IsImpostor: true, IsDead: false } && player is not { IsDead: true })
+            {
+                continue;
+            }
+
+            peerManager.TrySendPeerData(socketId, payload);
+            _ = RunPeerOperationAsync(() => SendSignalAsync(socketId, new { type = "bcl-control", payload }));
+        }
+        Log("INFO", $"インポスターラジオ送信: active={active} version={version}");
+    }
 
     private void ApplyImpostorRadioStatus(int clientId, JsonElement data, bool active)
     {
@@ -538,6 +623,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 return;
             }
 
+            if (impostorRadioTransmitting)
+            {
+                SetImpostorRadioTransmitting(false);
+            }
             await socket.EmitAsync("leave");
             currentJoinedLobby = "MENU";
             spatialVoiceSettings = new SpatialVoiceSettings();

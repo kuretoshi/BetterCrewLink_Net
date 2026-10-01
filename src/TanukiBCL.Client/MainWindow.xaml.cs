@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private AmongUsState? currentState;
     private bool microphoneMuted;
     private bool deafened;
+    private bool radioTransmitting;
     private long sentAudioFrames;
 
     public MainWindow()
@@ -89,6 +90,13 @@ public partial class MainWindow : Window
                 ? System.Windows.Media.Brushes.LightGreen
                 : System.Windows.Media.Brushes.LightGray;
         });
+        probe.ImpostorRadioAvailabilityChanged += available => Dispatch(() => RadioButton.IsEnabled = available);
+        probe.ImpostorRadioTransmitChanged += active => Dispatch(() =>
+        {
+            radioTransmitting = active;
+            RadioButton.Content = active ? "インポスターラジオ: ON" : "インポスターラジオ: OFF";
+            RadioButton.Background = active ? System.Windows.Media.Brushes.DarkOrange : null;
+        });
 
         try
         {
@@ -135,6 +143,9 @@ public partial class MainWindow : Window
         probe?.SetDeafened(deafened);
         DeafenButton.Content = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
     }
+
+    private void RadioButton_Click(object sender, RoutedEventArgs e) =>
+        probe?.SetImpostorRadioTransmitting(!radioTransmitting);
 
     private void ShowGameState(AmongUsState state)
     {
@@ -201,6 +212,7 @@ public partial class MainWindow : Window
         StopButton.IsEnabled = running;
         MuteButton.IsEnabled = running;
         DeafenButton.IsEnabled = running;
+        RadioButton.IsEnabled = running && probe?.CanUseImpostorRadio == true;
         ProcessCombo.IsEnabled = !running;
         InputCombo.IsEnabled = !running;
         OutputCombo.IsEnabled = !running;
@@ -210,6 +222,9 @@ public partial class MainWindow : Window
             sentAudioFrames = 0;
             microphoneMuted = false;
             deafened = false;
+            radioTransmitting = false;
+            RadioButton.Content = "インポスターラジオ: OFF";
+            RadioButton.Background = null;
             MuteButton.Content = "マイクをミュート";
             DeafenButton.Content = "スピーカーをミュート";
             VadText.Text = "マイク: 待機中";

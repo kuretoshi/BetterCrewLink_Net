@@ -136,6 +136,24 @@ internal sealed class WebRtcPeerManager : IDisposable
     public bool IsInitiating(string remoteSocketId) =>
         peers.TryGetValue(remoteSocketId, out var peer) && peer.Initiator;
 
+    public bool TrySendPeerData(string remoteSocketId, string message)
+    {
+        if (!peers.TryGetValue(remoteSocketId, out var peer) || peer.Channel is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            peer.Channel.send(message);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task ReconnectAsync(string remoteSocketId)
     {
         RemovePeer(remoteSocketId);
