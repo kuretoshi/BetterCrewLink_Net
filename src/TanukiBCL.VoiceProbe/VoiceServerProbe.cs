@@ -29,7 +29,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private bool microphoneMuted;
     private bool deafened;
     private readonly object radioTransmitGate = new();
-    private bool impostorRadioTransmitting;
+    private volatile bool impostorRadioTransmitting;
+    private volatile bool localVadTalking;
     private long impostorRadioVersion;
     private DateTimeOffset lastRadioStatusSentAt;
 
@@ -147,6 +148,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
 
         SendImpostorRadioStatus();
+        if (socket.Connected)
+        {
+            _ = socket.EmitAsync("VAD", !active && localVadTalking);
+        }
         ImpostorRadioTransmitChanged?.Invoke(active);
         return true;
     }
@@ -284,7 +289,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 options.OutputDevice,
                 pcm =>
                 {
-                    var peerCount = peerManager.BroadcastMonoPcm48k(pcm.Span);
+                    var peerCount = peerManager.BroadcastMonoPcm48k(
+                        pcm.Span,
+                        impostorRadioTransmitting ? CanReceiveImpostorRadioAudio : null);
                     if (peerCount > 0)
                     {
                         LocalAudioFrameSent?.Invoke(peerCount);
@@ -292,8 +299,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 },
                 talking =>
                 {
+                    localVadTalking = talking;
                     LocalVadChanged?.Invoke(talking);
-                    _ = socket.EmitAsync("VAD", talking);
+                    if (socket.Connected)
+                    {
+                        _ = socket.EmitAsync("VAD", talking && !impostorRadioTransmitting);
+                    }
                 });
             audioSession.Start();
             audioSession.SetMicrophoneMuted(microphoneMuted);
@@ -535,6 +546,17 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             _ = RunPeerOperationAsync(() => SendSignalAsync(socketId, new { type = "bcl-control", payload }));
         }
         Log("INFO", $"インポスターラジオ送信: active={active} version={version}");
+    }
+
+    private bool CanReceiveImpostorRadioAudio(string remoteSocketId)
+    {
+        if (!peerClientIds.TryGetValue(remoteSocketId, out var clientId))
+        {
+            return false;
+        }
+
+        var player = currentGameState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+        return player is { IsImpostor: true, IsDead: false } or { IsDead: true };
     }
 
     private void ApplyImpostorRadioStatus(int clientId, JsonElement data, bool active)

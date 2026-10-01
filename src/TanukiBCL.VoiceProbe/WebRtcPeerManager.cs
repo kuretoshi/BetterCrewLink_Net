@@ -44,7 +44,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string>? TestToneSent;
 
-    public int BroadcastMonoPcm48k(ReadOnlySpan<byte> pcm16Mono)
+    public int BroadcastMonoPcm48k(ReadOnlySpan<byte> pcm16Mono, Func<string, bool>? canSendToPeer = null)
     {
         if (pcm16Mono.Length < sizeof(short))
         {
@@ -67,7 +67,8 @@ internal sealed class WebRtcPeerManager : IDisposable
         var sentPeers = 0;
         foreach (var peer in peers.Values.ToArray())
         {
-            if (peer.Connection.connectionState == RTCPeerConnectionState.connected)
+            if (peer.Connection.connectionState == RTCPeerConnectionState.connected &&
+                (canSendToPeer is null || canSendToPeer(peer.RemoteSocketId)))
             {
                 peer.Connection.SendAudio(SamplesPerChannel, encoded);
                 sentPeers++;
