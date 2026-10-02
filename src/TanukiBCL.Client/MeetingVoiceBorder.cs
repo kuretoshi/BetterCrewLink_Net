@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 
 namespace TanukiBCL.Client;
 
@@ -12,6 +14,41 @@ internal sealed class MeetingVoiceBorder : Border
     private double fadeEnd;
     private double reversingStart;
     private double shorteningFactor = 1;
+    private double shadowRadius;
+    private MeetingBoxShadow? shadow;
+    private (Size Size, DpiScale Dpi) shadowLayout;
+    internal Color ShadowColor { get; private set; }
+
+    internal void SetShadow(Color color, double radius)
+    {
+        if (ShadowColor == color && shadowRadius == radius) return;
+        ShadowColor = color;
+        shadowRadius = radius;
+        shadow = null;
+        InvalidateVisual();
+    }
+
+    protected override void OnRender(DrawingContext drawingContext)
+    {
+        var layout = (RenderSize, VisualTreeHelper.GetDpi(this));
+        if (RenderSize.Width > 0 && RenderSize.Height > 0 && shadowRadius > 0)
+        {
+            if (shadow is null || !shadowLayout.Equals(layout))
+            {
+                shadow = MeetingBoxShadow.Create(RenderSize.Width, RenderSize.Height,
+                    shadowRadius, ShadowColor, layout.Item2);
+                shadowLayout = layout;
+            }
+            drawingContext.DrawImage(shadow.Image, shadow.Bounds);
+        }
+        base.OnRender(drawingContext);
+    }
+
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        InvalidateVisual();
+    }
 
     internal void SetTalking(bool talking)
     {
@@ -56,6 +93,8 @@ internal sealed class MeetingVoiceBorder : Border
 
     internal static void Verify()
     {
+        MeetingBoxShadow.Verify();
+        VerifyShadowRender();
         var box = new MeetingVoiceBorder();
         box.SetTalking(false);
         if (box.Opacity != 0) throw new InvalidOperationException("Initial meeting visibility incorrect");
@@ -99,5 +138,51 @@ internal sealed class MeetingVoiceBorder : Border
         if (immediate.fade is not null || immediate.Opacity != 0)
             throw new InvalidOperationException("Zero-progress reversal should cancel without a new transition");
         Console.WriteLine("[PASS] Interrupted and repeated CSS reversal shortening; completed transition duration reset");
+    }
+
+    private static void VerifyShadowRender()
+    {
+        var box = new MeetingVoiceBorder
+        {
+            Width = 120, Height = 60, CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(2),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x37, 0, 0, 0)),
+            Background = Brushes.Transparent
+        };
+        box.SetShadow(Colors.Red, 6);
+        box.SetTalking(true);
+        var canvas = new Canvas { Width = 190, Height = 120 };
+        Canvas.SetLeft(box, 25); Canvas.SetTop(box, 25); canvas.Children.Add(box);
+        byte[] Render()
+        {
+            canvas.Measure(new Size(190, 120));
+            canvas.Arrange(new Rect(0, 0, 190, 120));
+            canvas.UpdateLayout();
+            var bitmap = new RenderTargetBitmap(190, 120, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(canvas);
+            var pixels = new byte[190 * 120 * 4];
+            bitmap.CopyPixels(pixels, 190 * 4, 0);
+            return pixels;
+        }
+        var first = Render();
+        var outside = (23 * 190 + 85) * 4;
+        var center = (55 * 190 + 85) * 4;
+        if (first[outside + 2] < 210 || first[center + 3] != 0)
+            throw new InvalidOperationException("WPF meeting shadow was clipped outside its slot or filled its interior");
+        var cached = box.shadow;
+        box.InvalidateVisual();
+        Render();
+        if (cached is null || !ReferenceEquals(cached, box.shadow))
+            throw new InvalidOperationException("Unchanged meeting geometry did not reuse its shadow raster");
+        box.SetShadow(Colors.Lime, 6);
+        var recolored = Render();
+        if (recolored[outside + 1] < 210 || recolored[outside + 2] != 0 || ReferenceEquals(cached, box.shadow))
+            throw new InvalidOperationException("Meeting live color change did not replace the rendered shadow");
+        cached = box.shadow;
+        box.Width = 140;
+        Render();
+        if (ReferenceEquals(cached, box.shadow))
+            throw new InvalidOperationException("Meeting resize retained stale shadow geometry");
+        Console.WriteLine("[PASS] WPF meeting shadow outside slot, transparent interior, cached redraw, live color and resize");
     }
 }

@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
@@ -277,16 +276,14 @@ public partial class OverlayWindow : Window
                 {
                     BorderThickness = new Thickness(2d),
                     BorderBrush = new SolidColorBrush(Color.FromArgb(0x37, 0, 0, 0)),
-                    Background = Brushes.Transparent,
-                    Effect = new DropShadowEffect { ShadowDepth = 0d, Opacity = 0.95d }
+                    Background = Brushes.Transparent
                 };
                 meetingSlots.Add(player.Id, slot);
                 MeetingCanvas.Children.Add(slot);
             }
             slot.Width = bounds.Width; slot.Height = bounds.Height;
             slot.CornerRadius = new CornerRadius(hudHeight / 100d);
-            var shadow = (DropShadowEffect)slot.Effect;
-            shadow.Color = color; shadow.BlurRadius = Math.Max(5d, hudHeight / 50d);
+            slot.SetShadow(color, hudHeight / 100d);
             slot.SetTalking(talking);
             Canvas.SetLeft(slot, bounds.X);
             Canvas.SetTop(slot, bounds.Y);
@@ -420,7 +417,7 @@ public partial class OverlayWindow : Window
             var peers = new Dictionary<int, OverlayPeerStatus>();
             window.Update(state, peers, false, false, false);
             var slot = (MeetingVoiceBorder)window.MeetingCanvas.Children[0];
-            Color Tint() => ((DropShadowEffect)slot.Effect).Color;
+            Color Tint() => slot.ShadowColor;
             player.ColorId = 0; player.ClientId = 23; player.IsDead = true; player.IsLocal = false;
             state.Players.Add(new Player { Id = 1, ClientId = 99 });
             window.Update(state, peers, true, false, false);
