@@ -10,6 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="..\TanukiBCL.VoiceProbe\TanukiBCL.VoiceProbe.csproj" />
     <Resource Include="Assets\Avatar\*.png" />
+    <Content Include="Assets\Audio\chime.mp3" CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="BundleNosSnapshotReader" BeforeTargets="ComputeFilesToPublish">

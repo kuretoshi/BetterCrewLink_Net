@@ -21,12 +21,14 @@ public partial class App : Application
             Trace.TraceWarning($"Could not set TanukiBCL AppUserModelID: 0x{result:X8}");
         }
         base.OnStartup(e);
-        if (e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test"))
+        if (e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
+            e.Args.Contains("--audio-preview-self-test"))
         {
             try
             {
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
                 if (e.Args.Contains("--settings-self-test")) SettingsWindow.VerifyModControls();
+                if (e.Args.Contains("--audio-preview-self-test")) AudioPreviewSelfTest.VerifyDevices();
                 Shutdown(0);
             }
             catch (Exception error)

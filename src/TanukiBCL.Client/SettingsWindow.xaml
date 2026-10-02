@@ -150,9 +150,18 @@
                     <StackPanel x:Name="AudioPanel" Visibility="Collapsed">
                         <TextBlock Text="オーディオ" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
                         <TextBlock Text="マイク" Margin="0,0,0,6" />
-                        <ComboBox x:Name="MicrophoneCombo" Margin="0,0,0,16" />
+                        <ComboBox x:Name="MicrophoneCombo" Margin="0,0,0,8"
+                                  SelectionChanged="MicrophoneCombo_SelectionChanged" />
+                        <ProgressBar x:Name="MicrophoneLevelBar" Minimum="0" Maximum="100" Height="8"
+                                     Foreground="#B061C0" Background="#403146" Margin="0,0,0,5" />
+                        <TextBlock x:Name="MicrophoneLevelStatus" Foreground="#B7AABD"
+                                   Text="マイク入力レベル" Margin="0,0,0,16" />
                         <TextBlock Text="スピーカー" Margin="0,0,0,6" />
-                        <ComboBox x:Name="SpeakerCombo" Margin="0,0,0,10" />
+                        <ComboBox x:Name="SpeakerCombo" Margin="0,0,0,8"
+                                  SelectionChanged="SpeakerCombo_SelectionChanged" />
+                        <Button x:Name="TestSpeakerButton" Content="スピーカーテスト"
+                                Width="170" Height="34" HorizontalAlignment="Right"
+                                Margin="0,0,0,10" Click="TestSpeakerButton_Click" />
                         <TextBlock Text="デバイスの変更は再接続後に反映されます。"
                                    Foreground="#B7AABD" Margin="0,0,0,20" />
                         <TextBlock Text="音声操作モード" Margin="0,0,0,8" />

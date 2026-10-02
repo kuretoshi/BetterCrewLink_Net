@@ -23,6 +23,8 @@ public partial class SettingsWindow : Window
     private bool showingCurrentLobby;
     private string? obsSecretDraft;
     private VoiceEffectPreviewSession? voiceEffectPreview;
+    private MicrophoneLevelSession? microphoneLevelSession;
+    private SpeakerTestSession? speakerTestSession;
     private AmongUsState? currentGameState;
     private readonly Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged;
     private string playersSignature = string.Empty;
@@ -233,6 +235,15 @@ public partial class SettingsWindow : Window
         AdvancedPanel.Visibility = CategoryList.SelectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
         StreamingPanel.Visibility = CategoryList.SelectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
         if (CategoryList.SelectedIndex == 7) UpdateObsUrl();
+        if (IsLoaded)
+        {
+            UpdateMicrophoneLevelSession();
+            if (CategoryList.SelectedIndex != 3)
+            {
+                StopSpeakerTest();
+                StopVoiceEffectPreview();
+            }
+        }
     }
 
     private void ObsOverlayCheck_Changed(object sender, RoutedEventArgs e) => UpdateObsUrl();
@@ -291,6 +302,91 @@ public partial class SettingsWindow : Window
             voiceEffectPreview?.SetStrength((int)VoiceEffectStrengthSlider.Value);
     }
 
+    private void MicrophoneCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        UpdateMicrophoneLevelSession();
+        StopVoiceEffectPreview();
+    }
+
+    private void UpdateMicrophoneLevelSession()
+    {
+        StopMicrophoneLevelSession();
+        if (AudioPanel.Visibility != Visibility.Visible ||
+            MicrophoneCombo.SelectedItem is not AudioDeviceInfo input) return;
+        try
+        {
+            MicrophoneLevelSession? started = null;
+            started = MicrophoneLevelSession.Start(input.Id, level =>
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (ReferenceEquals(microphoneLevelSession, started))
+                        MicrophoneLevelBar.Value = level;
+                })));
+            microphoneLevelSession = started;
+            MicrophoneLevelStatus.Text = "マイク入力レベル";
+        }
+        catch (Exception error)
+        {
+            MicrophoneLevelStatus.Text = $"マイクに接続できません: {error.Message}";
+        }
+    }
+
+    private void StopMicrophoneLevelSession()
+    {
+        var session = microphoneLevelSession;
+        microphoneLevelSession = null;
+        session?.Dispose();
+        if (MicrophoneLevelBar is not null) MicrophoneLevelBar.Value = 0;
+    }
+
+    private void SpeakerCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        StopSpeakerTest();
+        StopVoiceEffectPreview();
+    }
+
+    private void TestSpeakerButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (speakerTestSession is not null)
+        {
+            StopSpeakerTest();
+            return;
+        }
+        if (SpeakerCombo.SelectedItem is not AudioDeviceInfo speaker)
+        {
+            MessageBox.Show(this, "スピーカーを選択してください。", "スピーカーテスト");
+            return;
+        }
+        try
+        {
+            var chimePath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Audio", "chime.mp3");
+            SpeakerTestSession? started = null;
+            started = SpeakerTestSession.Start(speaker.Id, chimePath, () =>
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    if (ReferenceEquals(speakerTestSession, started)) StopSpeakerTest();
+                })));
+            speakerTestSession = started;
+            TestSpeakerButton.Content = "スピーカーテスト停止";
+        }
+        catch (Exception error)
+        {
+            StopSpeakerTest();
+            MessageBox.Show(this, $"スピーカーテストを開始できませんでした: {error.Message}",
+                "スピーカーテスト");
+        }
+    }
+
+    private void StopSpeakerTest()
+    {
+        var session = speakerTestSession;
+        speakerTestSession = null;
+        session?.Dispose();
+        if (TestSpeakerButton is not null) TestSpeakerButton.Content = "スピーカーテスト";
+    }
+
     private void TestVoiceEffectButton_Click(object sender, RoutedEventArgs e)
     {
         if (voiceEffectPreview is not null)
@@ -329,6 +425,8 @@ public partial class SettingsWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        StopMicrophoneLevelSession();
+        StopSpeakerTest();
         StopVoiceEffectPreview();
         base.OnClosed(e);
     }
@@ -650,6 +748,12 @@ public partial class SettingsWindow : Window
             if (restored is null || !restored.HideCode || !restored.ObsOverlay ||
                 restored.ObsSecret != window.obsSecretDraft)
                 throw new InvalidOperationException("Streaming settings did not persist");
+            var chimePath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Audio", "chime.mp3");
+            using var chime = new NAudio.Wave.AudioFileReader(chimePath);
+            if (chime.TotalTime < TimeSpan.FromMilliseconds(100) ||
+                MicrophoneLevelSession.CalculateLevel([0, 0, 0, 0]) != 0 ||
+                MicrophoneLevelSession.CalculateLevel([0, 64, 0, 64]) < 90)
+                throw new InvalidOperationException("Audio settings previews are not ready");
         }
         finally { window.Close(); }
     }
