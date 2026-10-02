@@ -171,6 +171,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public event Action<string>? ConnectionStatusChanged;
 
+    public event Action<ConnectionQuality?>? ServerQualityChanged;
+
     public event Action<int, string>? PeerConnectionStatusChanged;
 
     public event Action<int>? PeerTestToneSent;
@@ -494,8 +496,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             connected.TrySetResult();
         };
 
+        socket.OnPong += (_, duration) =>
+        {
+            if (!socket.Connected || duration < TimeSpan.Zero) return;
+            var pingMs = duration.TotalMilliseconds;
+            if (double.IsFinite(pingMs))
+            {
+                ServerQualityChanged?.Invoke(new ConnectionQuality(ServerPingMs: pingMs));
+            }
+        };
+
         socket.OnDisconnected += (_, reason) =>
         {
+            ServerQualityChanged?.Invoke(null);
             Log("WARN", $"切断: {reason}");
             ConnectionStatusChanged?.Invoke($"切断: {reason}");
         };

@@ -109,6 +109,15 @@ internal static class SpatialVoicePolicySelfTest
         CheckGain("player config: clamp invalid volume", 2d,
             new PlayerAudioConfig(5d).Normalize().Volume);
 
+        Check("quality: unmeasured", true, new ConnectionQuality().Bars == 0);
+        Check("quality: good server ping", true, new ConnectionQuality(ServerPingMs: 25d).Bars == 3);
+        Check("quality: moderate server ping", true, new ConnectionQuality(ServerPingMs: 180d).Bars == 2);
+        Check("quality: unstable server ping", true, new ConnectionQuality(ServerPingMs: 320d).Bars == 1);
+        Check("quality: jitter can lower bars", true,
+            new ConnectionQuality(JitterMs: 35d, ServerPingMs: 25d).Bars == 2);
+        Check("quality: server ping takes precedence over peer RTT", true,
+            new ConnectionQuality(RttMs: 400d, ServerPingMs: 25d).Bars == 3);
+
         var ventPolicy = new SpatialVoiceSettings(HearImpostorsInVents: true,
             ImpostorsHearImpostorsInVents: true, ImpostorRadioEnabled: true);
         var ventSpeaker = new Player { IsImpostor = true, InVent = true };

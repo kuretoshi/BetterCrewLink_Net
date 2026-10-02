@@ -55,7 +55,8 @@ public partial class VoiceView : UserControl
 
     public void Update(AmongUsState? game, bool connected, bool localTalking, bool muted,
         bool deafened, IReadOnlyDictionary<int, VoicePlayerStatus> peers, bool hideCode = false,
-        bool localUsingRadio = false, IReadOnlyDictionary<int, PlayerAudioConfig>? playerConfigs = null)
+        bool localUsingRadio = false, IReadOnlyDictionary<int, PlayerAudioConfig>? playerConfigs = null,
+        ConnectionQuality? serverQuality = null)
     {
         this.playerConfigs = playerConfigs ?? new Dictionary<int, PlayerAudioConfig>();
         var local = game?.Players.FirstOrDefault(player => player.IsLocal);
@@ -76,7 +77,7 @@ public partial class VoiceView : UserControl
         LobbyCode.Text = hideCode ? "LOBBY" : game.LobbyCode;
         LocalAvatar.SetPlayer(local, game.PlayerColors);
         LocalAvatar.SetVisualState(localTalking, muted, deafened,
-            connected ? "connected" : "disconnected", localUsingRadio);
+            connected ? "connected" : "disconnected", localUsingRadio, serverQuality);
         MuteIcon.Data = muted || deafened ? MicOff : Mic;
         DeafenIcon.Data = deafened ? VolumeOff : VolumeUp;
         MuteButton.ToolTip = muted || deafened ? "マイクミュート解除" : "マイクをミュート";
@@ -115,7 +116,7 @@ public partial class VoiceView : UserControl
                 : VoicePlayerStatus.Disconnected;
             var config = PlayerAudioConfig.For(player, this.playerConfigs);
             avatar.SetVisualState(status.Talking && !player.InVent, false,
-                config.IsMuted || config.Volume == 0d, status.ConnectionState, status.UsingRadio, status.QualityBars);
+                config.IsMuted || config.Volume == 0d, status.ConnectionState, status.UsingRadio, status.Quality);
         }
     }
 
@@ -230,7 +231,7 @@ public sealed record VoicePlayerStatus(
     string ConnectionState,
     bool Talking,
     bool UsingRadio,
-    int QualityBars)
+    ConnectionQuality? Quality = null)
 {
-    public static readonly VoicePlayerStatus Disconnected = new("disconnected", false, false, 0);
+    public static readonly VoicePlayerStatus Disconnected = new("disconnected", false, false);
 }

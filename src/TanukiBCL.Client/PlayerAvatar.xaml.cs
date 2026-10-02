@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.Client;
@@ -41,7 +42,7 @@ public partial class PlayerAvatar : UserControl
     }
 
     public void SetVisualState(bool talking, bool muted, bool deafened, string connectionState,
-        bool usingRadio, int qualityBars = 0)
+        bool usingRadio, ConnectionQuality? quality = null)
     {
         SpeechRing.Stroke = talking ? new SolidColorBrush(Color.FromRgb(0x2e, 0xcc, 0x71)) : Brushes.Transparent;
         RadioBadge.Visibility = usingRadio ? Visibility.Visible : Visibility.Collapsed;
@@ -62,7 +63,8 @@ public partial class PlayerAvatar : UserControl
             StateBadge.BorderBrush = new SolidColorBrush(borderColor);
         }
 
-        var bars = Math.Clamp(qualityBars, 0, 3);
+        var connected = connectionState == "connected";
+        var bars = connected ? quality?.Bars ?? 0 : 0;
         var active = bars switch
         {
             1 => Color.FromRgb(0xef, 0x53, 0x50),
@@ -73,5 +75,19 @@ public partial class PlayerAvatar : UserControl
         QualityBar1.Background = bars >= 1 ? activeBrush : new SolidColorBrush(Color.FromRgb(0x72, 0x77, 0x7d));
         QualityBar2.Background = bars >= 2 ? activeBrush : new SolidColorBrush(Color.FromRgb(0x72, 0x77, 0x7d));
         QualityBar3.Background = bars >= 3 ? activeBrush : new SolidColorBrush(Color.FromRgb(0x72, 0x77, 0x7d));
+        var status = !connected ? "未接続" : bars switch
+        {
+            0 => "未計測",
+            1 => "不安定",
+            2 => "普通",
+            _ => "良好"
+        };
+        var ping = connected ? quality?.ServerPingMs ?? quality?.RttMs : null;
+        var tooltip = $"音声接続: {status}\nボイスサーバーとのping: {(ping is null ? "—" : $"{Math.Round(ping.Value)} ms")}";
+        if (connected && quality?.JitterMs is double jitterMs)
+            tooltip += $"\n受信の揺らぎ: {Math.Round(jitterMs)} ms";
+        if (connected && quality?.LossPercent is double lossPercent)
+            tooltip += $"\n受信ロス: {lossPercent:0.0}%";
+        QualityBadge.ToolTip = tooltip;
     }
 }

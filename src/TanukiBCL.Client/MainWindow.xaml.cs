@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private bool radioTransmitting;
     private bool localTalking;
     private bool voiceServerConnected;
+    private ConnectionQuality? serverQuality;
     private long sentAudioFrames;
 
     public MainWindow()
@@ -178,6 +179,11 @@ public partial class MainWindow : Window
         {
             StatusText.Text = status;
             voiceServerConnected = status == "ボイスサーバー接続済み";
+            UpdateCompactView();
+        });
+        probe.ServerQualityChanged += quality => Dispatch(() =>
+        {
+            serverQuality = quality;
             UpdateCompactView();
         });
         probe.GameStateApplied += state => Dispatch(() => ShowGameState(state));
@@ -397,6 +403,7 @@ public partial class MainWindow : Window
             radioTransmitting = false;
             localTalking = false;
             voiceServerConnected = false;
+            serverQuality = null;
             RadioButton.Content = "インポスターラジオ: OFF";
             RadioButton.Background = null;
             MuteButton.Content = "マイクをミュート";
@@ -442,10 +449,10 @@ public partial class MainWindow : Window
             row.Connection is "data-ready" or "接続済み"
                 ? row.HasReceivedFrames ? "connected" : "novoice"
                 : "disconnected",
-            row.Talking, row.Radio == "送信中", 0));
+            row.Talking, row.Radio == "送信中"));
         CompactVoiceView.Update(currentState, voiceServerConnected, localTalking && !microphoneMuted,
             microphoneMuted, deafened, statuses, localUsingRadio: radioTransmitting,
-            playerConfigs: settings.PlayerConfigMap);
+            playerConfigs: settings.PlayerConfigMap, serverQuality: serverQuality);
         var active = probe?.CurrentLobbySettings;
         CompactVoiceView.SetWarning(active?.DeadOnly == true
             ? "幽霊のみのボイス設定です"
