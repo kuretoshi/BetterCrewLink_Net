@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private bool radioTransmitting;
     private bool localTalking;
     private bool voiceServerConnected;
+    private bool reloadInProgress;
     private ConnectionQuality? serverQuality;
     private long sentAudioFrames;
 
@@ -40,7 +41,7 @@ public partial class MainWindow : Window
         RefreshProcesses();
         var explicitProcess = SelectProcessFromCommandLine();
         CompactVoiceView.SettingsRequested += (_, _) => SettingsButton_Click(this, new RoutedEventArgs());
-        CompactVoiceView.ReloadRequested += (_, _) => ShowDiagnostics();
+        CompactVoiceView.ReloadRequested += CompactVoiceView_ReloadRequested;
         CompactVoiceView.CloseRequested += (_, _) => Close();
         CompactVoiceView.MuteRequested += (_, _) => ToggleMicrophoneMute();
         CompactVoiceView.DeafenRequested += (_, _) => ToggleDeafen();
@@ -290,6 +291,37 @@ public partial class MainWindow : Window
     }
 
     private void StopButton_Click(object sender, RoutedEventArgs e) => runCancellation?.Cancel();
+
+    private async void CompactVoiceView_ReloadRequested(object? sender, EventArgs e)
+    {
+        if (reloadInProgress) return;
+        var activeProbe = probe;
+        var cancellation = runCancellation;
+        if (activeProbe is null || cancellation is null || cancellation.IsCancellationRequested)
+        {
+            ShowDiagnostics();
+            return;
+        }
+
+        reloadInProgress = true;
+        try
+        {
+            StatusText.Text = "音声接続を再読み込み中...";
+            await activeProbe.RestartServerConnectionAsync(cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"再読み込み失敗: {exception.Message}";
+            ShowDiagnostics();
+        }
+        finally
+        {
+            reloadInProgress = false;
+        }
+    }
 
     private void MuteButton_Click(object sender, RoutedEventArgs e)
         => ToggleMicrophoneMute();
