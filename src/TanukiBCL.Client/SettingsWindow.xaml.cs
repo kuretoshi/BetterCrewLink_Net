@@ -76,6 +76,9 @@ public partial class SettingsWindow : Window
         ServerUrlBox.Text = settings.ServerUrl;
         NatFixCheck.IsChecked = settings.NatFix;
         SpatialAudioCheck.IsChecked = settings.EnableSpatialAudio;
+        EchoCancellationCheck.IsChecked = settings.EchoCancellation;
+        NoiseSuppressionCheck.IsChecked = settings.NoiseSuppression;
+        AutoGainControlCheck.IsChecked = settings.AutoGainControl;
         ShowLobbyCodeCheck.IsChecked = !settings.HideCode;
         obsSecretDraft = settings.ObsSecret;
         ObsOverlayCheck.IsChecked = settings.ObsOverlay;
@@ -310,6 +313,11 @@ public partial class SettingsWindow : Window
         StopVoiceEffectPreview();
     }
 
+    private void AutoGainControlCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (IsLoaded) UpdateMicrophoneLevelSession();
+    }
+
     private void UpdateMicrophoneLevelSession()
     {
         StopMicrophoneLevelSession();
@@ -318,7 +326,7 @@ public partial class SettingsWindow : Window
         try
         {
             MicrophoneLevelSession? started = null;
-            started = MicrophoneLevelSession.Start(input.Id, level =>
+            started = MicrophoneLevelSession.Start(input.Id, AutoGainControlCheck.IsChecked == true, level =>
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     if (ReferenceEquals(microphoneLevelSession, started))
@@ -627,6 +635,9 @@ public partial class SettingsWindow : Window
             ServerUrl = serverUrl,
             NatFix = NatFixCheck.IsChecked == true,
             EnableSpatialAudio = SpatialAudioCheck.IsChecked == true,
+            EchoCancellation = EchoCancellationCheck.IsChecked == true,
+            NoiseSuppression = NoiseSuppressionCheck.IsChecked == true,
+            AutoGainControl = AutoGainControlCheck.IsChecked == true,
             MicrophoneName = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Name,
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,
             AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
@@ -670,6 +681,9 @@ public partial class SettingsWindow : Window
         settings.ServerUrl = candidate.ServerUrl;
         settings.NatFix = candidate.NatFix;
         settings.EnableSpatialAudio = candidate.EnableSpatialAudio;
+        settings.EchoCancellation = candidate.EchoCancellation;
+        settings.NoiseSuppression = candidate.NoiseSuppression;
+        settings.AutoGainControl = candidate.AutoGainControl;
         settings.MicrophoneName = candidate.MicrophoneName;
         settings.SpeakerName = candidate.SpeakerName;
         settings.AlwaysOnTop = candidate.AlwaysOnTop;
@@ -760,6 +774,23 @@ public partial class SettingsWindow : Window
                 { EnableSpatialAudio = window.SpatialAudioCheck.IsChecked == true }));
             if (spatialRestored?.EnableSpatialAudio != false)
                 throw new InvalidOperationException("Spatial audio setting did not persist");
+            if (window.EchoCancellationCheck.IsChecked != true ||
+                window.NoiseSuppressionCheck.IsChecked != true ||
+                window.AutoGainControlCheck.IsChecked != false)
+                throw new InvalidOperationException("Input processing defaults were not loaded");
+            window.EchoCancellationCheck.IsChecked = false;
+            window.NoiseSuppressionCheck.IsChecked = false;
+            window.AutoGainControlCheck.IsChecked = true;
+            var processingRestored = JsonSerializer.Deserialize<ClientSettings>(
+                JsonSerializer.Serialize(new ClientSettings
+                {
+                    EchoCancellation = window.EchoCancellationCheck.IsChecked == true,
+                    NoiseSuppression = window.NoiseSuppressionCheck.IsChecked == true,
+                    AutoGainControl = window.AutoGainControlCheck.IsChecked == true
+                }));
+            if (processingRestored is null || processingRestored.EchoCancellation ||
+                processingRestored.NoiseSuppression || !processingRestored.AutoGainControl)
+                throw new InvalidOperationException("Input processing settings did not persist");
             var chimePath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Audio", "chime.mp3");
             using var chime = new NAudio.Wave.AudioFileReader(chimePath);
             if (chime.TotalTime < TimeSpan.FromMilliseconds(100) ||

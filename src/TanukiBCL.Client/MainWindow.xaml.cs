@@ -70,6 +70,9 @@ public partial class MainWindow : Window
         var previousServerUrl = settings.ServerUrl;
         var previousMicrophone = settings.MicrophoneName;
         var previousSpeaker = settings.SpeakerName;
+        var previousEchoCancellation = settings.EchoCancellation;
+        var previousNoiseSuppression = settings.NoiseSuppression;
+        var previousAutoGainControl = settings.AutoGainControl;
         var hostInGame = currentState is { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         var window = new SettingsWindow(settings, !hostInGame,
             probe?.CurrentLobbySettings, currentState?.IsHost != true, currentState,
@@ -91,7 +94,10 @@ public partial class MainWindow : Window
         Topmost = settings.AlwaysOnTop;
         var requiresRestart = !string.Equals(previousServerUrl, settings.ServerUrl, StringComparison.Ordinal) ||
             !string.Equals(previousMicrophone, settings.MicrophoneName, StringComparison.Ordinal) ||
-            !string.Equals(previousSpeaker, settings.SpeakerName, StringComparison.Ordinal);
+            !string.Equals(previousSpeaker, settings.SpeakerName, StringComparison.Ordinal) ||
+            previousEchoCancellation != settings.EchoCancellation ||
+            previousNoiseSuppression != settings.NoiseSuppression ||
+            previousAutoGainControl != settings.AutoGainControl;
         if (requiresRestart)
         {
             InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
@@ -215,6 +221,7 @@ public partial class MainWindow : Window
         probe.SetPlayerConfigs(settings.PlayerConfigMap);
         probe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         probe.SetSpatialAudio(settings.EnableSpatialAudio);
+        probe.SetInputProcessing(settings.EchoCancellation, settings.NoiseSuppression, settings.AutoGainControl);
         probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
         probe.SetMicrophoneActivationMode(settings.PushToTalkMode);

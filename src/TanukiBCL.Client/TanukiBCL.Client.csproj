@@ -12,6 +12,9 @@
     <Resource Include="Assets\Avatar\*.png" />
     <Content Include="Assets\Audio\chime.mp3" CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\licenses\SpeexDSPSharp.*.LICENSE.txt"
+             Link="Licenses\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="BundleNosSnapshotReader" BeforeTargets="ComputeFilesToPublish">

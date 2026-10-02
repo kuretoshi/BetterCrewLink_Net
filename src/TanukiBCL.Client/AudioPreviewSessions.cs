@@ -8,14 +8,16 @@ namespace TanukiBCL.Client;
 internal sealed class MicrophoneLevelSession : IDisposable
 {
     private readonly WaveInEvent capture;
+    private readonly MicrophoneProcessor processor;
     private readonly Action<double> onLevel;
     private long lastReportTicks;
     private bool recording;
     private bool disposed;
 
-    private MicrophoneLevelSession(int deviceId, Action<double> onLevel)
+    private MicrophoneLevelSession(int deviceId, bool autoGainControl, Action<double> onLevel)
     {
         this.onLevel = onLevel;
+        processor = new MicrophoneProcessor(false, false, autoGainControl);
         capture = new WaveInEvent
         {
             DeviceNumber = deviceId,
@@ -26,9 +28,9 @@ internal sealed class MicrophoneLevelSession : IDisposable
         capture.DataAvailable += OnDataAvailable;
     }
 
-    public static MicrophoneLevelSession Start(int deviceId, Action<double> onLevel)
+    public static MicrophoneLevelSession Start(int deviceId, bool autoGainControl, Action<double> onLevel)
     {
-        var session = new MicrophoneLevelSession(deviceId, onLevel);
+        var session = new MicrophoneLevelSession(deviceId, autoGainControl, onLevel);
         try
         {
             session.capture.StartRecording();
@@ -45,10 +47,12 @@ internal sealed class MicrophoneLevelSession : IDisposable
     private void OnDataAvailable(object? sender, WaveInEventArgs args)
     {
         if (disposed || args.BytesRecorded < sizeof(short)) return;
+        var pcm = args.Buffer.AsSpan(0, args.BytesRecorded).ToArray();
+        processor.ProcessCapture(pcm);
         var now = Stopwatch.GetTimestamp();
         if (Stopwatch.GetElapsedTime(lastReportTicks, now) < TimeSpan.FromMilliseconds(50)) return;
         lastReportTicks = now;
-        onLevel(CalculateLevel(args.Buffer.AsSpan(0, args.BytesRecorded)));
+        onLevel(CalculateLevel(pcm));
     }
 
     internal static double CalculateLevel(ReadOnlySpan<byte> pcm)
@@ -68,6 +72,7 @@ internal sealed class MicrophoneLevelSession : IDisposable
         capture.DataAvailable -= OnDataAvailable;
         if (recording) capture.StopRecording();
         capture.Dispose();
+        processor.Dispose();
     }
 }
 
@@ -133,7 +138,7 @@ internal static class AudioPreviewSelfTest
             ?? throw new InvalidOperationException("No speaker device is available");
         var chimePath = Path.Combine(AppContext.BaseDirectory, "Assets", "Audio", "chime.mp3");
         var levelEvents = 0;
-        using var microphone = MicrophoneLevelSession.Start(input.Id,
+        using var microphone = MicrophoneLevelSession.Start(input.Id, settings.AutoGainControl,
             _ => Interlocked.Increment(ref levelEvents));
         using var speaker = SpeakerTestSession.Start(output.Id, chimePath, () => { });
         Thread.Sleep(800);

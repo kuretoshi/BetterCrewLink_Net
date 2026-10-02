@@ -42,6 +42,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private double crewVolumeAsGhost = 1d;
     private double ghostVolumeAsImpostor = 0.1d;
     private double microphoneGain = 100d;
+    private bool echoCancellation = true;
+    private bool noiseSuppression = true;
+    private bool autoGainControl;
     private bool microphoneSensitivityEnabled;
     private double microphoneSensitivity = 0.15d;
     private MicrophoneActivationMode microphoneActivationMode;
@@ -394,6 +397,17 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         audioSession?.SetMicrophoneGain(microphoneGain);
     }
 
+    public void SetInputProcessing(bool echoCancellation, bool noiseSuppression, bool autoGainControl)
+    {
+        if (audioSession is not null)
+        {
+            throw new InvalidOperationException("Audio input processing changes require a session restart.");
+        }
+        this.echoCancellation = echoCancellation;
+        this.noiseSuppression = noiseSuppression;
+        this.autoGainControl = autoGainControl;
+    }
+
     public void SetMicrophoneSensitivity(bool enabled, double minimumNoiseLevel)
     {
         microphoneSensitivityEnabled = enabled;
@@ -545,7 +559,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     {
                         _ = socket.EmitAsync("VAD", talking && !impostorRadioTransmitting);
                     }
-                });
+                },
+                echoCancellation,
+                noiseSuppression,
+                autoGainControl);
             audioSession.SetMicrophoneMuted(microphoneMuted);
             audioSession.SetDeafened(deafened);
             audioSession.SetMasterVolume(masterVolume);

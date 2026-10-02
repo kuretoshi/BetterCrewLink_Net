@@ -16,6 +16,7 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly object playbackGate = new();
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
     private readonly Action<bool> onVadChanged;
+    private readonly MicrophoneProcessor microphoneProcessor;
     private readonly TanukiVoiceActivityDetector voiceDetector = new();
     private bool? lastVadState;
     private volatile bool microphoneMuted;
@@ -37,11 +38,15 @@ internal sealed class AudioDeviceSession : IDisposable
         int inputDevice,
         int outputDevice,
         Action<ReadOnlyMemory<byte>> onCaptured,
-        Action<bool> onVadChanged)
+        Action<bool> onVadChanged,
+        bool echoCancellation = true,
+        bool noiseSuppression = true,
+        bool autoGainControl = false)
     {
         ValidateDeviceNumbers(inputDevice, outputDevice);
         this.onCaptured = onCaptured;
         this.onVadChanged = onVadChanged;
+        microphoneProcessor = new MicrophoneProcessor(echoCancellation, noiseSuppression, autoGainControl);
 
         capture = new WaveInEvent
         {
@@ -70,7 +75,7 @@ internal sealed class AudioDeviceSession : IDisposable
             DesiredLatency = 100,
             NumberOfBuffers = 3
         };
-        playback.Init(masterMix.ToWaveProvider());
+        playback.Init(new RenderReferenceSampleProvider(masterMix, microphoneProcessor).ToWaveProvider());
     }
 
     public void Start()
@@ -207,6 +212,7 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         var buffer = args.Buffer.AsMemory(0, args.BytesRecorded).ToArray();
+        microphoneProcessor.ProcessCapture(buffer);
         var sensitivityEnabled = microphoneSensitivityEnabled;
         // The upstream VAD analyses the raw microphone before output gain.
         bool talking;
@@ -317,6 +323,20 @@ internal sealed class AudioDeviceSession : IDisposable
         playback.Stop();
         capture.Dispose();
         playback.Dispose();
+        microphoneProcessor.Dispose();
+    }
+
+    private sealed class RenderReferenceSampleProvider(
+        ISampleProvider source, MicrophoneProcessor processor) : ISampleProvider
+    {
+        public WaveFormat WaveFormat => source.WaveFormat;
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            var read = source.Read(buffer, offset, count);
+            processor.SubmitPlayback(buffer, offset, read);
+            return read;
+        }
     }
 
     private sealed record PeerPlayback(

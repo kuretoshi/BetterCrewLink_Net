@@ -268,9 +268,15 @@
                         <TextBlock Text="P2Pの代わりにTURNサーバーを経由します。接続の問題を解決できますが、遅延が増える場合があります。"
                                    TextWrapping="Wrap" Foreground="#A8A4B0" Margin="0,0,0,20" />
                         <TextBlock Text="音声処理" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <CheckBox x:Name="EchoCancellationCheck" Content="エコーキャンセラー" Margin="0,0,0,8" />
+                        <CheckBox x:Name="AutoGainControlCheck" Content="自動ゲイン調整" Margin="0,0,0,8"
+                                  Checked="AutoGainControlCheck_Changed" Unchecked="AutoGainControlCheck_Changed" />
+                        <TextBlock Text="ベータ版：マイク音量を自動調整します。先にテストしてください。"
+                                   TextWrapping="Wrap" Foreground="#A8A4B0" Margin="0,0,0,8" />
                         <CheckBox x:Name="SpatialAudioCheck" Content="立体音響" Margin="0,0,0,8" />
                         <TextBlock Text="OFFでも声が届く距離や壁の遮断は有効です。距離内の音量と左右配置を固定します。"
-                                   TextWrapping="Wrap" Foreground="#A8A4B0" />
+                                   TextWrapping="Wrap" Foreground="#A8A4B0" Margin="0,0,0,8" />
+                        <CheckBox x:Name="NoiseSuppressionCheck" Content="ノイズ防止" Margin="0,0,0,8" />
                     </StackPanel>
                     <StackPanel x:Name="StreamingPanel" Visibility="Collapsed">
                         <TextBlock Text="配信設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
