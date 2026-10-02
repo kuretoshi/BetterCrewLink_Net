@@ -108,6 +108,7 @@ public partial class VoiceView : UserControl
     internal event Action<string>? LaunchPlatformChanged;
     internal event Action<GameLaunchPlatform>? LaunchGameRequested;
     internal event EventHandler? AddCustomGameRequested;
+    internal event Action<GameLaunchPlatform>? EditCustomGameRequested;
     public event Action<int, PlayerAudioConfig, bool>? PlayerConfigChanged;
 
     internal void SetLaunchPlatforms(IReadOnlyList<GameLaunchPlatform> platforms, string selectedKey)
@@ -119,6 +120,8 @@ public partial class VoiceView : UserControl
             LaunchPlatformCombo.SelectedItem = platforms.FirstOrDefault(platform => platform.Key == selectedKey)
                 ?? platforms.FirstOrDefault();
             LaunchGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is not null;
+            EditCustomGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is GameLaunchPlatform
+                { IsDefault: false };
         }
         finally { configuringLaunchPlatforms = false; }
     }
@@ -127,6 +130,8 @@ public partial class VoiceView : UserControl
     {
         if (configuringLaunchPlatforms) return;
         LaunchGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is not null;
+        EditCustomGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is GameLaunchPlatform
+            { IsDefault: false };
         if (LaunchPlatformCombo.SelectedItem is GameLaunchPlatform platform)
             LaunchPlatformChanged?.Invoke(platform.Key);
     }
@@ -139,6 +144,12 @@ public partial class VoiceView : UserControl
 
     private void AddCustomGameButton_Click(object sender, RoutedEventArgs e) =>
         AddCustomGameRequested?.Invoke(this, EventArgs.Empty);
+
+    private void EditCustomGameButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (LaunchPlatformCombo.SelectedItem is GameLaunchPlatform { IsDefault: false } platform)
+            EditCustomGameRequested?.Invoke(platform);
+    }
 
     public void Update(AmongUsState? game, bool connected, bool localTalking, bool muted,
         bool deafened, IReadOnlyDictionary<int, VoicePlayerStatus> peers, bool hideCode = false,

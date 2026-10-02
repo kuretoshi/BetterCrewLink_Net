@@ -56,7 +56,7 @@ internal static class GameLauncher
         foreach (var (key, platform) in custom)
         {
             if (platform is null || platform.Key != key || !platform.IsValid ||
-                available.Any(existing => existing.Key == key)) continue;
+                available.Any(existing => existing.Key.Equals(key, StringComparison.OrdinalIgnoreCase))) continue;
             if (platform.LaunchType == "URI" ||
                 File.Exists(Path.Combine(platform.RunPath, platform.Execute[0])))
                 available.Add(platform);

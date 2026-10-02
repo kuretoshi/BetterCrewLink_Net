@@ -95,8 +95,12 @@
                           SelectionChanged="LaunchPlatformCombo_SelectionChanged" />
                 <Button x:Name="LaunchGameButton" Content="ゲームを起動" Width="220" Height="32"
                         Margin="0,6,0,0" Click="LaunchGameButton_Click" />
-                <Button x:Name="AddCustomGameButton" Content="カスタム起動先を追加" Width="220" Height="26"
-                        Margin="0,4,0,0" Click="AddCustomGameButton_Click" />
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Button x:Name="AddCustomGameButton" Content="カスタムを追加" Width="126" Height="26"
+                            Click="AddCustomGameButton_Click" />
+                    <Button x:Name="EditCustomGameButton" Content="編集／削除" Width="88" Height="26"
+                            Margin="6,0,0,0" Click="EditCustomGameButton_Click" IsEnabled="False" />
+                </StackPanel>
             </StackPanel>
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           Margin="0,4,0,0">

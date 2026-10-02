@@ -107,7 +107,8 @@ internal sealed class ClientSettings
         LaunchPlatform = string.IsNullOrWhiteSpace(LaunchPlatform) ? "STEAM" : LaunchPlatform;
         CustomPlatforms = (CustomPlatforms ?? [])
             .Where(pair => pair.Value is not null && pair.Key == pair.Value.Key && pair.Value.IsValid &&
-                pair.Key is not ("STEAM" or "EPIC" or "MICROSOFT"))
+                !new[] { "STEAM", "EPIC", "MICROSOFT" }.Contains(pair.Key,
+                    StringComparer.OrdinalIgnoreCase))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
         PushToTalkShortcut = GlobalHotkeyMonitor.NormalizeShortcut(PushToTalkShortcut, "V");
         ImpostorRadioShortcut = GlobalHotkeyMonitor.NormalizeShortcut(ImpostorRadioShortcut, "F");

@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
-using Microsoft.Win32;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
 
@@ -69,7 +68,8 @@ public partial class MainWindow : Window
                 MessageBox.Show(this, $"ゲームを起動できませんでした。{error.Message}", "ゲーム起動");
             }
         };
-        CompactVoiceView.AddCustomGameRequested += (_, _) => AddCustomGameLauncher();
+        CompactVoiceView.AddCustomGameRequested += (_, _) => EditCustomGameLauncher(null);
+        CompactVoiceView.EditCustomGameRequested += platform => EditCustomGameLauncher(platform);
         RefreshGameLaunchers();
         CompactVoiceView.PlayerConfigChanged += ApplyPlayerConfig;
         UpdateCompactView();
@@ -97,24 +97,40 @@ public partial class MainWindow : Window
         CompactVoiceView.SetLaunchPlatforms(available, settings.LaunchPlatform);
     }
 
-    private void AddCustomGameLauncher()
+    private void EditCustomGameLauncher(GameLaunchPlatform? original)
     {
-        var picker = new OpenFileDialog
+        if (isClosing) return;
+        var takenKeys = new[] { "STEAM", "EPIC", "MICROSOFT" }
+            .Concat(settings.CustomPlatforms.Keys.Where(key => key != original?.Key)).ToArray();
+        var dialog = new CustomPlatformWindow(original, takenKeys) { Owner = this };
+        hotkeysSuspended = true;
+        try
         {
-            Title = "Among Usの実行ファイルを選択",
-            Filter = "実行ファイル (*.exe)|*.exe",
-            CheckFileExists = true
-        };
-        if (picker.ShowDialog(this) != true) return;
-        var directory = Path.GetDirectoryName(picker.FileName)!;
-        var key = $"CUSTOM-{Guid.NewGuid():N}";
-        var platform = new GameLaunchPlatform(key, Path.GetFileName(directory), "EXE", directory,
-            [Path.GetFileName(picker.FileName)]);
-        if (!platform.IsValid) return;
-        settings.CustomPlatforms[key] = platform;
-        settings.LaunchPlatform = key;
-        ClientSettingsStore.Save(settings);
-        RefreshGameLaunchers();
+            if (dialog.ShowDialog() != true) return;
+            if (dialog.DeleteRequested)
+            {
+                if (original is null) return;
+                settings.CustomPlatforms.Remove(original.Key);
+                if (settings.LaunchPlatform == original.Key) settings.LaunchPlatform = "STEAM";
+            }
+            else if (dialog.ResultPlatform is { } platform)
+            {
+                if (new[] { "STEAM", "EPIC", "MICROSOFT" }.Contains(platform.Key,
+                        StringComparer.OrdinalIgnoreCase) ||
+                    settings.CustomPlatforms.Keys.Any(key =>
+                        key != original?.Key && key.Equals(platform.Key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    MessageBox.Show(this, "その名前は既に起動先に使用されています。", "カスタム起動先");
+                    return;
+                }
+                if (original is not null) settings.CustomPlatforms.Remove(original.Key);
+                settings.CustomPlatforms[platform.Key] = platform;
+                settings.LaunchPlatform = platform.Key;
+            }
+            ClientSettingsStore.Save(settings);
+            RefreshGameLaunchers();
+        }
+        finally { hotkeysSuspended = false; }
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)

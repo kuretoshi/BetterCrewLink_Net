@@ -43,6 +43,7 @@ public partial class App : Application
                     VoiceView.VerifyNameLayout();
                     GameLauncher.Verify();
                     VoiceView.VerifyLaunchControls();
+                    CustomPlatformWindow.Verify();
                 }
                 if (e.Args.Contains("--cosmetics-self-test"))
                 {
