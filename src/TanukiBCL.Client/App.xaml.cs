@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using TanukiBCL.VoiceProbe;
@@ -7,6 +8,7 @@ namespace TanukiBCL.Client;
 
 public partial class App : Application
 {
+    private SupportLog? supportLog;
     // Give this process a distinct shell identity before WPF creates a window.
     // It must not be grouped with the official Electron release during interop tests.
     private const string AppUserModelId = "TanukiBCL.Net.Client";
@@ -28,7 +30,8 @@ public partial class App : Application
             e.Args.Contains("--session-lifecycle-self-test") ||
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
-            e.Args.Contains("--input-processing-self-test") || e.Args.Contains("--inquiry-self-test"))
+            e.Args.Contains("--input-processing-self-test") || e.Args.Contains("--inquiry-self-test") ||
+            e.Args.Contains("--support-log-self-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
@@ -68,6 +71,7 @@ public partial class App : Application
                     InquiryWindow.VerifyForm();
                     Task.Run(InquirySubmission.VerifyAsync).GetAwaiter().GetResult();
                 }
+                if (e.Args.Contains("--support-log-self-test")) SupportLog.Verify();
                 if (e.Args.Contains("--self-test-failure-exit"))
                     throw new InvalidOperationException("Deliberate self-test exit-code verification.");
                 Shutdown(0);
@@ -80,6 +84,17 @@ public partial class App : Application
             }
             return;
         }
+        try { supportLog = SupportLog.Install(e.Args); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            Trace.TraceWarning($"Support log could not be opened: {error.Message}");
+        }
         new MainWindow().Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        supportLog?.Dispose();
+        base.OnExit(e);
     }
 }

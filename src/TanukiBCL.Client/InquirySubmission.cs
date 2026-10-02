@@ -23,8 +23,7 @@ internal static class InquirySubmission
 
     internal static IReadOnlyList<InquiryAttachment> GetSupportLogs()
     {
-        var path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "TanukiBCL.Net", "logs", "debug.log");
+        var path = SupportLog.DefaultPath;
         try
         {
             var file = new FileInfo(path);
