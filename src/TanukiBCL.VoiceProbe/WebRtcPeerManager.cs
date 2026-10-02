@@ -153,8 +153,9 @@ internal sealed class WebRtcPeerManager : IDisposable
     {
         if (!peers.TryGetValue(remoteSocketId, out var peer))
         {
-            // setClients may have scheduled our offer but not created the peer yet.
-            return true;
+            // Only an actual local offer can glare with an incoming one.
+            // The joining client waits for offers from existing v3.2.7 peers.
+            return false;
         }
 
         return peer.Initiator &&
@@ -163,6 +164,8 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public bool HasOpenDataChannel(string remoteSocketId) =>
         peers.TryGetValue(remoteSocketId, out var peer) && Volatile.Read(ref peer.DataChannelOpen) == 1;
+
+    public bool HasPeer(string remoteSocketId) => peers.ContainsKey(remoteSocketId);
 
     private static bool CanSendAudio(Peer peer) =>
         peer.Connection.connectionState == RTCPeerConnectionState.connected ||
@@ -321,6 +324,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         var connection = new RTCPeerConnection(configuration);
         var peer = new Peer(remoteSocketId, connectionId ?? Guid.NewGuid().ToString("N"), connection, initiator);
         peers[remoteSocketId] = peer;
+        _ = WatchHandshakeAsync(peer);
         connection.addTrack(new MediaStreamTrack([OpusFormat], MediaStreamStatusEnum.SendRecv));
 
         connection.onicecandidate += candidate =>
@@ -456,6 +460,22 @@ internal sealed class WebRtcPeerManager : IDisposable
         }
 
         Log($"data channel stalled: {Short(peer.RemoteSocketId)}");
+        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
+    }
+
+    private async Task WatchHandshakeAsync(Peer peer)
+    {
+        // The data-channel watchdog starts only after ICE reaches connected.
+        // A lost offer/answer can otherwise remain in new/connecting forever.
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        if (!peers.TryGetValue(peer.RemoteSocketId, out var current) ||
+            !ReferenceEquals(current, peer) ||
+            Volatile.Read(ref peer.DataChannelOpen) == 1)
+        {
+            return;
+        }
+
+        Log($"peer handshake stalled: {Short(peer.RemoteSocketId)} state={peer.Connection.connectionState}");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
     }
 

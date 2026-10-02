@@ -18,6 +18,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly WebRtcPeerManager peerManager;
     private readonly ConcurrentDictionary<string, int> peerClientIds = new();
     private readonly ConcurrentDictionary<string, int> stalledReconnectAttempts = new();
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> peerOperationGates = new();
+    private readonly ConcurrentDictionary<string, byte> pendingOfferFallbacks = new();
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
     private AmongUsState? currentGameState;
     private AmongUsMemoryReaderService? gameReader;
@@ -98,35 +100,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         };
         peerManager.PeerDataChannelStalled += remoteSocketId =>
         {
-            _ = RunPeerOperationAsync(async () =>
-            {
-                // Give the lower socket ID the first chance to re-offer. If it
-                // is an Electron peer that does not retry, recover locally too.
-                if (string.CompareOrdinal(socket.Id, remoteSocketId) > 0)
-                {
-                    await Task.Delay(4_000);
-                }
-                if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
-                    peerManager.HasOpenDataChannel(remoteSocketId))
-                {
-                    return;
-                }
-                var attempt = stalledReconnectAttempts.AddOrUpdate(remoteSocketId, 1, (_, count) => count + 1);
-                if (attempt > 2)
-                {
-                    Log("WARN", $"データチャネル復旧の再試行上限 peer={remoteSocketId}");
-                    return;
-                }
-                Log("INFO", $"データチャネル停滞を再接続 peer={remoteSocketId} attempt={attempt}");
-                await peerManager.ReconnectAsync(remoteSocketId);
-            });
+            _ = RunPeerOperationAsync(() => RecoverStalledPeerAsync(remoteSocketId));
         };
         peerManager.PeerConnectionFailed += remoteSocketId =>
         {
             if (string.CompareOrdinal(socket.Id, remoteSocketId) < 0)
             {
                 Log("INFO", $"失敗したpeerを自動再接続 peer={remoteSocketId}");
-                _ = RunPeerOperationAsync(() => peerManager.ReconnectAsync(remoteSocketId));
+                _ = RunPeerOperationAsync(remoteSocketId, () => peerManager.ReconnectAsync(remoteSocketId));
             }
         };
         peerManager.PeerConnectionStateChanged += (remoteSocketId, state) =>
@@ -344,7 +325,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
 
         Log("INFO", $"音声メディアを再接続 client={clientId}");
-        return peerManager.ReconnectAsync(socketId);
+        return RunPeerOperationAsync(socketId, () => peerManager.ReconnectAsync(socketId));
     }
 
     public async Task RejoinCurrentGameLobbyAsync()
@@ -419,6 +400,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
         peerClientIds.Clear();
         stalledReconnectAttempts.Clear();
+        pendingOfferFallbacks.Clear();
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -539,6 +521,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             var remoteSocketId = response.GetValue<string>(0);
             var client = response.GetValue<JsonElement>(1);
             RegisterPeerClient(remoteSocketId, client);
+            ScheduleOfferFallback(remoteSocketId);
         });
         socket.On("setClients", response =>
         {
@@ -548,22 +531,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             foreach (var client in clients.EnumerateObject())
             {
                 RegisterPeerClient(client.Name, client.Value);
+                ScheduleOfferFallback(client.Name);
             }
             Log("EVENT", $"setClients count={peerClientIds.Count}");
-            foreach (var remoteSocketId in peerClientIds.Keys.Where(remote => string.CompareOrdinal(socket.Id, remote) < 0).ToArray())
-            {
-                _ = RunPeerOperationAsync(() => peerManager.InitiateAsync(remoteSocketId));
-            }
         });
         socket.On("join", response =>
         {
             var remoteSocketId = response.GetValue<string>(0);
             RegisterPeerClient(remoteSocketId, response.GetValue<JsonElement>(1));
             Log("EVENT", $"join peer={remoteSocketId}");
-            if (string.CompareOrdinal(socket.Id, remoteSocketId) < 0)
-            {
-                _ = RunPeerOperationAsync(() => peerManager.InitiateAsync(remoteSocketId));
-            }
+            // v3.2.7's existing client always offers to a newly joined peer.
+            // Applying the glare tie-break here can leave both sides waiting:
+            // the new Electron peer never offers from its setClients handler.
+            _ = RunPeerOperationAsync(remoteSocketId, () => peerManager.InitiateAsync(remoteSocketId));
         });
         socket.On("leave", response =>
         {
@@ -572,6 +552,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (peerClientIds.TryRemove(remoteSocketId, out var departedClientId))
             {
                 stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
+                pendingOfferFallbacks.TryRemove(remoteSocketId, out _);
                 impostorRadioStates.TryRemove(departedClientId, out _);
                 PeerVadChanged?.Invoke(departedClientId, false);
             }
@@ -623,7 +604,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
             var detail = type == "candidate" ? DescribeCandidate(data) : string.Empty;
             Log("EVENT", $"signal {type}{detail} < {remoteSocketId}");
-            _ = RunPeerOperationAsync(() => peerManager.ApplySignalAsync(remoteSocketId, data.Clone()));
+            _ = RunPeerOperationAsync(remoteSocketId, () => peerManager.ApplySignalAsync(remoteSocketId, data.Clone()));
         });
         Observe("error");
     }
@@ -645,6 +626,57 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
             peerClientIds[socketId] = clientId;
             RefreshPeerMix(socketId, clientId);
+        }
+    }
+
+    private void ScheduleOfferFallback(string remoteSocketId)
+    {
+        if (!pendingOfferFallbacks.TryAdd(remoteSocketId, 0)) return;
+        _ = OfferFallbackAsync(remoteSocketId);
+    }
+
+    private async Task RecoverStalledPeerAsync(string remoteSocketId)
+    {
+        // Delay outside the peer operation gate: a new offer from the remote
+        // peer must be processed while we wait for its own recovery attempt.
+        if (string.CompareOrdinal(socket.Id, remoteSocketId) > 0)
+        {
+            await Task.Delay(4_000);
+        }
+        if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
+            peerManager.HasOpenDataChannel(remoteSocketId)) return;
+
+        var attempt = stalledReconnectAttempts.AddOrUpdate(remoteSocketId, 1, (_, count) => count + 1);
+        if (attempt > 1)
+        {
+            await Task.Delay(Math.Min(1_000 * (1 << Math.Min(attempt - 2, 4)), 15_000));
+        }
+        await RunPeerOperationAsync(remoteSocketId, async () =>
+        {
+            if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
+                peerManager.HasOpenDataChannel(remoteSocketId)) return;
+            Log("INFO", $"データチャネル停滞を再接続 peer={remoteSocketId} attempt={attempt}");
+            await peerManager.ReconnectAsync(remoteSocketId);
+        });
+    }
+
+    private async Task OfferFallbackAsync(string remoteSocketId)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30));
+            if (!socket.Connected || currentJoinedLobby == "MENU" ||
+                !peerClientIds.ContainsKey(remoteSocketId)) return;
+            await RunPeerOperationAsync(remoteSocketId, async () =>
+            {
+                if (peerManager.HasPeer(remoteSocketId)) return;
+                Log("INFO", $"offer未着のpeerへ接続を開始 peer={remoteSocketId}");
+                await peerManager.InitiateAsync(remoteSocketId);
+            });
+        }
+        finally
+        {
+            pendingOfferFallbacks.TryRemove(remoteSocketId, out _);
         }
     }
 
@@ -1008,6 +1040,20 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
     }
 
+    private async Task RunPeerOperationAsync(string remoteSocketId, Func<Task> operation)
+    {
+        var gate = peerOperationGates.GetOrAdd(remoteSocketId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            await RunPeerOperationAsync(operation);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
     private Task SendSignalAsync(string remoteSocketId, object data)
     {
         return socket.EmitAsync("signal", new { to = remoteSocketId, data });
@@ -1032,7 +1078,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var addressKind = parts.Length > 4 && parts[4].EndsWith(".local", StringComparison.OrdinalIgnoreCase)
             ? "mdns"
             : "ip";
-        return $"({candidateType}/{addressKind})";
+        var lineIndex = candidate.ValueKind == JsonValueKind.Object &&
+            candidate.TryGetProperty("sdpMLineIndex", out var line) && line.TryGetInt32(out var index)
+                ? index.ToString() : "?";
+        return $"({candidateType}/{addressKind}/mline={lineIndex})";
     }
 
     private void Observe(string eventName)

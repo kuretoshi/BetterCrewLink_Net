@@ -4,6 +4,14 @@ internal static class SelfTestRunner
 {
     public static async Task<int> RunAsync(ProbeOptions baseOptions)
     {
+        using (var peerManager = new WebRtcPeerManager("self-test", (_, _) => Task.CompletedTask, false))
+        {
+            if (peerManager.ShouldDeferIncomingOffer("unseen-peer"))
+            {
+                throw new InvalidOperationException("An incoming offer was discarded before a local offer existed.");
+            }
+        }
+
         var lobby = baseOptions.LobbyCode ?? CreateLobbyCode();
         var timeout = baseOptions.Duration ?? TimeSpan.FromSeconds(30);
         var seed = Random.Shared.Next(100_000, 900_000);
