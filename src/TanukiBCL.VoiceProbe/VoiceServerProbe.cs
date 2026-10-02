@@ -37,6 +37,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private bool microphoneMuted;
     private bool deafened;
     private double masterVolume = 100d;
+    private int voiceEffectStrength = 100;
     private double crewVolumeAsGhost = 1d;
     private double ghostVolumeAsImpostor = 0.1d;
     private double microphoneGain = 100d;
@@ -258,6 +259,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         masterVolume = Math.Clamp(volumePercent, 0d, 200d);
         audioSession?.SetMasterVolume(masterVolume);
+    }
+
+    public void SetVoiceEffectStrength(int strengthPercent)
+    {
+        voiceEffectStrength = Math.Clamp(strengthPercent, 0, 100);
+        RefreshPeerMixes();
     }
 
     public void SetPlayerConfigs(IReadOnlyDictionary<int, PlayerAudioConfig> configs)
@@ -1061,9 +1068,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings,
             IsImpostorRadioActive(clientId), CanHearNosJackalRadio(currentGameState, other, me));
         mix = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs)).Apply(mix);
-        var nosSizeEffect = NosSizeVoiceEffectPolicy.Select(currentGameState, other,
-            activeLobbySettings, mix.Audible);
-        audioSession?.SetPeerMix(socketId, mix, nosSizeEffect);
+        var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
+            activeLobbySettings, voiceEffectStrength, mix.Audible, IsImpostorRadioActive(clientId));
+        audioSession?.SetPeerMix(socketId, mix, effect);
         PeerMixChanged?.Invoke(clientId, mix);
     }
 

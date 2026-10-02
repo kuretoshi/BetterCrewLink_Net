@@ -85,6 +85,7 @@
                         <CheckBox x:Name="ImpostorRadioCheck" Content="インポスターラジオを有効化" Margin="0,0,0,14" />
                         <CheckBox x:Name="CommsSabotageCheck" Content="通信妨害中はクルーメイトの受信を遮断" Margin="0,0,0,14" />
                         <CheckBox x:Name="HearThroughCamerasCheck" Content="カメラ越しに声が聞こえる" Margin="0,0,0,14" />
+                        <CheckBox x:Name="VoiceEffectEnabledCheck" Content="変装時のボイスエフェクトを有効にする" Margin="0,0,0,14" />
                         <CheckBox x:Name="DeadOnlyCheck" Content="幽霊同士のみ会話できる" Margin="0,0,0,14"
                                   Checked="DeadOnlyCheck_Checked" />
                         <CheckBox x:Name="MeetingGhostOnlyCheck" Content="会議中のみ幽霊以外も会話できる" Margin="0,0,0,14"
@@ -125,6 +126,13 @@
                         <DockPanel Margin="0,5,0,20">
                             <TextBlock x:Name="MasterVolumeValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
                             <Slider x:Name="MasterVolumeSlider" Minimum="0" Maximum="200"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                        <TextBlock Text="変装時のボイスエフェクトの強さ" />
+                        <DockPanel Margin="0,5,0,20">
+                            <TextBlock x:Name="VoiceEffectStrengthValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
+                            <Slider x:Name="VoiceEffectStrengthSlider" Minimum="0" Maximum="100"
                                     TickFrequency="1" IsSnapToTickEnabled="True"
                                     ValueChanged="VolumeSlider_ValueChanged" />
                         </DockPanel>

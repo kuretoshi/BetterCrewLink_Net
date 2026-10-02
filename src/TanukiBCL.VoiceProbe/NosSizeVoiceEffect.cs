@@ -7,7 +7,45 @@ internal enum NosSizeEffectMode
     Squash,
     PitchUp,
     Jumbo,
-    ToneOnly
+    ToneOnly,
+    Disguise
+}
+
+internal static class VoiceDisguiseEffectPolicy
+{
+    // TanukiBCL v3.2.7 voiceEffectRules.ts: NoS size effects have priority;
+    // ordinary disguises are local-listener effects, not transmitted audio.
+    public static NosSizeVoiceEffect? Select(AmongUsState state, Player listener, Player speaker,
+        LobbySettings lobby, int strengthPercent, bool audible, bool impostorRadioActive)
+    {
+        var sizeEffect = NosSizeVoiceEffectPolicy.Select(state, speaker, lobby, audible);
+        if (sizeEffect is not null) return sizeEffect;
+
+        // The upstream selector exits entirely for a valid NoS body with zero
+        // height; it does not fall through to the ordinary disguise effect.
+        if (state.Mod == AmongUsModType.NebulaOnTheShip && lobby.NosSizeVoiceEffect &&
+            speaker.NosPlayer is { BodyRateX: { } x, BodyRateY: 0d } &&
+            double.IsFinite(x) && x > 0d)
+            return null;
+
+        if (!audible || state.GameState != GameState.Tasks || speaker.IsDead ||
+            speaker.Disconnected || speaker.IsDummy || listener.IsDead ||
+            !lobby.VoiceEffectEnabled || strengthPercent <= 0)
+            return null;
+
+        if (impostorRadioActive && listener.IsImpostor && speaker.IsImpostor &&
+            (lobby.ImpostorRadioEnabled || lobby.ImpostorRadioOnlyMode))
+            return null;
+
+        static bool ChangedName(Player player) =>
+            (string.IsNullOrEmpty(player.AppearanceName) ? player.Name : player.AppearanceName) != player.Name;
+        if (!ChangedName(speaker) ||
+            !state.Players.Any(player => !player.Disconnected && ChangedName(player)))
+            return null;
+
+        return new NosSizeVoiceEffect(NosSizeEffectMode.Disguise,
+            Math.Clamp(strengthPercent, 0, 100) / 100d, 1d);
+    }
 }
 
 internal sealed record NosSizeVoiceEffect(NosSizeEffectMode Mode, double Strength, double ToneRate,

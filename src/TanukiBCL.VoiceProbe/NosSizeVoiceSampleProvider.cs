@@ -106,6 +106,17 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
                 pitchUp = true;
                 squaredFade = false;
                 break;
+            case NosSizeEffectMode.Disguise:
+                // Web Audio bandpass Q is linear (unlike low/high-pass Q).
+                // Generic disguise keeps the 35 ms pitch-up modulators at 1x.
+                wetFilter.ConfigureBandPass(1200d - strength * 350d, 1d + strength * 8d);
+                dryGain = 1d - strength * 0.95d;
+                wetGain = strength * 1.45d;
+                outputGain = 1d;
+                pitchRate = 1d;
+                pitchUp = true;
+                squaredFade = false;
+                break;
         }
     }
 
@@ -188,6 +199,18 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
             b2 = amplitude * ((amplitude + 1d) - (amplitude - 1d) * cosine - beta) / a0;
             a1 = -2d * ((amplitude - 1d) + (amplitude + 1d) * cosine) / a0;
             a2 = ((amplitude + 1d) + (amplitude - 1d) * cosine - beta) / a0;
+        }
+
+        public void ConfigureBandPass(double frequency, double q)
+        {
+            var omega = 2d * Math.PI * Math.Clamp(frequency, 20d, SampleRate * 0.49d) / SampleRate;
+            var alpha = Math.Sin(omega) / (2d * q);
+            var normalizer = 1d + alpha;
+            b0 = alpha / normalizer;
+            b1 = 0d;
+            b2 = -b0;
+            a1 = -2d * Math.Cos(omega) / normalizer;
+            a2 = (1d - alpha) / normalizer;
         }
     }
 }

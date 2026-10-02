@@ -47,6 +47,7 @@ public partial class SettingsWindow : Window
             .FirstOrDefault(device => device.Name == settings.SpeakerName) ?? SpeakerCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
         AlwaysOnTopCheck.IsChecked = settings.AlwaysOnTop;
         MasterVolumeSlider.Value = settings.MasterVolume;
+        VoiceEffectStrengthSlider.Value = settings.VoiceEffectStrength;
         CrewVolumeAsGhostSlider.Value = settings.CrewVolumeAsGhost;
         GhostVolumeAsImpostorSlider.Value = settings.GhostVolumeAsImpostor;
         MicrophoneGainSlider.Value = settings.MicrophoneGain;
@@ -283,6 +284,7 @@ public partial class SettingsWindow : Window
         ImpostorRadioEnabled = ImpostorRadioCheck.IsChecked == true,
         CommsSabotage = CommsSabotageCheck.IsChecked == true,
         HearThroughCameras = HearThroughCamerasCheck.IsChecked == true,
+        VoiceEffectEnabled = VoiceEffectEnabledCheck.IsChecked == true,
         ImpostorRadioOnlyMode = RadioOnlyCheck.IsChecked == true,
         DeadOnly = DeadOnlyCheck.IsChecked == true,
         MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true,
@@ -304,6 +306,7 @@ public partial class SettingsWindow : Window
         ImpostorRadioCheck.IsChecked = value.ImpostorRadioEnabled;
         CommsSabotageCheck.IsChecked = value.CommsSabotage;
         HearThroughCamerasCheck.IsChecked = value.HearThroughCameras;
+        VoiceEffectEnabledCheck.IsChecked = value.VoiceEffectEnabled;
         DeadOnlyCheck.IsChecked = value.DeadOnly;
         MeetingGhostOnlyCheck.IsChecked = value.MeetingGhostOnly;
         JackalRadioCheck.IsChecked = value.JackalRadioEnabled;
@@ -322,6 +325,7 @@ public partial class SettingsWindow : Window
         ImpostorRadioCheck.IsEnabled = regularSettingsEnabled;
         CommsSabotageCheck.IsEnabled = regularSettingsEnabled;
         HearThroughCamerasCheck.IsEnabled = regularSettingsEnabled;
+        VoiceEffectEnabledCheck.IsEnabled = regularSettingsEnabled;
         DeadOnlyCheck.IsEnabled = regularSettingsEnabled;
         MeetingGhostOnlyCheck.IsEnabled = regularSettingsEnabled;
         JackalRadioCheck.IsEnabled = regularSettingsEnabled;
@@ -365,9 +369,10 @@ public partial class SettingsWindow : Window
 
     private void UpdateVolumeLabels()
     {
-        if (MasterVolumeValue is null || CrewVolumeAsGhostValue is null || GhostVolumeAsImpostorValue is null ||
+        if (MasterVolumeValue is null || VoiceEffectStrengthValue is null || CrewVolumeAsGhostValue is null || GhostVolumeAsImpostorValue is null ||
             MicrophoneGainValue is null || MicSensitivityValue is null || DistanceValue is null) return;
         MasterVolumeValue.Text = $"{MasterVolumeSlider.Value:0}%";
+        VoiceEffectStrengthValue.Text = $"{VoiceEffectStrengthSlider.Value:0}%";
         CrewVolumeAsGhostValue.Text = $"{CrewVolumeAsGhostSlider.Value:0}%";
         GhostVolumeAsImpostorValue.Text = $"{GhostVolumeAsImpostorSlider.Value:0}%";
         MicrophoneGainValue.Text = $"{MicrophoneGainSlider.Value:0}%";
@@ -393,6 +398,7 @@ public partial class SettingsWindow : Window
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,
             AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
             MasterVolume = (int)MasterVolumeSlider.Value,
+            VoiceEffectStrength = (int)VoiceEffectStrengthSlider.Value,
             CrewVolumeAsGhost = (int)CrewVolumeAsGhostSlider.Value,
             GhostVolumeAsImpostor = (int)GhostVolumeAsImpostorSlider.Value,
             MicrophoneGain = (int)MicrophoneGainSlider.Value,
@@ -427,6 +433,7 @@ public partial class SettingsWindow : Window
         settings.SpeakerName = candidate.SpeakerName;
         settings.AlwaysOnTop = candidate.AlwaysOnTop;
         settings.MasterVolume = candidate.MasterVolume;
+        settings.VoiceEffectStrength = candidate.VoiceEffectStrength;
         settings.CrewVolumeAsGhost = candidate.CrewVolumeAsGhost;
         settings.GhostVolumeAsImpostor = candidate.GhostVolumeAsImpostor;
         settings.MicrophoneGain = candidate.MicrophoneGain;

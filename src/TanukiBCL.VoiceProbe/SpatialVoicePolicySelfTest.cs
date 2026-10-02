@@ -165,6 +165,45 @@ internal static class SpatialVoicePolicySelfTest
             0.5d, 1d, 0.5d));
         Check("NoS DSP: squash attenuates voice", true,
             Rms(squashAudio) < 0.15d);
+        var disguisedSpeaker = new Player
+        {
+            Name = "base", AppearanceName = "disguised", IsImpostor = true
+        };
+        var disguiseListener = new Player { IsImpostor = true };
+        var disguiseTasks = new AmongUsState
+        {
+            GameState = GameState.Tasks, Players = [disguiseListener, disguisedSpeaker]
+        };
+        Check("disguise: changed appearance name enables effect", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings(), 100, true, false)?.Mode == NosSizeEffectMode.Disguise);
+        Check("disguise: zero local strength disables effect", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings(), 0, true, false) is null);
+        Check("disguise: lobby switch disables effect", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings { VoiceEffectEnabled = false }, 100, true, false) is null);
+        Check("disguise: impostor radio bypasses effect", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings { ImpostorRadioEnabled = true }, 100, true, true) is null);
+        disguiseListener.IsDead = true;
+        Check("disguise: ghosts hear unmodified voice", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings(), 100, true, false) is null);
+        disguiseListener.IsDead = false;
+        disguisedSpeaker.NosPlayer = new NosPlayerData { BodyRateX = 1d, BodyRateY = 0.5d };
+        disguiseTasks.Mod = AmongUsModType.NebulaOnTheShip;
+        Check("disguise: NoS size takes priority", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings(), 100, true, false)?.Mode == NosSizeEffectMode.Squash);
+        disguisedSpeaker.NosPlayer.BodyRateY = 0d;
+        disguisedSpeaker.NosPlayer.BodyRateX = 0.8d;
+        Check("disguise: zero NoS body height blocks fallback", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings(), 100, true, false) is null);
+        var disguiseAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(NosSizeEffectMode.Disguise, 1d, 1d), 850d);
+        Check("disguise DSP: pitch-up path shifts center-band voice", true,
+            ToneAmplitude(disguiseAudio, 1700d) > ToneAmplitude(disguiseAudio, 850d));
         Check("dummy speaker: never audible", false,
             SpatialVoicePolicy.Calculate(discussion, new Player(), new Player { IsDummy = true },
                 new SpatialVoiceSettings()).Audible);
@@ -471,9 +510,9 @@ internal static class SpatialVoicePolicySelfTest
         return Math.Sqrt(energy / steadySamples.Length);
     }
 
-    private static float[] CreateSizeEffectAudio(NosSizeVoiceEffect effect)
+    private static float[] CreateSizeEffectAudio(NosSizeVoiceEffect effect, double frequency = 440d)
     {
-        var provider = new NosSizeVoiceSampleProvider(new TestSineSource(440d));
+        var provider = new NosSizeVoiceSampleProvider(new TestSineSource(frequency));
         provider.SetEffect(effect);
         var samples = new float[24_000];
         provider.Read(samples, 0, samples.Length);

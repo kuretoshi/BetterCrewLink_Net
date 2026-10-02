@@ -12,6 +12,7 @@ internal sealed class ClientSettings
     public bool AlwaysOnTop { get; set; }
     public bool NatFix { get; set; }
     public int MasterVolume { get; set; } = 100;
+    public int VoiceEffectStrength { get; set; } = 100;
     public int CrewVolumeAsGhost { get; set; } = 100;
     public int GhostVolumeAsImpostor { get; set; } = 10;
     public int MicrophoneGain { get; set; } = 100;
@@ -36,6 +37,7 @@ internal sealed class ClientSettings
             ServerUrl = "https://bettercrewl.ink";
         }
         MasterVolume = Math.Clamp(MasterVolume, 0, 200);
+        VoiceEffectStrength = Math.Clamp(VoiceEffectStrength, 0, 100);
         CrewVolumeAsGhost = Math.Clamp(CrewVolumeAsGhost, 0, 100);
         GhostVolumeAsImpostor = Math.Clamp(GhostVolumeAsImpostor, 0, 100);
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);

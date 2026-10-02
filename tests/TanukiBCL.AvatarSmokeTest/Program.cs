@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.IO;
+using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using TanukiBCL.Client;
@@ -27,11 +29,12 @@ internal static class Program
                 throw new InvalidOperationException("Avatar appearance or state badge did not change the rendered image.");
             }
             VerifyAppearanceChangedAvatar();
+            VerifyVoiceEffectSettingsControls();
 
             var voiceView = RenderVoiceView(args.Skip(1).FirstOrDefault());
             if (voiceView.Length != 64) throw new InvalidOperationException("VoiceView did not render.");
 
-            Console.WriteLine("[PASS] v3.2.7 avatar coloring/status and compact VoiceView WPF rendering");
+            Console.WriteLine("[PASS] v3.2.7 avatar, compact VoiceView, and voice-effect settings WPF rendering");
             return 0;
         }
         catch (Exception error)
@@ -81,6 +84,29 @@ internal static class Program
         avatar.SetPlayer(player, null, hideWhenAppearanceChanged: false);
         if (body.Visibility != Visibility.Visible)
             throw new InvalidOperationException("Changed outfit should be visible during meetings.");
+    }
+
+    private static void VerifyVoiceEffectSettingsControls()
+    {
+        var assembly = typeof(VoiceView).Assembly;
+        var settingsType = assembly.GetType("TanukiBCL.Client.ClientSettings", throwOnError: true)!;
+        var windowType = assembly.GetType("TanukiBCL.Client.SettingsWindow", throwOnError: true)!;
+        var settings = Activator.CreateInstance(settingsType, nonPublic: true)!;
+        settingsType.GetProperty("VoiceEffectStrength")!.SetValue(settings, 63);
+        var constructor = windowType.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+            .Single(info => info.GetParameters().Length == 6);
+        var window = (Window)constructor.Invoke([settings, true, null, false, null,
+            (Action<int, PlayerAudioConfig, bool>)((_, _, _) => { })]);
+        try
+        {
+            if (window.FindName("VoiceEffectStrengthSlider") is not Slider slider || slider.Value != 63d ||
+                window.FindName("VoiceEffectEnabledCheck") is not CheckBox toggle || toggle.IsChecked != true)
+                throw new InvalidOperationException("Voice disguise settings did not initialize from v3.2.7 defaults.");
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     private static string RenderVoiceView(string? previewPath)
