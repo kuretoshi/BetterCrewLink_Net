@@ -35,7 +35,11 @@ public partial class App : Application
             {
                 if (e.Args.Contains("--nos-avatar-self-test")) AvatarImageFactory.VerifyNosColors();
                 if (e.Args.Contains("--voice-view-self-test")) VoiceView.VerifyNameLayout();
-                if (e.Args.Contains("--cosmetics-self-test")) CosmeticCatalog.Verify();
+                if (e.Args.Contains("--cosmetics-self-test"))
+                {
+                    CosmeticCatalog.Verify();
+                    PlayerAvatar.VerifyCosmeticLayers();
+                }
                 if (e.Args.Contains("--cosmetics-self-test") && e.Args.Contains("--download-cosmetics-catalog"))
                     Task.Run(CosmeticCatalog.VerifyDownloadAsync).GetAwaiter().GetResult();
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();

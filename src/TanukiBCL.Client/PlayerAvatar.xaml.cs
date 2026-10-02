@@ -25,24 +25,30 @@ public partial class PlayerAvatar : UserControl
     public PlayerAvatar()
     {
         InitializeComponent();
+        SizeChanged += (_, _) => LayoutCosmetics();
+        Unloaded += (_, _) => { cosmeticGeneration++; cosmeticKey = null; };
     }
 
     public void SetOverlayMode() => QualityBadge.Visibility = Visibility.Collapsed;
 
     public void SetPlayer(Player player, IReadOnlyList<PlayerColorPair>? colors,
-        bool hideWhenAppearanceChanged = false)
+        bool hideWhenAppearanceChanged = false, AmongUsModType mod = AmongUsModType.None)
     {
         hideAvatar = hideWhenAppearanceChanged && player.HasVisibleAppearanceChanged();
         AvatarBody.Visibility = hideAvatar ? Visibility.Hidden : Visibility.Visible;
+        CosmeticBack.Visibility = CosmeticSkin.Visibility = CosmeticFront.Visibility =
+            hideAvatar || player.IsDead ? Visibility.Hidden : Visibility.Visible;
         SpeechRing.Visibility = hideAvatar ? Visibility.Hidden : Visibility.Visible;
         var colorId = player.CurrentOutfit is > 0 and <= 10 && player.AppearanceColorId >= 0
             ? player.AppearanceColorId : player.ColorId;
         var image = AvatarImageFactory.GetNos(player) ?? AvatarImageFactory.Get(colorId, player.IsDead, colors);
         if (!ReferenceEquals(image, currentImage))
         {
-            AvatarBody.Fill = new ImageBrush(image) { Stretch = Stretch.UniformToFill };
+            AvatarBody.Source = image;
             currentImage = image;
         }
+        UpdateCosmetics(player, colors, mod, colorId);
+        LayoutCosmetics();
         var displayName = string.IsNullOrWhiteSpace(player.AppearanceName) ? player.Name : player.AppearanceName;
         if (displayName != currentName)
         {

@@ -3,7 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Width="67" Height="67" Background="Transparent">
     <Grid>
-        <Ellipse x:Name="AvatarBody" Margin="2" />
+        <Canvas x:Name="CosmeticBack" IsHitTestVisible="False" />
+        <Canvas x:Name="BodyCanvas" IsHitTestVisible="False">
+            <Image x:Name="AvatarBody" Stretch="Uniform" />
+            <Canvas x:Name="CosmeticSkin" />
+        </Canvas>
+        <Canvas x:Name="CosmeticFront" IsHitTestVisible="False" />
         <Ellipse x:Name="SpeechRing" Margin="1" StrokeThickness="2.5" Stroke="Transparent" />
         <Border x:Name="RadioBadge" Width="30" Height="30" Background="Transparent"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,6"

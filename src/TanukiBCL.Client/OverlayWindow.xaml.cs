@@ -181,7 +181,7 @@ public partial class OverlayWindow : Window
                 Margin = new Thickness(side ? 1d : 5d)
             };
             var avatar = new PlayerAvatar { Width = avatarSize, Height = avatarSize };
-            avatar.SetPlayer(player, state.PlayerColors, state.GameState == GameState.Tasks);
+            avatar.SetPlayer(player, state.PlayerColors, state.GameState == GameState.Tasks, state.Mod);
             avatar.SetVisualState(entry.Talking,
                 player.IsLocal && microphoneMuted,
                 player.IsLocal && deafened, "connected", entry.UsingRadio);

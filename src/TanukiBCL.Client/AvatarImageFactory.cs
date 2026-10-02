@@ -80,7 +80,7 @@ internal static class AvatarImageFactory
         return DefaultColors[colorId >= 0 && colorId < DefaultColors.Length ? colorId : 0];
     }
 
-    private static BitmapSource Recolor(BitmapSource template, Color main, Color shadow, bool nos = false)
+    internal static BitmapSource Recolor(BitmapSource template, Color main, Color shadow, bool nos = false)
     {
         var converted = new FormatConvertedBitmap(template, PixelFormats.Bgra32, null, 0);
         var stride = converted.PixelWidth * 4;
