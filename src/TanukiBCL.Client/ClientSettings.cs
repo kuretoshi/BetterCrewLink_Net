@@ -19,6 +19,7 @@ internal sealed class ClientSettings
         .ToArray();
 
     public string ServerUrl { get; set; } = "https://bettercrewl.ink";
+    public string Language { get; set; } = "ja";
     public List<string> ServerUrls { get; set; } = ["https://bettercrewl.ink"];
     public string? MicrophoneName { get; set; }
     public string? SpeakerName { get; set; }
@@ -82,6 +83,7 @@ internal sealed class ClientSettings
     public void Normalize()
     {
         ServerUrl = string.IsNullOrWhiteSpace(ServerUrl) ? "https://bettercrewl.ink" : ServerUrl.Trim();
+        Language = UiLocalization.Normalize(Language);
         if (!Uri.TryCreate(ServerUrl, UriKind.Absolute, out var parsed) ||
             parsed.Scheme is not ("http" or "https"))
         {

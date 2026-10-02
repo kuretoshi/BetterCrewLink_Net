@@ -61,6 +61,7 @@ public partial class App : Application
                 if (e.Args.Contains("--settings-self-test"))
                 {
                     SettingsWindow.VerifyModControls();
+                    SettingsWindow.VerifyLocalization();
                     var previewIndex = Array.IndexOf(e.Args, "--server-dialog-preview");
                     if (previewIndex >= 0 && previewIndex + 1 < e.Args.Length)
                         SettingsWindow.RenderServerDialogPreview(e.Args[previewIndex + 1]);

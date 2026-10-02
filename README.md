@@ -10,14 +10,14 @@ dotnet run --project src/TanukiBCL.Client
 
 起動時に実行中のAmong Usを自動検出します。複数プロセスがある場合は対象PIDを選択し、`接続開始`を押すとゲーム状態からロビー情報を読み取ってボイスサーバーへ接続します。画面には接続状態、ゲーム状態、ロビー、参加人数、マイク発話状態に加え、参加者ごとのPeer状態、音声ルール、現在の音量を表示します。接続中はマイクとスピーカーを個別にミュートできます。マイクミュート時は音声送信を止め、VADも即座にOFFにします。他プレイヤーの役職や未発見の死亡情報は表示しません。設定画面から接続先、入出力デバイス、マスター音量、マイクゲインなどを保存できます（3.2.7設定項目の移植は継続中）。
 
-当初はTanukiBCL v3.2.5 (`33f8d252400d74756ce3bfd7e59b8011bf76d798`) を通信仕様の基準として再構築しました。現在の完成目標は[リリース v3.2.7](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.7) (`9861ccc8137bb63a7d3834f493be0b784a288544`) の機能・GUI・実機相互運用の完全互換です。現時点では未完成で、差分と検証状況は[3.2.7互換チェックリスト](docs/compatibility-3.2.7.md)に記録しています。
+当初はTanukiBCL v3.2.5 (`33f8d252400d74756ce3bfd7e59b8011bf76d798`) を通信仕様の基準として再構築しました。現在の完成目標は[リリース v3.2.8](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.8) (`8d52d02beee8410e0c4dfa06f704c7a41f5fe962`) の機能・GUI・実機相互運用の完全互換です。対象のAmong Usは64bit版に限定します。現時点では未完成で、[3.2.8互換チェックリスト](docs/compatibility-3.2.8.md)に新しい差分と検証状況を記録しています。従来の[3.2.7チェックリスト](docs/compatibility-3.2.7.md)も履歴として残しています。
 
 Socket.IO、WebRTC、Opus音声、音声デバイス、ゲームメモリ読み取り、ゲーム状態に応じた音声ミックスまで段階的に実装しています。
 
 ## 必要環境
 
 - .NET 8 SDK
-- Windows、Linux、macOSのいずれか（現在のプローブはコンソールアプリ）
+- Windows x64と64bit版Among Us（WPFクライアント・NoS補助リーダー）
 
 ## ビルド
 
@@ -28,7 +28,7 @@ dotnet build TanukiBCL.Net.sln
 Windows向けのself-contained配布ZIPは、バージョンを指定してローカルで作成できます。
 
 ```powershell
-& tools/package-release.ps1 -Version 3.2.7-netdev.0
+& tools/package-release.ps1 -Version 3.2.8-netdev.0
 ```
 
 `dist/<version>/TanukiBCL.Net-win-x64.zip`とSHA-256が生成・表示されます。配布物にはNoS/SNR補助リーダーと更新補助ツールが入ります。このコマンドはGitHub Releaseを公開しません。アプリ内の「アップデート」は、このリポジトリに同名のZIPを含む新しいReleaseがある場合にだけ有効になります。公開Releaseからの実更新、新規Windows環境での起動、完全互換はまだ未検証です。

@@ -13,6 +13,12 @@ public partial class SettingsWindow
     private void InitializeImmediateSettings()
     {
         BindToggle(AlwaysOnTopCheck, nameof(ClientSettings.AlwaysOnTop));
+        LanguageCombo.SelectionChanged += (_, _) =>
+        {
+            if (!settingsReady) return;
+            if (ApplyControls(true, nameof(ClientSettings.Language))) ApplyLanguage(settings.Language);
+            else LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == settings.Language);
+        };
         BindToggle(EnableOverlayCheck, nameof(ClientSettings.EnableOverlay));
         BindToggle(CompactOverlayCheck, nameof(ClientSettings.CompactOverlay));
         BindToggle(MeetingOverlayCheck, nameof(ClientSettings.MeetingOverlay));

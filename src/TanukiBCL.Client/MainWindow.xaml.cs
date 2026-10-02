@@ -71,6 +71,7 @@ public partial class MainWindow : Window
         CompactVoiceView.AddCustomGameRequested += (_, _) => EditCustomGameLauncher(null);
         CompactVoiceView.EditCustomGameRequested += platform => EditCustomGameLauncher(platform);
         RefreshGameLaunchers();
+        CompactVoiceView.SetLanguage(settings.Language);
         CompactVoiceView.PlayerConfigChanged += ApplyPlayerConfig;
         UpdateCompactView();
         Loaded += (_, _) =>
@@ -178,6 +179,7 @@ public partial class MainWindow : Window
     {
         hotkeys?.UpdateBindings(settings);
         RefreshGameLaunchers();
+        CompactVoiceView.SetLanguage(settings.Language);
         if (!isClosing && sessions.Current is { AcceptsCallbacks: true } session)
             RequestSettingsRestart(session);
     }
@@ -192,6 +194,7 @@ public partial class MainWindow : Window
             if (previous.HardwareAcceleration != current.HardwareAcceleration)
                 QueueApplicationRelaunch();
             Topmost = current.AlwaysOnTop;
+            if (previous.Language != current.Language) CompactVoiceView.SetLanguage(current.Language);
             if (previous.MicrophoneName != current.MicrophoneName || previous.SpeakerName != current.SpeakerName)
             {
                 InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
@@ -310,7 +313,12 @@ public partial class MainWindow : Window
     {
         var selectedPid = (ProcessChoice?)ProcessCombo.SelectedItem is { } selected ? selected.Id : (int?)null;
         var processes = Process.GetProcessesByName("Among Us");
-        var choices = processes.Select(process => new ProcessChoice(process.Id)).OrderBy(choice => choice.Id).ToArray();
+        var choices = processes.Where(process =>
+        {
+            try { return process.Threads.Count > 0; }
+            catch (InvalidOperationException) { return false; }
+            catch (System.ComponentModel.Win32Exception) { return false; }
+        }).Select(process => new ProcessChoice(process.Id)).OrderBy(choice => choice.Id).ToArray();
         foreach (var process in processes)
         {
             process.Dispose();
@@ -844,7 +852,7 @@ public partial class MainWindow : Window
             dialog?.Close();
             if (dialog?.IsVisible == true) return;
             relaunch = ApplicationRelaunch.Create(Environment.ProcessPath!,
-                typeof(App).Assembly.Location, resumeGamePid);
+                Path.Combine(AppContext.BaseDirectory, "TanukiBCL.Net.dll"), resumeGamePid);
             Close(); // OnClosing drains native audio/socket work before OnClosed launches.
         }));
     }

@@ -89,7 +89,7 @@
         <Grid Grid.Row="3">
             <StackPanel x:Name="WaitingPanel" VerticalAlignment="Top" Margin="0,6,0,0"
                         HorizontalAlignment="Center" Visibility="Collapsed">
-                <TextBlock Text="Among Usを待っています" FontSize="20" TextAlignment="Center" />
+                <TextBlock x:Name="WaitingTitle" Text="Among Usを待っています" FontSize="20" TextAlignment="Center" />
                 <TextBlock Text="ゲームを起動してください" FontSize="17" Margin="0,4,0,6" TextAlignment="Center" />
                 <ComboBox x:Name="LaunchPlatformCombo" Width="220" Height="28" DisplayMemberPath="Name"
                           SelectionChanged="LaunchPlatformCombo_SelectionChanged" />
@@ -110,7 +110,7 @@
 
         <Grid Grid.Row="4">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                <Button x:Name="GithubButton" Width="72" Height="36" Margin="4,0" ToolTip="GitHubのページはこちら"
+                <Button x:Name="GithubButton" Width="44" Height="36" Margin="4,0" ToolTip="GitHubのページはこちら"
                         Background="Transparent" BorderThickness="0" Foreground="#D0D0D0"
                         Click="GithubButton_Click">
                     <Viewbox Width="36" Height="36">
@@ -118,7 +118,7 @@
                               Data="M12,2A10,10 0 0,0 2,12C2,16.42 4.87,20.17 8.84,21.5C9.34,21.58 9.5,21.27 9.5,21C9.5,20.77 9.5,20.14 9.5,19.31C6.73,19.91 6.14,17.97 6.14,17.97C5.68,16.81 5.03,16.5 5.03,16.5C4.12,15.88 5.1,15.9 5.1,15.9C6.1,15.97 6.63,16.93 6.63,16.93C7.5,18.45 8.97,18 9.54,17.76C9.63,17.11 9.89,16.67 10.17,16.42C7.95,16.17 5.62,15.31 5.62,11.5C5.62,10.39 6,9.5 6.65,8.79C6.55,8.54 6.2,7.5 6.75,6.15C6.75,6.15 7.59,5.88 9.5,7.17C10.29,6.95 11.15,6.84 12,6.84C12.85,6.84 13.71,6.95 14.5,7.17C16.41,5.88 17.25,6.15 17.25,6.15C17.8,7.5 17.45,8.54 17.35,8.79C18,9.5 18.38,10.39 18.38,11.5C18.38,15.32 16.04,16.16 13.81,16.41C14.17,16.72 14.5,17.33 14.5,18.26C14.5,19.6 14.5,20.68 14.5,21C14.5,21.27 14.66,21.59 15.17,21.5C19.14,20.16 22,16.42 22,12A10,10 0 0,0 12,2Z" />
                     </Viewbox>
                 </Button>
-                <Button x:Name="DiscordButton" Width="72" Height="36" Margin="4,0" ToolTip="サポート用Discord"
+                <Button x:Name="DiscordButton" Width="44" Height="36" Margin="4,0" ToolTip="サポート用Discord"
                         Background="Transparent" BorderThickness="0" Foreground="#7289DA"
                         Click="DiscordButton_Click">
                     <Viewbox Width="36" Height="36">
@@ -128,7 +128,28 @@
                         </Canvas>
                     </Viewbox>
                 </Button>
-                <Button x:Name="HelpButton" Width="48" Height="36" Margin="4,0" ToolTip="お問い合わせ"
+                <Button x:Name="KofiButton" Width="44" Height="36" Margin="4,0" ToolTip="お賽銭で開発を支援する"
+                        Background="Transparent" BorderThickness="0" Click="KofiButton_Click">
+                    <Viewbox Width="36" Height="36">
+                        <Canvas Width="48" Height="48">
+                            <Ellipse Canvas.Left="19" Canvas.Top="2" Width="10" Height="10" Fill="#F6D46B" Stroke="#5B371F" StrokeThickness="1.5" />
+                            <Path Data="M24,4 L24,10 M22,6 L26,6 M22,8 L26,8" Stroke="#5B371F" StrokeThickness="1.2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            <Path Data="M7,18 L13,13 L41,13 L44,18 L40,23 L11,23 Z" Fill="#B77B45" Stroke="#F4D5A0" StrokeThickness="2" StrokeLineJoin="Round" />
+                            <Path Data="M7,18 L44,18 M13,13 L11,23 M21,13 L20,23 M29,13 L30,23 M40,13 L44,23" Stroke="#5B371F" StrokeThickness="2" />
+                            <Path Data="M10,23 L41,23 L41,42 L10,42 Z" Fill="#8B562F" Stroke="#F4D5A0" StrokeThickness="2" />
+                            <Path Data="M16,26 L16,39 M24,26 L24,39 M32,26 L32,39" Stroke="#BA8654" StrokeThickness="2" />
+                            <Path Data="M20,19 L30,19" Stroke="#38241A" StrokeThickness="2.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        </Canvas>
+                    </Viewbox>
+                </Button>
+                <Button x:Name="XButton" Width="44" Height="36" Margin="4,0" ToolTip="Xのページはこちら"
+                        Background="Transparent" BorderThickness="0" Click="XButton_Click">
+                    <Viewbox Width="36" Height="36">
+                        <Path Fill="White" Width="36" Height="36" Stretch="Uniform"
+                              Data="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z" />
+                    </Viewbox>
+                </Button>
+                <Button x:Name="HelpButton" Width="44" Height="36" Margin="4,0" ToolTip="お問い合わせ"
                         Background="Transparent" BorderThickness="0" Foreground="#D0D0D0"
                         Click="HelpButton_Click">
                     <Grid Width="28" Height="28">

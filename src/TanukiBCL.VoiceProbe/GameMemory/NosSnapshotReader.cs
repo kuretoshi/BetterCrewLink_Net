@@ -4,17 +4,18 @@ using System.Text.Json;
 
 namespace TanukiBCL.VoiceProbe.GameMemory;
 
-// The v3.2.7 NoS protocol writes RequireUpdate once, then reads published
-// unmanaged snapshots without writing to the game on every poll.
+// NoS v3.5.3 publishes snapshots continuously. The 3.2.8 reader is read-only
+// and uses the x64 helper for the supported 64-bit game architecture.
 internal sealed class NosSnapshotReader
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private int pid = -1;
+    private int pointerSize;
     private NosLayout? layout;
     private Task<NosLayout>? resolveTask;
     private DateTimeOffset retryAt;
     private string observedSession = string.Empty;
-    private uint publication;
+    private ulong publication;
     private DateTimeOffset publishedAt;
     private bool fresh;
 
@@ -23,6 +24,7 @@ internal sealed class NosSnapshotReader
     public void Reset()
     {
         pid = -1;
+        pointerSize = 0;
         layout = null;
         resolveTask = null;
         retryAt = default;
@@ -33,12 +35,20 @@ internal sealed class NosSnapshotReader
         Status = "NoSスナップショット未取得";
     }
 
-    public NosSnapshot? Update(int processId, string session, Func<long, int, byte[]> read)
+    public NosSnapshot? Update(int processId, string session, int targetPointerSize,
+        Func<long, int, byte[]> read)
     {
-        if (pid != processId)
+        if (targetPointerSize != 8)
+        {
+            Reset();
+            Status = "NoS読取は64ビット版Among Usのみ対応";
+            return null;
+        }
+        if (pid != processId || pointerSize != targetPointerSize)
         {
             Reset();
             pid = processId;
+            pointerSize = targetPointerSize;
         }
 
         if (resolveTask is { IsCompleted: true })
@@ -60,8 +70,8 @@ internal sealed class NosSnapshotReader
         {
             if (resolveTask is null && DateTimeOffset.UtcNow >= retryAt)
             {
-                resolveTask = ResolveAsync(processId);
-                Status = "NoSスナップショットの公開を有効化中";
+                resolveTask = ResolveAsync(processId, targetPointerSize);
+                Status = "NoSスナップショットのレイアウト取得中";
             }
             return null;
         }
@@ -96,9 +106,10 @@ internal sealed class NosSnapshotReader
         }
     }
 
-    private static async Task<NosLayout> ResolveAsync(int processId)
+    private static async Task<NosLayout> ResolveAsync(int processId, int targetPointerSize)
     {
-        var helper = FindHelper() ?? throw new FileNotFoundException("NoS読み取りツールが見つかりません");
+        var helper = FindHelper(targetPointerSize) ??
+            throw new FileNotFoundException("NoS読み取りツールが見つかりません");
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo(helper)
@@ -126,6 +137,8 @@ internal sealed class NosSnapshotReader
                 response.Metadata is null)
                 throw new InvalidOperationException(response?.Message ?? error.Trim() ?? "NoSレイアウト取得失敗");
             response.Metadata.Validate(processId);
+            if (response.Metadata.PointerSize != targetPointerSize)
+                throw new InvalidDataException("NoS補助リーダーのアーキテクチャが一致しません");
             return response.Metadata;
         }
         catch (OperationCanceledException)
@@ -135,15 +148,16 @@ internal sealed class NosSnapshotReader
         }
     }
 
-    internal static string? FindHelper()
+    internal static string? FindHelper(int pointerSize)
     {
+        if (pointerSize != 8) return null;
         var packaged = Path.Combine(AppContext.BaseDirectory, "NoSReader", "TbclSnapshotReader.exe");
         if (File.Exists(packaged)) return packaged;
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null;
              directory = directory.Parent)
         {
             var development = Path.Combine(directory.FullName, "tools", "TbclSnapshotReader", "bin",
-                "Release", "net8.0", "win-x86", "TbclSnapshotReader.exe");
+                "Release", "net8.0", "win-x64", "TbclSnapshotReader.exe");
             if (File.Exists(development)) return development;
         }
         return null;
@@ -151,26 +165,33 @@ internal sealed class NosSnapshotReader
 
     internal static NosSnapshot ReadSnapshot(NosLayout layout, Func<long, int, byte[]> read)
     {
-        static bool ValidPointer(uint value) => value >= 0x10000 && value <= 0xfffffffc && value % 4 == 0;
-        var pointer = BitConverter.ToUInt32(read((long)layout.LatestSlotAddress, 4));
+        bool ValidPointer(ulong value) => value >= 0x10000 && value <= long.MaxValue &&
+            value % (ulong)layout.PointerSize == 0;
+        ulong ReadPointer(long address) => layout.PointerSize == 4
+            ? BitConverter.ToUInt32(read(address, 4))
+            : BitConverter.ToUInt64(read(address, 8));
+        var pointer = ReadPointer(checked((long)layout.LatestSlotAddress));
         if (!ValidPointer(pointer)) throw new InvalidDataException("NoS snapshot not published");
         var s = layout.Snapshot;
         var p = layout.PlayerData;
-        var headerSize = new[] { s.LocalMicPositionX, s.LocalMicPositionY, s.PlayersLength, s.Players,
-            s.RadiosLength ?? 0, s.Radios ?? 0 }.Max() + 4;
-        var header = read(pointer, headerSize);
+        var headerSize = new[] { s.LocalMicPositionX + 4, s.LocalMicPositionY + 4,
+            s.PlayersLength + 4, s.Players + layout.PointerSize,
+            (s.RadiosLength ?? 0) + 4, (s.Radios ?? 0) + layout.PointerSize }.Max();
+        var header = read(checked((long)pointer), headerSize);
+        ulong HeaderPointer(int offset) => layout.PointerSize == 4
+            ? BitConverter.ToUInt32(header, offset) : BitConverter.ToUInt64(header, offset);
         var count = BitConverter.ToInt32(header, s.PlayersLength);
-        var playersAddress = BitConverter.ToUInt32(header, s.Players);
+        var playersAddress = HeaderPointer(s.Players);
         if (count is < 0 or > 24 || count > 0 && !ValidPointer(playersAddress))
             throw new InvalidDataException("Invalid NoS players");
-        var payload = count > 0 ? read(playersAddress, count * p.Size) : [];
+        var payload = count > 0 ? read(checked((long)playersAddress), count * p.Size) : [];
         var radioCount = s.RadiosLength.HasValue ? BitConverter.ToInt32(header, s.RadiosLength.Value) : 0;
-        var radiosAddress = s.Radios.HasValue ? BitConverter.ToUInt32(header, s.Radios.Value) : 0;
+        var radiosAddress = s.Radios.HasValue ? HeaderPointer(s.Radios.Value) : 0;
         if (radioCount is < 0 or > 32 || radioCount > 0 && !ValidPointer(radiosAddress))
             throw new InvalidDataException("Invalid NoS radios");
         var radioLayout = layout.RadioData;
         var radioPayload = radioCount > 0 && radioLayout is not null
-            ? read(radiosAddress, radioCount * radioLayout.Size) : [];
+            ? read(checked((long)radiosAddress), radioCount * radioLayout.Size) : [];
 
         static double Finite(float value) => float.IsFinite(value)
             ? value : throw new InvalidDataException("Invalid NoS float");
@@ -223,10 +244,10 @@ internal sealed class NosSnapshotReader
         }
 
         // A ring slot can be recycled while it is being read. Discard torn snapshots.
-        if (!read(pointer, headerSize).AsSpan().SequenceEqual(header) ||
-            count > 0 && !read(playersAddress, payload.Length).AsSpan().SequenceEqual(payload) ||
+        if (!read(checked((long)pointer), headerSize).AsSpan().SequenceEqual(header) ||
+            count > 0 && !read(checked((long)playersAddress), payload.Length).AsSpan().SequenceEqual(payload) ||
             radioCount > 0 && radioLayout is not null &&
-            !read(radiosAddress, radioPayload.Length).AsSpan().SequenceEqual(radioPayload))
+            !read(checked((long)radiosAddress), radioPayload.Length).AsSpan().SequenceEqual(radioPayload))
             throw new InvalidDataException("NoS snapshot changed during read");
         return new NosSnapshot(pointer,
             new VoicePosition(Finite(BitConverter.ToSingle(header, s.LocalMicPositionX)),
@@ -242,7 +263,7 @@ internal sealed class NosSnapshotReader
     }
 }
 
-internal sealed record NosSnapshot(uint Publication, VoicePosition LocalMicPosition,
+internal sealed record NosSnapshot(ulong Publication, VoicePosition LocalMicPosition,
     IReadOnlyDictionary<int, NosPlayerData> Players, List<NosRadioData> Radios);
 
 internal sealed class NosLayout
@@ -258,14 +279,15 @@ internal sealed class NosLayout
     public void Validate(int pid)
     {
         static bool Field(int offset, int size, int limit) => offset >= 0 && offset + size <= limit;
-        if (Pid != pid || PointerSize != 4 || SchemaVersion != 20260918 ||
-            LatestSlotAddress is < 0x10000 or > 0xfffffffc || LatestSlotAddress % 4 != 0 ||
+        if (Pid != pid || PointerSize != 8 || SchemaVersion != 20260918 ||
+            LatestSlotAddress is < 0x10000 or > long.MaxValue ||
+            LatestSlotAddress % (ulong)PointerSize != 0 ||
             PlayerData.Size is < 96 or > 4096)
             throw new InvalidDataException("未対応のNoSスナップショット定義です");
         var s = Snapshot;
         var p = PlayerData;
         if (!Field(s.LocalMicPositionX, 4, 256) || !Field(s.LocalMicPositionY, 4, 256) ||
-            !Field(s.PlayersLength, 4, 256) || !Field(s.Players, 4, 256) ||
+            !Field(s.PlayersLength, 4, 256) || !Field(s.Players, PointerSize, 256) ||
             !Field(p.PlayerId, 1, p.Size) || !Field(p.IsKiller, 1, p.Size) ||
             !Field(p.IsImpostor, 1, p.Size) || !Field(p.IsCrewmate, 1, p.Size) ||
             !Field(p.IsNeutral, 1, p.Size) || !Field(p.IsImpostorlike, 1, p.Size) ||
@@ -281,7 +303,7 @@ internal sealed class NosLayout
         if (s.RadiosLength.HasValue != s.Radios.HasValue || s.Radios.HasValue != (RadioData is not null))
             throw new InvalidDataException("Invalid NoS radio layout");
         if (RadioData is { } r && (r.Size is < 76 or > 4096 ||
-            !Field(s.RadiosLength!.Value, 4, 256) || !Field(s.Radios!.Value, 4, 256) ||
+            !Field(s.RadiosLength!.Value, 4, 256) || !Field(s.Radios!.Value, PointerSize, 256) ||
             !Field(r.Kind, 4, r.Size) || !Field(r.HearableMask, 4, r.Size) ||
             !Field(r.NameLength, 1, r.Size) || !Field(r.Name, 64, r.Size)))
             throw new InvalidDataException("Invalid NoS radio layout");

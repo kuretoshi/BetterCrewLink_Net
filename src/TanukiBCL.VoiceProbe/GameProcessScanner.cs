@@ -21,6 +21,7 @@ internal static class GameProcessScanner
         }
 
         var processes = Process.GetProcessesByName("Among Us")
+            .Where(process => HasLiveThreads(process))
             .OrderBy(process => process.Id)
             .ToArray();
         if (processes.Length == 0)
@@ -40,6 +41,19 @@ internal static class GameProcessScanner
 
         PrintResults(results);
         return Validate(results, expectation, expectedGameState) ? 0 : 1;
+    }
+
+    private static bool HasLiveThreads(Process process)
+    {
+        try
+        {
+            if (process.Threads.Count > 0) return true;
+        }
+        catch (InvalidOperationException) { }
+        catch (System.ComponentModel.Win32Exception) { }
+
+        process.Dispose();
+        return false;
     }
 
     private static async Task<ProcessReadResult> ReadProcessAsync(

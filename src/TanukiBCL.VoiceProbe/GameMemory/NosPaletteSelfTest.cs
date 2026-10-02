@@ -8,8 +8,11 @@ internal static class NosPaletteSelfTest
         {
             if (!value) throw new InvalidOperationException(message);
         }
-        var layout = new NosPaletteReader.Layout { Pid = 42, PointerSize = 4, ArraySlot = 0x10000,
-            ArrayType = 0x20000, ArrayLengthOffset = 4, ArrayDataOffset = 8, Stride = 12, R = 0, G = 4, B = 8 };
+        const long slot = 0x1_0001_0000;
+        const long type = 0x1_0002_0000;
+        const long array = 0x1_0003_0000;
+        var layout = new NosPaletteReader.Layout { Pid = 42, PointerSize = 8, ArraySlot = slot,
+            ArrayType = type, ArrayLengthOffset = 8, ArrayDataOffset = 16, Stride = 12, R = 0, G = 4, B = 8 };
         var payload = new byte[32 * 12];
         for (var i = 0; i < 32; i++)
         {
@@ -23,14 +26,14 @@ internal static class NosPaletteSelfTest
         {
             var data = address switch
             {
-                0x10000 => BitConverter.GetBytes(0x30000u),
-                0x30000 => BitConverter.GetBytes(0x20000u),
-                0x30004 => BitConverter.GetBytes(32u),
-                0x30008 => payload.ToArray(),
+                slot => BitConverter.GetBytes((ulong)array),
+                array => BitConverter.GetBytes((ulong)type),
+                array + 8 => BitConverter.GetBytes(32),
+                array + 16 => payload.ToArray(),
                 _ => throw new InvalidOperationException("Unexpected address")
             };
             Require(data.Length == size, "Wrong read length");
-            if (address == 0x30008 && torn && ++reads == 2) data[0] ^= 1;
+            if (address == array + 16 && torn && ++reads == 2) data[0] ^= 1;
             return data;
         }
         var colors = NosPaletteReader.Read(layout, Read);

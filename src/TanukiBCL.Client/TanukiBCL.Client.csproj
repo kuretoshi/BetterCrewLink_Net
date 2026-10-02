@@ -13,6 +13,8 @@
     <Resource Include="Assets\Avatar\*.png" />
     <Content Include="Assets\Audio\chime.mp3" CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Locales\**\translation.json" Link="Locales\%(RecursiveDir)translation.json"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\update-manifest.json" Link="update-manifest.json"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\licenses\SpeexDSPSharp.*.LICENSE.txt"
@@ -23,7 +25,7 @@
   <Target Name="BundleNosSnapshotReader" BeforeTargets="ComputeFilesToPublish">
     <MSBuild Projects="..\..\tools\TbclSnapshotReader\TbclSnapshotReader.csproj"
              Targets="Publish"
-             Properties="Configuration=Release;RuntimeIdentifier=win-x86;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;DebugType=None;PublishDir=$(MSBuildProjectDirectory)\obj\nos-reader-publish\" />
+             Properties="Configuration=Release;RuntimeIdentifier=win-x64;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;DebugType=None;PublishDir=$(MSBuildProjectDirectory)\obj\nos-reader-publish\" />
     <ItemGroup>
       <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)\obj\nos-reader-publish\TbclSnapshotReader.exe">
         <RelativePath>NoSReader\TbclSnapshotReader.exe</RelativePath>

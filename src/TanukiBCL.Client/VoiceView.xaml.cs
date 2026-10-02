@@ -111,6 +111,9 @@ public partial class VoiceView : UserControl
     internal event Action<GameLaunchPlatform>? EditCustomGameRequested;
     public event Action<int, PlayerAudioConfig, bool>? PlayerConfigChanged;
 
+    internal void SetLanguage(string language) =>
+        WaitingTitle.Text = UiLocalization.Translate(language, "game.waiting");
+
     internal void SetLaunchPlatforms(IReadOnlyList<GameLaunchPlatform> platforms, string selectedKey)
     {
         configuringLaunchPlatforms = true;
@@ -325,6 +328,12 @@ public partial class VoiceView : UserControl
 
     private void DiscordButton_Click(object sender, RoutedEventArgs e) =>
         OpenLink("https://discord.gg/jEyDrpBsmJ");
+
+    private void KofiButton_Click(object sender, RoutedEventArgs e) =>
+        OpenLink("https://ko-fi.com/kuretoshi");
+
+    private void XButton_Click(object sender, RoutedEventArgs e) =>
+        OpenLink("https://x.com/tanukibcl?s=11");
 }
 
 public sealed record VoicePlayerStatus(

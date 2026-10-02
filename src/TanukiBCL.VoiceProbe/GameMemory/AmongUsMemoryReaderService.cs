@@ -262,8 +262,10 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         lobbyCode = string.IsNullOrWhiteSpace(lobbyCode) ? "MENU" : lobbyCode;
 
         NosSnapshot? nos = null;
+        var nosPointerSize = currentContext.Is64Bit ? 8 : 4;
         var nosLobbyColors = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Lobby
-            ? nosPaletteReader.Update(currentProcess.ProcessId, currentContext.ReadBytes) : null;
+            ? nosPaletteReader.Update(currentProcess.ProcessId, nosPointerSize,
+                currentContext.ReadBytes) : null;
         if (mod != AmongUsModType.NebulaOnTheShip || gameState == GameState.Menu) nosPaletteReader.Reset();
         foreach (var player in players)
             player.NosLobbyColor = !player.Disconnected && nosLobbyColors is not null &&
@@ -273,7 +275,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         {
             if (previousGameState is GameState.Menu or GameState.Lobby or GameState.Unknown)
                 nosRound++;
-            nos = nosReader.Update(currentProcess.ProcessId, $"{lobbyCode}:{nosRound}", currentContext.ReadBytes);
+            nos = nosReader.Update(currentProcess.ProcessId, $"{lobbyCode}:{nosRound}",
+                nosPointerSize, currentContext.ReadBytes);
             foreach (var player in players)
             {
                 var published = !player.Disconnected && nos?.Players.TryGetValue(player.Id, out var data) == true

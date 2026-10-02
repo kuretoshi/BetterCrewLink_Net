@@ -1,0 +1,32 @@
+namespace TanukiBCL.Client;
+
+public partial class SettingsWindow
+{
+    private readonly LocalizedStaticText staticText = new();
+
+    private void ApplyLanguage(string language)
+    {
+        Title = UiLocalization.Translate(language, "settings.title");
+        staticText.Apply(this, language, PlayerRows);
+    }
+
+    internal static void VerifyLocalization()
+    {
+        UiLocalization.Verify();
+        var settings = new ClientSettings();
+        var window = new SettingsWindow(settings, true, null, false, null, (_, _, _) => { }, _ => { });
+        window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "en");
+        if (settings.Language != "en" || window.Title != "Settings" ||
+            window.LanguageLabel.Text != "Language" ||
+            window.CategoryList.Items[0] is not System.Windows.Controls.ListBoxItem { Content: "General" } ||
+            window.CategoryList.Items[4] is not System.Windows.Controls.ListBoxItem
+                { Content: "Keyboard Shortcuts" } ||
+            !Equals(window.NatFixCheck.Content, UiLocalization.Translate("en", "settings.advanced.nat_fix")))
+            throw new InvalidOperationException("English settings language did not apply");
+        window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "ja");
+        if (settings.Language != "ja" || window.Title != "設定" || window.LanguageLabel.Text != "言語")
+            throw new InvalidOperationException("Japanese settings language was not restored");
+        window.Close();
+        Console.WriteLine("[PASS] Settings language switches English/Japanese and persists through transaction");
+    }
+}

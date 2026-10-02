@@ -17,8 +17,9 @@ internal sealed class NosPaletteReader
         retryAt = default;
     }
 
-    public string[]? Update(int processId, Func<long, int, byte[]> read)
+    public string[]? Update(int processId, int targetPointerSize, Func<long, int, byte[]> read)
     {
+        if (targetPointerSize != 8) { Reset(); return null; }
         if (pid != processId) { Reset(); pid = processId; }
         if (pending is { IsCompleted: true })
         {
@@ -28,17 +29,19 @@ internal sealed class NosPaletteReader
         }
         if (layout is null)
         {
-            if (pending is null && DateTimeOffset.UtcNow >= retryAt) pending = ResolveAsync(processId);
+            if (pending is null && DateTimeOffset.UtcNow >= retryAt)
+                pending = ResolveAsync(processId, targetPointerSize);
             return null;
         }
         try { return Read(layout, read); }
         catch { return null; } // A changing palette must not publish a torn color array.
     }
 
-    private static async Task<Layout> ResolveAsync(int pid)
+    private static async Task<Layout> ResolveAsync(int pid, int targetPointerSize)
     {
         using var process = new Process { StartInfo = new ProcessStartInfo(
-            NosSnapshotReader.FindHelper() ?? throw new FileNotFoundException("NoS reader missing"))
+            NosSnapshotReader.FindHelper(targetPointerSize) ??
+            throw new FileNotFoundException("NoS reader missing"))
         {
             UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden,
             RedirectStandardOutput = true, RedirectStandardError = true
@@ -58,6 +61,8 @@ internal sealed class NosPaletteReader
             if (process.ExitCode != 0 || result?.Status != "ok" || result.Pid != pid || result.Metadata is null)
                 throw new InvalidDataException("NoS palette unavailable");
             result.Metadata.Validate(pid);
+            if (result.Metadata.PointerSize != targetPointerSize)
+                throw new InvalidDataException("NoS palette helper architecture mismatch");
             return result.Metadata;
         }
         catch (OperationCanceledException)
@@ -70,9 +75,10 @@ internal sealed class NosPaletteReader
     internal static string[] Read(Layout layout, Func<long, int, byte[]> read)
     {
         layout.Validate(layout.Pid);
-        uint Pointer(long address) => BitConverter.ToUInt32(read(address, 4));
+        long Pointer(long address) => checked((long)BitConverter.ToUInt64(read(address, 8)));
         var array = Pointer(layout.ArraySlot);
-        if (!ValidPointer(array) || Pointer(array) != layout.ArrayType || Pointer(array + layout.ArrayLengthOffset) != 32)
+        if (!ValidPointer(array, layout.PointerSize) || Pointer(array) != layout.ArrayType ||
+            BitConverter.ToInt32(read(array + layout.ArrayLengthOffset, 4)) != 32)
             throw new InvalidDataException("NoS palette changed");
         var bytes = read(array + layout.ArrayDataOffset, 32 * layout.Stride);
         var colors = Enumerable.Range(0, 32).Select(i =>
@@ -89,7 +95,8 @@ internal sealed class NosPaletteReader
         return colors;
     }
 
-    private static bool ValidPointer(long value) => value is >= 0x10000 and <= 0xfffffffc && value % 4 == 0;
+    private static bool ValidPointer(long value, int pointerSize) =>
+        value >= 0x10000 && value % pointerSize == 0;
     private sealed record Response(string Status, int Pid, Layout? Metadata);
     internal sealed class Layout
     {
@@ -105,8 +112,9 @@ internal sealed class NosPaletteReader
         public int B { get; set; }
         public void Validate(int pid)
         {
-            if (Pid != pid || PointerSize != 4 || !ValidPointer(ArraySlot) || !ValidPointer(ArrayType) ||
-                ArrayLengthOffset != 4 || ArrayDataOffset is < 8 or > 64 || Stride is < 12 or > 64 ||
+            if (Pid != pid || PointerSize != 8 || !ValidPointer(ArraySlot, PointerSize) ||
+                !ValidPointer(ArrayType, PointerSize) ||
+                ArrayLengthOffset != 8 || ArrayDataOffset is < 8 or > 64 || Stride is < 12 or > 64 ||
                 new[] { R, G, B }.Any(offset => offset < 0 || offset > Stride - 4))
                 throw new InvalidDataException("Unsupported NoS palette");
         }

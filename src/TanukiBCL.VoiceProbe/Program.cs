@@ -14,6 +14,8 @@ internal static class Program
         {
             if (args.Contains("--nos-palette-self-test"))
                 return GameMemory.NosPaletteSelfTest.Run();
+            if (args.Contains("--nos-snapshot-self-test"))
+                return GameMemory.NosSnapshotSelfTest.Run();
             if (args.Contains("--game-scan-self-test"))
             {
                 return GameProcessScannerSelfTest.Run();
@@ -169,6 +171,7 @@ internal static class Program
               --game-scan-self-test ゲーム読取検証コマンドの回帰テスト
               --nos-palette       NoSロビー色を取得（--game-process-id 必須）
               --nos-palette-self-test NoS色パレットの読取回帰テスト
+              --nos-snapshot-self-test 64bit NoSプレイヤー・ラジオ読取の回帰テスト
               --nos-snapshot --game-process-id PID  NoS公開スナップショットを実機検証
               --game-audio-self-test 5プロセスと仮想音声クライアントの統合検証
               --game-audio-transition-test Tasks→会議→Tasksの連続追従検証

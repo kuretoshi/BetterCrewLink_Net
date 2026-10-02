@@ -57,6 +57,8 @@ public partial class SettingsWindow : Window
         this.currentLobbySettings = currentLobbySettings;
         currentGameState = gameState;
         this.onPlayerConfigChanged = onPlayerConfigChanged;
+        LanguageCombo.ItemsSource = UiLocalization.Languages;
+        LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == settings.Language);
         lobbyDraft = settings.MyLobbySettings;
         radioOnlyBackup = settings.RadioOnlyBackup;
         MicrophoneCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
@@ -121,6 +123,7 @@ public partial class SettingsWindow : Window
         InitializeImmediateSettings();
         UpdateResetAvailability();
         settingsReady = true;
+        ApplyLanguage(settings.Language);
     }
 
     internal void UpdateCurrentLobbySettings(LobbySettings? settings)
@@ -655,6 +658,7 @@ public partial class SettingsWindow : Window
 
         return new ClientSettings
         {
+            Language = (LanguageCombo.SelectedItem as UiLanguage)?.Code ?? "ja",
             ServerUrl = serverUrl,
             ServerUrls = serverUrlDrafts.Append(serverUrl)
                 .Distinct(StringComparer.Ordinal).ToList(),
