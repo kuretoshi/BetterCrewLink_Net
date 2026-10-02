@@ -34,6 +34,8 @@ public partial class SettingsWindow : Window
         MasterVolumeSlider.Value = settings.MasterVolume;
         MicrophoneGainSlider.Value = settings.MicrophoneGain;
         MicrophoneGainCheck.IsChecked = settings.MicrophoneGainEnabled;
+        MicSensitivitySlider.Value = 1d - settings.MicSensitivity;
+        MicSensitivityCheck.IsChecked = settings.MicSensitivityEnabled;
         ServerUrlBox.Text = settings.ServerUrl;
         LoadLobbyControls(lobbyDraft);
         if (currentLobbySettings is not null && preferCurrentLobby)
@@ -160,9 +162,10 @@ public partial class SettingsWindow : Window
 
     private void UpdateVolumeLabels()
     {
-        if (MasterVolumeValue is null || MicrophoneGainValue is null || DistanceValue is null) return;
+        if (MasterVolumeValue is null || MicrophoneGainValue is null || MicSensitivityValue is null || DistanceValue is null) return;
         MasterVolumeValue.Text = $"{MasterVolumeSlider.Value:0}%";
         MicrophoneGainValue.Text = $"{MicrophoneGainSlider.Value:0}%";
+        MicSensitivityValue.Text = $"{MicSensitivitySlider.Value:0.00}";
         DistanceValue.Text = $"{DistanceSlider.Value:0.0}";
     }
 
@@ -185,8 +188,8 @@ public partial class SettingsWindow : Window
             MasterVolume = (int)MasterVolumeSlider.Value,
             MicrophoneGain = (int)MicrophoneGainSlider.Value,
             MicrophoneGainEnabled = MicrophoneGainCheck.IsChecked == true,
-            MicSensitivity = settings.MicSensitivity,
-            MicSensitivityEnabled = settings.MicSensitivityEnabled,
+            MicSensitivity = Math.Round(1d - MicSensitivitySlider.Value, 2),
+            MicSensitivityEnabled = MicSensitivityCheck.IsChecked == true,
             MyLobbySettings = showingCurrentLobby ? lobbyDraft : ReadLobbyControls(),
             RadioOnlyBackup = radioOnlyBackup
         };
@@ -206,6 +209,8 @@ public partial class SettingsWindow : Window
         settings.MasterVolume = candidate.MasterVolume;
         settings.MicrophoneGain = candidate.MicrophoneGain;
         settings.MicrophoneGainEnabled = candidate.MicrophoneGainEnabled;
+        settings.MicSensitivity = candidate.MicSensitivity;
+        settings.MicSensitivityEnabled = candidate.MicSensitivityEnabled;
         settings.MyLobbySettings = candidate.MyLobbySettings;
         settings.RadioOnlyBackup = candidate.RadioOnlyBackup;
         DialogResult = true;

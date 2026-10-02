@@ -34,6 +34,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private bool deafened;
     private double masterVolume = 100d;
     private double microphoneGain = 100d;
+    private bool microphoneSensitivityEnabled;
+    private double microphoneSensitivity = 0.15d;
     private readonly object radioTransmitGate = new();
     private volatile bool impostorRadioTransmitting;
     private volatile bool localVadTalking;
@@ -269,6 +271,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         audioSession?.SetMicrophoneGain(microphoneGain);
     }
 
+    public void SetMicrophoneSensitivity(bool enabled, double minimumNoiseLevel)
+    {
+        microphoneSensitivityEnabled = enabled;
+        microphoneSensitivity = Math.Clamp(minimumNoiseLevel, 0d, 1d);
+        audioSession?.SetMicrophoneSensitivity(enabled, microphoneSensitivity);
+    }
+
     public void SetDeafened(bool value)
     {
         deafened = value;
@@ -398,11 +407,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                         _ = socket.EmitAsync("VAD", talking && !impostorRadioTransmitting);
                     }
                 });
-            audioSession.Start();
             audioSession.SetMicrophoneMuted(microphoneMuted);
             audioSession.SetDeafened(deafened);
             audioSession.SetMasterVolume(masterVolume);
             audioSession.SetMicrophoneGain(microphoneGain);
+            audioSession.SetMicrophoneSensitivity(microphoneSensitivityEnabled, microphoneSensitivity);
+            audioSession.Start();
         }
 
         if (options.AutoRadioTone)

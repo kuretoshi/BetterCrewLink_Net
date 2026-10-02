@@ -101,6 +101,16 @@
                                     IsEnabled="{Binding IsChecked, ElementName=MicrophoneGainCheck}"
                                     ValueChanged="VolumeSlider_ValueChanged" />
                         </DockPanel>
+                        <CheckBox x:Name="MicSensitivityCheck" Content="マイク感度で無音時の送信を抑える" Margin="0,0,0,8" />
+                        <DockPanel Margin="0,0,0,8">
+                            <TextBlock x:Name="MicSensitivityValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
+                            <Slider x:Name="MicSensitivitySlider" Minimum="0" Maximum="1"
+                                    TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                    IsEnabled="{Binding IsChecked, ElementName=MicSensitivityCheck}"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                        <TextBlock Text="値を上げるほど小さな声にも反応します。無音時は送信音声を抑えます。"
+                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,18" />
                     </StackPanel>
                     <StackPanel x:Name="AdvancedPanel" Visibility="Collapsed">
                         <TextBlock Text="詳細設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
