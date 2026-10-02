@@ -18,6 +18,7 @@ internal static class VoiceDisguiseEffectPolicy
     public static NosSizeVoiceEffect? Select(AmongUsState state, Player listener, Player speaker,
         LobbySettings lobby, int strengthPercent, bool audible, bool impostorRadioActive)
     {
+        if (state.Map == MapType.Airship && state.AirshipMeetingByOutfit) return null;
         var sizeEffect = NosSizeVoiceEffectPolicy.Select(state, speaker, lobby, audible);
         if (sizeEffect is not null) return sizeEffect;
 

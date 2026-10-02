@@ -19,6 +19,7 @@ public partial class SettingsWindow : Window
     private LobbySettings? radioOnlyBackup;
     private bool loadingLobbyControls;
     private bool showingCurrentLobby;
+    private VoiceEffectPreviewSession? voiceEffectPreview;
     private AmongUsState? currentGameState;
     private readonly Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged;
     private string playersSignature = string.Empty;
@@ -236,7 +237,54 @@ public partial class SettingsWindow : Window
         e.Handled = true;
     }
 
-    private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateVolumeLabels();
+    private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        UpdateVolumeLabels();
+        if (ReferenceEquals(sender, VoiceEffectStrengthSlider))
+            voiceEffectPreview?.SetStrength((int)VoiceEffectStrengthSlider.Value);
+    }
+
+    private void TestVoiceEffectButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (voiceEffectPreview is not null)
+        {
+            StopVoiceEffectPreview();
+            return;
+        }
+
+        if (MicrophoneCombo.SelectedItem is not AudioDeviceInfo input ||
+            SpeakerCombo.SelectedItem is not AudioDeviceInfo output)
+        {
+            MessageBox.Show(this, "マイクとスピーカーを選択してください。", "ボイスエフェクトテスト");
+            return;
+        }
+
+        try
+        {
+            voiceEffectPreview = VoiceEffectPreviewSession.Start(input.Id, output.Id,
+                (int)VoiceEffectStrengthSlider.Value);
+            TestVoiceEffectButton.Content = "エフェクトテスト停止";
+        }
+        catch (Exception error)
+        {
+            StopVoiceEffectPreview();
+            MessageBox.Show(this, $"エフェクトテストを開始できませんでした: {error.Message}",
+                "ボイスエフェクトテスト");
+        }
+    }
+
+    private void StopVoiceEffectPreview()
+    {
+        voiceEffectPreview?.Dispose();
+        voiceEffectPreview = null;
+        TestVoiceEffectButton.Content = "ボイスエフェクトテスト";
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        StopVoiceEffectPreview();
+        base.OnClosed(e);
+    }
 
     private void LobbyTab_Changed(object sender, RoutedEventArgs e)
     {

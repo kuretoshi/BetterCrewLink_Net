@@ -201,6 +201,12 @@ internal static class SpatialVoicePolicySelfTest
         Check("disguise: zero NoS body height blocks fallback", true,
             VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
                 new LobbySettings(), 100, true, false) is null);
+        disguiseTasks.Map = MapType.Airship;
+        disguiseTasks.AirshipMeetingByOutfit = true;
+        disguisedSpeaker.NosPlayer.BodyRateY = 0.5d;
+        Check("disguise: Airship meeting fallback suppresses all effects", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings(), 100, true, false) is null);
         var disguiseAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(NosSizeEffectMode.Disguise, 1d, 1d), 850d);
         Check("disguise DSP: pitch-up path shifts center-band voice", true,
             ToneAmplitude(disguiseAudio, 1700d) > ToneAmplitude(disguiseAudio, 850d));
@@ -222,6 +228,26 @@ internal static class SpatialVoicePolicySelfTest
         Check("vision hearing: disabling restores configured range", true,
             SpatialVoicePolicy.Calculate(visionTasks, new Player(), new Player { X = 3d },
                 visionPolicy with { VisionHearing = false }).Audible);
+        var meetingOutfit = new Player { CurrentOutfit = 1, ColorId = 0, AppearanceColorId = 0 };
+        var otherMeetingOutfit = new Player { CurrentOutfit = 1, ColorId = 1, AppearanceColorId = 1,
+            X = 30d };
+        Check("Airship outfit fallback: two matching active outfits", true,
+            AirshipMeetingRules.IsMeetingByOutfit(GameState.Tasks, MapType.Airship,
+                [meetingOutfit, otherMeetingOutfit]));
+        otherMeetingOutfit.AppearanceColorId = 2;
+        Check("Airship outfit fallback: a real disguise excludes fallback", false,
+            AirshipMeetingRules.IsMeetingByOutfit(GameState.Tasks, MapType.Airship,
+                [meetingOutfit, otherMeetingOutfit]));
+        otherMeetingOutfit.AppearanceColorId = 1;
+        var airshipOutfitMeeting = new AmongUsState
+        {
+            GameState = GameState.Tasks, Map = MapType.Airship, AirshipMeetingByOutfit = true
+        };
+        var airshipFallbackMix = SpatialVoicePolicy.Calculate(airshipOutfitMeeting,
+            meetingOutfit, otherMeetingOutfit,
+            new SpatialVoiceSettings(MaxDistance: 5d, WallsBlockAudio: true, HearThroughCameras: true));
+        Check("Airship outfit fallback: distance and walls bypassed", true,
+            airshipFallbackMix.Audible && airshipFallbackMix.Gain == 1d && airshipFallbackMix.Pan == 0d);
         Check("vision hearing: pan uses effective range", true,
             Math.Abs(SpatialVoicePolicy.Calculate(visionTasks, new Player(),
                 new Player { X = 1d }, visionPolicy).Pan - 0.4d) < 0.001d);
@@ -472,7 +498,7 @@ internal static class SpatialVoicePolicySelfTest
             (beforeRadioOnly with { Haunting = true }));
 
         Console.WriteLine(failures == 0
-            ? "[PASS] 3.2.7 radio, NoS size, listener-volume, vent, camera and wall audio policy"
+            ? "[PASS] 3.2.7 radio, voice effects, Airship fallback, listener-volume, vent, camera and wall policy"
             : $"[FAIL] 3.2.7 radio, NoS size, listener-volume, vent, camera and wall audio policy: {failures} cases failed");
         return failures == 0 ? 0 : 1;
 

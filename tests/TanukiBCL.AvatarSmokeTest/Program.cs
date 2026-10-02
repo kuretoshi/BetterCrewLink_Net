@@ -100,7 +100,9 @@ internal static class Program
         try
         {
             if (window.FindName("VoiceEffectStrengthSlider") is not Slider slider || slider.Value != 63d ||
-                window.FindName("VoiceEffectEnabledCheck") is not CheckBox toggle || toggle.IsChecked != true)
+                window.FindName("VoiceEffectEnabledCheck") is not CheckBox toggle || toggle.IsChecked != true ||
+                window.FindName("TestVoiceEffectButton") is not Button preview ||
+                !Equals(preview.Content, "ボイスエフェクトテスト"))
                 throw new InvalidOperationException("Voice disguise settings did not initialize from v3.2.7 defaults.");
         }
         finally

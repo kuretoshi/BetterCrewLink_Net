@@ -174,6 +174,8 @@ public sealed class AmongUsState
 
     public MapType Map { get; set; } = MapType.Unknown;
 
+    public bool AirshipMeetingByOutfit { get; set; }
+
     public CameraLocation CurrentCamera { get; set; } = CameraLocation.None;
 
     public VoicePosition? NosLocalMicPosition { get; set; }

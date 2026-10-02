@@ -48,6 +48,7 @@ internal static class SpatialVoicePolicy
         bool nosJackalRadioHearable = false)
     {
         var isNos = state.Mod == AmongUsModType.NebulaOnTheShip;
+        var airshipMeetingFallback = state.Map == MapType.Airship && state.AirshipMeetingByOutfit;
         var useNosPositions = isNos && settings.NosVoicePositions;
         var meX = useNosPositions ? state.NosLocalMicPosition?.X ?? me.X : me.X;
         var meY = useNosPositions ? state.NosLocalMicPosition?.Y ?? me.Y : me.Y;
@@ -146,7 +147,7 @@ internal static class SpatialVoicePolicy
         // selected camera instead. Camera reception uses that camera's position
         // for both attenuation and panning.
         var cameraMuffle = false;
-        if (distance > maxDistance && settings.HearThroughCameras &&
+        if (!airshipMeetingFallback && distance > maxDistance && settings.HearThroughCameras &&
             state.CurrentCamera != CameraLocation.None &&
             CameraGeometry.TryRelativePosition(state.Map, state.CurrentCamera,
                 new Player { X = otherX, Y = otherY },
@@ -168,6 +169,14 @@ internal static class SpatialVoicePolicy
         if ((ventMuffle || cameraMuffle) && Math.Abs(baseGain - 1d) < 0.0001d)
         {
             baseGain = cameraMuffle ? 0.8d : 0.5d;
+        }
+
+        if (airshipMeetingFallback)
+        {
+            // TASKS is a stale state during this Airship meeting fallback.
+            // Upstream recenters the panner and skips both distance and walls.
+            return ApplyListenerVolume(new PeerVoiceMix(baseGain, 0d, distance,
+                "airship-meeting-fallback", Muffled: ventMuffle), me, other, settings);
         }
 
         var distanceGain = LinearDistanceGain(distance, maxDistance);

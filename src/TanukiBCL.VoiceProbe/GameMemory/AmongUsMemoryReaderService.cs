@@ -292,6 +292,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             ? currentContext.ReadTaskEnvironment(map, localPlayer)
             : TaskEnvironment.Empty;
 
+        var airshipMeetingByOutfit = AirshipMeetingRules.IsMeetingByOutfit(gameState, map, players);
+
         oldGameState = gameState;
         lastStateLobbyCodeInt = lobbyCodeInt;
 
@@ -311,6 +313,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             MaxPlayers = maxPlayers,
             LightRadius = localPlayer?.LightRadius ?? 1d,
             Map = map,
+            AirshipMeetingByOutfit = airshipMeetingByOutfit,
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosRadios = nos?.Radios ?? [],
             CommsSabotaged = taskEnvironment.CommsSabotaged,

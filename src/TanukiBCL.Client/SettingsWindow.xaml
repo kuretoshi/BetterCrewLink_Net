@@ -122,34 +122,6 @@
                         <RadioButton x:Name="VoiceModeRadio" Content="声で起動" GroupName="MicrophoneMode" Margin="0,0,0,7" />
                         <RadioButton x:Name="PushToTalkModeRadio" Content="押している間だけ話す" GroupName="MicrophoneMode" Margin="0,0,0,7" />
                         <RadioButton x:Name="PushToMuteModeRadio" Content="押している間だけミュート" GroupName="MicrophoneMode" Margin="0,0,0,20" />
-                        <TextBlock Text="マスター音量" />
-                        <DockPanel Margin="0,5,0,20">
-                            <TextBlock x:Name="MasterVolumeValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="MasterVolumeSlider" Minimum="0" Maximum="200"
-                                    TickFrequency="1" IsSnapToTickEnabled="True"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <TextBlock Text="変装時のボイスエフェクトの強さ" />
-                        <DockPanel Margin="0,5,0,20">
-                            <TextBlock x:Name="VoiceEffectStrengthValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="VoiceEffectStrengthSlider" Minimum="0" Maximum="100"
-                                    TickFrequency="1" IsSnapToTickEnabled="True"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <TextBlock Text="幽霊として聞く生存者の音量" />
-                        <DockPanel Margin="0,5,0,20">
-                            <TextBlock x:Name="CrewVolumeAsGhostValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="CrewVolumeAsGhostSlider" Minimum="0" Maximum="100"
-                                    TickFrequency="1" IsSnapToTickEnabled="True"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <TextBlock Text="インポスターとして聞く幽霊の音量" />
-                        <DockPanel Margin="0,5,0,20">
-                            <TextBlock x:Name="GhostVolumeAsImpostorValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="GhostVolumeAsImpostorSlider" Minimum="0" Maximum="100"
-                                    TickFrequency="1" IsSnapToTickEnabled="True"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
                         <CheckBox x:Name="MicrophoneGainCheck" Content="マイク入力ゲインを調整する" Margin="0,0,0,8" />
                         <DockPanel Margin="0,0,0,18">
                             <TextBlock x:Name="MicrophoneGainValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
@@ -168,6 +140,37 @@
                         </DockPanel>
                         <TextBlock Text="値を上げるほど小さな声にも反応します。無音時は送信音声を抑えます。"
                                    TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,18" />
+                        <TextBlock Text="マスター音量" />
+                        <DockPanel Margin="0,5,0,20">
+                            <TextBlock x:Name="MasterVolumeValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
+                            <Slider x:Name="MasterVolumeSlider" Minimum="0" Maximum="200"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                        <TextBlock Text="幽霊として聞く生存者の音量" />
+                        <DockPanel Margin="0,5,0,20">
+                            <TextBlock x:Name="CrewVolumeAsGhostValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
+                            <Slider x:Name="CrewVolumeAsGhostSlider" Minimum="0" Maximum="100"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                        <TextBlock Text="インポスターとして聞く幽霊の音量" />
+                        <DockPanel Margin="0,5,0,20">
+                            <TextBlock x:Name="GhostVolumeAsImpostorValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
+                            <Slider x:Name="GhostVolumeAsImpostorSlider" Minimum="0" Maximum="100"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                        <TextBlock Text="変装時のボイスエフェクトの強さ" />
+                        <DockPanel Margin="0,5,0,12">
+                            <TextBlock x:Name="VoiceEffectStrengthValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
+                            <Slider x:Name="VoiceEffectStrengthSlider" Minimum="0" Maximum="100"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                        <Button x:Name="TestVoiceEffectButton" Content="ボイスエフェクトテスト"
+                                Width="240" Height="40" HorizontalAlignment="Center" Margin="0,0,0,20"
+                                Click="TestVoiceEffectButton_Click" />
                     </StackPanel>
                     <StackPanel x:Name="KeybindsPanel" Visibility="Collapsed">
                         <TextBlock Text="キー割り当て" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
