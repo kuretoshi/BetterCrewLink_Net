@@ -604,7 +604,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 },
                 echoCancellation,
                 noiseSuppression,
-                autoGainControl);
+                autoGainControl,
+                options.OldSampleDebug);
             audioSession.SetMicrophoneMuted(microphoneMuted);
             audioSession.SetDeafened(deafened);
             audioSession.SetMasterVolume(masterVolume);

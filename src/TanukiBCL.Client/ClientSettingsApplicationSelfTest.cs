@@ -26,7 +26,8 @@ internal static class ClientSettingsApplicationSelfTest
             settings => settings.SpeakerName = "another speaker",
             settings => settings.EchoCancellation = false,
             settings => settings.NoiseSuppression = false,
-            settings => settings.AutoGainControl = true
+            settings => settings.AutoGainControl = true,
+            settings => settings.OldSampleDebug = true
         })
         {
             var changed = new ClientSettings();

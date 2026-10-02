@@ -31,7 +31,8 @@ internal sealed record ProbeOptions(
     bool VadSelfTest,
     bool NatFix,
     bool NosSnapshot,
-    int ExpectedPlayers = 5)
+    int ExpectedPlayers = 5,
+    bool OldSampleDebug = false)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -41,7 +42,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--policy-self-test" or "--vad-self-test" or "--nat-fix" or "--nos-snapshot")
+            if (argument is "--host" or "--self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--policy-self-test" or "--vad-self-test" or "--nat-fix" or "--nos-snapshot" or "--old-sample-debug" or "--capture-device-self-test")
             {
                 switches.Add(argument);
                 continue;
@@ -106,7 +107,8 @@ internal sealed record ProbeOptions(
             switches.Contains("--nat-fix"),
             switches.Contains("--nos-snapshot"),
             values.TryGetValue("--expected-players", out var playersText)
-                ? ParsePositiveInt(playersText, "--expected-players") : 5);
+                ? ParsePositiveInt(playersText, "--expected-players") : 5,
+            switches.Contains("--old-sample-debug"));
     }
 
     private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)

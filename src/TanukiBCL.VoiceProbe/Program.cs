@@ -34,6 +34,8 @@ internal static class Program
                 return await NosSnapshotDiagnostic.RunAsync(
                     ProbeOptions.Parse(args.Where(arg => arg != "--nos-palette").ToArray()).GameProcessId, palette: true);
             var options = ProbeOptions.Parse(args);
+            if (args.Contains("--capture-device-self-test"))
+                return await AudioCaptureDeviceSelfTest.RunAsync(options);
             if (options.PolicySelfTest)
             {
                 return SpatialVoicePolicySelfTest.Run();
@@ -155,6 +157,7 @@ internal static class Program
               --policy-self-test  3.2.7の音声ポリシーをローカルで検証
               --vad-self-test     3.2.7の周波数帯VADとマイク操作モードを検証
               --audio-processing-self-test  エコーキャンセル・ノイズ抑制・自動ゲイン処理を検証
+              --capture-device-self-test  選択マイクの既定/強制48 kHz録音を各750msローカル検証
               --mobile-host-self-test  3.2.7モバイルホスト通知を検証
               --server-reconnect-self-test  ローカルサーバーの切断・再接続とロビー再参加を検証
               --tanuki-interop-test 起動中のTanukiBCLとのWebRTC・Opus相互接続を検証
@@ -181,6 +184,7 @@ internal static class Program
               --auto-radio-tone   ラジオON時に440Hzの検証音を送信（実マイク不要）
               --input-device <n>  マイク番号（既定: 0）
               --output-device <n> スピーカー番号（既定: 0）
+              --old-sample-debug マイクに48 kHz入力を要求（既定はデバイスの既定レート）
               --help, -h           このヘルプを表示
             """);
     }

@@ -310,6 +310,7 @@ public partial class MainWindow : Window
             "--output-device", output.Id.ToString()
         };
         if (settings.NatFix) optionArgs.Add("--nat-fix");
+        if (settings.OldSampleDebug) optionArgs.Add("--old-sample-debug");
         var options = ProbeOptions.Parse([.. optionArgs]);
         var activeProbe = new VoiceServerProbe(options, "client");
         probe = activeProbe;

@@ -84,6 +84,24 @@ public partial class SettingsWindow
             Click(window.ConfirmDialog.ConfirmButton);
             RequireLive(settings.NatFix, "Confirmed NAT setting was not applied");
 
+            window.OldSampleDebugCheck.IsChecked = true;
+            Click(window.OldSampleDebugCheck);
+            RequireLive(!settings.OldSampleDebug && window.ConfirmDialogBackdrop.Visibility == Visibility.Visible,
+                "Forced 48 kHz capture was applied before the upstream warning");
+            Click(window.ConfirmDialog.CancelButton);
+            RequireLive(!settings.OldSampleDebug && window.OldSampleDebugCheck.IsChecked == false,
+                "Canceling sample-rate warning changed capture mode");
+            window.OldSampleDebugCheck.IsChecked = true;
+            Click(window.OldSampleDebugCheck);
+            Click(window.ConfirmDialog.ConfirmButton);
+            RequireLive(settings.OldSampleDebug && writes.Last().OldSampleDebug,
+                "Confirmed sample-rate mode was not saved");
+            window.OldSampleDebugCheck.IsChecked = false;
+            Click(window.OldSampleDebugCheck);
+            RequireLive(!settings.OldSampleDebug && !writes.Last().OldSampleDebug &&
+                window.ConfirmDialogBackdrop.Visibility == Visibility.Collapsed,
+                "Turning off forced sample rate did not restore native capture immediately");
+
             window.MicSensitivitySlider.Value = 0.7;
             RequireLive(settings.MicSensitivity == 0.15, "Sensitivity was applied before commit");
             window.CommitMicrophoneSensitivity();

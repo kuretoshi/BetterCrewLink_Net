@@ -302,6 +302,9 @@
                         <TextBlock Text="OFFでも声が届く距離や壁の遮断は有効です。距離内の音量と左右配置を固定します。"
                                    TextWrapping="Wrap" Foreground="#A8A4B0" Margin="0,0,0,8" />
                         <CheckBox x:Name="NoiseSuppressionCheck" Content="ノイズ防止" Margin="0,0,0,8" />
+                        <CheckBox x:Name="OldSampleDebugCheck" Content="サンプルレートデバッグ" Margin="0,0,0,8" />
+                        <TextBlock Text="依頼された場合のみ有効にするテスト機能です。ONではマイク入力を48 kHzで要求します。"
+                                   TextWrapping="Wrap" Foreground="#A8A4B0" Margin="0,0,0,8" />
                     </StackPanel>
                     <StackPanel x:Name="StreamingPanel" Visibility="Collapsed">
                         <TextBlock Text="配信設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />

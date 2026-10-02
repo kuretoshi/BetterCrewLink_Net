@@ -6,9 +6,9 @@ namespace TanukiBCL.VoiceProbe;
 
 internal sealed class AudioDeviceSession : IDisposable
 {
-    private static readonly WaveFormat CaptureFormat = new(48_000, 16, 1);
     private static readonly WaveFormat PlaybackFormat = new(48_000, 16, 2);
-    private readonly WaveInEvent capture;
+    private WaveInEvent capture;
+    private readonly int inputDevice;
     private readonly WaveOutEvent playback;
     private readonly MixingSampleProvider playbackMixer;
     private readonly VolumeSampleProvider masterMix;
@@ -17,7 +17,7 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
     private readonly Action<bool> onVadChanged;
     private readonly MicrophoneProcessor microphoneProcessor;
-    private readonly Pcm16CaptureFramer captureFramer = new();
+    private MicrophoneCaptureConverter captureConverter;
     private readonly TanukiVoiceActivityDetector voiceDetector = new();
     private bool? lastVadState;
     private volatile bool microphoneMuted;
@@ -42,30 +42,20 @@ internal sealed class AudioDeviceSession : IDisposable
         Action<bool> onVadChanged,
         bool echoCancellation = true,
         bool noiseSuppression = true,
-        bool autoGainControl = false)
+        bool autoGainControl = false,
+        bool oldSampleDebug = false)
     {
         ValidateDeviceNumbers(inputDevice, outputDevice);
+        this.inputDevice = inputDevice;
         this.onCaptured = onCaptured;
         this.onVadChanged = onVadChanged;
         microphoneProcessor = new MicrophoneProcessor(echoCancellation, noiseSuppression, autoGainControl);
+        var inputRate = MicrophoneCaptureRate.Choose(inputDevice, oldSampleDebug);
+        captureConverter = new MicrophoneCaptureConverter(inputRate);
 
         try
         {
-            capture = new WaveInEvent
-            {
-                DeviceNumber = inputDevice,
-                WaveFormat = CaptureFormat,
-                BufferMilliseconds = 20,
-                NumberOfBuffers = 3
-            };
-            capture.DataAvailable += OnDataAvailable;
-            capture.RecordingStopped += (_, args) =>
-            {
-                if (args.Exception is not null)
-                {
-                    Console.Error.WriteLine($"マイク録音エラー: {args.Exception.Message}");
-                }
-            };
+            capture = CreateCapture(inputRate);
 
             playbackMixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(48_000, 2))
             {
@@ -97,8 +87,40 @@ internal sealed class AudioDeviceSession : IDisposable
     public void Start()
     {
         playback.Play();
-        capture.StartRecording();
-        Console.WriteLine("実音声モード開始: マイク → Opus/WebRTC → 相手のスピーカー");
+        try { capture.StartRecording(); }
+        catch (NAudio.MmException error) when (capture.WaveFormat.SampleRate != MicrophoneCaptureRate.OutputRate &&
+                                             error.Result == NAudio.MmResult.WaveBadFormat)
+        {
+            // The endpoint mix rate is advisory; a legacy WinMM driver may
+            // refuse that PCM16 mono format even though its mix rate matches.
+            Console.Error.WriteLine($"マイクの既定レートをWinMMが拒否 ({error.Message})。48 kHzで再試行します。");
+            capture.DataAvailable -= OnDataAvailable;
+            capture.Dispose();
+            capture = CreateCapture(MicrophoneCaptureRate.OutputRate);
+            captureConverter = new MicrophoneCaptureConverter(MicrophoneCaptureRate.OutputRate);
+            capture.StartRecording();
+        }
+        Console.WriteLine($"実音声モード開始: マイク {capture.WaveFormat.SampleRate} Hz → Opus 48 kHz/WebRTC → 相手のスピーカー");
+    }
+
+    internal int CaptureSampleRate => capture.WaveFormat.SampleRate;
+
+    private WaveInEvent CreateCapture(int rate)
+    {
+        var device = new WaveInEvent
+        {
+            DeviceNumber = inputDevice,
+            WaveFormat = new WaveFormat(rate, 16, 1),
+            BufferMilliseconds = 20,
+            NumberOfBuffers = 3
+        };
+        device.DataAvailable += OnDataAvailable;
+        device.RecordingStopped += (_, args) =>
+        {
+            if (args.Exception is not null)
+                Console.Error.WriteLine($"マイク録音エラー: {args.Exception.Message}");
+        };
+        return device;
     }
 
     public void SetMicrophoneMuted(bool muted)
@@ -227,7 +249,7 @@ internal sealed class AudioDeviceSession : IDisposable
             return;
         }
 
-        captureFramer.Push(args.Buffer.AsSpan(0, args.BytesRecorded), ProcessCaptureFrame);
+        captureConverter.Push(args.Buffer.AsSpan(0, args.BytesRecorded), ProcessCaptureFrame);
     }
 
     private void ProcessCaptureFrame(byte[] buffer)
@@ -271,7 +293,8 @@ internal sealed class AudioDeviceSession : IDisposable
         Console.WriteLine("入力デバイス:");
         for (var index = 0; index < WaveInEvent.DeviceCount; index++)
         {
-            Console.WriteLine($"  {index}: {WaveInEvent.GetCapabilities(index).ProductName}");
+            Console.WriteLine($"  {index}: {WaveInEvent.GetCapabilities(index).ProductName} " +
+                $"(既定 {MicrophoneCaptureRate.Choose(index, false)} Hz)");
         }
 
         if (WaveInEvent.DeviceCount == 0)

@@ -3,11 +3,13 @@ namespace TanukiBCL.Client;
 // These are currently fixed when the .NET probe/audio session is constructed.
 // Levels, activation mode, NAT policy, lobby rules, and appearance are live values.
 internal sealed record ClientSessionSettings(string ServerUrl, string? MicrophoneName,
-    string? SpeakerName, bool EchoCancellation, bool NoiseSuppression, bool AutoGainControl)
+    string? SpeakerName, bool EchoCancellation, bool NoiseSuppression, bool AutoGainControl,
+    bool OldSampleDebug)
 {
     public static ClientSessionSettings From(ClientSettings settings) => new(
         settings.ServerUrl, settings.MicrophoneName, settings.SpeakerName,
-        settings.EchoCancellation, settings.NoiseSuppression, settings.AutoGainControl);
+        settings.EchoCancellation, settings.NoiseSuppression, settings.AutoGainControl,
+        settings.OldSampleDebug);
 }
 
 // Settings can change repeatedly while native audio/socket teardown is awaiting.

@@ -8,6 +8,7 @@ public static class MicrophoneProcessorSelfTest
         {
             VerifyDisabled();
             VerifyCaptureFraming();
+            VerifyCaptureRateConversion();
             VerifyEchoCancellation();
             VerifyNoiseSuppression();
             VerifyAutomaticGain();
@@ -104,6 +105,53 @@ public static class MicrophoneProcessorSelfTest
             "capture framer changed the 20 ms frame size");
         Require(frames.SelectMany(frame => frame).SequenceEqual(source),
             "capture framer lost, repeated or reordered PCM bytes");
+    }
+
+    private static void VerifyCaptureRateConversion()
+    {
+        foreach (var inputRate in new[] { 44_100, 48_000, 96_000 })
+        {
+            const int durationMs = 1_000;
+            var source = new byte[inputRate * durationMs / 1_000 * 2];
+            for (var i = 0; i < source.Length / 2; i++)
+            {
+                var sample = (short)Math.Round(10_000 * Math.Sin(2 * Math.PI * 1_000 * i / inputRate));
+                BitConverter.TryWriteBytes(source.AsSpan(i * 2, 2), sample);
+            }
+            var converter = new MicrophoneCaptureConverter(inputRate);
+            var frames = new List<byte[]>();
+            var offset = 0;
+            // Vary callback sizes, including multiple 20ms frames in one callback.
+            while (offset < source.Length)
+            {
+                var chunk = Math.Min(source.Length - offset,
+                    new[] { 176, 2_048, 3_522, 7_680 }[(offset / 2) % 4]);
+                chunk &= ~1;
+                converter.Push(source.AsSpan(offset, chunk), frames.Add);
+                offset += chunk;
+            }
+            Require(frames.Count is >= 47 and <= 50,
+                $"{inputRate} Hz capture produced {frames.Count} Opus frames, expected about 50");
+            Require(frames.All(frame => frame.Length == MicrophoneProcessor.BytesPerFrame),
+                $"{inputRate} Hz capture emitted a partial DSP frame");
+            var decoded = frames.SelectMany(frame => frame).ToArray();
+            var zeroCrossings = 0;
+            double energy = 0;
+            var previous = (short)0;
+            for (var i = 4_800; i < decoded.Length / 2; i++)
+            {
+                var sample = BitConverter.ToInt16(decoded, i * 2);
+                if (previous < 0 && sample >= 0) zeroCrossings++;
+                energy += (double)sample * sample;
+                previous = sample;
+            }
+            var seconds = (decoded.Length / 2 - 4_800) / 48_000d;
+            var frequency = zeroCrossings / seconds;
+            var rms = Math.Sqrt(energy / (decoded.Length / 2 - 4_800));
+            Require(Math.Abs(frequency - 1_000) < 15 && rms is > 6_000 and < 8_000,
+                $"{inputRate} Hz capture changed tone to {frequency:F1} Hz / RMS {rms:F0}");
+        }
+        Console.WriteLine("[PASS] Native 44.1/48/96 kHz microphone callbacks become continuous 48 kHz 20ms PCM with preserved pitch");
     }
 
     private static void VerifyNoiseSuppression()

@@ -98,6 +98,7 @@ public partial class SettingsWindow : Window
         EchoCancellationCheck.IsChecked = settings.EchoCancellation;
         NoiseSuppressionCheck.IsChecked = settings.NoiseSuppression;
         AutoGainControlCheck.IsChecked = settings.AutoGainControl;
+        OldSampleDebugCheck.IsChecked = settings.OldSampleDebug;
         HardwareAccelerationCheck.IsChecked = settings.HardwareAcceleration;
         ShowLobbyCodeCheck.IsChecked = !settings.HideCode;
         obsSecretDraft = settings.ObsSecret;
@@ -659,6 +660,7 @@ public partial class SettingsWindow : Window
             EchoCancellation = EchoCancellationCheck.IsChecked == true,
             NoiseSuppression = NoiseSuppressionCheck.IsChecked == true,
             AutoGainControl = AutoGainControlCheck.IsChecked == true,
+            OldSampleDebug = OldSampleDebugCheck.IsChecked == true,
             HardwareAcceleration = HardwareAccelerationCheck.IsChecked == true,
             MicrophoneName = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Name,
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,

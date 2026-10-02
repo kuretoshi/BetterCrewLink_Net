@@ -25,6 +25,18 @@ public partial class SettingsWindow
         BindToggle(EchoCancellationCheck, nameof(ClientSettings.EchoCancellation));
         BindToggle(NoiseSuppressionCheck, nameof(ClientSettings.NoiseSuppression));
         BindToggle(AutoGainControlCheck, nameof(ClientSettings.AutoGainControl));
+        OldSampleDebugCheck.Click += (_, _) =>
+        {
+            var enabled = OldSampleDebugCheck.IsChecked == true;
+            OldSampleDebugCheck.IsChecked = settings.OldSampleDebug;
+            void Apply()
+            {
+                OldSampleDebugCheck.IsChecked = enabled;
+                ApplyControls(true, nameof(ClientSettings.OldSampleDebug));
+            }
+            if (enabled) ConfirmChange("依頼された場合のみ有効にするテスト機能です。", Apply);
+            else Apply();
+        };
         HardwareAccelerationCheck.Click += (_, _) =>
         {
             var enabled = HardwareAccelerationCheck.IsChecked == true;

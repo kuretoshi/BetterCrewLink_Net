@@ -177,7 +177,7 @@ internal static class ClientSettingsTransactionSelfTest
             MicrophoneName = "test microphone", SpeakerName = "test speaker", EnableOverlay = true, CompactOverlay = true,
             MeetingOverlay = false, OverlayPosition = "bottom_left", HideCode = true, ObsOverlay = true, ObsSecret = "ABC123XYZ",
             NatFix = true, MobileHost = false, EnableSpatialAudio = false, EchoCancellation = false, NoiseSuppression = false,
-            AutoGainControl = true, VoiceEffectStrength = 42, CrewVolumeAsGhost = 65, GhostVolumeAsImpostor = 26,
+            AutoGainControl = true, OldSampleDebug = true, VoiceEffectStrength = 42, CrewVolumeAsGhost = 65, GhostVolumeAsImpostor = 26,
             MicrophoneGain = 136, MicrophoneGainEnabled = true, MicSensitivity = 0.4d, MicSensitivityEnabled = true,
             PushToTalkMode = MicrophoneActivationMode.PushToTalk, PushToTalkShortcut = "G", ImpostorRadioShortcut = "T",
             MuteShortcut = "F7", DeafenShortcut = "F8",
