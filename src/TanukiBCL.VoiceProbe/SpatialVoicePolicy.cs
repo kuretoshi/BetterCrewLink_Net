@@ -21,7 +21,9 @@ internal sealed record PeerVoiceMix(
     double Pan,
     double Distance,
     string Reason,
-    bool Muffled = false)
+    bool Muffled = false,
+    bool RadioHighPass = false,
+    bool RadioEcho = false)
 {
     public bool Audible => Gain > 0.0001d;
 }
@@ -67,7 +69,8 @@ internal static class SpatialVoicePolicy
                 if (otherUsingImpostorRadio)
                 {
                     return CanHearImpostorRadio(me, other, settings)
-                        ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio"), me, other, settings)
+                        ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio",
+                            RadioHighPass: true, RadioEcho: true), me, other, settings)
                         : Muted(0, distance, "radio-private");
                 }
                 return !me.IsDead && other.IsDead
@@ -81,7 +84,7 @@ internal static class SpatialVoicePolicy
         if (otherUsingImpostorRadio)
         {
             return CanHearImpostorRadio(me, other, settings)
-                ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio"), me, other, settings)
+                ? ApplyListenerVolume(CreateTaskRadioMix(me, other, distance), me, other, settings)
                 : Muted(0, distance, "radio-private");
         }
 
@@ -161,6 +164,15 @@ internal static class SpatialVoicePolicy
         (settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&
         other.IsImpostor && !other.IsDead &&
         ((me.IsImpostor && !me.IsDead) || me.IsDead);
+
+    private static PeerVoiceMix CreateTaskRadioMix(Player me, Player other, double distance)
+    {
+        // In v3.2.7 the vent muffle is applied after radio selection, replacing
+        // the radio high-pass while leaving its echo connected.
+        var ventMuffle = (me.InVent && !me.IsDead) || (other.InVent && !other.IsDead);
+        return new PeerVoiceMix(ventMuffle ? 0.5d : 1d, 0d, distance, "impostor-radio",
+            Muffled: ventMuffle, RadioHighPass: !ventMuffle, RadioEcho: true);
+    }
 
     private static PeerVoiceMix Muted(double pan, double distance, string reason) => new(0d, pan, distance, reason);
 }

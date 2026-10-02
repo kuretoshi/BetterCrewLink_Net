@@ -17,6 +17,9 @@ internal static class SpatialVoicePolicySelfTest
 
             Check($"{gameState}: impostor receives radio", true,
                 SpatialVoicePolicy.Calculate(state, new Player { IsImpostor = true }, sender, settings, true).Audible);
+            var radioMix = SpatialVoicePolicy.Calculate(state, new Player { IsImpostor = true }, sender, settings, true);
+            Check($"{gameState}: radio high-pass", true, radioMix.RadioHighPass);
+            Check($"{gameState}: radio echo", true, radioMix.RadioEcho);
             Check($"{gameState}: crewmate cannot receive radio", false,
                 SpatialVoicePolicy.Calculate(state, new Player(), sender, settings, true).Audible);
             Check($"{gameState}: ghost receives radio", true,
@@ -90,12 +93,25 @@ internal static class SpatialVoicePolicySelfTest
         CheckGain("vent: unmodified gain is halved", 0.5d, ventMix.Gain);
         Check("vent: meeting voice is not muffled", false,
             SpatialVoicePolicy.Calculate(discussion, impostorListener, ventSpeaker, ventPolicy).Muffled);
-        Check("vent: radio voice is not muffled", false,
-            SpatialVoicePolicy.Calculate(tasks, impostorListener, ventSpeaker, ventPolicy, true).Muffled);
+        var ventRadioMix = SpatialVoicePolicy.Calculate(tasks, impostorListener, ventSpeaker, ventPolicy, true);
+        Check("vent: radio high-pass replaced by low-pass", true,
+            ventRadioMix.Muffled && !ventRadioMix.RadioHighPass && ventRadioMix.RadioEcho);
+        CheckGain("vent: radio gain is halved", 0.5d, ventRadioMix.Gain);
         var lowTone = MeasureFilteredRms(500d);
         var highTone = MeasureFilteredRms(8_000d);
         Check("vent DSP: low frequency remains audible", true, lowTone > 0.1d);
         Check("vent DSP: high frequency attenuated", true, highTone < lowTone * 0.25d);
+        var radioLowTone = MeasureRadioFilteredRms(200d);
+        var radioHighTone = MeasureRadioFilteredRms(4_000d);
+        Check("radio DSP: low frequency attenuated", true, radioLowTone < radioHighTone * 0.25d);
+        Check("radio DSP: high frequency remains audible", true, radioHighTone > 0.1d);
+        var echo = new RadioEchoSampleProvider(new TestImpulseStereoSource()) { Enabled = true };
+        var echoSamples = new float[17_282];
+        echo.Read(echoSamples, 0, echoSamples.Length);
+        CheckGain("radio echo DSP: dry signal", 0.92d, echoSamples[0]);
+        CheckGain("radio echo DSP: first 90 ms reflection", 0.2d, echoSamples[8_640]);
+        CheckGain("radio echo DSP: second reflection", 0.024d, echoSamples[17_280]);
+        CheckGain("radio echo DSP: channels remain separate", 0d, echoSamples[8_641]);
 
         var lobbySettings = new LobbySettings
         {
@@ -175,6 +191,34 @@ internal static class SpatialVoicePolicySelfTest
         var energy = 0d;
         foreach (var sample in steadySamples) energy += sample * sample;
         return Math.Sqrt(energy / steadySamples.Length);
+    }
+
+    private static double MeasureRadioFilteredRms(double frequency)
+    {
+        var filter = new RadioHighPassSampleProvider(new TestSineSource(frequency)) { Enabled = true };
+        var samples = new float[4_800];
+        filter.Read(samples, 0, samples.Length);
+        var steadySamples = samples.AsSpan(2_400);
+        var energy = 0d;
+        foreach (var sample in steadySamples) energy += sample * sample;
+        return Math.Sqrt(energy / steadySamples.Length);
+    }
+
+    private sealed class TestImpulseStereoSource : ISampleProvider
+    {
+        private bool sent;
+        public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(48_000, 2);
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            Array.Clear(buffer, offset, count);
+            if (!sent && count > 0)
+            {
+                buffer[offset] = 1f;
+                sent = true;
+            }
+            return count;
+        }
     }
 
     private sealed class TestSineSource(double frequency) : ISampleProvider

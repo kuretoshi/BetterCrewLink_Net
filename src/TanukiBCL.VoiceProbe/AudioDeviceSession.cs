@@ -147,6 +147,8 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
         peer.Panning.Pan = (float)Math.Clamp(mix.Pan, -1d, 1d);
         peer.Muffle.Enabled = mix.Muffled;
+        peer.RadioHighPass.Enabled = mix.RadioHighPass;
+        peer.RadioEcho.Enabled = mix.RadioEcho;
     }
 
     public void RemovePeer(string peerId)
@@ -155,7 +157,7 @@ internal sealed class AudioDeviceSession : IDisposable
         {
             if (peerPlayback.Remove(peerId, out var peer))
             {
-                playbackMixer.RemoveMixerInput(peer.Volume);
+                playbackMixer.RemoveMixerInput(peer.RadioEcho);
             }
         }
     }
@@ -181,11 +183,13 @@ internal sealed class AudioDeviceSession : IDisposable
                 RightVolume = 0.5f
             };
             var muffle = new VentMuffleSampleProvider(mono);
-            var panning = new PanningSampleProvider(muffle);
+            var radioHighPass = new RadioHighPassSampleProvider(muffle);
+            var panning = new PanningSampleProvider(radioHighPass);
             var volume = new VolumeSampleProvider(panning);
-            var created = new PeerPlayback(buffer, muffle, panning, volume);
+            var radioEcho = new RadioEchoSampleProvider(volume);
+            var created = new PeerPlayback(buffer, muffle, radioHighPass, panning, volume, radioEcho);
             peerPlayback[peerId] = created;
-            playbackMixer.AddMixerInput(volume);
+            playbackMixer.AddMixerInput(radioEcho);
             return created;
         }
     }
@@ -313,8 +317,10 @@ internal sealed class AudioDeviceSession : IDisposable
     private sealed record PeerPlayback(
         BufferedWaveProvider Buffer,
         VentMuffleSampleProvider Muffle,
+        RadioHighPassSampleProvider RadioHighPass,
         PanningSampleProvider Panning,
-        VolumeSampleProvider Volume);
+        VolumeSampleProvider Volume,
+        RadioEchoSampleProvider RadioEcho);
 
 }
 
