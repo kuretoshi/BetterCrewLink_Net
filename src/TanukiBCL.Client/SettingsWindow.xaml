@@ -89,10 +89,8 @@
                         <CheckBox x:Name="CommsSabotageCheck" Content="通信妨害中はクルーメイトの受信を遮断" Margin="0,0,0,14" />
                         <CheckBox x:Name="HearThroughCamerasCheck" Content="カメラ越しに声が聞こえる" Margin="0,0,0,14" />
                         <CheckBox x:Name="VoiceEffectEnabledCheck" Content="変装時のボイスエフェクトを有効にする" Margin="0,0,0,14" />
-                        <CheckBox x:Name="DeadOnlyCheck" Content="幽霊同士のみ会話できる" Margin="0,0,0,14"
-                                  Checked="DeadOnlyCheck_Checked" />
-                        <CheckBox x:Name="MeetingGhostOnlyCheck" Content="会議中のみ幽霊以外も会話できる" Margin="0,0,0,14"
-                                  Checked="MeetingGhostOnlyCheck_Checked" />
+                        <CheckBox x:Name="DeadOnlyCheck" Content="幽霊同士のみ会話できる" Margin="0,0,0,14" />
+                        <CheckBox x:Name="MeetingGhostOnlyCheck" Content="会議中のみ幽霊以外も会話できる" Margin="0,0,0,14" />
                         <StackPanel x:Name="SnrControlsPanel" Visibility="Collapsed" Margin="0,14,0,0">
                             <TextBlock Text="【MOD】SNR設定" FontWeight="SemiBold" Foreground="#C779D7"
                                        Margin="0,0,0,14" />
@@ -163,7 +161,8 @@
                         <Button x:Name="TestSpeakerButton" Content="スピーカーテスト"
                                 Width="170" Height="34" HorizontalAlignment="Right"
                                 Margin="0,0,0,10" Click="TestSpeakerButton_Click" />
-                        <TextBlock Text="デバイスの変更は再接続後に反映されます。"
+                        <TextBlock Text="デバイスの変更はすぐに反映されます。音声接続を切り替える間、一時的に通話が途切れます。"
+                                   TextWrapping="Wrap"
                                    Foreground="#B7AABD" Margin="0,0,0,20" />
                         <TextBlock Text="音声操作モード" Margin="0,0,0,8" />
                         <RadioButton x:Name="VoiceModeRadio" Content="声で起動" GroupName="MicrophoneMode" Margin="0,0,0,7" />
@@ -312,16 +311,20 @@
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
-            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                <Button Content="キャンセル" Width="100" Height="36" Margin="0,0,10,0"
-                        Click="CancelButton_Click" />
-                <Button Content="保存" Width="100" Height="36" Background="#8B4D99" Foreground="White"
-                        Click="SaveButton_Click" />
-            </StackPanel>
+            <DockPanel Grid.Row="1" Margin="0,16,0,0">
+                <Button x:Name="CloseSettingsButton" Content="閉じる" Width="100" Height="36" DockPanel.Dock="Right"
+                        Background="#8B4D99" Foreground="White" Click="CloseSettingsButton_Click" />
+                <TextBlock x:Name="SaveStatusText" Text="変更は自動的に反映・保存されます。"
+                           Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,0,12,0" />
+            </DockPanel>
         </Grid>
         <Grid x:Name="ServerDialogBackdrop" Grid.ColumnSpan="2" Background="#80000000" Visibility="Collapsed"
               MouseDown="ServerDialogBackdrop_MouseDown">
             <local:ServerUrlDialog x:Name="ServerDialog" Margin="32" VerticalAlignment="Center" />
+        </Grid>
+        <Grid x:Name="ConfirmDialogBackdrop" Grid.ColumnSpan="2" Background="#80000000" Visibility="Collapsed"
+              MouseDown="ConfirmDialogBackdrop_MouseDown">
+            <local:SettingsConfirmDialog x:Name="ConfirmDialog" Margin="32" VerticalAlignment="Center" />
         </Grid>
     </Grid>
 </Window>

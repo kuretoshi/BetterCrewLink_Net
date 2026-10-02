@@ -30,7 +30,8 @@ internal sealed record ProbeOptions(
     int? ExpectedPeerClientId,
     bool VadSelfTest,
     bool NatFix,
-    bool NosSnapshot)
+    bool NosSnapshot,
+    int ExpectedPlayers = 5)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -103,7 +104,9 @@ internal sealed record ProbeOptions(
                 : null,
             switches.Contains("--vad-self-test"),
             switches.Contains("--nat-fix"),
-            switches.Contains("--nos-snapshot"));
+            switches.Contains("--nos-snapshot"),
+            values.TryGetValue("--expected-players", out var playersText)
+                ? ParsePositiveInt(playersText, "--expected-players") : 5);
     }
 
     private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)

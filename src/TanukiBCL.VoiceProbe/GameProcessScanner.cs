@@ -59,9 +59,7 @@ internal static class GameProcessScanner
             reader.Error += (_, message) => error = message;
             reader.StateChanged += (_, state) =>
             {
-                if (state.GameState is GameState.Tasks or GameState.Discussion &&
-                    state.Players.Count > 0 &&
-                    (expectedGameState is null || state.GameState == expectedGameState))
+                if (IsReady(state, expectedGameState))
                 {
                     completion.TrySetResult(state);
                 }
@@ -151,29 +149,37 @@ internal static class GameProcessScanner
         }
     }
 
-    private static bool Validate(
+    internal static bool IsReady(AmongUsState state, GameState? expectedGameState) =>
+        state.Players.Count > 0 && (expectedGameState.HasValue
+            ? state.GameState == expectedGameState.Value
+            : state.GameState is GameState.Tasks or GameState.Discussion);
+
+    internal static bool Validate(
         IReadOnlyCollection<ProcessReadResult> results,
         GameScanExpectation expectation,
         GameState? expectedGameState)
     {
         var states = results.Where(result => result.State is not null).Select(result => result.State!).ToArray();
-        var localPlayers = states.Select(state => state.Players.SingleOrDefault(player => player.IsLocal)).Where(player => player is not null).ToArray();
-        var passed = results.Count == 5 &&
-                     states.Length == 5 &&
+        var localPlayers = states.SelectMany(state => state.Players.Where(player => player.IsLocal)).ToArray();
+        var expectedPlayers = expectation.Players;
+        var passed = expectedPlayers > 0 && results.Count == expectedPlayers &&
+                     states.Length == expectedPlayers &&
                      states.Select(state => state.LobbyCode).Distinct(StringComparer.Ordinal).Count() == 1 &&
                      states.Select(state => state.GameState).Distinct().Count() == 1 &&
-                     states.All(state => state.Players.Count == 5) &&
+                     states.All(state => state.Players.Count == expectedPlayers) &&
                      (expectedGameState is null || states.All(state => state.GameState == expectedGameState)) &&
                      (expectation.Alive is null || states.All(state => CountAlive(state) == expectation.Alive)) &&
                      (expectation.Dead is null || states.All(state => CountDead(state) == expectation.Dead)) &&
                      (expectation.Impostors is null || states.All(state => CountImpostors(state) == expectation.Impostors)) &&
-                     localPlayers.Length == 5 &&
-                     localPlayers.Select(player => player!.ClientId).Distinct().Count() == 5 &&
+                     localPlayers.Length == expectedPlayers &&
+                     localPlayers.Select(player => player!.ClientId).Distinct().Count() == expectedPlayers &&
                      localPlayers.Count(player => player!.IsImpostor) == CountImpostors(states.FirstOrDefault());
 
-        var voiceRulesPassed = states.All(state =>
+        var voiceRulesPassed = states.Length > 0 && states.Length == results.Count && states.All(state =>
         {
-            var me = state.Players.Single(player => player.IsLocal);
+            var locals = state.Players.Where(player => player.IsLocal).ToArray();
+            if (locals.Length != 1) return false;
+            var me = locals[0];
             var mixes = state.Players
                 .Where(player => !player.IsLocal)
                 .Select(player => (Player: player, Mix: SpatialVoicePolicy.Calculate(state, me, player, new SpatialVoiceSettings())))
@@ -200,7 +206,7 @@ internal static class GameProcessScanner
         });
 
         Console.WriteLine(passed
-            ? "[PASS] 全5プロセスでゲーム状態と指定した期待値が一致しました。"
+            ? $"[PASS] 全{expectedPlayers}プロセスでゲーム状態と指定した期待値が一致しました。"
             : "[FAIL] ゲーム状態が指定した期待値と一致しません。上のPID別結果を確認してください。");
         Console.WriteLine(voiceRulesPassed
             ? "[PASS] 現在のゲーム状態に応じた音声の可聴・遮断・定位ルールが一致しました。"
@@ -230,7 +236,7 @@ internal static class GameProcessScanner
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool IsWow64Process(IntPtr processHandle, out bool wow64Process);
 
-    private sealed record ProcessReadResult(
+    internal sealed record ProcessReadResult(
         int ProcessId,
         bool Is64Bit,
         AmongUsState? State,
@@ -243,4 +249,5 @@ internal sealed record GameScanExpectation(
     int? Alive,
     int? Dead,
     int? Impostors,
-    bool ExpectNearby);
+    bool ExpectNearby,
+    int Players = 5);

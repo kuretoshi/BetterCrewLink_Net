@@ -1,11 +1,23 @@
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using TanukiBCL.VoiceProbe;
 
 namespace TanukiBCL.Client;
 
 internal sealed class ClientSettings
 {
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
+    {
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+    };
+    private static readonly PropertyInfo[] SettingsProperties = typeof(ClientSettings)
+        .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(property => property.GetMethod?.IsPublic == true && property.SetMethod?.IsPublic == true)
+        .ToArray();
+
     public string ServerUrl { get; set; } = "https://bettercrewl.ink";
     public List<string> ServerUrls { get; set; } = ["https://bettercrewl.ink"];
     public string? MicrophoneName { get; set; }
@@ -41,6 +53,28 @@ internal sealed class ClientSettings
     public LobbySettings? RadioOnlyBackup { get; set; }
     public Dictionary<int, PlayerAudioConfig> PlayerConfigMap { get; set; } = [];
 
+    // Use the same serializable property model as the settings file. Newly added
+    // properties participate without another hand-maintained clone/copy list.
+    public ClientSettings Clone() => JsonSerializer.Deserialize<ClientSettings>(
+        JsonSerializer.SerializeToUtf8Bytes(this, SnapshotJsonOptions), SnapshotJsonOptions)!;
+
+    public void CopyFrom(ClientSettings source, params string[] propertyNames)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        var properties = propertyNames.Length == 0 ? SettingsProperties : propertyNames
+            .Distinct(StringComparer.Ordinal)
+            .Select(name => SettingsProperties.SingleOrDefault(property => property.Name == name)
+                ?? throw new ArgumentException($"Unknown settings property: {name}", nameof(propertyNames)))
+            .ToArray();
+        var copy = source.Clone();
+        foreach (var property in properties) property.SetValue(this, property.GetValue(copy));
+    }
+
+    public bool ContentEquals(ClientSettings other) => JsonNode.DeepEquals(
+        JsonSerializer.SerializeToNode(this, SnapshotJsonOptions),
+        JsonSerializer.SerializeToNode(other, SnapshotJsonOptions));
+
     public void Normalize()
     {
         ServerUrl = string.IsNullOrWhiteSpace(ServerUrl) ? "https://bettercrewl.ink" : ServerUrl.Trim();
@@ -60,7 +94,7 @@ internal sealed class ClientSettings
         CrewVolumeAsGhost = Math.Clamp(CrewVolumeAsGhost, 0, 100);
         GhostVolumeAsImpostor = Math.Clamp(GhostVolumeAsImpostor, 0, 100);
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);
-        MicSensitivity = Math.Clamp(MicSensitivity, 0d, 1d);
+        MicSensitivity = double.IsFinite(MicSensitivity) ? Math.Clamp(MicSensitivity, 0d, 1d) : 0.15d;
         if (!Enum.IsDefined(PushToTalkMode)) PushToTalkMode = MicrophoneActivationMode.Voice;
         if (OverlayPosition is not ("hidden" or "top" or "bottom_left" or "right" or
             "right1" or "left" or "left1")) OverlayPosition = "right";

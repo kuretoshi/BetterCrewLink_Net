@@ -24,9 +24,11 @@ public partial class App : Application
         base.OnStartup(e);
         if (e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
             e.Args.Contains("--session-lifecycle-self-test") ||
+            e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
             e.Args.Contains("--input-processing-self-test"))
         {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
             {
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
@@ -38,14 +40,19 @@ public partial class App : Application
                         SettingsWindow.RenderServerDialogPreview(e.Args[previewIndex + 1]);
                 }
                 if (e.Args.Contains("--session-lifecycle-self-test")) ClientSessionLifecycleSelfTest.Run();
+                if (e.Args.Contains("--settings-application-self-test")) ClientSettingsApplicationSelfTest.Run();
+                if (e.Args.Contains("--settings-transaction-self-test")) ClientSettingsTransactionSelfTest.Run();
                 if (e.Args.Contains("--audio-preview-self-test")) AudioPreviewSelfTest.VerifyDevices();
                 if (e.Args.Contains("--input-processing-self-test") && MicrophoneProcessorSelfTest.Run() != 0)
                     throw new InvalidOperationException("Input processing self-test failed.");
+                if (e.Args.Contains("--self-test-failure-exit"))
+                    throw new InvalidOperationException("Deliberate self-test exit-code verification.");
                 Shutdown(0);
             }
             catch (Exception error)
             {
                 Trace.TraceError($"Client self-test failed: {error}");
+                Console.Error.WriteLine($"Client self-test failed: {error}");
                 Shutdown(1);
             }
             return;

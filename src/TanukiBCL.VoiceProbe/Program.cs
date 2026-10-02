@@ -12,6 +12,10 @@ internal static class Program
 
         try
         {
+            if (args.Contains("--game-scan-self-test"))
+            {
+                return GameProcessScannerSelfTest.Run();
+            }
             if (args.Contains("--audio-processing-self-test"))
             {
                 return MicrophoneProcessorSelfTest.Run();
@@ -49,7 +53,8 @@ internal static class Program
                         options.ExpectedAlive,
                         options.ExpectedDead,
                         options.ExpectedImpostors,
-                        options.ExpectNearby));
+                        options.ExpectNearby,
+                        options.ExpectedPlayers));
             }
 
             if (options.NosSnapshot)
@@ -152,6 +157,8 @@ internal static class Program
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
               --scan-game         起動中の全Among Usプロセスを読み取り検証
+              --expected-players  検証するプロセス数・ロビー人数（既定5）
+              --game-scan-self-test ゲーム読取検証コマンドの回帰テスト
               --nos-snapshot --game-process-id PID  NoS公開スナップショットを実機検証
               --game-audio-self-test 5プロセスと仮想音声クライアントの統合検証
               --game-audio-transition-test Tasks→会議→Tasksの連続追従検証

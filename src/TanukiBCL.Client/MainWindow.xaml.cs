@@ -12,6 +12,7 @@ namespace TanukiBCL.Client;
 public partial class MainWindow : Window
 {
     private readonly ClientSessionCoordinator sessions = new();
+    private readonly CoalescedSessionRestart settingsRestarts = new();
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
     private OverlayWindow? overlayWindow;
@@ -65,81 +66,121 @@ public partial class MainWindow : Window
         };
     }
 
-    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         if (isClosing || settingsWindow is not null) return;
         CompactVoiceView.DismissPlayerConfigPopup();
-        var previousServerUrl = settings.ServerUrl;
-        var previousMicrophone = settings.MicrophoneName;
-        var previousSpeaker = settings.SpeakerName;
-        var previousEchoCancellation = settings.EchoCancellation;
-        var previousNoiseSuppression = settings.NoiseSuppression;
-        var previousAutoGainControl = settings.AutoGainControl;
         var hostInGame = currentState is { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         var window = new SettingsWindow(settings, !hostInGame,
             probe?.CurrentLobbySettings, currentState?.IsHost != true, currentState,
             ApplyPlayerConfig) { Owner = this };
         settingsWindow = window;
         hotkeysSuspended = true;
-        bool? saved;
+        window.SettingsApplied += SettingsWindow_SettingsApplied;
         try
         {
-            saved = window.ShowDialog();
+            window.ShowDialog();
         }
         finally
         {
+            window.SettingsApplied -= SettingsWindow_SettingsApplied;
             settingsWindow = null;
             hotkeysSuspended = false;
         }
-        if (saved != true) return;
+    }
 
-        Topmost = settings.AlwaysOnTop;
-        var requiresRestart = !string.Equals(previousServerUrl, settings.ServerUrl, StringComparison.Ordinal) ||
-            !string.Equals(previousMicrophone, settings.MicrophoneName, StringComparison.Ordinal) ||
-            !string.Equals(previousSpeaker, settings.SpeakerName, StringComparison.Ordinal) ||
-            previousEchoCancellation != settings.EchoCancellation ||
-            previousNoiseSuppression != settings.NoiseSuppression ||
-            previousAutoGainControl != settings.AutoGainControl;
-        if (requiresRestart)
+    private void SettingsWindow_SettingsApplied(ClientSettingsChange change)
+    {
+        if (isClosing) return;
+        try
         {
-            InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
-            OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
+            var previous = change.Previous;
+            var current = change.Current;
+            Topmost = current.AlwaysOnTop;
+            if (previous.MicrophoneName != current.MicrophoneName || previous.SpeakerName != current.SpeakerName)
+            {
+                InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
+                OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
+                SelectConfiguredDevices();
+            }
+            if (sessions.Current is { AcceptsCallbacks: true } session && probe is { } activeProbe)
+            {
+                if (ClientSessionSettings.From(previous) != ClientSessionSettings.From(current))
+                    RequestSettingsRestart(session);
+                else
+                    ApplyLiveSettings(activeProbe, previous, current);
+            }
+            // The shared settings object has already been updated. Visual-only
+            // changes also apply while stopped or while a restart is awaiting.
+            UpdateCompactView();
         }
-        SelectConfiguredDevices();
-        if (requiresRestart && sessions.Current is { AcceptsCallbacks: true } session)
+        catch (Exception error)
         {
-            // The server URL and audio device IDs are fixed when the probe starts.
-            // Keep the user's mute/deafen choice across the controlled restart.
-            var wasMuted = microphoneMuted;
-            var wasDeafened = deafened;
-            var restartIntent = ++connectionIntentVersion;
+            ReportSettingsApplicationFailure(error);
+        }
+    }
+
+    private void ApplyLiveSettings(VoiceServerProbe activeProbe, ClientSettings previous, ClientSettings current)
+    {
+        if (previous.MasterVolume != current.MasterVolume) activeProbe.SetMasterVolume(current.MasterVolume);
+        if (previous.VoiceEffectStrength != current.VoiceEffectStrength)
+            activeProbe.SetVoiceEffectStrength(current.VoiceEffectStrength);
+        if (previous.CrewVolumeAsGhost != current.CrewVolumeAsGhost ||
+            previous.GhostVolumeAsImpostor != current.GhostVolumeAsImpostor)
+            activeProbe.SetListenerVolumes(current.CrewVolumeAsGhost, current.GhostVolumeAsImpostor);
+        if (previous.EnableSpatialAudio != current.EnableSpatialAudio)
+            activeProbe.SetSpatialAudio(current.EnableSpatialAudio);
+        if (previous.MicrophoneGainEnabled != current.MicrophoneGainEnabled ||
+            previous.MicrophoneGain != current.MicrophoneGain)
+            activeProbe.SetMicrophoneGain(current.MicrophoneGainEnabled ? current.MicrophoneGain : 100d);
+        if (previous.MicSensitivityEnabled != current.MicSensitivityEnabled ||
+            previous.MicSensitivity != current.MicSensitivity)
+            activeProbe.SetMicrophoneSensitivity(current.MicSensitivityEnabled, current.MicSensitivity);
+        if (previous.NatFix != current.NatFix) activeProbe.SetNatFix(current.NatFix);
+        if (previous.MobileHost != current.MobileHost) activeProbe.SetMobileHost(current.MobileHost);
+        // Resetting activation mode/bindings on unrelated slider events would
+        // release an already-held PTT key, so update only the changed controls.
+        if (previous.PushToTalkMode != current.PushToTalkMode)
+            activeProbe.SetMicrophoneActivationMode(current.PushToTalkMode);
+        if (previous.PushToTalkShortcut != current.PushToTalkShortcut ||
+            previous.ImpostorRadioShortcut != current.ImpostorRadioShortcut ||
+            previous.MuteShortcut != current.MuteShortcut || previous.DeafenShortcut != current.DeafenShortcut)
+            hotkeys?.UpdateBindings(current);
+        if (previous.MyLobbySettings != current.MyLobbySettings)
+            activeProbe.SetOwnLobbySettings(current.MyLobbySettings);
+        if (!previous.PlayerConfigMap.OrderBy(pair => pair.Key).SequenceEqual(
+            current.PlayerConfigMap.OrderBy(pair => pair.Key)))
+            activeProbe.SetPlayerConfigs(current.PlayerConfigMap);
+    }
+
+    private void RequestSettingsRestart(ClientSessionCoordinator.Session session)
+    {
+        var wasMuted = microphoneMuted;
+        var wasDeafened = deafened;
+        var restartIntent = connectionIntentVersion;
+        _ = settingsRestarts.Request(async () =>
+        {
             session.RequestStop();
             await session.Completion;
-            if (isClosing || !IsVisible || Dispatcher.HasShutdownStarted ||
-                restartIntent != connectionIntentVersion) return;
-            if (sessions.Current is not null)
-            {
-                ShowDiagnostics();
-                return;
-            }
-            if (wasMuted) ToggleMicrophoneMute();
-            if (wasDeafened) ToggleDeafen();
+        }, () => !isClosing && IsVisible && !Dispatcher.HasShutdownStarted &&
+            restartIntent == connectionIntentVersion && sessions.Current is null,
+        () =>
+        {
+            // Changes made while teardown awaited are already in settings.
+            // Refresh selection and start once from that latest configuration.
+            SelectConfiguredDevices();
+            if (microphoneMuted != wasMuted) ToggleMicrophoneMute();
+            if (deafened != wasDeafened) ToggleDeafen();
             StartButton_Click(this, new RoutedEventArgs());
-            return;
-        }
-        if (sessions.Current is { AcceptsCallbacks: false }) return;
-        probe?.SetMasterVolume(settings.MasterVolume);
-        probe?.SetVoiceEffectStrength(settings.VoiceEffectStrength);
-        probe?.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
-        probe?.SetSpatialAudio(settings.EnableSpatialAudio);
-        probe?.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
-        probe?.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
-        probe?.SetNatFix(settings.NatFix);
-        probe?.SetMobileHost(settings.MobileHost);
-        probe?.SetMicrophoneActivationMode(settings.PushToTalkMode);
-        hotkeys?.UpdateBindings(settings);
-        probe?.SetOwnLobbySettings(settings.MyLobbySettings);
-        UpdateCompactView();
+        }, ReportSettingsApplicationFailure);
+    }
+
+    private void ReportSettingsApplicationFailure(Exception error)
+    {
+        Trace.TraceError($"Settings could not be applied to the active session: {error}");
+        if (isClosing || Dispatcher.HasShutdownStarted) return;
+        StatusText.Text = $"設定の反映に失敗しました: {error.Message}";
+        ShowDiagnostics();
     }
 
     private void SelectConfiguredDevices()
@@ -231,12 +272,17 @@ public partial class MainWindow : Window
             previousOverlay?.Close();
             return ValueTask.CompletedTask;
         });
-        settings.MicrophoneName = input.Name;
-        settings.SpeakerName = output.Name;
-        try { ClientSettingsStore.Save(settings); }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        // During a live settings restart, the settings transaction owns disk
+        // persistence. Do not commit other sliders' temporary runtime values.
+        if (settingsWindow is null)
         {
-            MessageBox.Show(this, $"デバイス設定を保存できませんでした: {exception.Message}", "TanukiBCL");
+            settings.MicrophoneName = input.Name;
+            settings.SpeakerName = output.Name;
+            try { ClientSettingsStore.Save(settings); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show(this, $"デバイス設定を保存できませんでした: {exception.Message}", "TanukiBCL");
+            }
         }
         session.Token.ThrowIfCancellationRequested();
         activeGamePid = process.Id;

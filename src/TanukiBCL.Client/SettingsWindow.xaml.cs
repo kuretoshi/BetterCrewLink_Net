@@ -1,5 +1,6 @@
 using System.IO;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
@@ -8,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
 
@@ -17,7 +19,13 @@ public partial class SettingsWindow : Window
 {
     private readonly ClientSettings settings;
     private readonly ObservableCollection<string> serverUrlDrafts = [];
-    private readonly bool lobbySettingsEditable;
+    private bool lobbySettingsEditable;
+    private readonly ClientSettingsTransaction settingsTransaction;
+    private readonly DispatcherTimer lobbyCommitTimer = new() { Interval = TimeSpan.FromMilliseconds(750) };
+    private bool settingsReady;
+    private bool lobbyPending;
+    private Action? pendingConfirmation;
+    internal event Action<ClientSettingsChange>? SettingsApplied;
     private LobbySettings? currentLobbySettings;
     private LobbySettings lobbyDraft;
     private LobbySettings? radioOnlyBackup;
@@ -37,10 +45,12 @@ public partial class SettingsWindow : Window
 
     internal SettingsWindow(ClientSettings settings, bool lobbySettingsEditable,
         LobbySettings? currentLobbySettings, bool preferCurrentLobby, AmongUsState? gameState,
-        Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged)
+        Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged, Action<ClientSettings>? persistSettings = null)
     {
         InitializeComponent();
         this.settings = settings;
+        settingsTransaction = new ClientSettingsTransaction(settings, persistSettings ?? ClientSettingsStore.Save);
+        settingsTransaction.Changed += change => SettingsApplied?.Invoke(change);
         this.lobbySettingsEditable = lobbySettingsEditable;
         this.currentLobbySettings = currentLobbySettings;
         currentGameState = gameState;
@@ -104,6 +114,8 @@ public partial class SettingsWindow : Window
         RenderPlayers();
         CategoryList.SelectedIndex = 0;
         UpdateVolumeLabels();
+        InitializeImmediateSettings();
+        settingsReady = true;
     }
 
     internal void UpdateCurrentLobbySettings(LobbySettings? settings)
@@ -115,6 +127,10 @@ public partial class SettingsWindow : Window
     internal void UpdateCurrentGameState(AmongUsState? state)
     {
         currentGameState = state;
+        var wasEditable = lobbySettingsEditable;
+        lobbySettingsEditable = state is not { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
+        LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
+        if (wasEditable != lobbySettingsEditable) ShowSelectedLobbySettings();
         UpdateModSettingsVisibility();
         var signature = string.Join(';', (state?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
             .OrderBy(player => player.ClientId)
@@ -198,19 +214,19 @@ public partial class SettingsWindow : Window
         mute.Click += (_, _) =>
         {
             var config = PlayerAudioConfig.For(player, settings.PlayerConfigMap);
-            onPlayerConfigChanged(player.PlayerConfigId, config with { IsMuted = !config.IsMuted }, true);
+            ChangePlayerConfig(player.PlayerConfigId, config with { IsMuted = !config.IsMuted }, true);
             UpdateControls();
         };
         slider.ValueChanged += (_, _) =>
         {
             var config = PlayerAudioConfig.For(player, settings.PlayerConfigMap);
-            onPlayerConfigChanged(player.PlayerConfigId, config with { Volume = slider.Value }, false);
+            ChangePlayerConfig(player.PlayerConfigId, config with { Volume = slider.Value }, false);
             UpdateControls();
         };
         void PersistVolume()
         {
             var config = PlayerAudioConfig.For(player, settings.PlayerConfigMap);
-            onPlayerConfigChanged(player.PlayerConfigId, config with { Volume = slider.Value }, true);
+            ChangePlayerConfig(player.PlayerConfigId, config with { Volume = slider.Value }, true);
         }
         slider.PreviewMouseLeftButtonUp += (_, _) => PersistVolume();
         slider.KeyUp += (_, _) => PersistVolume();
@@ -238,6 +254,7 @@ public partial class SettingsWindow : Window
     private void CategoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (GeneralPanel is null) return;
+        if (CategoryList.SelectedIndex != 1) FlushPendingLobby();
         GeneralPanel.Visibility = CategoryList.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
         LobbyPanel.Visibility = CategoryList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         PlayersPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
@@ -442,6 +459,7 @@ public partial class SettingsWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        lobbyCommitTimer.Stop();
         StopMicrophoneLevelSession();
         StopSpeakerTest();
         StopVoiceEffectPreview();
@@ -456,6 +474,7 @@ public partial class SettingsWindow : Window
         if (!showingCurrentLobby)
         {
             lobbyDraft = ReadLobbyControls();
+            FlushPendingLobby();
         }
         showingCurrentLobby = nextCurrent;
         ShowSelectedLobbySettings();
@@ -605,16 +624,6 @@ public partial class SettingsWindow : Window
             ? "インポスターに届く音声距離" : "音声が届く距離";
     }
 
-    private void DeadOnlyCheck_Checked(object sender, RoutedEventArgs e)
-    {
-        if (MeetingGhostOnlyCheck is not null) MeetingGhostOnlyCheck.IsChecked = false;
-    }
-
-    private void MeetingGhostOnlyCheck_Checked(object sender, RoutedEventArgs e)
-    {
-        if (DeadOnlyCheck is not null) DeadOnlyCheck.IsChecked = false;
-    }
-
     private void UpdateVolumeLabels()
     {
         if (MasterVolumeValue is null || VoiceEffectStrengthValue is null || CrewVolumeAsGhostValue is null || GhostVolumeAsImpostorValue is null ||
@@ -628,13 +637,13 @@ public partial class SettingsWindow : Window
         DistanceValue.Text = $"{DistanceSlider.Value:0.0}";
     }
 
-    private void SaveButton_Click(object sender, RoutedEventArgs e)
+    private ClientSettings ReadSettingsControls()
     {
         var serverUrl = SelectedServerUrl;
         // The history selector preserves existing URLs verbatim, as in 3.2.7.
         // Only the new-URL dialog validates/normalizes newly entered addresses.
 
-        var candidate = new ClientSettings
+        return new ClientSettings
         {
             ServerUrl = serverUrl,
             ServerUrls = serverUrlDrafts.Append(serverUrl)
@@ -672,54 +681,10 @@ public partial class SettingsWindow : Window
             ImpostorRadioShortcut = ImpostorRadioShortcutBox.Text,
             MuteShortcut = MuteShortcutBox.Text,
             DeafenShortcut = DeafenShortcutBox.Text,
-            MyLobbySettings = showingCurrentLobby ? lobbyDraft : ReadLobbyControls(),
+            MyLobbySettings = lobbyDraft,
             RadioOnlyBackup = radioOnlyBackup,
             PlayerConfigMap = settings.PlayerConfigMap.ToDictionary(pair => pair.Key, pair => pair.Value)
         };
-        try
-        {
-            ClientSettingsStore.Save(candidate);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            MessageBox.Show(this, $"設定を保存できませんでした: {exception.Message}", "設定");
-            return;
-        }
-        settings.ServerUrl = candidate.ServerUrl;
-        settings.ServerUrls = candidate.ServerUrls;
-        settings.NatFix = candidate.NatFix;
-        settings.MobileHost = candidate.MobileHost;
-        settings.EnableSpatialAudio = candidate.EnableSpatialAudio;
-        settings.EchoCancellation = candidate.EchoCancellation;
-        settings.NoiseSuppression = candidate.NoiseSuppression;
-        settings.AutoGainControl = candidate.AutoGainControl;
-        settings.MicrophoneName = candidate.MicrophoneName;
-        settings.SpeakerName = candidate.SpeakerName;
-        settings.AlwaysOnTop = candidate.AlwaysOnTop;
-        settings.EnableOverlay = candidate.EnableOverlay;
-        settings.CompactOverlay = candidate.CompactOverlay;
-        settings.MeetingOverlay = candidate.MeetingOverlay;
-        settings.OverlayPosition = candidate.OverlayPosition;
-        settings.HideCode = candidate.HideCode;
-        settings.ObsOverlay = candidate.ObsOverlay;
-        settings.ObsSecret = candidate.ObsSecret;
-        settings.MasterVolume = candidate.MasterVolume;
-        settings.VoiceEffectStrength = candidate.VoiceEffectStrength;
-        settings.CrewVolumeAsGhost = candidate.CrewVolumeAsGhost;
-        settings.GhostVolumeAsImpostor = candidate.GhostVolumeAsImpostor;
-        settings.MicrophoneGain = candidate.MicrophoneGain;
-        settings.MicrophoneGainEnabled = candidate.MicrophoneGainEnabled;
-        settings.MicSensitivity = candidate.MicSensitivity;
-        settings.MicSensitivityEnabled = candidate.MicSensitivityEnabled;
-        settings.PushToTalkMode = candidate.PushToTalkMode;
-        settings.PushToTalkShortcut = candidate.PushToTalkShortcut;
-        settings.ImpostorRadioShortcut = candidate.ImpostorRadioShortcut;
-        settings.MuteShortcut = candidate.MuteShortcut;
-        settings.DeafenShortcut = candidate.DeafenShortcut;
-        settings.MyLobbySettings = candidate.MyLobbySettings;
-        settings.RadioOnlyBackup = candidate.RadioOnlyBackup;
-        settings.PlayerConfigMap = candidate.PlayerConfigMap;
-        DialogResult = true;
     }
 
     private string SelectedServerUrl => ServerUrlBox.SelectedItem as string ?? ServerUrlDialog.DefaultUrl;
@@ -761,13 +726,13 @@ public partial class SettingsWindow : Window
 
     internal static bool IsValidServerUrl(string candidate) => ServerUrlDialog.IsValidUrl(candidate);
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+    private void CloseSettingsButton_Click(object sender, RoutedEventArgs e) => Close();
 
     internal static void RenderServerDialogPreview(string directory)
     {
         // Render our own WPF visual tree offscreen; no desktop capture or live settings are used.
         Directory.CreateDirectory(directory);
-        var window = new SettingsWindow(new ClientSettings(), true, null, false, null, (_, _, _) => { });
+        var window = new SettingsWindow(new ClientSettings(), true, null, false, null, (_, _, _) => { }, _ => { });
         try
         {
             window.CategoryList.SelectedIndex = 6;
@@ -794,6 +759,8 @@ public partial class SettingsWindow : Window
     internal static void VerifyModControls()
     {
         ServerUrlDialog.VerifyBehavior();
+        SettingsConfirmDialog.VerifyBehavior();
+        VerifyImmediateSettings();
         var lobby = new LobbySettings
         {
             SnrJumboVoice = true, JackalHaunting = true, JackalRadioEnabled = true,
@@ -804,7 +771,7 @@ public partial class SettingsWindow : Window
         };
         var settings = new ClientSettings { MyLobbySettings = lobby };
         var window = new SettingsWindow(settings, true, null, false,
-            new AmongUsState { Mod = AmongUsModType.SuperNewRoles }, (_, _, _) => { });
+            new AmongUsState { Mod = AmongUsModType.SuperNewRoles }, (_, _, _) => { }, _ => { });
         try
         {
             var read = window.ReadLobbyControls();
@@ -861,7 +828,7 @@ public partial class SettingsWindow : Window
             if (window.serverUrlDrafts.Count(url => url == "https://voice.example.test") != 1 ||
                 window.SelectedServerUrl != "https://voice.example.test" ||
                 window.ServerUrlDescription.Text != "https://voice.example.test" ||
-                settings.ServerUrl != ServerUrlDialog.DefaultUrl ||
+                settings.ServerUrl != "https://voice.example.test" ||
                 window.ServerDialogBackdrop.Visibility != Visibility.Collapsed ||
                 !window.ObsUrlBox.Text.Contains("&server=https%3A%2F%2Fvoice.example.test"))
                 throw new InvalidOperationException("Server confirmation did not update unique history, selection and OBS preview");
