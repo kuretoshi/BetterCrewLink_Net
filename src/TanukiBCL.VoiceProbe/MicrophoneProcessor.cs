@@ -4,7 +4,7 @@ namespace TanukiBCL.VoiceProbe;
 
 // SpeexDSP operates on the same 20 ms, 48 kHz mono PCM16 frames that we send
 // to WebRTC. It is not Chromium's APM, so subjective 3.2.7 comparisons remain
-// necessary, but each of the three input-processing switches affects the audio.
+// necessary. Synthetic tests check outcomes, not acoustic or Chromium parity.
 public sealed class MicrophoneProcessor : IDisposable
 {
     public const int SamplesPerFrame = 960;
@@ -19,30 +19,40 @@ public sealed class MicrophoneProcessor : IDisposable
 
     public MicrophoneProcessor(bool echoCancellation, bool noiseSuppression, bool autoGainControl)
     {
-        if (echoCancellation)
+        try
         {
-            echoCanceler = new SpeexDSPEchoCanceler(SamplesPerFrame, 48_000 / 5);
-            var sampleRate = 48_000;
-            echoCanceler.Ctl(EchoCancellationCtl.SPEEX_ECHO_SET_SAMPLING_RATE, ref sampleRate);
-        }
-
-        if (noiseSuppression || autoGainControl)
-        {
-            preprocessor = new SpeexDSPPreprocessor(SamplesPerFrame, 48_000);
-            var denoise = noiseSuppression ? 1 : 0;
-            var agc = autoGainControl ? 1 : 0;
-            preprocessor.Ctl(PreprocessorCtl.SPEEX_PREPROCESS_SET_DENOISE, ref denoise);
-            preprocessor.Ctl(PreprocessorCtl.SPEEX_PREPROCESS_SET_AGC, ref agc);
-            if (autoGainControl)
+            if (echoCancellation)
             {
-                var target = 30_000;
-                preprocessor.Ctl(PreprocessorCtl.SPEEX_PREPROCESS_SET_AGC_TARGET, ref target);
+                echoCanceler = new SpeexDSPEchoCanceler(SamplesPerFrame, 48_000 / 5);
+                var sampleRate = 48_000;
+                echoCanceler.Ctl(EchoCancellationCtl.SPEEX_ECHO_SET_SAMPLING_RATE, ref sampleRate);
             }
+
+            if (noiseSuppression || autoGainControl)
+            {
+                preprocessor = new SpeexDSPPreprocessor(SamplesPerFrame, 48_000);
+                var denoise = noiseSuppression ? 1 : 0;
+                var agc = autoGainControl ? 1 : 0;
+                preprocessor.Ctl(PreprocessorCtl.SPEEX_PREPROCESS_SET_DENOISE, ref denoise);
+                preprocessor.Ctl(PreprocessorCtl.SPEEX_PREPROCESS_SET_AGC, ref agc);
+                if (autoGainControl)
+                {
+                    var target = 30_000;
+                    preprocessor.Ctl(PreprocessorCtl.SPEEX_PREPROCESS_SET_AGC_TARGET, ref target);
+                }
+            }
+        }
+        catch
+        {
+            preprocessor?.Dispose();
+            echoCanceler?.Dispose();
+            throw;
         }
     }
 
     // Called by the render device, after mixing and master/deafen volume.
-    // Speex's EchoPlayback/EchoCapture pair compensates its own two-frame delay.
+    // Speex's EchoPlayback/EchoCapture pair assumes a two-frame render delay;
+    // it does not measure the actual output-device latency.
     public void SubmitPlayback(float[] stereo, int offset, int count)
     {
         if (echoCanceler is null) return;

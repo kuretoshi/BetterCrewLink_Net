@@ -17,6 +17,7 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
     private readonly Action<bool> onVadChanged;
     private readonly MicrophoneProcessor microphoneProcessor;
+    private readonly Pcm16CaptureFramer captureFramer = new();
     private readonly TanukiVoiceActivityDetector voiceDetector = new();
     private bool? lastVadState;
     private volatile bool microphoneMuted;
@@ -48,34 +49,49 @@ internal sealed class AudioDeviceSession : IDisposable
         this.onVadChanged = onVadChanged;
         microphoneProcessor = new MicrophoneProcessor(echoCancellation, noiseSuppression, autoGainControl);
 
-        capture = new WaveInEvent
+        try
         {
-            DeviceNumber = inputDevice,
-            WaveFormat = CaptureFormat,
-            BufferMilliseconds = 20,
-            NumberOfBuffers = 3
-        };
-        capture.DataAvailable += OnDataAvailable;
-        capture.RecordingStopped += (_, args) =>
-        {
-            if (args.Exception is not null)
+            capture = new WaveInEvent
             {
-                Console.Error.WriteLine($"マイク録音エラー: {args.Exception.Message}");
-            }
-        };
+                DeviceNumber = inputDevice,
+                WaveFormat = CaptureFormat,
+                BufferMilliseconds = 20,
+                NumberOfBuffers = 3
+            };
+            capture.DataAvailable += OnDataAvailable;
+            capture.RecordingStopped += (_, args) =>
+            {
+                if (args.Exception is not null)
+                {
+                    Console.Error.WriteLine($"マイク録音エラー: {args.Exception.Message}");
+                }
+            };
 
-        playbackMixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(48_000, 2))
+            playbackMixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(48_000, 2))
+            {
+                ReadFully = true
+            };
+            masterMix = new VolumeSampleProvider(playbackMixer);
+            playback = new WaveOutEvent
+            {
+                DeviceNumber = outputDevice,
+                DesiredLatency = 100,
+                NumberOfBuffers = 3
+            };
+            playback.Init(new RenderReferenceSampleProvider(masterMix, microphoneProcessor).ToWaveProvider());
+        }
+        catch
         {
-            ReadFully = true
-        };
-        masterMix = new VolumeSampleProvider(playbackMixer);
-        playback = new WaveOutEvent
-        {
-            DeviceNumber = outputDevice,
-            DesiredLatency = 100,
-            NumberOfBuffers = 3
-        };
-        playback.Init(new RenderReferenceSampleProvider(masterMix, microphoneProcessor).ToWaveProvider());
+            // Init can fail after the DSP and microphone objects were created
+            // (for example, the selected speaker disappears during reconnect).
+            try { capture?.Dispose(); }
+            finally
+            {
+                try { playback?.Dispose(); }
+                finally { microphoneProcessor.Dispose(); }
+            }
+            throw;
+        }
     }
 
     public void Start()
@@ -211,7 +227,12 @@ internal sealed class AudioDeviceSession : IDisposable
             return;
         }
 
-        var buffer = args.Buffer.AsMemory(0, args.BytesRecorded).ToArray();
+        captureFramer.Push(args.Buffer.AsSpan(0, args.BytesRecorded), ProcessCaptureFrame);
+    }
+
+    private void ProcessCaptureFrame(byte[] buffer)
+    {
+        if (disposed) return;
         microphoneProcessor.ProcessCapture(buffer);
         var sensitivityEnabled = microphoneSensitivityEnabled;
         // The upstream VAD analyses the raw microphone before output gain.
@@ -319,11 +340,21 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         disposed = true;
-        capture.StopRecording();
-        playback.Stop();
-        capture.Dispose();
-        playback.Dispose();
-        microphoneProcessor.Dispose();
+        capture.DataAvailable -= OnDataAvailable;
+        try { capture.StopRecording(); }
+        finally
+        {
+            try { playback.Stop(); }
+            finally
+            {
+                try { capture.Dispose(); }
+                finally
+                {
+                    try { playback.Dispose(); }
+                    finally { microphoneProcessor.Dispose(); }
+                }
+            }
+        }
     }
 
     private sealed class RenderReferenceSampleProvider(
@@ -349,6 +380,30 @@ internal sealed class AudioDeviceSession : IDisposable
         VolumeSampleProvider Volume,
         RadioEchoSampleProvider RadioEcho);
 
+}
+
+// WinMM normally delivers 20 ms blocks, but stopped/irregular callbacks may be
+// shorter. Retain their bytes so DSP, VAD and Opus see complete frames only.
+internal sealed class Pcm16CaptureFramer
+{
+    private byte[] pending = new byte[MicrophoneProcessor.BytesPerFrame];
+    private int pendingLength;
+
+    public void Push(ReadOnlySpan<byte> input, Action<byte[]> onFrame)
+    {
+        while (!input.IsEmpty)
+        {
+            var copied = Math.Min(input.Length, pending.Length - pendingLength);
+            input[..copied].CopyTo(pending.AsSpan(pendingLength));
+            pendingLength += copied;
+            input = input[copied..];
+            if (pendingLength != pending.Length) continue;
+            var complete = pending;
+            pending = new byte[MicrophoneProcessor.BytesPerFrame];
+            pendingLength = 0;
+            onFrame(complete);
+        }
+    }
 }
 
 internal sealed record AudioDeviceInfo(int Id, string Name)

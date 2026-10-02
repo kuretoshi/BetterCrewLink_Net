@@ -9,6 +9,7 @@ internal sealed class MicrophoneLevelSession : IDisposable
 {
     private readonly WaveInEvent capture;
     private readonly MicrophoneProcessor processor;
+    private readonly Pcm16CaptureFramer captureFramer = new();
     private readonly Action<double> onLevel;
     private long lastReportTicks;
     private bool recording;
@@ -18,14 +19,23 @@ internal sealed class MicrophoneLevelSession : IDisposable
     {
         this.onLevel = onLevel;
         processor = new MicrophoneProcessor(false, false, autoGainControl);
-        capture = new WaveInEvent
+        try
         {
-            DeviceNumber = deviceId,
-            WaveFormat = new WaveFormat(48_000, 16, 1),
-            BufferMilliseconds = 20,
-            NumberOfBuffers = 3
-        };
-        capture.DataAvailable += OnDataAvailable;
+            capture = new WaveInEvent
+            {
+                DeviceNumber = deviceId,
+                WaveFormat = new WaveFormat(48_000, 16, 1),
+                BufferMilliseconds = 20,
+                NumberOfBuffers = 3
+            };
+            capture.DataAvailable += OnDataAvailable;
+        }
+        catch
+        {
+            try { capture?.Dispose(); }
+            finally { processor.Dispose(); }
+            throw;
+        }
     }
 
     public static MicrophoneLevelSession Start(int deviceId, bool autoGainControl, Action<double> onLevel)
@@ -46,8 +56,13 @@ internal sealed class MicrophoneLevelSession : IDisposable
 
     private void OnDataAvailable(object? sender, WaveInEventArgs args)
     {
-        if (disposed || args.BytesRecorded < sizeof(short)) return;
-        var pcm = args.Buffer.AsSpan(0, args.BytesRecorded).ToArray();
+        if (disposed || args.BytesRecorded <= 0) return;
+        captureFramer.Push(args.Buffer.AsSpan(0, args.BytesRecorded), ProcessCaptureFrame);
+    }
+
+    private void ProcessCaptureFrame(byte[] pcm)
+    {
+        if (disposed) return;
         processor.ProcessCapture(pcm);
         var now = Stopwatch.GetTimestamp();
         if (Stopwatch.GetElapsedTime(lastReportTicks, now) < TimeSpan.FromMilliseconds(50)) return;
@@ -70,9 +85,15 @@ internal sealed class MicrophoneLevelSession : IDisposable
         if (disposed) return;
         disposed = true;
         capture.DataAvailable -= OnDataAvailable;
-        if (recording) capture.StopRecording();
-        capture.Dispose();
-        processor.Dispose();
+        try
+        {
+            if (recording) capture.StopRecording();
+        }
+        finally
+        {
+            try { capture.Dispose(); }
+            finally { processor.Dispose(); }
+        }
     }
 }
 
