@@ -22,6 +22,8 @@ public partial class App : Application
             Trace.TraceWarning($"Could not set TanukiBCL AppUserModelID: 0x{result:X8}");
         }
         base.OnStartup(e);
+        System.Windows.Media.RenderOptions.ProcessRenderMode = ClientSettingsStore.Load().HardwareAcceleration
+            ? System.Windows.Interop.RenderMode.Default : System.Windows.Interop.RenderMode.SoftwareOnly;
         if (e.Args.Contains("--nos-avatar-self-test") || e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
             e.Args.Contains("--session-lifecycle-self-test") ||
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||

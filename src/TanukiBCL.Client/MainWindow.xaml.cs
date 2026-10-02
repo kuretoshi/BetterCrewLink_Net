@@ -33,6 +33,8 @@ public partial class MainWindow : Window
     private long connectionIntentVersion;
     private ConnectionQuality? serverQuality;
     private long sentAudioFrames;
+    private ProcessStartInfo? relaunch;
+    private bool relaunchRequested;
 
     public MainWindow()
     {
@@ -105,6 +107,8 @@ public partial class MainWindow : Window
         {
             var previous = change.Previous;
             var current = change.Current;
+            if (previous.HardwareAcceleration != current.HardwareAcceleration)
+                QueueApplicationRelaunch();
             Topmost = current.AlwaysOnTop;
             if (previous.MicrophoneName != current.MicrophoneName || previous.SpeakerName != current.SpeakerName)
             {
@@ -731,7 +735,35 @@ public partial class MainWindow : Window
         sessions.Current?.RequestStop();
         overlayWindow?.Close();
         overlayWindow = null;
+        if (relaunch is not null)
+        {
+            try { Process.Start(relaunch)?.Dispose(); }
+            catch (Exception error)
+            {
+                MessageBox.Show($"再起動できませんでした。TanukiBCLを手動で起動してください: {error.Message}", "TanukiBCL");
+            }
+        }
         base.OnClosed(e);
+    }
+
+    private void QueueApplicationRelaunch()
+    {
+        if (relaunchRequested || isClosing) return;
+        relaunchRequested = true;
+        var resumeGamePid = sessions.Current is not null ? activeGamePid : null;
+        // Finish the settings event before closing its modal window. This also
+        // lets failed pending saves cancel the close instead of losing edits.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            relaunchRequested = false;
+            if (isClosing) return;
+            var dialog = settingsWindow;
+            dialog?.Close();
+            if (dialog?.IsVisible == true) return;
+            relaunch = ApplicationRelaunch.Create(Environment.ProcessPath!,
+                typeof(App).Assembly.Location, resumeGamePid);
+            Close(); // OnClosing drains native audio/socket work before OnClosed launches.
+        }));
     }
 
     private sealed record ProcessChoice(int Id)

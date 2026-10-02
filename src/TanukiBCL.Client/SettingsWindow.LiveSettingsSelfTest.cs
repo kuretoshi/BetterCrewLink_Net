@@ -28,6 +28,13 @@ public partial class SettingsWindow
         try
         {
             RequireLive(writes.Count == 0 && changes.Count == 0, "Opening settings wrote values");
+            window.HardwareAccelerationCheck.IsChecked = false;
+            Click(window.HardwareAccelerationCheck);
+            RequireLive(settings.HardwareAcceleration && writes.Count == 0,
+                "Hardware acceleration disabled before confirmation");
+            Click(window.ConfirmDialog.CancelButton);
+            RequireLive(settings.HardwareAcceleration && window.HardwareAccelerationCheck.IsChecked == true,
+                "Canceled hardware acceleration change was not restored");
             window.MasterVolumeSlider.Value = 61;
             RequireLive(settings.MasterVolume == 61 && changes.Count == 1 && writes.Count == 0,
                 "Volume preview was not live-only");

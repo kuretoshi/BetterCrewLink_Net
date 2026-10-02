@@ -25,6 +25,18 @@ public partial class SettingsWindow
         BindToggle(EchoCancellationCheck, nameof(ClientSettings.EchoCancellation));
         BindToggle(NoiseSuppressionCheck, nameof(ClientSettings.NoiseSuppression));
         BindToggle(AutoGainControlCheck, nameof(ClientSettings.AutoGainControl));
+        HardwareAccelerationCheck.Click += (_, _) =>
+        {
+            var enabled = HardwareAccelerationCheck.IsChecked == true;
+            HardwareAccelerationCheck.IsChecked = settings.HardwareAcceleration;
+            void Apply()
+            {
+                HardwareAccelerationCheck.IsChecked = enabled;
+                ApplyControls(true, nameof(ClientSettings.HardwareAcceleration));
+            }
+            if (!enabled) ConfirmChange("ハードウェアアクセラレーションを無効にします（CPU使用率が上がる可能性があります）", Apply);
+            else Apply();
+        };
         BindToggle(ShowLobbyCodeCheck, nameof(ClientSettings.HideCode));
         BindToggle(ObsOverlayCheck, nameof(ClientSettings.ObsOverlay), nameof(ClientSettings.ObsSecret));
         foreach (var radio in new[] { VoiceModeRadio, PushToTalkModeRadio, PushToMuteModeRadio })

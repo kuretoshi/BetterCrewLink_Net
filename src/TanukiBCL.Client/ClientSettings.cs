@@ -36,6 +36,7 @@ internal sealed class ClientSettings
     public bool EchoCancellation { get; set; } = true;
     public bool NoiseSuppression { get; set; } = true;
     public bool AutoGainControl { get; set; }
+    public bool HardwareAcceleration { get; set; } = true;
     public int MasterVolume { get; set; } = 100;
     public int VoiceEffectStrength { get; set; } = 100;
     public int CrewVolumeAsGhost { get; set; } = 100;

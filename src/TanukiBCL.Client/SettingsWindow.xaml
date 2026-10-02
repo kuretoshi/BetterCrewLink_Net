@@ -290,6 +290,9 @@
                         </Grid>
                         <TextBlock Text="音声処理" FontWeight="SemiBold" Margin="0,0,0,12" />
                         <CheckBox x:Name="MobileHostCheck" Content="モバイル ホスト" Margin="0,0,0,8" />
+                        <CheckBox x:Name="HardwareAccelerationCheck" Content="ハードウェア アクセラレーション" Margin="0,0,0,8" />
+                        <TextBlock Text="ハードウェアアクセラレーションを無効にします（CPU使用率が上がる可能性があります）"
+                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,12" />
                         <CheckBox x:Name="EchoCancellationCheck" Content="エコーキャンセラー" Margin="0,0,0,8" />
                         <CheckBox x:Name="AutoGainControlCheck" Content="自動ゲイン調整" Margin="0,0,0,8"
                                   Checked="AutoGainControlCheck_Changed" Unchecked="AutoGainControlCheck_Changed" />

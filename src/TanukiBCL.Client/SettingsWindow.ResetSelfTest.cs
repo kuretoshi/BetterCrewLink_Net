@@ -8,6 +8,24 @@ public partial class SettingsWindow
 {
     private static void VerifyResetDefaults()
     {
+        ApplicationRelaunch.Verify();
+        var graphicsSettings = new ClientSettings();
+        var graphicsWrites = new List<ClientSettings>();
+        var graphicsWindow = new SettingsWindow(graphicsSettings, true, null, false, null,
+            (_, _, _) => { }, value => graphicsWrites.Add(value.Clone()));
+        try
+        {
+            graphicsWindow.HardwareAccelerationCheck.IsChecked = false;
+            Click(graphicsWindow.HardwareAccelerationCheck);
+            Click(graphicsWindow.ConfirmDialog.ConfirmButton);
+            RequireLive(!graphicsSettings.HardwareAcceleration && graphicsWrites.Count == 1 &&
+                !graphicsWrites[0].HardwareAcceleration, "Hardware disable was not persisted");
+            graphicsWindow.HardwareAccelerationCheck.IsChecked = true;
+            Click(graphicsWindow.HardwareAccelerationCheck);
+            RequireLive(graphicsSettings.HardwareAcceleration && graphicsWrites.Count == 2 &&
+                graphicsWindow.pendingConfirmation is null, "Hardware enable required unexpected confirmation");
+        }
+        finally { graphicsWindow.Close(); }
         var settings = new ClientSettings { MasterVolume = 43, NatFix = true,
             ServerUrl = "https://example.test", PlayerConfigMap = new() { [7] = PlayerAudioConfig.Default } };
         var saves = new List<ClientSettings>();
