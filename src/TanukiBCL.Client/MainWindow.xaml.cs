@@ -131,6 +131,7 @@ public partial class MainWindow : Window
         probe?.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe?.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
         probe?.SetNatFix(settings.NatFix);
+        probe?.SetMobileHost(settings.MobileHost);
         probe?.SetMicrophoneActivationMode(settings.PushToTalkMode);
         hotkeys?.UpdateBindings(settings);
         probe?.SetOwnLobbySettings(settings.MyLobbySettings);
@@ -221,6 +222,7 @@ public partial class MainWindow : Window
         probe.SetPlayerConfigs(settings.PlayerConfigMap);
         probe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         probe.SetSpatialAudio(settings.EnableSpatialAudio);
+        probe.SetMobileHost(settings.MobileHost);
         probe.SetInputProcessing(settings.EchoCancellation, settings.NoiseSuppression, settings.AutoGainControl);
         probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);

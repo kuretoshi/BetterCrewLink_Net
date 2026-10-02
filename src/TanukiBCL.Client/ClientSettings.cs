@@ -7,6 +7,7 @@ namespace TanukiBCL.Client;
 internal sealed class ClientSettings
 {
     public string ServerUrl { get; set; } = "https://bettercrewl.ink";
+    public List<string> ServerUrls { get; set; } = ["https://bettercrewl.ink"];
     public string? MicrophoneName { get; set; }
     public string? SpeakerName { get; set; }
     public bool AlwaysOnTop { get; set; }
@@ -18,6 +19,7 @@ internal sealed class ClientSettings
     public bool ObsOverlay { get; set; }
     public string? ObsSecret { get; set; }
     public bool NatFix { get; set; }
+    public bool MobileHost { get; set; } = true;
     public bool EnableSpatialAudio { get; set; } = true;
     public bool EchoCancellation { get; set; } = true;
     public bool NoiseSuppression { get; set; } = true;
@@ -47,6 +49,12 @@ internal sealed class ClientSettings
         {
             ServerUrl = "https://bettercrewl.ink";
         }
+        ServerUrls = (ServerUrls ?? [])
+            .Where(url => Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                          uri.Scheme is "http" or "https")
+            .Append(ServerUrl)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
         MasterVolume = Math.Clamp(MasterVolume, 0, 200);
         VoiceEffectStrength = Math.Clamp(VoiceEffectStrength, 0, 100);
         CrewVolumeAsGhost = Math.Clamp(CrewVolumeAsGhost, 0, 100);

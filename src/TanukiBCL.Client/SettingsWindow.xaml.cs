@@ -73,8 +73,10 @@ public partial class SettingsWindow : Window
         ImpostorRadioShortcutBox.Text = settings.ImpostorRadioShortcut;
         MuteShortcutBox.Text = settings.MuteShortcut;
         DeafenShortcutBox.Text = settings.DeafenShortcut;
+        ServerUrlBox.ItemsSource = settings.ServerUrls;
         ServerUrlBox.Text = settings.ServerUrl;
         NatFixCheck.IsChecked = settings.NatFix;
+        MobileHostCheck.IsChecked = settings.MobileHost;
         SpatialAudioCheck.IsChecked = settings.EnableSpatialAudio;
         EchoCancellationCheck.IsChecked = settings.EchoCancellation;
         NoiseSuppressionCheck.IsChecked = settings.NoiseSuppression;
@@ -623,17 +625,21 @@ public partial class SettingsWindow : Window
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
         var serverUrl = ServerUrlBox.Text.Trim();
-        if (!Uri.TryCreate(serverUrl, UriKind.Absolute, out var parsed) ||
-            parsed.Scheme is not ("http" or "https"))
+        if (!IsValidServerUrl(serverUrl) &&
+            !string.Equals(serverUrl, settings.ServerUrl, StringComparison.Ordinal))
         {
             MessageBox.Show(this, "http または https のボイスサーバーURLを指定してください。", "設定");
             return;
         }
+        if (serverUrl.EndsWith('/')) serverUrl = serverUrl[..^1];
 
         var candidate = new ClientSettings
         {
             ServerUrl = serverUrl,
+            ServerUrls = settings.ServerUrls.Append(serverUrl)
+                .Distinct(StringComparer.Ordinal).ToList(),
             NatFix = NatFixCheck.IsChecked == true,
+            MobileHost = MobileHostCheck.IsChecked == true,
             EnableSpatialAudio = SpatialAudioCheck.IsChecked == true,
             EchoCancellation = EchoCancellationCheck.IsChecked == true,
             NoiseSuppression = NoiseSuppressionCheck.IsChecked == true,
@@ -679,7 +685,9 @@ public partial class SettingsWindow : Window
             return;
         }
         settings.ServerUrl = candidate.ServerUrl;
+        settings.ServerUrls = candidate.ServerUrls;
         settings.NatFix = candidate.NatFix;
+        settings.MobileHost = candidate.MobileHost;
         settings.EnableSpatialAudio = candidate.EnableSpatialAudio;
         settings.EchoCancellation = candidate.EchoCancellation;
         settings.NoiseSuppression = candidate.NoiseSuppression;
@@ -712,6 +720,15 @@ public partial class SettingsWindow : Window
         settings.PlayerConfigMap = candidate.PlayerConfigMap;
         DialogResult = true;
     }
+
+    private void ResetServerUrlButton_Click(object sender, RoutedEventArgs e)
+        => ServerUrlBox.Text = "https://bettercrewl.ink";
+
+    internal static bool IsValidServerUrl(string candidate) =>
+        Uri.TryCreate(candidate, UriKind.Absolute, out var parsed) &&
+        (parsed.Scheme is "http" or "https") &&
+        parsed.AbsolutePath == "/" &&
+        !string.Equals(parsed.Host, "discord.gg", StringComparison.OrdinalIgnoreCase);
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
@@ -766,6 +783,30 @@ public partial class SettingsWindow : Window
                 restored.ObsSecret != window.obsSecretDraft)
                 throw new InvalidOperationException("Streaming settings did not persist");
             window.CategoryList.SelectedIndex = 6;
+            if (!window.ServerUrlBox.Items.Cast<string>().Contains("https://bettercrewl.ink") ||
+                !IsValidServerUrl("https://voice.example.test/") ||
+                IsValidServerUrl("https://voice.example.test/api") ||
+                IsValidServerUrl("https://discord.gg/abc"))
+                throw new InvalidOperationException("Server URL selection or validation differs from 3.2.7");
+            var serverHistory = new ClientSettings
+            {
+                ServerUrl = "https://voice.example.test",
+                ServerUrls = ["https://bettercrewl.ink", "https://voice.example.test"]
+            };
+            var restoredServers = JsonSerializer.Deserialize<ClientSettings>(
+                JsonSerializer.Serialize(serverHistory));
+            restoredServers?.Normalize();
+            if (restoredServers is null || restoredServers.ServerUrl != serverHistory.ServerUrl ||
+                !restoredServers.ServerUrls.Contains("https://voice.example.test"))
+                throw new InvalidOperationException("Server URL history did not persist");
+            if (window.MobileHostCheck.IsChecked != true)
+                throw new InvalidOperationException("Mobile host default was not loaded");
+            window.MobileHostCheck.IsChecked = false;
+            var mobileRestored = JsonSerializer.Deserialize<ClientSettings>(
+                JsonSerializer.Serialize(new ClientSettings
+                { MobileHost = window.MobileHostCheck.IsChecked == true }));
+            if (mobileRestored?.MobileHost != false)
+                throw new InvalidOperationException("Mobile host setting did not persist");
             if (window.SpatialAudioCheck.IsChecked != true)
                 throw new InvalidOperationException("Spatial audio default was not loaded");
             window.SpatialAudioCheck.IsChecked = false;

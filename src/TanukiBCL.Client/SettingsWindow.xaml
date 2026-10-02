@@ -263,11 +263,15 @@
                     <StackPanel x:Name="AdvancedPanel" Visibility="Collapsed">
                         <TextBlock Text="詳細設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
                         <TextBlock Text="ボイスサーバー URL" Margin="0,0,0,6" />
-                        <TextBox x:Name="ServerUrlBox" Margin="0,0,0,22" />
+                        <ComboBox x:Name="ServerUrlBox" IsEditable="True" Margin="0,0,0,8" />
+                        <Button Content="既定のボイスサーバーに戻す" Width="190" Height="30"
+                                HorizontalAlignment="Left" Margin="0,0,0,22"
+                                Click="ResetServerUrlButton_Click" />
                         <CheckBox x:Name="NatFixCheck" Content="NATの修正" Margin="0,0,0,6" />
                         <TextBlock Text="P2Pの代わりにTURNサーバーを経由します。接続の問題を解決できますが、遅延が増える場合があります。"
                                    TextWrapping="Wrap" Foreground="#A8A4B0" Margin="0,0,0,20" />
                         <TextBlock Text="音声処理" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <CheckBox x:Name="MobileHostCheck" Content="モバイル ホスト" Margin="0,0,0,8" />
                         <CheckBox x:Name="EchoCancellationCheck" Content="エコーキャンセラー" Margin="0,0,0,8" />
                         <CheckBox x:Name="AutoGainControlCheck" Content="自動ゲイン調整" Margin="0,0,0,8"
                                   Checked="AutoGainControlCheck_Changed" Unchecked="AutoGainControlCheck_Changed" />

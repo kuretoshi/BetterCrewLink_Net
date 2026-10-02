@@ -29,6 +29,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private string lastMixSignature = string.Empty;
     private SpatialVoiceSettings spatialVoiceSettings = new();
     private bool spatialAudioEnabled = true;
+    private volatile bool mobileHostEnabled = true;
+    private volatile bool mobileRunning;
+    private Task? mobileBeaconTask;
     private IReadOnlyDictionary<int, PlayerAudioConfig> playerConfigs = new Dictionary<int, PlayerAudioConfig>();
     private LobbySettings ownLobbySettings = new();
     private LobbySettings activeLobbySettings = new();
@@ -304,6 +307,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     local.TohRole = tohRoleOverride;
             }
         }
+        if (currentGameState?.LobbyCode != state.LobbyCode ||
+            state.GameState is GameState.Menu or GameState.Unknown)
+        {
+            mobileRunning = false;
+        }
         currentGameState = state;
         SyncNosRadioReports(state);
         SyncTohReports(state);
@@ -390,6 +398,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         spatialVoiceSettings = spatialVoiceSettings with { SpatialAudio = enabled };
         RefreshPeerMixes();
     }
+
+    public void SetMobileHost(bool enabled) => mobileHostEnabled = enabled;
+
+    public bool IsMobileClientDetected => mobileRunning;
 
     public void SetMicrophoneGain(double gainPercent)
     {
@@ -589,7 +601,42 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 : "ゲーム状態からロビー参加情報を待機しています。");
         }
 
-        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        mobileBeaconTask = RunMobileBeaconLoopAsync(cancellationToken);
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        finally
+        {
+            await mobileBeaconTask;
+            mobileBeaconTask = null;
+        }
+    }
+
+    private async Task RunMobileBeaconLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(MobileHostBeacon.Interval);
+        try
+        {
+            do
+            {
+                if (socket.Connected &&
+                    MobileHostBeacon.Create(currentGameState, mobileHostEnabled) is { } beacon)
+                {
+                    try
+                    {
+                        await socket.EmitAsync("signal", beacon);
+                    }
+                    catch (Exception error) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        Log("WARN", $"Mobile host beacon failed: {error.Message}");
+                    }
+                }
+            } while (await timer.WaitForNextTickAsync(cancellationToken));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
     }
 
     private void RegisterHandlers()
@@ -614,6 +661,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
         socket.OnDisconnected += (_, reason) =>
         {
+            mobileRunning = false;
             lock (obsPayloadGate) { lastObsPayload = string.Empty; lastObsSecret = string.Empty; }
             ServerQualityChanged?.Invoke(null);
             Log("WARN", $"切断: {reason}");
@@ -712,6 +760,16 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (!envelope.TryGetProperty("from", out var fromElement) ||
                 !envelope.TryGetProperty("data", out var data) ||
                 fromElement.GetString() is not { Length: > 0 } remoteSocketId)
+            {
+                return;
+            }
+
+            if (MobileHostBeacon.IsResponseForLobby(data, currentGameState))
+            {
+                mobileRunning = true;
+                return;
+            }
+            if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("mobilePlayerInfo", out _))
             {
                 return;
             }
