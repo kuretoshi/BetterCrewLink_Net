@@ -75,6 +75,7 @@ public partial class SettingsWindow : Window
         DeafenShortcutBox.Text = settings.DeafenShortcut;
         ServerUrlBox.Text = settings.ServerUrl;
         NatFixCheck.IsChecked = settings.NatFix;
+        SpatialAudioCheck.IsChecked = settings.EnableSpatialAudio;
         ShowLobbyCodeCheck.IsChecked = !settings.HideCode;
         obsSecretDraft = settings.ObsSecret;
         ObsOverlayCheck.IsChecked = settings.ObsOverlay;
@@ -625,6 +626,7 @@ public partial class SettingsWindow : Window
         {
             ServerUrl = serverUrl,
             NatFix = NatFixCheck.IsChecked == true,
+            EnableSpatialAudio = SpatialAudioCheck.IsChecked == true,
             MicrophoneName = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Name,
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,
             AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
@@ -667,6 +669,7 @@ public partial class SettingsWindow : Window
         }
         settings.ServerUrl = candidate.ServerUrl;
         settings.NatFix = candidate.NatFix;
+        settings.EnableSpatialAudio = candidate.EnableSpatialAudio;
         settings.MicrophoneName = candidate.MicrophoneName;
         settings.SpeakerName = candidate.SpeakerName;
         settings.AlwaysOnTop = candidate.AlwaysOnTop;
@@ -748,6 +751,15 @@ public partial class SettingsWindow : Window
             if (restored is null || !restored.HideCode || !restored.ObsOverlay ||
                 restored.ObsSecret != window.obsSecretDraft)
                 throw new InvalidOperationException("Streaming settings did not persist");
+            window.CategoryList.SelectedIndex = 6;
+            if (window.SpatialAudioCheck.IsChecked != true)
+                throw new InvalidOperationException("Spatial audio default was not loaded");
+            window.SpatialAudioCheck.IsChecked = false;
+            var spatialRestored = JsonSerializer.Deserialize<ClientSettings>(
+                JsonSerializer.Serialize(new ClientSettings
+                { EnableSpatialAudio = window.SpatialAudioCheck.IsChecked == true }));
+            if (spatialRestored?.EnableSpatialAudio != false)
+                throw new InvalidOperationException("Spatial audio setting did not persist");
             var chimePath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Audio", "chime.mp3");
             using var chime = new NAudio.Wave.AudioFileReader(chimePath);
             if (chime.TotalTime < TimeSpan.FromMilliseconds(100) ||

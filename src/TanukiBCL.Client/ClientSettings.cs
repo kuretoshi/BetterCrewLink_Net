@@ -18,6 +18,7 @@ internal sealed class ClientSettings
     public bool ObsOverlay { get; set; }
     public string? ObsSecret { get; set; }
     public bool NatFix { get; set; }
+    public bool EnableSpatialAudio { get; set; } = true;
     public int MasterVolume { get; set; } = 100;
     public int VoiceEffectStrength { get; set; } = 100;
     public int CrewVolumeAsGhost { get; set; } = 100;

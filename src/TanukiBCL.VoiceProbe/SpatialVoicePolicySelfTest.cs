@@ -72,6 +72,24 @@ internal static class SpatialVoicePolicySelfTest
                 .TryGetProperty("nosColor", out _) &&
             vanillaObs.GetProperty("overlayState").GetProperty("players")[0]
                 .GetProperty("realColor")[0].GetString() == "#C51111");
+        var spatialState = new AmongUsState { GameState = GameState.Tasks };
+        var spatialMe = new Player();
+        var spatialOther = new Player { X = 2d };
+        var spatialOn = SpatialVoicePolicy.Calculate(spatialState, spatialMe, spatialOther,
+            new SpatialVoiceSettings(MaxDistance: 5d));
+        var spatialOff = SpatialVoicePolicy.Calculate(spatialState, spatialMe, spatialOther,
+            new SpatialVoiceSettings(MaxDistance: 5d, SpatialAudio: false));
+        Check("spatial off: in-range voice is centered without attenuation", true,
+            spatialOn.Gain < 1d && spatialOn.Pan > 0d &&
+            Math.Abs(spatialOff.Gain - 1d) < 0.0001d && spatialOff.Pan == 0d);
+        spatialOther.X = 5d;
+        Check("spatial off: boundary remains audible", true,
+            SpatialVoicePolicy.Calculate(spatialState, spatialMe, spatialOther,
+                new SpatialVoiceSettings(MaxDistance: 5d, SpatialAudio: false)).Audible);
+        spatialOther.X = 5.01d;
+        Check("spatial off: outside range is still blocked", false,
+            SpatialVoicePolicy.Calculate(spatialState, spatialMe, spatialOther,
+                new SpatialVoiceSettings(MaxDistance: 5d, SpatialAudio: false)).Audible);
         var snrReader = SnrLiveRoleReaderSelfTest.Verify();
         Check("SNR live reader: role and modifier names", true, snrReader.Role);
         Check("SNR live reader: Jumbo size", true, snrReader.Jumbo);
@@ -585,6 +603,9 @@ internal static class SpatialVoicePolicySelfTest
         Check("wall policy: living listener blocked", false,
             SpatialVoicePolicy.Calculate(fungleTasks, fungleListener, fungleSpeaker,
                 new SpatialVoiceSettings(WallsBlockAudio: true)).Audible);
+        Check("spatial off: wall still blocks audio", false,
+            SpatialVoicePolicy.Calculate(fungleTasks, fungleListener, fungleSpeaker,
+                new SpatialVoiceSettings(WallsBlockAudio: true, SpatialAudio: false)).Audible);
         Check("wall policy: disabled option preserves proximity", true,
             SpatialVoicePolicy.Calculate(fungleTasks, fungleListener, fungleSpeaker,
                 new SpatialVoiceSettings()).Audible);

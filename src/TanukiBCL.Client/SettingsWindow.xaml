@@ -266,6 +266,10 @@
                         <TextBox x:Name="ServerUrlBox" Margin="0,0,0,22" />
                         <CheckBox x:Name="NatFixCheck" Content="NATの修正" Margin="0,0,0,6" />
                         <TextBlock Text="P2Pの代わりにTURNサーバーを経由します。接続の問題を解決できますが、遅延が増える場合があります。"
+                                   TextWrapping="Wrap" Foreground="#A8A4B0" Margin="0,0,0,20" />
+                        <TextBlock Text="音声処理" FontWeight="SemiBold" Margin="0,0,0,12" />
+                        <CheckBox x:Name="SpatialAudioCheck" Content="立体音響" Margin="0,0,0,8" />
+                        <TextBlock Text="OFFでも声が届く距離や壁の遮断は有効です。距離内の音量と左右配置を固定します。"
                                    TextWrapping="Wrap" Foreground="#A8A4B0" />
                     </StackPanel>
                     <StackPanel x:Name="StreamingPanel" Visibility="Collapsed">

@@ -28,6 +28,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private string currentJoinedLobby = "MENU";
     private string lastMixSignature = string.Empty;
     private SpatialVoiceSettings spatialVoiceSettings = new();
+    private bool spatialAudioEnabled = true;
     private IReadOnlyDictionary<int, PlayerAudioConfig> playerConfigs = new Dictionary<int, PlayerAudioConfig>();
     private LobbySettings ownLobbySettings = new();
     private LobbySettings activeLobbySettings = new();
@@ -377,6 +378,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             CrewVolumeAsGhost = crewVolumeAsGhost,
             GhostVolumeAsImpostor = ghostVolumeAsImpostor
         };
+        RefreshPeerMixes();
+    }
+
+    public void SetSpatialAudio(bool enabled)
+    {
+        spatialAudioEnabled = enabled;
+        spatialVoiceSettings = spatialVoiceSettings with { SpatialAudio = enabled };
         RefreshPeerMixes();
     }
 
@@ -1324,6 +1332,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             await socket.EmitAsync("leave");
             currentJoinedLobby = "MENU";
             spatialVoiceSettings = new SpatialVoiceSettings(
+                SpatialAudio: spatialAudioEnabled,
                 CrewVolumeAsGhost: crewVolumeAsGhost,
                 GhostVolumeAsImpostor: ghostVolumeAsImpostor);
             activeLobbySettings = new LobbySettings();

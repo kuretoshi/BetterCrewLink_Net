@@ -214,11 +214,15 @@ internal static class SpatialVoicePolicy
                 "airship-meeting-fallback", Muffled: ventMuffle), me, other, settings);
         }
 
-        var distanceGain = LinearDistanceGain(distance, maxDistance);
-        if (distanceGain <= 0)
+        if (distance > maxDistance ||
+            (settings.SpatialAudio && LinearDistanceGain(distance, maxDistance) <= 0))
         {
             return Muted(pan, distance, "out-of-range");
         }
+        // 3.2.7 checks the proximity limit before centering the PannerNode.
+        // Turning spatial audio off therefore keeps the range/wall rules but
+        // removes both stereo placement and distance attenuation inside range.
+        var distanceGain = settings.SpatialAudio ? LinearDistanceGain(distance, maxDistance) : 1d;
 
         if (!cameraMuffle && settings.WallsBlockAudio && !me.IsDead &&
             WallCollision.Intersects(new Player { X = meX, Y = meY },

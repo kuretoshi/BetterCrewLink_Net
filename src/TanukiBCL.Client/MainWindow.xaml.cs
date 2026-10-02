@@ -89,6 +89,7 @@ public partial class MainWindow : Window
         probe?.SetMasterVolume(settings.MasterVolume);
         probe?.SetVoiceEffectStrength(settings.VoiceEffectStrength);
         probe?.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
+        probe?.SetSpatialAudio(settings.EnableSpatialAudio);
         probe?.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe?.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
         probe?.SetNatFix(settings.NatFix);
@@ -181,6 +182,7 @@ public partial class MainWindow : Window
         probe.SetVoiceEffectStrength(settings.VoiceEffectStrength);
         probe.SetPlayerConfigs(settings.PlayerConfigMap);
         probe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
+        probe.SetSpatialAudio(settings.EnableSpatialAudio);
         probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
         probe.SetMicrophoneActivationMode(settings.PushToTalkMode);
