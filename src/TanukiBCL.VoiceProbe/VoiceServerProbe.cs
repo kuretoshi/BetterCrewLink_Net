@@ -17,6 +17,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly TaskCompletionSource<AudioTestResult> audioVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly WebRtcPeerManager peerManager;
     private readonly ConcurrentDictionary<string, int> peerClientIds = new();
+    private readonly ConcurrentDictionary<string, int> stalledReconnectAttempts = new();
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
     private AmongUsState? currentGameState;
     private AmongUsMemoryReaderService? gameReader;
@@ -80,6 +81,33 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
         };
         peerManager.PeerDataReceived += ApplyPeerData;
+        peerManager.PeerDataChannelOpened += remoteSocketId =>
+            stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
+        peerManager.PeerDataChannelStalled += remoteSocketId =>
+        {
+            _ = RunPeerOperationAsync(async () =>
+            {
+                // Give the lower socket ID the first chance to re-offer. If it
+                // is an Electron peer that does not retry, recover locally too.
+                if (string.CompareOrdinal(socket.Id, remoteSocketId) > 0)
+                {
+                    await Task.Delay(4_000);
+                }
+                if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
+                    peerManager.HasOpenDataChannel(remoteSocketId))
+                {
+                    return;
+                }
+                var attempt = stalledReconnectAttempts.AddOrUpdate(remoteSocketId, 1, (_, count) => count + 1);
+                if (attempt > 2)
+                {
+                    Log("WARN", $"データチャネル復旧の再試行上限 peer={remoteSocketId}");
+                    return;
+                }
+                Log("INFO", $"データチャネル停滞を再接続 peer={remoteSocketId} attempt={attempt}");
+                await peerManager.ReconnectAsync(remoteSocketId);
+            });
+        };
         peerManager.PeerConnectionFailed += remoteSocketId =>
         {
             if (string.CompareOrdinal(socket.Id, remoteSocketId) < 0)
@@ -324,6 +352,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             audioSession?.RemovePeer(socketId);
         }
         peerClientIds.Clear();
+        stalledReconnectAttempts.Clear();
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -435,6 +464,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             var clients = response.GetValue<JsonElement>();
             peerClientIds.Clear();
+            stalledReconnectAttempts.Clear();
             foreach (var client in clients.EnumerateObject())
             {
                 RegisterPeerClient(client.Name, client.Value);
@@ -458,6 +488,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             Log("EVENT", $"leave peer={remoteSocketId}");
             if (peerClientIds.TryRemove(remoteSocketId, out var departedClientId))
             {
+                stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
                 impostorRadioStates.TryRemove(departedClientId, out _);
             }
             peerManager.RemovePeer(remoteSocketId);
@@ -505,6 +536,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             {
                 Log("INFO", $"同一clientの旧peerを除去 client={clientId} peer={staleSocketId}");
                 peerClientIds.TryRemove(staleSocketId, out _);
+                stalledReconnectAttempts.TryRemove(staleSocketId, out _);
                 peerManager.RemovePeer(staleSocketId);
                 audioSession?.RemovePeer(staleSocketId);
             }

@@ -40,6 +40,10 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string>? PeerConnectionFailed;
 
+    public event Action<string>? PeerDataChannelStalled;
+
+    public event Action<string>? PeerDataChannelOpened;
+
     public event Action<string, RTCPeerConnectionState>? PeerConnectionStateChanged;
 
     public event Action<string>? TestToneSent;
@@ -136,6 +140,9 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public bool IsInitiating(string remoteSocketId) =>
         peers.TryGetValue(remoteSocketId, out var peer) && peer.Initiator;
+
+    public bool HasOpenDataChannel(string remoteSocketId) =>
+        peers.TryGetValue(remoteSocketId, out var peer) && Volatile.Read(ref peer.DataChannelOpen) == 1;
 
     public bool TrySendPeerData(string remoteSocketId, string message)
     {
@@ -330,6 +337,11 @@ internal sealed class WebRtcPeerManager : IDisposable
             {
                 _ = SendTestToneAsync(peer);
             }
+            if (state == RTCPeerConnectionState.connected &&
+                Interlocked.Exchange(ref peer.DataChannelWatchdogStarted, 1) == 0)
+            {
+                _ = WatchDataChannelAsync(peer);
+            }
             else if (state == RTCPeerConnectionState.failed)
             {
                 PeerConnectionFailed?.Invoke(remoteSocketId);
@@ -347,7 +359,13 @@ internal sealed class WebRtcPeerManager : IDisposable
         peer.Channel = channel;
         channel.onopen += () =>
         {
+            if (!peers.TryGetValue(peer.RemoteSocketId, out var current) || !ReferenceEquals(current, peer))
+            {
+                return;
+            }
+            Interlocked.Exchange(ref peer.DataChannelOpen, 1);
             Log($"data channel open: {Short(peer.RemoteSocketId)}");
+            PeerDataChannelOpened?.Invoke(peer.RemoteSocketId);
             if (sendTestTone)
             {
                 channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
@@ -369,7 +387,26 @@ internal sealed class WebRtcPeerManager : IDisposable
                 PeerVerified?.Invoke(peer.RemoteSocketId);
             }
         };
-        channel.onclose += () => Log($"data channel closed: {Short(peer.RemoteSocketId)}");
+        channel.onclose += () =>
+        {
+            Interlocked.Exchange(ref peer.DataChannelOpen, 0);
+            Log($"data channel closed: {Short(peer.RemoteSocketId)}");
+        };
+    }
+
+    private async Task WatchDataChannelAsync(Peer peer)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(8));
+        if (!peers.TryGetValue(peer.RemoteSocketId, out var current) ||
+            !ReferenceEquals(current, peer) ||
+            peer.Connection.connectionState != RTCPeerConnectionState.connected ||
+            Volatile.Read(ref peer.DataChannelOpen) == 1)
+        {
+            return;
+        }
+
+        Log($"data channel stalled: {Short(peer.RemoteSocketId)}");
+        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
     }
 
     private async Task SendTestToneAsync(Peer peer)
@@ -577,6 +614,8 @@ internal sealed class WebRtcPeerManager : IDisposable
         public bool HasPreviousSample { get; set; }
         public bool AudioReported { get; set; }
         public int TestToneStarted;
+        public int DataChannelWatchdogStarted;
+        public int DataChannelOpen;
     }
 }
 
