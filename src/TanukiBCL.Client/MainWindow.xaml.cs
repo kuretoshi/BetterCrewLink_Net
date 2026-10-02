@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
+using Microsoft.Win32;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
 
@@ -54,6 +55,22 @@ public partial class MainWindow : Window
         CompactVoiceView.MuteRequested += (_, _) => ToggleMicrophoneMute();
         CompactVoiceView.DeafenRequested += (_, _) => ToggleDeafen();
         CompactVoiceView.HelpRequested += (_, _) => ShowInquiry();
+        CompactVoiceView.LaunchPlatformChanged += key =>
+        {
+            settings.LaunchPlatform = key;
+            ClientSettingsStore.Save(settings);
+        };
+        CompactVoiceView.LaunchGameRequested += platform =>
+        {
+            try { GameLauncher.Launch(platform); }
+            catch (Exception error) when (error is IOException or InvalidOperationException or
+                System.ComponentModel.Win32Exception)
+            {
+                MessageBox.Show(this, $"ゲームを起動できませんでした。{error.Message}", "ゲーム起動");
+            }
+        };
+        CompactVoiceView.AddCustomGameRequested += (_, _) => AddCustomGameLauncher();
+        RefreshGameLaunchers();
         CompactVoiceView.PlayerConfigChanged += ApplyPlayerConfig;
         UpdateCompactView();
         Loaded += (_, _) =>
@@ -67,6 +84,37 @@ public partial class MainWindow : Window
                 ShowDiagnostics();
             }
         };
+    }
+
+    private void RefreshGameLaunchers()
+    {
+        var available = GameLauncher.Available(settings.CustomPlatforms);
+        if (available.Count > 0 && available.All(platform => platform.Key != settings.LaunchPlatform))
+        {
+            settings.LaunchPlatform = available[0].Key;
+            ClientSettingsStore.Save(settings);
+        }
+        CompactVoiceView.SetLaunchPlatforms(available, settings.LaunchPlatform);
+    }
+
+    private void AddCustomGameLauncher()
+    {
+        var picker = new OpenFileDialog
+        {
+            Title = "Among Usの実行ファイルを選択",
+            Filter = "実行ファイル (*.exe)|*.exe",
+            CheckFileExists = true
+        };
+        if (picker.ShowDialog(this) != true) return;
+        var directory = Path.GetDirectoryName(picker.FileName)!;
+        var key = $"CUSTOM-{Guid.NewGuid():N}";
+        var platform = new GameLaunchPlatform(key, Path.GetFileName(directory), "EXE", directory,
+            [Path.GetFileName(picker.FileName)]);
+        if (!platform.IsValid) return;
+        settings.CustomPlatforms[key] = platform;
+        settings.LaunchPlatform = key;
+        ClientSettingsStore.Save(settings);
+        RefreshGameLaunchers();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -113,6 +161,7 @@ public partial class MainWindow : Window
     private void SettingsWindow_SettingsReset()
     {
         hotkeys?.UpdateBindings(settings);
+        RefreshGameLaunchers();
         if (!isClosing && sessions.Current is { AcceptsCallbacks: true } session)
             RequestSettingsRestart(session);
     }

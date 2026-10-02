@@ -87,10 +87,16 @@
         <Border Grid.Row="2" Background="#5C565F" />
 
         <Grid Grid.Row="3">
-            <StackPanel x:Name="WaitingPanel" VerticalAlignment="Top" Margin="0,20,0,0"
+            <StackPanel x:Name="WaitingPanel" VerticalAlignment="Top" Margin="0,6,0,0"
                         HorizontalAlignment="Center" Visibility="Collapsed">
                 <TextBlock Text="Among Usを待っています" FontSize="20" TextAlignment="Center" />
-                <TextBlock Text="ゲームを起動してください" FontSize="17" Margin="0,20,0,0" TextAlignment="Center" />
+                <TextBlock Text="ゲームを起動してください" FontSize="17" Margin="0,4,0,6" TextAlignment="Center" />
+                <ComboBox x:Name="LaunchPlatformCombo" Width="220" Height="28" DisplayMemberPath="Name"
+                          SelectionChanged="LaunchPlatformCombo_SelectionChanged" />
+                <Button x:Name="LaunchGameButton" Content="ゲームを起動" Width="220" Height="32"
+                        Margin="0,6,0,0" Click="LaunchGameButton_Click" />
+                <Button x:Name="AddCustomGameButton" Content="カスタム起動先を追加" Width="220" Height="26"
+                        Margin="0,4,0,0" Click="AddCustomGameButton_Click" />
             </StackPanel>
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           Margin="0,4,0,0">

@@ -38,6 +38,8 @@ internal sealed class ClientSettings
     public bool AutoGainControl { get; set; }
     public bool OldSampleDebug { get; set; }
     public bool HardwareAcceleration { get; set; } = true;
+    public string LaunchPlatform { get; set; } = "STEAM";
+    public Dictionary<string, GameLaunchPlatform> CustomPlatforms { get; set; } = [];
     public int MasterVolume { get; set; } = 100;
     public int VoiceEffectStrength { get; set; } = 100;
     public int CrewVolumeAsGhost { get; set; } = 100;
@@ -102,6 +104,11 @@ internal sealed class ClientSettings
             "right1" or "left" or "left1")) OverlayPosition = "right";
         if (!StreamingSettings.IsValidSecret(ObsSecret))
             ObsSecret = ObsOverlay ? StreamingSettings.CreateSecret() : null;
+        LaunchPlatform = string.IsNullOrWhiteSpace(LaunchPlatform) ? "STEAM" : LaunchPlatform;
+        CustomPlatforms = (CustomPlatforms ?? [])
+            .Where(pair => pair.Value is not null && pair.Key == pair.Value.Key && pair.Value.IsValid &&
+                pair.Key is not ("STEAM" or "EPIC" or "MICROSOFT"))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
         PushToTalkShortcut = GlobalHotkeyMonitor.NormalizeShortcut(PushToTalkShortcut, "V");
         ImpostorRadioShortcut = GlobalHotkeyMonitor.NormalizeShortcut(ImpostorRadioShortcut, "F");
         MuteShortcut = GlobalHotkeyMonitor.NormalizeShortcut(MuteShortcut, "RAlt");

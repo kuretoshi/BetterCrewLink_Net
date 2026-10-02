@@ -38,7 +38,12 @@ public partial class App : Application
             try
             {
                 if (e.Args.Contains("--nos-avatar-self-test")) AvatarImageFactory.VerifyNosColors();
-                if (e.Args.Contains("--voice-view-self-test")) VoiceView.VerifyNameLayout();
+                if (e.Args.Contains("--voice-view-self-test"))
+                {
+                    VoiceView.VerifyNameLayout();
+                    GameLauncher.Verify();
+                    VoiceView.VerifyLaunchControls();
+                }
                 if (e.Args.Contains("--cosmetics-self-test"))
                 {
                     CosmeticCatalog.Verify();

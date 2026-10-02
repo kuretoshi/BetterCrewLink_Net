@@ -31,6 +31,7 @@ public partial class VoiceView : UserControl
     private int? popupClientId;
     private bool updatingPopup;
     private bool popupDirty;
+    private bool configuringLaunchPlatforms;
 
     public VoiceView()
     {
@@ -69,12 +70,75 @@ public partial class VoiceView : UserControl
         view.popupCloseTimer.Stop();
         Console.WriteLine("[PASS] VoiceView long name retains 20px nowrap text beyond 115px box");
     }
+    internal static void VerifyLaunchControls()
+    {
+        var view = new VoiceView();
+        var platforms = new[]
+        {
+            new GameLaunchPlatform("STEAM", "Steam", "URI", "steam://rungameid/945360", [""]),
+            new GameLaunchPlatform("custom", "NoS", "EXE", @"C:\Games\NoS", ["Among Us.exe"])
+        };
+        string? selected = null;
+        GameLaunchPlatform? requested = null;
+        view.LaunchPlatformChanged += key => selected = key;
+        view.LaunchGameRequested += platform => requested = platform;
+        view.SetLaunchPlatforms(platforms, "custom");
+        if (!Equals(view.LaunchPlatformCombo.SelectedItem, platforms[1]) || !view.LaunchGameButton.IsEnabled ||
+            selected is not null)
+            throw new InvalidOperationException("Launch platform selection was not restored");
+        view.LaunchPlatformCombo.SelectedItem = platforms[0];
+        view.LaunchGameButton_Click(view.LaunchGameButton, new RoutedEventArgs());
+        if (selected != "STEAM" || requested != platforms[0])
+            throw new InvalidOperationException("Launch platform change or launch request was not sent");
+        view.WaitingPanel.Visibility = Visibility.Visible;
+        view.Measure(new Size(280, 390));
+        view.Arrange(new Rect(0, 0, 280, 390));
+        view.UpdateLayout();
+        if (view.WaitingPanel.Parent is not Grid waitingArea ||
+            view.WaitingPanel.ActualHeight + view.WaitingPanel.Margin.Top > waitingArea.ActualHeight)
+            throw new InvalidOperationException("Game launcher overflows the 280×390 voice window");
+        view.popupCloseTimer.Stop();
+        Console.WriteLine("[PASS] VoiceView restores game launcher choice and emits launch request");
+    }
     public event EventHandler? ReloadRequested;
     public event EventHandler? CloseRequested;
     public event EventHandler? MuteRequested;
     public event EventHandler? DeafenRequested;
     public event EventHandler? HelpRequested;
+    internal event Action<string>? LaunchPlatformChanged;
+    internal event Action<GameLaunchPlatform>? LaunchGameRequested;
+    internal event EventHandler? AddCustomGameRequested;
     public event Action<int, PlayerAudioConfig, bool>? PlayerConfigChanged;
+
+    internal void SetLaunchPlatforms(IReadOnlyList<GameLaunchPlatform> platforms, string selectedKey)
+    {
+        configuringLaunchPlatforms = true;
+        try
+        {
+            LaunchPlatformCombo.ItemsSource = platforms;
+            LaunchPlatformCombo.SelectedItem = platforms.FirstOrDefault(platform => platform.Key == selectedKey)
+                ?? platforms.FirstOrDefault();
+            LaunchGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is not null;
+        }
+        finally { configuringLaunchPlatforms = false; }
+    }
+
+    private void LaunchPlatformCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (configuringLaunchPlatforms) return;
+        LaunchGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is not null;
+        if (LaunchPlatformCombo.SelectedItem is GameLaunchPlatform platform)
+            LaunchPlatformChanged?.Invoke(platform.Key);
+    }
+
+    private void LaunchGameButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (LaunchPlatformCombo.SelectedItem is GameLaunchPlatform platform)
+            LaunchGameRequested?.Invoke(platform);
+    }
+
+    private void AddCustomGameButton_Click(object sender, RoutedEventArgs e) =>
+        AddCustomGameRequested?.Invoke(this, EventArgs.Empty);
 
     public void Update(AmongUsState? game, bool connected, bool localTalking, bool muted,
         bool deafened, IReadOnlyDictionary<int, VoicePlayerStatus> peers, bool hideCode = false,
