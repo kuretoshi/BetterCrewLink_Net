@@ -137,7 +137,7 @@ public partial class SettingsWindow : Window
         UpdateModSettingsVisibility();
         var signature = string.Join(';', (state?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
             .OrderBy(player => player.ClientId)
-            .Select(player => $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{player.Disconnected}"));
+            .Select(player => $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{NosColor.For(player)}:{player.Disconnected}"));
         if (signature == playersSignature) return;
         RenderPlayers();
     }
@@ -149,7 +149,7 @@ public partial class SettingsWindow : Window
         var players = (currentGameState?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
             .OrderBy(player => player.ClientId).ToArray();
         playersSignature = string.Join(';', players.Select(player =>
-            $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{player.Disconnected}"));
+            $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{NosColor.For(player)}:{player.Disconnected}"));
         if (players.Length == 0)
         {
             PlayerRows.Children.Add(new TextBlock
@@ -166,6 +166,7 @@ public partial class SettingsWindow : Window
     private Border CreatePlayerRow(Player player)
     {
         var (main, shadow) = AvatarImageFactory.GetSwatchColors(player.ColorId, currentGameState?.PlayerColors);
+        if (AvatarImageFactory.GetNosColor(player) is { } nosColor) main = shadow = nosColor;
         var swatch = new Ellipse
         {
             Width = 12, Height = 12, Stroke = new SolidColorBrush(shadow), StrokeThickness = 1,

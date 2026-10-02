@@ -12,6 +12,8 @@ internal static class Program
 
         try
         {
+            if (args.Contains("--nos-palette-self-test"))
+                return GameMemory.NosPaletteSelfTest.Run();
             if (args.Contains("--game-scan-self-test"))
             {
                 return GameProcessScannerSelfTest.Run();
@@ -28,6 +30,9 @@ internal static class Program
             {
                 return await ServerReconnectSelfTest.RunAsync();
             }
+            if (args.Contains("--nos-palette"))
+                return await NosSnapshotDiagnostic.RunAsync(
+                    ProbeOptions.Parse(args.Where(arg => arg != "--nos-palette").ToArray()).GameProcessId, palette: true);
             var options = ProbeOptions.Parse(args);
             if (options.PolicySelfTest)
             {
@@ -159,6 +164,8 @@ internal static class Program
               --scan-game         起動中の全Among Usプロセスを読み取り検証
               --expected-players  検証するプロセス数・ロビー人数（既定5）
               --game-scan-self-test ゲーム読取検証コマンドの回帰テスト
+              --nos-palette       NoSロビー色を取得（--game-process-id 必須）
+              --nos-palette-self-test NoS色パレットの読取回帰テスト
               --nos-snapshot --game-process-id PID  NoS公開スナップショットを実機検証
               --game-audio-self-test 5プロセスと仮想音声クライアントの統合検証
               --game-audio-transition-test Tasks→会議→Tasksの連続追従検証

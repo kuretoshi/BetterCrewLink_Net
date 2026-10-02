@@ -33,6 +33,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     private AmongUsModType currentMod = AmongUsModType.None;
     private DateTimeOffset nextModCheck = DateTimeOffset.MinValue;
     private readonly NosSnapshotReader nosReader = new();
+    private readonly NosPaletteReader nosPaletteReader = new();
     private int nosRound;
     private readonly SnrLiveRoleReader snrReader = new();
     private int snrRound;
@@ -59,6 +60,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             currentMod = nextProcessInfo?.InstalledMod.Id ?? AmongUsModType.None;
             nextModCheck = DateTimeOffset.UtcNow.AddSeconds(2);
             nosReader.Reset();
+            nosPaletteReader.Reset();
             nosRound = 0;
             snrReader.Reset();
             snrRound = 0;
@@ -260,6 +262,12 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         lobbyCode = string.IsNullOrWhiteSpace(lobbyCode) ? "MENU" : lobbyCode;
 
         NosSnapshot? nos = null;
+        var nosLobbyColors = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Lobby
+            ? nosPaletteReader.Update(currentProcess.ProcessId, currentContext.ReadBytes) : null;
+        if (mod != AmongUsModType.NebulaOnTheShip || gameState == GameState.Menu) nosPaletteReader.Reset();
+        foreach (var player in players)
+            player.NosLobbyColor = !player.Disconnected && nosLobbyColors is not null &&
+                player.Id >= 0 && player.Id < nosLobbyColors.Length ? nosLobbyColors[player.Id] : null;
         if (mod == AmongUsModType.NebulaOnTheShip &&
             gameState is GameState.Tasks or GameState.Discussion)
         {

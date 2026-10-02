@@ -37,7 +37,7 @@ public partial class PlayerAvatar : UserControl
         SpeechRing.Visibility = hideAvatar ? Visibility.Hidden : Visibility.Visible;
         var colorId = player.CurrentOutfit is > 0 and <= 10 && player.AppearanceColorId >= 0
             ? player.AppearanceColorId : player.ColorId;
-        var image = AvatarImageFactory.Get(colorId, player.IsDead, colors);
+        var image = AvatarImageFactory.GetNos(player) ?? AvatarImageFactory.Get(colorId, player.IsDead, colors);
         if (!ReferenceEquals(image, currentImage))
         {
             AvatarBody.Fill = new ImageBrush(image) { Stretch = Stretch.UniformToFill };

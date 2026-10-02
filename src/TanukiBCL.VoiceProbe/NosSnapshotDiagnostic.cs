@@ -5,11 +5,11 @@ namespace TanukiBCL.VoiceProbe;
 
 internal static class NosSnapshotDiagnostic
 {
-    public static async Task<int> RunAsync(int? processId)
+    public static async Task<int> RunAsync(int? processId, bool palette = false)
     {
         if (processId is null)
         {
-            Console.Error.WriteLine("--nos-snapshot には --game-process-id が必要です");
+            Console.Error.WriteLine("NoS診断には --game-process-id が必要です");
             return 1;
         }
 
@@ -27,7 +27,9 @@ internal static class NosSnapshotDiagnostic
         reader.DiagnosticChanged += (_, value) => diagnostic = value;
         reader.StateChanged += (_, state) =>
         {
-            if (state.NosLocalMicPosition is not null && state.Players.Any(player => player.NosPlayer is not null))
+            if (palette ? state.GameState == GameState.Lobby && state.Players.Count > 0 &&
+                state.Players.Where(p => !p.Disconnected).All(p => p.NosLobbyColor is not null)
+                : state.NosLocalMicPosition is not null && state.Players.Any(player => player.NosPlayer is not null))
                 completion.TrySetResult(state);
         };
         reader.SetProcess(info);
@@ -36,6 +38,13 @@ internal static class NosSnapshotDiagnostic
         try
         {
             var state = await completion.Task.WaitAsync(timeout.Token);
+            if (palette)
+            {
+                Console.WriteLine($"[PASS] NoS lobby palette PID={processId} players={state.Players.Count}");
+                foreach (var player in state.Players)
+                    Console.WriteLine($"  id={player.Id} name={player.Name} color={player.NosLobbyColor}");
+                return 0;
+            }
             Console.WriteLine($"[PASS] NoS snapshot PID={processId} state={state.GameState} " +
                 $"lobby={state.LobbyCode} mic=({state.NosLocalMicPosition!.X:0.000}," +
                 $"{state.NosLocalMicPosition.Y:0.000}) light={state.LightRadius:0.000} " +

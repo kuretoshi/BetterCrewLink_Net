@@ -22,7 +22,7 @@ public partial class App : Application
             Trace.TraceWarning($"Could not set TanukiBCL AppUserModelID: 0x{result:X8}");
         }
         base.OnStartup(e);
-        if (e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
+        if (e.Args.Contains("--nos-avatar-self-test") || e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
             e.Args.Contains("--session-lifecycle-self-test") ||
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
@@ -31,6 +31,7 @@ public partial class App : Application
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
             {
+                if (e.Args.Contains("--nos-avatar-self-test")) AvatarImageFactory.VerifyNosColors();
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
                 if (e.Args.Contains("--settings-self-test"))
                 {

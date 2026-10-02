@@ -135,7 +135,7 @@ internal sealed class NosSnapshotReader
         }
     }
 
-    private static string? FindHelper()
+    internal static string? FindHelper()
     {
         var packaged = Path.Combine(AppContext.BaseDirectory, "NoSReader", "TbclSnapshotReader.exe");
         if (File.Exists(packaged)) return packaged;

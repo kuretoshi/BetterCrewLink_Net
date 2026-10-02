@@ -29,6 +29,7 @@ internal static class AvatarImageFactory
     ];
 
     private static readonly ConcurrentDictionary<(bool Dead, uint Main, uint Shadow), BitmapSource> Cache = new();
+    private static readonly ConcurrentDictionary<(bool Dead, uint Color), BitmapSource> NosCache = new();
     private static readonly Lazy<BitmapSource> PlayerTemplate = new(() => Load("player.png"));
     private static readonly Lazy<BitmapSource> GhostTemplate = new(() => Load("ghost.png"));
     private static readonly Lazy<BitmapSource> RainbowPlayer = new(() => Load("rainbow-alive.png"));
@@ -49,6 +50,25 @@ internal static class AvatarImageFactory
     public static (Color Main, Color Shadow) GetSwatchColors(int colorId,
         IReadOnlyList<PlayerColorPair>? playerColors) => ResolveColors(colorId, playerColors);
 
+    public static Color? GetNosColor(Player player)
+    {
+        var hex = NosColor.For(player);
+        if (hex is not { Length: 7 } || hex[0] != '#' ||
+            !uint.TryParse(hex.AsSpan(1), System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var rgb)) return null;
+        return Rgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+    }
+
+    public static BitmapSource? GetNos(Player player)
+    {
+        if (GetNosColor(player) is not { } color) return null;
+        var key = (player.IsDead, Pack(color));
+        if (NosCache.TryGetValue(key, out var existing)) return existing;
+        if (NosCache.Count >= 128) NosCache.Clear();
+        return NosCache.GetOrAdd(key, _ => Recolor(player.IsDead ? GhostTemplate.Value : PlayerTemplate.Value,
+            color, color, nos: true));
+    }
+
     private static (Color Main, Color Shadow) ResolveColors(int colorId, IReadOnlyList<PlayerColorPair>? playerColors)
     {
         if (playerColors is not null && colorId >= 0 && colorId < playerColors.Count)
@@ -60,7 +80,7 @@ internal static class AvatarImageFactory
         return DefaultColors[colorId >= 0 && colorId < DefaultColors.Length ? colorId : 0];
     }
 
-    private static BitmapSource Recolor(BitmapSource template, Color main, Color shadow)
+    private static BitmapSource Recolor(BitmapSource template, Color main, Color shadow, bool nos = false)
     {
         var converted = new FormatConvertedBitmap(template, PixelFormats.Bgra32, null, 0);
         var stride = converted.PixelWidth * 4;
@@ -86,6 +106,23 @@ internal static class AvatarImageFactory
             if (!WithinHue(hue, 240d, 30d) &&
                 !WithinHue(hue, 0d, 100d) &&
                 !WithinHue(hue, 120d, 40d)) continue;
+
+            if (nos)
+            {
+                // v3.2.7 nosAvatar.ts removes the red mask's (255,16,16)
+                // cross-channel baseline before applying the published color.
+                var green = r > g && r > b ? Math.Max(0, (g - r * (16d / 255)) / (1 - 16d / 255)) : g;
+                var blue = r > g && r > b ? Math.Max(0, (b - r * (16d / 255)) / (1 - 16d / 255)) : b;
+                byte Paint(byte body, byte visor)
+                {
+                    var painted = body * 0.6 * (blue / 255) * (1 - r / 255d) + body * (r / 255d);
+                    return (byte)Math.Clamp(Math.Floor(painted * (1 - green / 255) + visor * (green / 255) + 0.5), 0, 255);
+                }
+                pixels[offset] = Paint(main.B, 213);
+                pixels[offset + 1] = Paint(main.G, 202);
+                pixels[offset + 2] = Paint(main.R, 154);
+                continue;
+            }
 
             // Color('#000').mix(shadow, b/255).mix(main, r/255)
             //     .mix('#9acad5', g/255), as in the upstream generator.
@@ -114,6 +151,27 @@ internal static class AvatarImageFactory
         var image = new BitmapImage(new Uri($"pack://application:,,,/TanukiBCL.Net;component/Assets/Avatar/{file}"));
         image.Freeze();
         return image;
+    }
+
+    internal static void VerifyNosColors()
+    {
+        // BGRA mask: solid body (255,16,16), pure visor, shadow, gray and alpha.
+        byte[] mask = [16, 16, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 90, 90, 90, 123];
+        var template = BitmapSource.Create(4, 1, 96, 96, PixelFormats.Bgra32, null, mask, 16);
+        var result = Recolor(template, Rgb(20, 100, 200), default, nos: true);
+        byte[] actual = new byte[16];
+        result.CopyPixels(actual, 16, 0);
+        byte[] expected = [200, 100, 20, 255, 213, 202, 154, 255, 120, 60, 12, 255, 90, 90, 90, 123];
+        if (!actual.SequenceEqual(expected)) throw new InvalidOperationException("NoS RGB mask differs from 3.2.7");
+        var player = new Player { NosLobbyColor = "#1464c8" };
+        var alive = GetNos(player);
+        if (alive is null || !alive.IsFrozen || !ReferenceEquals(alive, GetNos(player)))
+            throw new InvalidOperationException("NoS avatar cache failed");
+        player.IsDead = true;
+        if (ReferenceEquals(alive, GetNos(player))) throw new InvalidOperationException("NoS ghost reused alive mask");
+        player.NosLobbyColor = "bad";
+        if (GetNos(player) is not null) throw new InvalidOperationException("Invalid NoS color accepted");
+        Console.WriteLine("[PASS] NoS avatar published RGB, visor, shadow, alpha and alive/ghost caching");
     }
 
     private static Color FromGameColor(uint packed) =>

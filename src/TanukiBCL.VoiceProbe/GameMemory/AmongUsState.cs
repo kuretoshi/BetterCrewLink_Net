@@ -96,6 +96,7 @@ public sealed class Player
     public double LightRadius { get; set; } = 1d;
 
     public NosPlayerData? NosPlayer { get; set; }
+    public string? NosLobbyColor { get; set; }
 
     public SnrRoleData? SnrRole { get; set; }
 
