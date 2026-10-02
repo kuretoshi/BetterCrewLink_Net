@@ -46,6 +46,8 @@ public partial class OverlayWindow : Window
         internal AvatarRow()
         {
             Row.Children.Add(Avatar);
+            Avatar.FlowDirection = FlowDirection.LeftToRight;
+            Name.FlowDirection = FlowDirection.LeftToRight;
             Name.Foreground = Brushes.White;
             Name.FontWeight = FontWeights.Bold;
             Name.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -250,9 +252,10 @@ public partial class OverlayWindow : Window
         // Overlay.tsx sets --size to 7.5 * (10 / rendered avatars) vh;
         // overlay.css caps only at 7.5vh, not at a fixed pixel dimension.
         var avatarSize = side ? 0.075d * Height * Math.Min(1d, 10d / selected.Count) : 60d;
+        var sideRegionWidth = compact ? avatarSize + 24d : 300d;
         AvatarPanel.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
         AvatarPanel.MaxHeight = side ? Height : double.PositiveInfinity;
-        AvatarPanel.MaxWidth = side ? (compact ? avatarSize + 16d : 300d) : 800d;
+        AvatarPanel.MaxWidth = side ? sideRegionWidth : 800d;
         AvatarBackground.Background = compact || side ? Brushes.Transparent
             : new SolidColorBrush(Color.FromArgb(position == "bottom_left" ? (byte)0x59 : (byte)0x80,
                 0, 0, 0));
@@ -274,6 +277,9 @@ public partial class OverlayWindow : Window
             var row = item.Row;
             row.Orientation = side ? Orientation.Horizontal : Orientation.Vertical;
             row.Margin = new Thickness(side ? 1d : 5d);
+            row.FlowDirection = side && position.StartsWith("right", StringComparison.Ordinal)
+                ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+            row.Width = side ? sideRegionWidth - (compact ? 8d : 18d) : double.NaN;
             var avatar = item.Avatar;
             avatar.Width = avatarSize;
             avatar.Height = avatarSize;
@@ -309,7 +315,7 @@ public partial class OverlayWindow : Window
         AvatarBackground.Visibility = Visibility.Visible;
         AvatarBackground.Width = double.NaN;
         AvatarBackground.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var regionWidth = side ? compact ? avatarSize + 24d : 300d
+        var regionWidth = side ? sideRegionWidth
             : position == "top" ? Math.Min(800d, Width) :
             Math.Min(AvatarBackground.DesiredSize.Width, Width);
         AvatarBackground.Width = regionWidth;
@@ -393,6 +399,7 @@ public partial class OverlayWindow : Window
         VerifyMeetingSnapshot();
         VerifyAvatarSizingAndBackground();
         VerifyAvatarRowPersistence();
+        VerifySidePlacement();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
         var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
         try
@@ -497,6 +504,39 @@ public partial class OverlayWindow : Window
         {
             window.Close();
         }
+    }
+
+    private static void VerifySidePlacement()
+    {
+        var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = false };
+        var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
+        try
+        {
+            var state = new AmongUsState { GameState = GameState.Tasks,
+                Players = [new Player { Id = 1, ClientId = 11, IsLocal = true, Name = "local" }] };
+            foreach (var position in new[] { "left", "left1", "right", "right1" })
+            {
+                settings.OverlayPosition = position;
+                window.Update(state, new Dictionary<int, OverlayPeerStatus>(), true, false, false);
+                window.OverlayCanvas.Measure(new Size(1280, 720));
+                window.OverlayCanvas.Arrange(new Rect(0, 0, 1280, 720));
+                window.OverlayCanvas.UpdateLayout();
+                var item = window.avatarRows[1];
+                var avatarLeft = item.Avatar.TransformToAncestor(window.OverlayCanvas)
+                    .Transform(new Point()).X;
+                var nameLeft = item.Name.TransformToAncestor(window.OverlayCanvas)
+                    .Transform(new Point()).X;
+                var right = position.StartsWith("right", StringComparison.Ordinal);
+                if (right ? avatarLeft <= nameLeft : avatarLeft >= nameLeft)
+                    throw new InvalidOperationException($"{position} placed the name on the wrong side of the avatar");
+                if (right && 1280 - (avatarLeft + item.Avatar.ActualWidth) > 40)
+                    throw new InvalidOperationException($"{position} failed to anchor the avatar to the screen's right edge");
+                if (!right && avatarLeft > 40)
+                    throw new InvalidOperationException($"{position} failed to anchor the avatar to the screen's left edge");
+            }
+            Console.WriteLine("[PASS] Left/right side avatars and name placement at both normal and alternate positions");
+        }
+        finally { window.Close(); }
     }
 
     private static void VerifyAvatarRowPersistence()
