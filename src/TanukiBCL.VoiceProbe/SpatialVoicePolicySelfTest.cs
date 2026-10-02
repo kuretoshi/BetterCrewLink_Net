@@ -120,6 +120,51 @@ internal static class SpatialVoicePolicySelfTest
             NosRadioRules.CanHearJackalChannel(nosJackalChannels, 32));
         Check("NoS radio mask: impostor channel cannot impersonate Jackal", false,
             NosRadioRules.CanHearJackalChannel([new NosRadioData(0, -1, "impostor")], 1));
+
+        var sizedSpeaker = new Player
+        {
+            NosPlayer = new NosPlayerData { BodyRateX = 0.8d, BodyRateY = 0.5d }
+        };
+        var sizeEffect = NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker,
+            new LobbySettings(), audible: true);
+        Check("NoS size: small body selects direct pitch up", true,
+            sizeEffect?.Mode == NosSizeEffectMode.PitchUp &&
+            Math.Abs(sizeEffect.Strength - Math.Log(2d) / Math.Log(10d)) < 0.0001d);
+        sizedSpeaker.NosPlayer!.BodyRateX = 1d;
+        Check("NoS size: narrow body selects squash", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true)?.Mode ==
+            NosSizeEffectMode.Squash);
+        sizedSpeaker.NosPlayer.BodyRateY = 2d;
+        Check("NoS size: large body selects jumbo", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true)?.Mode ==
+            NosSizeEffectMode.Jumbo);
+        sizedSpeaker.NosPlayer.BodyRateX = 0.7d;
+        sizedSpeaker.NosPlayer.BodyRateY = 1d;
+        Check("NoS size: neutral height retains tone-rate shelf", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true)?.Mode ==
+            NosSizeEffectMode.ToneOnly);
+        Check("NoS size: lobby switch disables effect", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker,
+                new LobbySettings { NosSizeVoiceEffect = false }, true) is null);
+        Check("NoS size: meeting disables effect", true,
+            NosSizeVoiceEffectPolicy.Select(new AmongUsState
+                { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Discussion },
+                sizedSpeaker, new LobbySettings(), true) is null);
+        Check("NoS size: dead sender disables effect", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks,
+                new Player { IsDead = true, NosPlayer = sizedSpeaker.NosPlayer }, new LobbySettings(), true) is null);
+        Check("NoS size: muted sender disables effect", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), false) is null);
+        var pitchUpAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(NosSizeEffectMode.PitchUp, 0.3d, 1d));
+        var pitchDownAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(NosSizeEffectMode.Jumbo, 0.4d, 1d));
+        Check("NoS DSP: direct pitch raises 440 Hz tone", true,
+            ToneAmplitude(pitchUpAudio, 572d) > ToneAmplitude(pitchUpAudio, 440d) * 1.5d);
+        Check("NoS DSP: jumbo lowers 440 Hz tone", true,
+            ToneAmplitude(pitchDownAudio, 334.4d) > ToneAmplitude(pitchDownAudio, 440d) * 1.5d);
+        var squashAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(NosSizeEffectMode.Squash,
+            0.5d, 1d, 0.5d));
+        Check("NoS DSP: squash attenuates voice", true,
+            Rms(squashAudio) < 0.15d);
         Check("dummy speaker: never audible", false,
             SpatialVoicePolicy.Calculate(discussion, new Player(), new Player { IsDummy = true },
                 new SpatialVoiceSettings()).Audible);
@@ -368,8 +413,8 @@ internal static class SpatialVoicePolicySelfTest
             (beforeRadioOnly with { Haunting = true }));
 
         Console.WriteLine(failures == 0
-            ? "[PASS] 3.2.7 radio, listener-volume, vent, camera and wall audio policy"
-            : $"[FAIL] 3.2.7 radio, listener-volume, vent, camera and wall audio policy: {failures} cases failed");
+            ? "[PASS] 3.2.7 radio, NoS size, listener-volume, vent, camera and wall audio policy"
+            : $"[FAIL] 3.2.7 radio, NoS size, listener-volume, vent, camera and wall audio policy: {failures} cases failed");
         return failures == 0 ? 0 : 1;
 
         void Check(string name, bool expected, bool actual)
@@ -405,6 +450,31 @@ internal static class SpatialVoicePolicySelfTest
         foreach (var sample in steadySamples) energy += sample * sample;
         return Math.Sqrt(energy / steadySamples.Length);
     }
+
+    private static float[] CreateSizeEffectAudio(NosSizeVoiceEffect effect)
+    {
+        var provider = new NosSizeVoiceSampleProvider(new TestSineSource(440d));
+        provider.SetEffect(effect);
+        var samples = new float[24_000];
+        provider.Read(samples, 0, samples.Length);
+        return samples[9_600..];
+    }
+
+    private static double ToneAmplitude(float[] samples, double frequency)
+    {
+        var cosine = 0d;
+        var sine = 0d;
+        for (var i = 0; i < samples.Length; i++)
+        {
+            var phase = 2d * Math.PI * frequency * i / 48_000d;
+            cosine += samples[i] * Math.Cos(phase);
+            sine += samples[i] * Math.Sin(phase);
+        }
+        return Math.Sqrt(cosine * cosine + sine * sine) * 2d / samples.Length;
+    }
+
+    private static double Rms(float[] samples) =>
+        Math.Sqrt(samples.Sum(value => (double)value * value) / samples.Length);
 
     private static double MeasureRadioFilteredRms(double frequency)
     {

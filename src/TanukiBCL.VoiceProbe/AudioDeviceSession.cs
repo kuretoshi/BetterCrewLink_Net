@@ -141,7 +141,7 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.Buffer.AddSamples(bytes, 0, bytes.Length);
     }
 
-    public void SetPeerMix(string peerId, PeerVoiceMix mix)
+    public void SetPeerMix(string peerId, PeerVoiceMix mix, NosSizeVoiceEffect? nosSizeEffect = null)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
@@ -150,6 +150,7 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.RadioHighPass.Enabled = mix.RadioHighPass;
         peer.RadioEcho.Enabled = mix.RadioEcho;
         peer.CameraMuffle.Enabled = mix.CameraMuffled;
+        peer.NosSizeEffect.SetEffect(nosSizeEffect);
     }
 
     public void RemovePeer(string peerId)
@@ -183,13 +184,15 @@ internal sealed class AudioDeviceSession : IDisposable
                 LeftVolume = 0.5f,
                 RightVolume = 0.5f
             };
-            var muffle = new VentMuffleSampleProvider(mono);
+            var nosSizeEffect = new NosSizeVoiceSampleProvider(mono);
+            var muffle = new VentMuffleSampleProvider(nosSizeEffect);
             var radioHighPass = new RadioHighPassSampleProvider(muffle);
             var cameraMuffle = new CameraMuffleSampleProvider(radioHighPass);
             var panning = new PanningSampleProvider(cameraMuffle);
             var volume = new VolumeSampleProvider(panning);
             var radioEcho = new RadioEchoSampleProvider(volume);
-            var created = new PeerPlayback(buffer, muffle, radioHighPass, cameraMuffle, panning, volume, radioEcho);
+            var created = new PeerPlayback(buffer, nosSizeEffect, muffle, radioHighPass,
+                cameraMuffle, panning, volume, radioEcho);
             peerPlayback[peerId] = created;
             playbackMixer.AddMixerInput(radioEcho);
             return created;
@@ -318,6 +321,7 @@ internal sealed class AudioDeviceSession : IDisposable
 
     private sealed record PeerPlayback(
         BufferedWaveProvider Buffer,
+        NosSizeVoiceSampleProvider NosSizeEffect,
         VentMuffleSampleProvider Muffle,
         RadioHighPassSampleProvider RadioHighPass,
         CameraMuffleSampleProvider CameraMuffle,

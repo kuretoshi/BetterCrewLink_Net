@@ -1060,7 +1060,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings,
             IsImpostorRadioActive(clientId), CanHearNosJackalRadio(currentGameState, other, me));
         mix = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs)).Apply(mix);
-        audioSession?.SetPeerMix(socketId, mix);
+        var nosSizeEffect = NosSizeVoiceEffectPolicy.Select(currentGameState, other,
+            activeLobbySettings, mix.Audible);
+        audioSession?.SetPeerMix(socketId, mix, nosSizeEffect);
         PeerMixChanged?.Invoke(clientId, mix);
     }
 
