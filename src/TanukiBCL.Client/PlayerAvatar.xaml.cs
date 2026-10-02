@@ -12,6 +12,8 @@ public partial class PlayerAvatar : UserControl
     private System.Windows.Media.Imaging.BitmapSource? currentImage;
     private string? currentName;
     private bool hideAvatar;
+    private bool clipCosmetics;
+    private Brush idleBorder = Brushes.Transparent;
     // Material icon paths used by the upstream Avatar.tsx status badges.
     private static readonly Geometry WifiOff = Geometry.Parse(
         "M22.99 9C19.15 5.16 13.8 3.76 8.84 4.78l2.52 2.52c3.47-.17 6.99 1.05 9.63 3.7zm-4 4c-1.29-1.29-2.84-2.13-4.49-2.56l3.53 3.53zM2 3.05 5.07 6.1C3.6 6.82 2.22 7.78 1 9l1.99 2c1.24-1.24 2.67-2.16 4.2-2.77l2.24 2.24C7.81 10.89 6.27 11.73 5 13v.01L6.99 15c1.36-1.36 3.14-2.04 4.92-2.06L18.98 20l1.27-1.26L3.29 1.79zM9 17l3 3 3-3c-1.65-1.66-4.34-1.66-6 0");
@@ -29,7 +31,31 @@ public partial class PlayerAvatar : UserControl
         Unloaded += (_, _) => { cosmeticGeneration++; cosmeticKey = null; };
     }
 
-    public void SetOverlayMode() => QualityBadge.Visibility = Visibility.Collapsed;
+    public void SetOverlayMode(bool lookLeft = false, bool clipEquipment = false, bool showBorder = false)
+    {
+        QualityBadge.Visibility = Visibility.Collapsed;
+        AvatarVisual.RenderTransform = new ScaleTransform(lookLeft ? -1 : 1, 1);
+        clipCosmetics = clipEquipment;
+        idleBorder = showBorder ? new SolidColorBrush(Color.FromArgb(0x86, 0xcc, 0xbd, 0xcc)) : Brushes.Transparent;
+        LayoutCosmetics();
+    }
+
+    internal void VerifyOverlayAppearance(bool left, bool clipped, bool bordered)
+    {
+        if (AvatarVisual.RenderTransform is not ScaleTransform transform || transform.ScaleX != (left ? -1 : 1) ||
+            transform.ScaleY != 1 || (CosmeticBack.Clip is EllipseGeometry) != clipped ||
+            (CosmeticFront.Clip is EllipseGeometry) != clipped || BodyCanvas.Clip is not EllipseGeometry ||
+            QualityBadge.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("Overlay avatar direction/clip differs from release");
+        if (StateBadge.Parent == AvatarVisual || RadioBadge.Parent != AvatarVisual || AvatarVisual.Parent != StateBadge.Parent)
+            throw new InvalidOperationException("Overlay mirror must include radio but exclude status badges");
+        SetVisualState(false, false, false, "connected", false);
+        if (SpeechRing.Stroke is not SolidColorBrush idle || idle.Color.A != (bordered ? 0x86 : 0))
+            throw new InvalidOperationException("Overlay idle border differs from release");
+        SetVisualState(true, false, false, "connected", false);
+        if (SpeechRing.Stroke is not SolidColorBrush active || active.Color != Color.FromRgb(0x2e, 0xcc, 0x71))
+            throw new InvalidOperationException("Overlay active border lost after idle border configuration");
+    }
 
     public void SetPlayer(Player player, IReadOnlyList<PlayerColorPair>? colors,
         bool hideWhenAppearanceChanged = false, AmongUsModType mod = AmongUsModType.None, string gameExecutable = "")
@@ -61,7 +87,7 @@ public partial class PlayerAvatar : UserControl
         bool usingRadio, ConnectionQuality? quality = null)
     {
         SpeechRing.Stroke = talking && !hideAvatar ?
-            new SolidColorBrush(Color.FromRgb(0x2e, 0xcc, 0x71)) : Brushes.Transparent;
+            new SolidColorBrush(Color.FromRgb(0x2e, 0xcc, 0x71)) : idleBorder;
         RadioBadge.Visibility = usingRadio && !hideAvatar ? Visibility.Visible : Visibility.Collapsed;
 
         var (geometry, badgeColor, borderColor) = connectionState switch

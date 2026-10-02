@@ -182,10 +182,11 @@ public partial class OverlayWindow : Window
             };
             var avatar = new PlayerAvatar { Width = avatarSize, Height = avatarSize };
             avatar.SetPlayer(player, state.PlayerColors, state.GameState == GameState.Tasks, state.Mod, state.GameExecutablePath);
+            avatar.SetOverlayMode(lookLeft: position is not ("left" or "left1" or "bottom_left"),
+                clipEquipment: side && !showName, showBorder: side && !settings.CompactOverlay);
             avatar.SetVisualState(entry.Talking,
                 player.IsLocal && microphoneMuted,
                 player.IsLocal && deafened, "connected", entry.UsingRadio);
-            avatar.SetOverlayMode();
             row.Children.Add(avatar);
             if (showName && (position is not ("left1" or "right1") || entry.Talking))
             {
@@ -304,6 +305,21 @@ public partial class OverlayWindow : Window
                 window.MeetingCanvas.Children.Count != 2 ||
                 window.WatermarkTitle.Text.Length == 0)
                 throw new InvalidOperationException("Overlay render smoke test failed");
+            foreach (var (position, mirrored, side, alternate) in new[] {
+                ("left", false, true, false), ("left1", false, true, true),
+                ("right", true, true, false), ("right1", true, true, true),
+                ("top", true, false, false), ("bottom", true, false, false),
+                ("bottom_left", false, false, false) })
+            foreach (var compact in new[] { false, true })
+            {
+                settings.OverlayPosition = position;
+                settings.CompactOverlay = compact;
+                window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, true, false) }, true, false, false);
+                if (window.AvatarPanel.Children.Count != 2) throw new InvalidOperationException("Overlay avatar selection changed");
+                foreach (StackPanel row in window.AvatarPanel.Children)
+                    ((PlayerAvatar)row.Children[0]).VerifyOverlayAppearance(mirrored, side && compact && !alternate, side && !compact);
+            }
+            Console.WriteLine("[PASS] Overlay direction, equipment clipping and idle/active border across seven positions and compact modes");
         }
         finally
         {

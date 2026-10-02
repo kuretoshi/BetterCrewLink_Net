@@ -114,6 +114,8 @@ public partial class PlayerAvatar
         var size = ActualWidth > 0 ? ActualWidth : Width;
         if (!double.IsFinite(size) || size <= 0) return;
         BodyCanvas.Clip = new EllipseGeometry(new Point(size / 2, size / 2), size / 2, size / 2);
+        CosmeticBack.Clip = CosmeticFront.Clip = clipCosmetics
+            ? new EllipseGeometry(new Point(size / 2, size / 2), size / 2, size / 2) : null;
         AvatarBody.Width = size * 1.05;
         Canvas.SetTop(AvatarBody, size * 0.22);
         Canvas.SetLeft(AvatarBody, -7);
