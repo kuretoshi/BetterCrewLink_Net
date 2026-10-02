@@ -27,6 +27,7 @@ internal sealed record SpatialVoiceSettings(
     bool SidekickHearOutsideVents = false,
     bool SidekickTalkInVents = false,
     bool TohNeutralKillerHaunting = false,
+    bool NosNeutralKillerHaunting = false,
     bool VisionHearing = false);
 
 internal sealed record PeerVoiceMix(
@@ -60,6 +61,16 @@ internal static class SpatialVoicePolicy
         var meSidekick = isSnr && me.SnrRole?.IsSidekick == true;
         var meJackalTeam = meJackal || meSidekick;
         var otherJackalTeam = isSnr && other.SnrRole?.IsJackalTeam == true;
+        var snrKillerHearingGhosts = isSnr && settings.JackalHaunting &&
+            me.SnrRole?.IsNeutralKiller == true;
+        var tohHearingGhosts = state.Mod == AmongUsModType.TownOfHostForE &&
+            settings.TohNeutralKillerHaunting && me.TohRole?.IsKiller == true;
+        var nosHearingGhosts = isNos && settings.NosNeutralKillerHaunting &&
+            me.NosPlayer is { IsNeutral: true, IsKiller: true, IsImpostor: false };
+        var canHearGhosts = meJackal ? snrKillerHearingGhosts
+            : meSidekick ? settings.SidekickHaunting
+            : tohHearingGhosts || nosHearingGhosts || snrKillerHearingGhosts ||
+              me.IsImpostor && settings.Haunting;
         var airshipMeetingFallback = state.Map == MapType.Airship && state.AirshipMeetingByOutfit;
         var useNosPositions = isNos && settings.NosVoicePositions;
         var meX = useNosPositions ? state.NosLocalMicPosition?.X ?? me.X : me.X;
@@ -124,12 +135,14 @@ internal static class SpatialVoicePolicy
                 : Muted(0, distance, "radio-private");
         }
 
-        if (settings.MeetingGhostOnly)
+        var radioOnlyGhostHearing = settings.ImpostorRadioOnlyMode &&
+            !me.IsDead && other.IsDead && canHearGhosts;
+        if (settings.MeetingGhostOnly && !radioOnlyGhostHearing)
         {
             return Muted(pan, distance, "meeting-ghost-only");
         }
 
-        if (settings.ImpostorRadioOnlyMode && !me.IsDead)
+        if (settings.ImpostorRadioOnlyMode && !me.IsDead && !radioOnlyGhostHearing)
         {
             return Muted(pan, distance, "radio-only");
         }
@@ -153,13 +166,7 @@ internal static class SpatialVoicePolicy
         var baseGain = 1d;
         if (!me.IsDead && other.IsDead)
         {
-            var snrHearingGhosts = isSnr && (meJackal
-                ? settings.JackalHaunting
-                : meSidekick ? settings.SidekickHaunting
-                : me.SnrRole?.IsNeutralKiller == true && settings.JackalHaunting);
-            var tohHearingGhosts = state.Mod == AmongUsModType.TownOfHostForE &&
-                settings.TohNeutralKillerHaunting && me.TohRole?.IsKiller == true;
-            if (!snrHearingGhosts && !tohHearingGhosts && (!me.IsImpostor || !settings.Haunting))
+            if (!canHearGhosts)
             {
                 return Muted(pan, distance, "living-cannot-hear-ghost");
             }

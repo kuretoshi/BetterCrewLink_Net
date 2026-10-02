@@ -20,21 +20,22 @@ public partial class App : Application
         {
             Trace.TraceWarning($"Could not set TanukiBCL AppUserModelID: 0x{result:X8}");
         }
-        if (e.Args.Contains("--overlay-self-test"))
+        base.OnStartup(e);
+        if (e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test"))
         {
-            StartupUri = null;
             try
             {
-                OverlayWindow.VerifyRender();
+                if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
+                if (e.Args.Contains("--settings-self-test")) SettingsWindow.VerifyModControls();
                 Shutdown(0);
             }
             catch (Exception error)
             {
-                Trace.TraceError($"Overlay self-test failed: {error}");
+                Trace.TraceError($"Client self-test failed: {error}");
                 Shutdown(1);
             }
             return;
         }
-        base.OnStartup(e);
+        new MainWindow().Show();
     }
 }

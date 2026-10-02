@@ -1068,7 +1068,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             SidekickHaunting = next.SidekickHaunting,
             SidekickHearOutsideVents = next.SidekickHearOutsideVents,
             SidekickTalkInVents = next.SidekickTalkInVents,
-            TohNeutralKillerHaunting = next.TohNeutralKillerHaunting
+            TohNeutralKillerHaunting = next.TohNeutralKillerHaunting,
+            NosNeutralKillerHaunting = next.NosNeutralKillerHaunting
         };
         if (options.AutoRadioTone && !impostorRadioTransmitting && CanUseImpostorRadio)
         {

@@ -323,9 +323,21 @@ public partial class SettingsWindow : Window
 
     private void UpdateModSettingsVisibility()
     {
-        if (NosControlsPanel is null) return;
+        if (NosControlsPanel is null || SnrControlsPanel is null || TohControlsPanel is null) return;
+        SnrControlsPanel.Visibility = currentGameState?.Mod == AmongUsModType.SuperNewRoles
+            ? Visibility.Visible : Visibility.Collapsed;
+        TohControlsPanel.Visibility = currentGameState?.Mod == AmongUsModType.TownOfHostForE
+            ? Visibility.Visible : Visibility.Collapsed;
         NosControlsPanel.Visibility = currentGameState?.Mod == AmongUsModType.NebulaOnTheShip
             ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void JackalRadioCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (loadingLobbyControls || SnrJackalRadioCheck is null || JackalRadioCheck is null) return;
+        var source = (CheckBox)sender;
+        var target = ReferenceEquals(source, SnrJackalRadioCheck) ? JackalRadioCheck : SnrJackalRadioCheck;
+        if (target.IsChecked != source.IsChecked) target.IsChecked = source.IsChecked;
     }
 
     private LobbySettings ReadLobbyControls() => lobbyDraft with
@@ -343,7 +355,17 @@ public partial class SettingsWindow : Window
         ImpostorRadioOnlyMode = RadioOnlyCheck.IsChecked == true,
         DeadOnly = DeadOnlyCheck.IsChecked == true,
         MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true,
-        JackalRadioEnabled = JackalRadioCheck.IsChecked == true,
+        SnrJumboVoice = SnrJumboVoiceCheck.IsChecked == true,
+        JackalHaunting = SnrJackalHauntingCheck.IsChecked == true,
+        JackalRadioEnabled = currentGameState?.Mod == AmongUsModType.SuperNewRoles
+            ? SnrJackalRadioCheck.IsChecked == true : JackalRadioCheck.IsChecked == true,
+        JackalHearOutsideVents = SnrJackalHearOutsideVentsCheck.IsChecked == true,
+        JackalTalkInVents = SnrJackalTalkInVentsCheck.IsChecked == true,
+        SidekickHaunting = SnrSidekickHauntingCheck.IsChecked == true,
+        SidekickHearOutsideVents = SnrSidekickHearOutsideVentsCheck.IsChecked == true,
+        SidekickTalkInVents = SnrSidekickTalkInVentsCheck.IsChecked == true,
+        TohNeutralKillerHaunting = TohNeutralKillerHauntingCheck.IsChecked == true,
+        NosNeutralKillerHaunting = NosNeutralKillerHauntingCheck.IsChecked == true,
         NosVoicePositions = NosVoicePositionsCheck.IsChecked == true,
         NosSizeVoiceEffect = NosSizeVoiceEffectCheck.IsChecked == true,
         NosFixerJammingVoiceBlock = NosFixerJammingVoiceBlockCheck.IsChecked == true
@@ -364,7 +386,17 @@ public partial class SettingsWindow : Window
         VoiceEffectEnabledCheck.IsChecked = value.VoiceEffectEnabled;
         DeadOnlyCheck.IsChecked = value.DeadOnly;
         MeetingGhostOnlyCheck.IsChecked = value.MeetingGhostOnly;
+        SnrJumboVoiceCheck.IsChecked = value.SnrJumboVoice;
+        SnrJackalHauntingCheck.IsChecked = value.JackalHaunting;
+        SnrJackalRadioCheck.IsChecked = value.JackalRadioEnabled;
+        SnrJackalHearOutsideVentsCheck.IsChecked = value.JackalHearOutsideVents;
+        SnrJackalTalkInVentsCheck.IsChecked = value.JackalTalkInVents;
+        SnrSidekickHauntingCheck.IsChecked = value.SidekickHaunting;
+        SnrSidekickHearOutsideVentsCheck.IsChecked = value.SidekickHearOutsideVents;
+        SnrSidekickTalkInVentsCheck.IsChecked = value.SidekickTalkInVents;
+        TohNeutralKillerHauntingCheck.IsChecked = value.TohNeutralKillerHaunting;
         JackalRadioCheck.IsChecked = value.JackalRadioEnabled;
+        NosNeutralKillerHauntingCheck.IsChecked = value.NosNeutralKillerHaunting;
         NosVoicePositionsCheck.IsChecked = value.NosVoicePositions;
         NosSizeVoiceEffectCheck.IsChecked = value.NosSizeVoiceEffect;
         NosFixerJammingVoiceBlockCheck.IsChecked = value.NosFixerJammingVoiceBlock;
@@ -384,6 +416,12 @@ public partial class SettingsWindow : Window
         DeadOnlyCheck.IsEnabled = regularSettingsEnabled;
         MeetingGhostOnlyCheck.IsEnabled = regularSettingsEnabled;
         JackalRadioCheck.IsEnabled = regularSettingsEnabled;
+        SnrJumboVoiceCheck.IsEnabled = regularSettingsEnabled;
+        SnrJackalRadioCheck.IsEnabled = regularSettingsEnabled;
+        SnrJackalHearOutsideVentsCheck.IsEnabled = regularSettingsEnabled;
+        SnrJackalTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
+        SnrSidekickHearOutsideVentsCheck.IsEnabled = regularSettingsEnabled;
+        SnrSidekickTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
         NosVoicePositionsCheck.IsEnabled = regularSettingsEnabled;
     }
 
@@ -515,4 +553,42 @@ public partial class SettingsWindow : Window
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
+
+    internal static void VerifyModControls()
+    {
+        var lobby = new LobbySettings
+        {
+            SnrJumboVoice = true, JackalHaunting = true, JackalRadioEnabled = true,
+            JackalHearOutsideVents = true, JackalTalkInVents = true,
+            SidekickHaunting = true, SidekickHearOutsideVents = true,
+            SidekickTalkInVents = true, TohNeutralKillerHaunting = true,
+            NosNeutralKillerHaunting = true
+        };
+        var settings = new ClientSettings { MyLobbySettings = lobby };
+        var window = new SettingsWindow(settings, true, null, false,
+            new AmongUsState { Mod = AmongUsModType.SuperNewRoles }, (_, _, _) => { });
+        try
+        {
+            var read = window.ReadLobbyControls();
+            if (!read.SnrJumboVoice || !read.JackalHaunting || !read.JackalRadioEnabled ||
+                !read.JackalHearOutsideVents || !read.JackalTalkInVents ||
+                !read.SidekickHaunting || !read.SidekickHearOutsideVents ||
+                !read.SidekickTalkInVents || !read.TohNeutralKillerHaunting ||
+                !read.NosNeutralKillerHaunting ||
+                window.SnrControlsPanel.Visibility != Visibility.Visible)
+                throw new InvalidOperationException("MOD lobby controls did not round-trip");
+            window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.TownOfHostForE });
+            if (window.TohControlsPanel.Visibility != Visibility.Visible ||
+                window.SnrControlsPanel.Visibility != Visibility.Collapsed)
+                throw new InvalidOperationException("TOH lobby settings are not visible");
+            window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip });
+            if (window.NosControlsPanel.Visibility != Visibility.Visible)
+                throw new InvalidOperationException("NoS lobby settings are not visible");
+            window.JackalRadioCheck.IsChecked = false;
+            window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.SuperNewRoles });
+            if (window.ReadLobbyControls().JackalRadioEnabled || window.SnrJackalRadioCheck.IsChecked != false)
+                throw new InvalidOperationException("Shared Jackal radio setting did not follow MOD switch");
+        }
+        finally { window.Close(); }
+    }
 }

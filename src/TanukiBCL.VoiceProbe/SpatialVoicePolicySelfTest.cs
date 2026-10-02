@@ -118,6 +118,25 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS: non-NoS game ignores fixer flags", true,
             SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks },
                 new Player(), jammedSpeaker, nosPolicy).Audible);
+        var nosNeutralKiller = new Player { NosPlayer = new NosPlayerData
+            { IsNeutral = true, IsKiller = true, IsImpostor = false } };
+        Check("NoS haunting: neutral killer hears ghosts when enabled", true,
+            SpatialVoicePolicy.Calculate(nosTasks, nosNeutralKiller,
+                new Player { IsDead = true },
+                new SpatialVoiceSettings(NosNeutralKillerHaunting: true)).Audible);
+        Check("NoS haunting: neutral non-killer cannot hear ghosts", false,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player { NosPlayer = new NosPlayerData
+                { IsNeutral = true, IsKiller = false } }, new Player { IsDead = true },
+                new SpatialVoiceSettings(NosNeutralKillerHaunting: true)).Audible);
+        var noSRadioOnlyHaunting = new SpatialVoiceSettings(
+            NosNeutralKillerHaunting: true, ImpostorRadioOnlyMode: true,
+            MeetingGhostOnly: true);
+        Check("NoS radio-only: neutral killer still hears ghost", true,
+            SpatialVoicePolicy.Calculate(nosTasks, nosNeutralKiller,
+                new Player { IsDead = true }, noSRadioOnlyHaunting).Audible);
+        Check("NoS radio-only: neutral killer does not hear living proximity", false,
+            SpatialVoicePolicy.Calculate(nosTasks, nosNeutralKiller,
+                new Player(), noSRadioOnlyHaunting).Audible);
         var nosRadioPolicy = new SpatialVoiceSettings(JackalRadioEnabled: true);
         var distantNosSender = new Player { X = 20d };
         Check("NoS radio: masked recipient hears distant sender", true,
