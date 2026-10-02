@@ -28,7 +28,8 @@ public partial class OverlayWindow : Window
     private bool localUsingRadio;
     private bool microphoneMuted;
     private bool deafened;
-    private List<int> meetingOrder = [];
+    private sealed record MeetingParticipant(int Id, int ClientId, int ColorId, bool IsLocal);
+    private List<MeetingParticipant> meetingOrder = [];
     private readonly Dictionary<int, MeetingVoiceBorder> meetingSlots = [];
     private GameState previousGameState = GameState.Unknown;
 
@@ -65,7 +66,8 @@ public partial class OverlayWindow : Window
             meetingSlots.Clear();
             MeetingCanvas.Children.Clear();
             meetingOrder = gameState.Players.OrderBy(player => player.Disconnected || player.IsDead)
-                .ThenBy(player => player.Id).Select(player => player.Id).ToList();
+                .ThenBy(player => player.Id)
+                .Select(player => new MeetingParticipant(player.Id, player.ClientId, player.ColorId, player.IsLocal)).ToList();
         }
         else if (gameState?.GameState != GameState.Discussion) meetingOrder.Clear();
         previousGameState = gameState?.GameState ?? GameState.Unknown;
@@ -258,19 +260,17 @@ public partial class OverlayWindow : Window
         Canvas.SetTop(MeetingCanvas, (Height - hudHeight) / 2d);
         for (var index = 0; index < meetingOrder.Count; index++)
         {
-            var player = state.Players.FirstOrDefault(candidate => candidate.Id == meetingOrder[index]);
-            if (player is null)
-            {
-                if (meetingSlots.TryGetValue(meetingOrder[index], out var missing)) missing.SetTalking(false);
-                continue;
-            }
+            var player = meetingOrder[index];
+            var livePlayer = state.Players.FirstOrDefault(candidate => candidate.Id == player.Id);
             peers.TryGetValue(player.ClientId, out var peer);
             var talking = player.IsLocal ? localTalking && !microphoneMuted : peer?.VoiceActive == true;
             var bounds = layout.Slot(index);
-            var color = state.Mod == AmongUsModType.NebulaOnTheShip && player.NosPlayer is { } nos &&
+            var color = state.Mod == AmongUsModType.NebulaOnTheShip && livePlayer?.NosPlayer is { } nos &&
                 double.IsFinite(nos.ColorR) && double.IsFinite(nos.ColorG) && double.IsFinite(nos.ColorB)
                 ? Color.FromRgb(ToByte(nos.ColorR), ToByte(nos.ColorG), ToByte(nos.ColorB))
-                : AvatarImageFactory.GetSwatchColors(player.ColorId, state.PlayerColors).Main;
+                : player.ColorId >= 0 && player.ColorId < state.PlayerColors.Count
+                    ? AvatarImageFactory.GetSwatchColors(player.ColorId, state.PlayerColors).Main
+                    : AvatarImageFactory.GetSwatchColors(0, null).Main;
             if (!meetingSlots.TryGetValue(player.Id, out var slot))
             {
                 slot = new MeetingVoiceBorder
@@ -295,12 +295,13 @@ public partial class OverlayWindow : Window
     }
 
     private static byte ToByte(double value) =>
-        (byte)Math.Round(Math.Clamp(value, 0d, 1d) * 255d);
+        (byte)Math.Floor(Math.Clamp(value, 0d, 1d) * 255d + 0.5d);
 
     internal static void VerifyRender()
     {
         MeetingOverlayLayout.Verify();
         MeetingVoiceBorder.Verify();
+        VerifyMeetingSnapshot();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
         var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
         try
@@ -405,6 +406,42 @@ public partial class OverlayWindow : Window
         {
             window.Close();
         }
+    }
+
+    private static void VerifyMeetingSnapshot()
+    {
+        var window = new OverlayWindow(0, new ClientSettings { EnableOverlay = true, MeetingOverlay = true })
+            { Width = 1280, Height = 720 };
+        try
+        {
+            var player = new Player { Id = 2, ClientId = 22, ColorId = 1, IsLocal = true };
+            var state = new AmongUsState { GameState = GameState.Discussion, Players = [player],
+                PlayerColors = [new() { Main = 0x000000ff }, new() { Main = 0x00ff0000 }] };
+            var peers = new Dictionary<int, OverlayPeerStatus>();
+            window.Update(state, peers, false, false, false);
+            var slot = (MeetingVoiceBorder)window.MeetingCanvas.Children[0];
+            Color Tint() => ((DropShadowEffect)slot.Effect).Color;
+            player.ColorId = 0; player.ClientId = 23; player.IsDead = true; player.IsLocal = false;
+            state.Players.Add(new Player { Id = 1, ClientId = 99 });
+            window.Update(state, peers, true, false, false);
+            if (window.MeetingCanvas.Children.Count != 1 || !ReferenceEquals(slot, window.MeetingCanvas.Children[0]) ||
+                Tint() != Colors.Blue || window.meetingOrder[0] != new MeetingParticipant(2, 22, 1, true))
+                throw new InvalidOperationException("Meeting participant snapshot changed with live player updates");
+            state.Mod = AmongUsModType.NebulaOnTheShip;
+            player.NosPlayer = new NosPlayerData { ColorR = 0.5 / 255, ColorG = 1, ColorB = 0 };
+            window.Update(state, peers, false, false, false);
+            if (Tint() != Color.FromRgb(1, 255, 0)) throw new InvalidOperationException("Meeting NoS color did not update with JS byte rounding");
+            state.Players.Remove(player);
+            window.Update(state, peers, false, false, false);
+            if (Tint() != Colors.Blue || window.MeetingCanvas.Children.Count != 1)
+                throw new InvalidOperationException("Missing live player must retain its frozen meeting slot/palette ID");
+            state.PlayerColors.Clear();
+            window.Update(state, peers, false, false, false);
+            if (Tint() != Color.FromRgb(0xc5, 0x11, 0x11))
+                throw new InvalidOperationException("Missing meeting palette entry must use released red fallback");
+            Console.WriteLine("[PASS] Meeting snapshot identity/palette, live NoS RGB, missing participant and red fallback");
+        }
+        finally { window.Close(); }
     }
 
     protected override void OnClosed(EventArgs e)
