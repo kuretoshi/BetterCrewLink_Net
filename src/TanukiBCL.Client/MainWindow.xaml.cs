@@ -11,14 +11,13 @@ namespace TanukiBCL.Client;
 
 public partial class MainWindow : Window
 {
-    private CancellationTokenSource? runCancellation;
-    private TaskCompletionSource? sessionStopped;
+    private readonly ClientSessionCoordinator sessions = new();
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
     private OverlayWindow? overlayWindow;
     private int? activeGamePid;
     private GlobalHotkeyMonitor? hotkeys;
-    private Task? hotkeyTask;
+    private Task? reloadTask;
     private volatile bool hotkeysSuspended;
     private readonly ObservableCollection<PeerRow> peers = [];
     private readonly ClientSettings settings;
@@ -29,6 +28,8 @@ public partial class MainWindow : Window
     private bool localTalking;
     private bool voiceServerConnected;
     private bool reloadInProgress;
+    private bool isClosing;
+    private long connectionIntentVersion;
     private ConnectionQuality? serverQuality;
     private long sentAudioFrames;
 
@@ -66,6 +67,7 @@ public partial class MainWindow : Window
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        if (isClosing || settingsWindow is not null) return;
         CompactVoiceView.DismissPlayerConfigPopup();
         var previousServerUrl = settings.ServerUrl;
         var previousMicrophone = settings.MicrophoneName;
@@ -104,17 +106,18 @@ public partial class MainWindow : Window
             OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
         }
         SelectConfiguredDevices();
-        if (requiresRestart && runCancellation is { IsCancellationRequested: false } cancellation &&
-            sessionStopped is { } stopped)
+        if (requiresRestart && sessions.Current is { AcceptsCallbacks: true } session)
         {
             // The server URL and audio device IDs are fixed when the probe starts.
             // Keep the user's mute/deafen choice across the controlled restart.
             var wasMuted = microphoneMuted;
             var wasDeafened = deafened;
-            cancellation.Cancel();
-            await stopped.Task;
-            if (!IsVisible || Dispatcher.HasShutdownStarted) return;
-            if (runCancellation is not null)
+            var restartIntent = ++connectionIntentVersion;
+            session.RequestStop();
+            await session.Completion;
+            if (isClosing || !IsVisible || Dispatcher.HasShutdownStarted ||
+                restartIntent != connectionIntentVersion) return;
+            if (sessions.Current is not null)
             {
                 ShowDiagnostics();
                 return;
@@ -124,6 +127,7 @@ public partial class MainWindow : Window
             StartButton_Click(this, new RoutedEventArgs());
             return;
         }
+        if (sessions.Current is { AcceptsCallbacks: false }) return;
         probe?.SetMasterVolume(settings.MasterVolume);
         probe?.SetVoiceEffectStrength(settings.VoiceEffectStrength);
         probe?.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
@@ -151,7 +155,7 @@ public partial class MainWindow : Window
     private void ApplyPlayerConfig(int configId, PlayerAudioConfig config, bool persist)
     {
         settings.PlayerConfigMap[configId] = config.Normalize();
-        probe?.SetPlayerConfig(configId, config);
+        if (sessions.Current?.AcceptsCallbacks == true) probe?.SetPlayerConfig(configId, config);
         UpdateCompactView();
         if (!persist) return;
         try
@@ -184,6 +188,7 @@ public partial class MainWindow : Window
 
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
+        if (isClosing || sessions.Current is not null) return;
         if (ProcessCombo.SelectedItem is not ProcessChoice process ||
             InputCombo.SelectedItem is not AudioDeviceInfo input ||
             OutputCombo.SelectedItem is not AudioDeviceInfo output)
@@ -191,21 +196,52 @@ public partial class MainWindow : Window
             MessageBox.Show(this, "Among Us、マイク、スピーカーを選択してください。", "TanukiBCL");
             return;
         }
+        if (!sessions.TryStart(out var session)) return;
+        connectionIntentVersion++;
+        await session.RunAsync(() => RunSessionAsync(session, process, input, output), result =>
+        {
+            if (result.Error is { } error)
+            {
+                Trace.TraceError($"Client session failed: {error}");
+                if (!isClosing && !Dispatcher.HasShutdownStarted)
+                {
+                    StatusText.Text = $"接続失敗: {error.Message}";
+                    ShowDiagnostics();
+                }
+            }
+            else if (!isClosing && !Dispatcher.HasShutdownStarted) StatusText.Text = "停止しました";
+        });
+    }
 
+    private async Task RunSessionAsync(ClientSessionCoordinator.Session session, ProcessChoice process,
+        AudioDeviceInfo input, AudioDeviceInfo output)
+    {
+        // Register the UI reset first so it runs last, including partial startup.
+        session.AddCleanup(() =>
+        {
+            activeGamePid = null;
+            hotkeys = null;
+            if (!isClosing && !Dispatcher.HasShutdownStarted) SetRunning(false);
+            return ValueTask.CompletedTask;
+        });
+        session.AddCleanup(() =>
+        {
+            var previousOverlay = overlayWindow;
+            overlayWindow = null;
+            previousOverlay?.Close();
+            return ValueTask.CompletedTask;
+        });
         settings.MicrophoneName = input.Name;
         settings.SpeakerName = output.Name;
-        try
-        {
-            ClientSettingsStore.Save(settings);
-        }
+        try { ClientSettingsStore.Save(settings); }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             MessageBox.Show(this, $"デバイス設定を保存できませんでした: {exception.Message}", "TanukiBCL");
         }
+        session.Token.ThrowIfCancellationRequested();
         activeGamePid = process.Id;
         SetRunning(true);
         ShowCompactView();
-        runCancellation = new CancellationTokenSource();
         var optionArgs = new List<string>
         {
             "--server", settings.ServerUrl,
@@ -216,37 +252,56 @@ public partial class MainWindow : Window
         };
         if (settings.NatFix) optionArgs.Add("--nat-fix");
         var options = ProbeOptions.Parse([.. optionArgs]);
-        probe = new VoiceServerProbe(options, "client");
-        probe.SetMasterVolume(settings.MasterVolume);
-        probe.SetVoiceEffectStrength(settings.VoiceEffectStrength);
-        probe.SetPlayerConfigs(settings.PlayerConfigMap);
-        probe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
-        probe.SetSpatialAudio(settings.EnableSpatialAudio);
-        probe.SetMobileHost(settings.MobileHost);
-        probe.SetInputProcessing(settings.EchoCancellation, settings.NoiseSuppression, settings.AutoGainControl);
-        probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
-        probe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
-        probe.SetMicrophoneActivationMode(settings.PushToTalkMode);
-        probe.SetOwnLobbySettings(settings.MyLobbySettings);
-        probe.SetMicrophoneMuted(microphoneMuted);
-        probe.SetDeafened(deafened);
-        probe.LobbySettingsChanged += _ => Dispatch(() =>
-            settingsWindow?.UpdateCurrentLobbySettings(probe?.CurrentLobbySettings));
-        probe.ConnectionStatusChanged += status => Dispatch(() =>
+        var activeProbe = new VoiceServerProbe(options, "client");
+        probe = activeProbe;
+        session.AddCleanup(async () =>
+        {
+            try { await activeProbe.DisposeAsync(); }
+            finally { if (ReferenceEquals(probe, activeProbe)) probe = null; }
+        });
+        session.AddCleanup(async () =>
+        {
+            try
+            {
+                if (reloadTask is { } pendingReload) await pendingReload;
+            }
+            catch (OperationCanceledException) when (session.Token.IsCancellationRequested) { }
+            finally
+            {
+                reloadTask = null;
+                reloadInProgress = false;
+            }
+        });
+        activeProbe.SetMasterVolume(settings.MasterVolume);
+        activeProbe.SetVoiceEffectStrength(settings.VoiceEffectStrength);
+        activeProbe.SetPlayerConfigs(settings.PlayerConfigMap);
+        activeProbe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
+        activeProbe.SetSpatialAudio(settings.EnableSpatialAudio);
+        activeProbe.SetMobileHost(settings.MobileHost);
+        activeProbe.SetInputProcessing(settings.EchoCancellation, settings.NoiseSuppression, settings.AutoGainControl);
+        activeProbe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
+        activeProbe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
+        activeProbe.SetMicrophoneActivationMode(settings.PushToTalkMode);
+        activeProbe.SetOwnLobbySettings(settings.MyLobbySettings);
+        activeProbe.SetMicrophoneMuted(microphoneMuted);
+        activeProbe.SetDeafened(deafened);
+        activeProbe.LobbySettingsChanged += _ => Dispatch(session, () =>
+            settingsWindow?.UpdateCurrentLobbySettings(activeProbe.CurrentLobbySettings));
+        activeProbe.ConnectionStatusChanged += status => Dispatch(session, () =>
         {
             StatusText.Text = status;
             voiceServerConnected = status == "ボイスサーバー接続済み";
             UpdateCompactView();
         });
-        probe.ServerQualityChanged += quality => Dispatch(() =>
+        activeProbe.ServerQualityChanged += quality => Dispatch(session, () =>
         {
             serverQuality = quality;
             UpdateCompactView();
         });
-        probe.GameStateApplied += state => Dispatch(() => ShowGameState(state));
-        probe.PeerMixChanged += (clientId, mix) => Dispatch(() => UpdatePeerMix(clientId, mix));
-        probe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(() => UpdatePeerConnection(clientId, status));
-        probe.PeerVadChanged += (clientId, active) => Dispatch(() =>
+        activeProbe.GameStateApplied += state => Dispatch(session, () => ShowGameState(state));
+        activeProbe.PeerMixChanged += (clientId, mix) => Dispatch(session, () => UpdatePeerMix(clientId, mix));
+        activeProbe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(session, () => UpdatePeerConnection(clientId, status));
+        activeProbe.PeerVadChanged += (clientId, active) => Dispatch(session, () =>
         {
             var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
             var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
@@ -254,7 +309,7 @@ public partial class MainWindow : Window
             row.Talking = active && row.Audible && player?.InVent != true;
             UpdateCompactView();
         });
-        probe.PeerPcmReceived += (clientId, _) => Dispatch(() =>
+        activeProbe.PeerPcmReceived += (clientId, _) => Dispatch(session, () =>
         {
             var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
             var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
@@ -262,12 +317,12 @@ public partial class MainWindow : Window
             row.IncrementReceived();
             if (firstFrame) UpdateCompactView();
         });
-        probe.LocalAudioFrameSent += peerCount => Dispatch(() =>
+        activeProbe.LocalAudioFrameSent += peerCount => Dispatch(session, () =>
         {
             sentAudioFrames++;
             SentText.Text = $"Opus送信: {sentAudioFrames} frame / {peerCount} peer";
         });
-        probe.LocalVadChanged += talking => Dispatch(() =>
+        activeProbe.LocalVadChanged += talking => Dispatch(session, () =>
         {
             localTalking = talking;
             VadText.Text = microphoneMuted ? "マイク: ミュート中" : talking ? "マイク: 発話中" : "マイク: 待機中";
@@ -276,8 +331,8 @@ public partial class MainWindow : Window
                 : System.Windows.Media.Brushes.LightGray;
             UpdateCompactView();
         });
-        probe.ImpostorRadioAvailabilityChanged += available => Dispatch(() => RadioButton.IsEnabled = available);
-        probe.ImpostorRadioTransmitChanged += active => Dispatch(() =>
+        activeProbe.ImpostorRadioAvailabilityChanged += available => Dispatch(session, () => RadioButton.IsEnabled = available);
+        activeProbe.ImpostorRadioTransmitChanged += active => Dispatch(session, () =>
         {
             radioTransmitting = active;
             RadioButton.Content = active ? "インポスターラジオ: ON" : "インポスターラジオ: OFF";
@@ -285,103 +340,78 @@ public partial class MainWindow : Window
             UpdateCompactView();
         });
         hotkeys = new GlobalHotkeyMonitor(
-            pressed => probe?.SetPushToTalkPressed(pressed),
-            () => Dispatch(() =>
+            pressed => { if (session.AcceptsCallbacks) activeProbe.SetPushToTalkPressed(pressed); },
+            () => Dispatch(session, () =>
             {
-                if (runCancellation?.IsCancellationRequested == false && probe?.CanUseImpostorRadio == true)
-                    probe.SetImpostorRadioTransmitting(!radioTransmitting);
+                if (activeProbe.CanUseImpostorRadio)
+                    activeProbe.SetImpostorRadioTransmitting(!radioTransmitting);
             }),
-            () => Dispatch(() =>
-            {
-                if (runCancellation?.IsCancellationRequested == false) ToggleMicrophoneMute();
-            }),
-            () => Dispatch(() =>
-            {
-                if (runCancellation?.IsCancellationRequested == false) ToggleDeafen();
-            }),
+            () => Dispatch(session, ToggleMicrophoneMute),
+            () => Dispatch(session, ToggleDeafen),
             () => hotkeysSuspended);
         hotkeys.UpdateBindings(settings);
         var runningHotkeys = hotkeys;
-        var hotkeyCancellationToken = runCancellation.Token;
-        hotkeyTask = Task.Run(() => runningHotkeys.RunAsync(hotkeyCancellationToken));
-        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        sessionStopped = stopped;
-
-        try
-        {
-            await probe.RunAsync(runCancellation.Token);
-        }
-        catch (OperationCanceledException) when (runCancellation.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            StatusText.Text = $"接続失敗: {exception.Message}";
-            ShowDiagnostics();
-        }
-        finally
+        var hotkeyTask = Task.Run(() => runningHotkeys.RunAsync(session.Token));
+        session.AddCleanup(async () =>
         {
             try
             {
-                var wasStopped = runCancellation?.IsCancellationRequested == true;
-                runCancellation?.Cancel();
-                if (hotkeyTask is not null) await hotkeyTask;
-                hotkeyTask = null;
-                hotkeys = null;
-                if (probe is not null)
-                {
-                    await probe.DisposeAsync();
-                    probe = null;
-                }
-                runCancellation?.Dispose();
-                runCancellation = null;
-                overlayWindow?.Close();
-                overlayWindow = null;
-                activeGamePid = null;
-                SetRunning(false);
-                if (wasStopped)
-                {
-                    StatusText.Text = "停止しました";
-                }
+                await hotkeyTask;
             }
-            finally
-            {
-                if (ReferenceEquals(sessionStopped, stopped)) sessionStopped = null;
-                stopped.TrySetResult();
-            }
-        }
+            catch (OperationCanceledException) when (session.Token.IsCancellationRequested) { }
+        });
+        var probeTask = activeProbe.RunAsync(session.Token);
+        // A failed hotkey callback must not leave a seemingly live session with
+        // controls no longer responding. Teardown observes the hotkey exception.
+        if (await Task.WhenAny(probeTask, hotkeyTask) == hotkeyTask) session.RequestStop();
+        await probeTask;
     }
 
-    private void StopButton_Click(object sender, RoutedEventArgs e) => runCancellation?.Cancel();
+    private void StopButton_Click(object sender, RoutedEventArgs e)
+    {
+        // An explicit stop also cancels a settings-initiated pending restart.
+        connectionIntentVersion++;
+        sessions.Current?.RequestStop();
+    }
 
     private async void CompactVoiceView_ReloadRequested(object? sender, EventArgs e)
     {
         if (reloadInProgress) return;
         var activeProbe = probe;
-        var cancellation = runCancellation;
-        if (activeProbe is null || cancellation is null || cancellation.IsCancellationRequested)
+        var session = sessions.Current;
+        if (activeProbe is null || session is null || !session.AcceptsCallbacks)
         {
             ShowDiagnostics();
             return;
         }
 
         reloadInProgress = true;
+        Task? reload = null;
         try
         {
             StatusText.Text = "音声接続を再読み込み中...";
-            await activeProbe.RestartServerConnectionAsync(cancellation.Token);
+            reload = activeProbe.RestartServerConnectionAsync(session.Token);
+            reloadTask = reload;
+            await reload;
         }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        catch (OperationCanceledException) when (session.Token.IsCancellationRequested)
         {
         }
         catch (Exception exception)
         {
-            StatusText.Text = $"再読み込み失敗: {exception.Message}";
-            ShowDiagnostics();
+            if (session.AcceptsCallbacks)
+            {
+                StatusText.Text = $"再読み込み失敗: {exception.Message}";
+                ShowDiagnostics();
+            }
         }
         finally
         {
-            reloadInProgress = false;
+            if (ReferenceEquals(reloadTask, reload))
+            {
+                reloadTask = null;
+                reloadInProgress = false;
+            }
         }
     }
 
@@ -390,6 +420,7 @@ public partial class MainWindow : Window
 
     private void ToggleMicrophoneMute()
     {
+        if (sessions.Current is { AcceptsCallbacks: false }) return;
         microphoneMuted = !microphoneMuted;
         probe?.SetMicrophoneMuted(microphoneMuted);
         MuteButton.Content = microphoneMuted ? "マイクミュート解除" : "マイクをミュート";
@@ -402,14 +433,18 @@ public partial class MainWindow : Window
 
     private void ToggleDeafen()
     {
+        if (sessions.Current is { AcceptsCallbacks: false }) return;
         deafened = !deafened;
         probe?.SetDeafened(deafened);
         DeafenButton.Content = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
         UpdateCompactView();
     }
 
-    private void RadioButton_Click(object sender, RoutedEventArgs e) =>
-        probe?.SetImpostorRadioTransmitting(!radioTransmitting);
+    private void RadioButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sessions.Current?.AcceptsCallbacks == true)
+            probe?.SetImpostorRadioTransmitting(!radioTransmitting);
+    }
 
     private void ShowGameState(AmongUsState state)
     {
@@ -524,7 +559,11 @@ public partial class MainWindow : Window
         UpdateCompactView();
     }
 
-    private void Dispatch(Action action) => Dispatcher.BeginInvoke(action);
+    private void Dispatch(ClientSessionCoordinator.Session session, Action action)
+    {
+        if (!session.AcceptsCallbacks || Dispatcher.HasShutdownStarted) return;
+        Dispatcher.BeginInvoke(session.Guard(action));
+    }
 
     private bool SelectProcessFromCommandLine()
     {
@@ -563,7 +602,8 @@ public partial class MainWindow : Window
             : active?.MeetingGhostOnly == true
                 ? "会議中は幽霊のみ会話できます"
                 : null);
-        if (settings.ObsOverlay && currentState is { } state && probe is { } activeProbe)
+        if (settings.ObsOverlay && sessions.Current?.AcceptsCallbacks == true &&
+            currentState is { } state && probe is { } activeProbe)
         {
             var obsPeers = peers.ToDictionary(row => row.ClientId, row => new ObsPeerState(
                 activeProbe.IsPeerPresent(row.ClientId), row.VadActive, row.Radio == "送信中"));
@@ -575,7 +615,8 @@ public partial class MainWindow : Window
 
     private void UpdateOverlayWindow()
     {
-        if (!settings.EnableOverlay || activeGamePid is not { } pid || probe is null)
+        if (!settings.EnableOverlay || sessions.Current?.AcceptsCallbacks != true ||
+            activeGamePid is not { } pid || probe is null)
         {
             overlayWindow?.Close();
             overlayWindow = null;
@@ -613,9 +654,26 @@ public partial class MainWindow : Window
 
     private void DiagnosticsCloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
+    protected override async void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel) return;
+        if (sessions.Current is not { } session) return;
+        // Keep the final window (and its Dispatcher) alive until native audio and
+        // the socket have finished shutting down. OnClosed is too late for this.
+        e.Cancel = true;
+        if (isClosing) return;
+        isClosing = true;
+        connectionIntentVersion++;
+        session.RequestStop();
+        await session.Completion;
+        if (!Dispatcher.HasShutdownStarted) Close();
+    }
+
     protected override void OnClosed(EventArgs e)
     {
-        runCancellation?.Cancel();
+        isClosing = true;
+        sessions.Current?.RequestStop();
         overlayWindow?.Close();
         overlayWindow = null;
         base.OnClosed(e);

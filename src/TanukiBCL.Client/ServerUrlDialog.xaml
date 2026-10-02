@@ -1,0 +1,81 @@
+<UserControl x:Class="TanukiBCL.Client.ServerUrlDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FocusManager.IsFocusScope="True" KeyboardNavigation.TabNavigation="Cycle"
+             KeyboardNavigation.ControlTabNavigation="Cycle" PreviewKeyDown="Dialog_PreviewKeyDown"
+             Foreground="White" FontSize="14" MaxWidth="600">
+    <UserControl.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="#BA68C8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="MinWidth" Value="64" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Opacity" Value="0.8" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#BA68C8" />
+                                <Setter TargetName="ButtonSurface" Property="BorderThickness" Value="1" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#61FFFFFF" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+    <Border Background="#272727" CornerRadius="4">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="ボイスサーバーの変更" FontSize="20" FontWeight="Medium" Margin="24,16" />
+            <StackPanel Grid.Row="1" Margin="24,8,24,20">
+                <Grid>
+                    <Border x:Name="InputOutline" BorderBrush="#66FFFFFF" BorderThickness="1" CornerRadius="4">
+                        <TextBox x:Name="UrlInput" Height="56" Background="Transparent" Foreground="White"
+                                 BorderThickness="0" Padding="14,16" FontSize="16"
+                                 VerticalContentAlignment="Center" SpellCheck.IsEnabled="False"
+                                 AutomationProperties.Name="ボイスサーバー"
+                                 TextChanged="UrlInput_TextChanged" />
+                    </Border>
+                    <TextBlock x:Name="InputLabel" Text="ボイスサーバー" Background="#272727" Foreground="#B3FFFFFF"
+                               FontSize="12" Padding="4,0" Margin="10,-8,0,0" VerticalAlignment="Top"
+                               HorizontalAlignment="Left" IsHitTestVisible="False" />
+                </Grid>
+                <TextBlock x:Name="InputError" Text="ボイスサーバー" Foreground="#F44336"
+                           Visibility="Collapsed" FontSize="12" Margin="14,4,14,0" />
+                <Border Background="#160B0B" CornerRadius="4" Padding="16,8" Margin="0,16,0,16">
+                    <DockPanel>
+                        <TextBlock Text="ⓘ" FontSize="22" Foreground="#F44336" Margin="0,0,12,0"
+                                   VerticalAlignment="Top" />
+                        <TextBlock Text="このオプションは、上級ユーザーのみが対象です。他のサーバーがあなたの情報を盗んだり、BetterCrewLinkKaiをクラッシュさせる可能性があります。"
+                                   Foreground="#F4C7C7" TextWrapping="Wrap" />
+                    </DockPanel>
+                </Border>
+                <Button x:Name="ResetButton" Content="デフォルトに戻す" Background="#BA68C8"
+                        Foreground="#000000" Click="ResetButton_Click" />
+            </StackPanel>
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8">
+                <Button x:Name="CancelButton" Content="キャンセル" Click="CancelButton_Click" />
+                <Button x:Name="ConfirmButton" Content="確認" Margin="8,0,0,0" Click="ConfirmButton_Click" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

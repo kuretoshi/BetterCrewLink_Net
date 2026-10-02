@@ -23,13 +23,21 @@ public partial class App : Application
         }
         base.OnStartup(e);
         if (e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
+            e.Args.Contains("--session-lifecycle-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
             e.Args.Contains("--input-processing-self-test"))
         {
             try
             {
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
-                if (e.Args.Contains("--settings-self-test")) SettingsWindow.VerifyModControls();
+                if (e.Args.Contains("--settings-self-test"))
+                {
+                    SettingsWindow.VerifyModControls();
+                    var previewIndex = Array.IndexOf(e.Args, "--server-dialog-preview");
+                    if (previewIndex >= 0 && previewIndex + 1 < e.Args.Length)
+                        SettingsWindow.RenderServerDialogPreview(e.Args[previewIndex + 1]);
+                }
+                if (e.Args.Contains("--session-lifecycle-self-test")) ClientSessionLifecycleSelfTest.Run();
                 if (e.Args.Contains("--audio-preview-self-test")) AudioPreviewSelfTest.VerifyDevices();
                 if (e.Args.Contains("--input-processing-self-test") && MicrophoneProcessorSelfTest.Run() != 0)
                     throw new InvalidOperationException("Input processing self-test failed.");

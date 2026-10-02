@@ -1,4 +1,5 @@
 using System.IO;
+using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
@@ -15,6 +16,7 @@ namespace TanukiBCL.Client;
 public partial class SettingsWindow : Window
 {
     private readonly ClientSettings settings;
+    private readonly ObservableCollection<string> serverUrlDrafts = [];
     private readonly bool lobbySettingsEditable;
     private LobbySettings? currentLobbySettings;
     private LobbySettings lobbyDraft;
@@ -73,8 +75,12 @@ public partial class SettingsWindow : Window
         ImpostorRadioShortcutBox.Text = settings.ImpostorRadioShortcut;
         MuteShortcutBox.Text = settings.MuteShortcut;
         DeafenShortcutBox.Text = settings.DeafenShortcut;
-        ServerUrlBox.ItemsSource = settings.ServerUrls;
-        ServerUrlBox.Text = settings.ServerUrl;
+        foreach (var url in settings.ServerUrls.Append(settings.ServerUrl).Distinct(StringComparer.Ordinal))
+            serverUrlDrafts.Add(url);
+        ServerUrlBox.ItemsSource = serverUrlDrafts;
+        ServerUrlBox.SelectedItem = settings.ServerUrl;
+        ServerDialog.Confirmed += ConfirmServerUrl;
+        ServerDialog.Dismissed += CloseServerDialog;
         NatFixCheck.IsChecked = settings.NatFix;
         MobileHostCheck.IsChecked = settings.MobileHost;
         SpatialAudioCheck.IsChecked = settings.EnableSpatialAudio;
@@ -265,7 +271,7 @@ public partial class SettingsWindow : Window
             obsSecretDraft = StreamingSettings.CreateSecret();
         ObsUrlBox.Text = StreamingSettings.BuildObsUrl(new ClientSettings
         {
-            ServerUrl = ServerUrlBox.Text.Trim(),
+            ServerUrl = SelectedServerUrl,
             CompactOverlay = CompactOverlayCheck.IsChecked == true,
             MeetingOverlay = MeetingOverlayCheck.IsChecked == true,
             OverlayPosition = (OverlayPositionCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "right",
@@ -624,19 +630,14 @@ public partial class SettingsWindow : Window
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        var serverUrl = ServerUrlBox.Text.Trim();
-        if (!IsValidServerUrl(serverUrl) &&
-            !string.Equals(serverUrl, settings.ServerUrl, StringComparison.Ordinal))
-        {
-            MessageBox.Show(this, "http または https のボイスサーバーURLを指定してください。", "設定");
-            return;
-        }
-        if (serverUrl.EndsWith('/')) serverUrl = serverUrl[..^1];
+        var serverUrl = SelectedServerUrl;
+        // The history selector preserves existing URLs verbatim, as in 3.2.7.
+        // Only the new-URL dialog validates/normalizes newly entered addresses.
 
         var candidate = new ClientSettings
         {
             ServerUrl = serverUrl,
-            ServerUrls = settings.ServerUrls.Append(serverUrl)
+            ServerUrls = serverUrlDrafts.Append(serverUrl)
                 .Distinct(StringComparer.Ordinal).ToList(),
             NatFix = NatFixCheck.IsChecked == true,
             MobileHost = MobileHostCheck.IsChecked == true,
@@ -721,19 +722,78 @@ public partial class SettingsWindow : Window
         DialogResult = true;
     }
 
-    private void ResetServerUrlButton_Click(object sender, RoutedEventArgs e)
-        => ServerUrlBox.Text = "https://bettercrewl.ink";
+    private string SelectedServerUrl => ServerUrlBox.SelectedItem as string ?? ServerUrlDialog.DefaultUrl;
 
-    internal static bool IsValidServerUrl(string candidate) =>
-        Uri.TryCreate(candidate, UriKind.Absolute, out var parsed) &&
-        (parsed.Scheme is "http" or "https") &&
-        parsed.AbsolutePath == "/" &&
-        !string.Equals(parsed.Host, "discord.gg", StringComparison.OrdinalIgnoreCase);
+    private void ServerUrlBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ServerUrlDescription is not null) ServerUrlDescription.Text = SelectedServerUrl;
+        ServerDialog?.SynchronizeSelection(SelectedServerUrl);
+        UpdateObsUrl();
+    }
+
+    private void ChangeServerButton_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsNavigation.IsEnabled = false;
+        SettingsContent.IsEnabled = false;
+        ServerDialogBackdrop.Visibility = Visibility.Visible;
+        ServerDialog.Open(SelectedServerUrl);
+    }
+
+    private void ConfirmServerUrl(string url)
+    {
+        if (!serverUrlDrafts.Contains(url)) serverUrlDrafts.Add(url);
+        ServerUrlBox.SelectedItem = url;
+        CloseServerDialog();
+    }
+
+    private void CloseServerDialog()
+    {
+        ServerDialogBackdrop.Visibility = Visibility.Collapsed;
+        SettingsNavigation.IsEnabled = true;
+        SettingsContent.IsEnabled = true;
+        ChangeServerButton.Focus();
+    }
+
+    private void ServerDialogBackdrop_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, ServerDialogBackdrop)) ServerDialog.Dismiss();
+    }
+
+    internal static bool IsValidServerUrl(string candidate) => ServerUrlDialog.IsValidUrl(candidate);
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
+    internal static void RenderServerDialogPreview(string directory)
+    {
+        // Render our own WPF visual tree offscreen; no desktop capture or live settings are used.
+        Directory.CreateDirectory(directory);
+        var window = new SettingsWindow(new ClientSettings(), true, null, false, null, (_, _, _) => { });
+        try
+        {
+            window.CategoryList.SelectedIndex = 6;
+            window.ChangeServerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var root = (FrameworkElement)window.Content;
+            foreach (var size in new[] { new Size(760, 620), new Size(650, 500) })
+            {
+                root.Measure(size);
+                root.Arrange(new Rect(size));
+                root.UpdateLayout();
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(root);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using var output = File.Create(System.IO.Path.Combine(directory,
+                    $"server-dialog-{size.Width:0}x{size.Height:0}.png"));
+                encoder.Save(output);
+            }
+        }
+        finally { window.Close(); }
+    }
+
     internal static void VerifyModControls()
     {
+        ServerUrlDialog.VerifyBehavior();
         var lobby = new LobbySettings
         {
             SnrJumboVoice = true, JackalHaunting = true, JackalRadioEnabled = true,
@@ -783,6 +843,28 @@ public partial class SettingsWindow : Window
                 restored.ObsSecret != window.obsSecretDraft)
                 throw new InvalidOperationException("Streaming settings did not persist");
             window.CategoryList.SelectedIndex = 6;
+            window.ChangeServerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            if (window.ServerDialogBackdrop.Visibility != Visibility.Visible ||
+                window.SettingsContent.IsEnabled || window.SettingsNavigation.IsEnabled ||
+                window.ServerUrlBox.IsEditable)
+                throw new InvalidOperationException("Server dialog did not block underlying settings controls");
+            window.ServerDialog.Dismiss();
+            if (window.ServerDialogBackdrop.Visibility != Visibility.Collapsed ||
+                !window.SettingsContent.IsEnabled || !window.SettingsNavigation.IsEnabled)
+                throw new InvalidOperationException("Dismissing server dialog did not restore settings controls");
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                window.ChangeServerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                window.ServerDialog.UrlInput.Text = "https://voice.example.test/";
+                window.ServerDialog.ConfirmButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
+            if (window.serverUrlDrafts.Count(url => url == "https://voice.example.test") != 1 ||
+                window.SelectedServerUrl != "https://voice.example.test" ||
+                window.ServerUrlDescription.Text != "https://voice.example.test" ||
+                settings.ServerUrl != ServerUrlDialog.DefaultUrl ||
+                window.ServerDialogBackdrop.Visibility != Visibility.Collapsed ||
+                !window.ObsUrlBox.Text.Contains("&server=https%3A%2F%2Fvoice.example.test"))
+                throw new InvalidOperationException("Server confirmation did not update unique history, selection and OBS preview");
             if (!window.ServerUrlBox.Items.Cast<string>().Contains("https://bettercrewl.ink") ||
                 !IsValidServerUrl("https://voice.example.test/") ||
                 IsValidServerUrl("https://voice.example.test/api") ||
