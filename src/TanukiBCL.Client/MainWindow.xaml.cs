@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     private readonly CoalescedSessionRestart settingsRestarts = new();
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
+    private InquiryWindow? inquiryWindow;
     private OverlayWindow? overlayWindow;
     private int? activeGamePid;
     private GlobalHotkeyMonitor? hotkeys;
@@ -52,7 +53,7 @@ public partial class MainWindow : Window
         CompactVoiceView.CloseRequested += (_, _) => Close();
         CompactVoiceView.MuteRequested += (_, _) => ToggleMicrophoneMute();
         CompactVoiceView.DeafenRequested += (_, _) => ToggleDeafen();
-        CompactVoiceView.HelpRequested += (_, _) => ShowDiagnostics();
+        CompactVoiceView.HelpRequested += (_, _) => ShowInquiry();
         CompactVoiceView.PlayerConfigChanged += ApplyPlayerConfig;
         UpdateCompactView();
         Loaded += (_, _) =>
@@ -91,6 +92,20 @@ public partial class MainWindow : Window
             settingsWindow = null;
             hotkeysSuspended = false;
         }
+    }
+
+    private void ShowInquiry()
+    {
+        if (isClosing) return;
+        if (inquiryWindow is { IsVisible: true } open)
+        {
+            if (open.WindowState == WindowState.Minimized) open.WindowState = WindowState.Normal;
+            open.Activate();
+            return;
+        }
+        inquiryWindow = new InquiryWindow { Owner = this };
+        inquiryWindow.Closed += (_, _) => inquiryWindow = null;
+        inquiryWindow.Show();
     }
 
     private void SettingsWindow_SettingsReset()

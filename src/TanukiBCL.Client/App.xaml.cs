@@ -28,7 +28,7 @@ public partial class App : Application
             e.Args.Contains("--session-lifecycle-self-test") ||
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
-            e.Args.Contains("--input-processing-self-test"))
+            e.Args.Contains("--input-processing-self-test") || e.Args.Contains("--inquiry-self-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
@@ -63,6 +63,11 @@ public partial class App : Application
                 if (e.Args.Contains("--audio-preview-self-test")) AudioPreviewSelfTest.VerifyDevices();
                 if (e.Args.Contains("--input-processing-self-test") && MicrophoneProcessorSelfTest.Run() != 0)
                     throw new InvalidOperationException("Input processing self-test failed.");
+                if (e.Args.Contains("--inquiry-self-test"))
+                {
+                    InquiryWindow.VerifyForm();
+                    Task.Run(InquirySubmission.VerifyAsync).GetAwaiter().GetResult();
+                }
                 if (e.Args.Contains("--self-test-failure-exit"))
                     throw new InvalidOperationException("Deliberate self-test exit-code verification.");
                 Shutdown(0);
