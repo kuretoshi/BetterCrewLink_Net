@@ -33,6 +33,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private bool microphoneMuted;
     private bool deafened;
     private double masterVolume = 100d;
+    private double crewVolumeAsGhost = 1d;
+    private double ghostVolumeAsImpostor = 0.1d;
     private double microphoneGain = 100d;
     private bool microphoneSensitivityEnabled;
     private double microphoneSensitivity = 0.15d;
@@ -263,6 +265,18 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         masterVolume = Math.Clamp(volumePercent, 0d, 200d);
         audioSession?.SetMasterVolume(masterVolume);
+    }
+
+    public void SetListenerVolumes(double crewAsGhostPercent, double ghostAsImpostorPercent)
+    {
+        crewVolumeAsGhost = Math.Clamp(crewAsGhostPercent / 100d, 0d, 1d);
+        ghostVolumeAsImpostor = Math.Clamp(ghostAsImpostorPercent / 100d, 0d, 1d);
+        spatialVoiceSettings = spatialVoiceSettings with
+        {
+            CrewVolumeAsGhost = crewVolumeAsGhost,
+            GhostVolumeAsImpostor = ghostVolumeAsImpostor
+        };
+        RefreshPeerMixes();
     }
 
     public void SetMicrophoneGain(double gainPercent)
@@ -839,7 +853,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
             await socket.EmitAsync("leave");
             currentJoinedLobby = "MENU";
-            spatialVoiceSettings = new SpatialVoiceSettings();
+            spatialVoiceSettings = new SpatialVoiceSettings(
+                CrewVolumeAsGhost: crewVolumeAsGhost,
+                GhostVolumeAsImpostor: ghostVolumeAsImpostor);
             activeLobbySettings = new LobbySettings();
             hasActiveLobbySettings = false;
             LobbySettingsChanged?.Invoke(null);

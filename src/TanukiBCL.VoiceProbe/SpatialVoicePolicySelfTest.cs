@@ -65,6 +65,21 @@ internal static class SpatialVoicePolicySelfTest
             SpatialVoicePolicy.Calculate(commsTasks, new Player(), new Player(),
                 commsPolicy with { CommsSabotage = false }).Audible);
 
+        var ghostListener = new Player { IsDead = true };
+        var livingSpeaker = new Player();
+        var ghostVolumePolicy = new SpatialVoiceSettings(CrewVolumeAsGhost: 0.35d,
+            GhostVolumeAsImpostor: 0.1d, Haunting: true, ImpostorRadioEnabled: true);
+        CheckGain("ghost volume: tasks proximity", 0.35d,
+            SpatialVoicePolicy.Calculate(tasks, ghostListener, livingSpeaker, ghostVolumePolicy).Gain);
+        CheckGain("ghost volume: meeting", 0.35d,
+            SpatialVoicePolicy.Calculate(discussion, ghostListener, livingSpeaker, ghostVolumePolicy).Gain);
+        CheckGain("ghost volume: radio", 0.35d,
+            SpatialVoicePolicy.Calculate(tasks, ghostListener,
+                new Player { IsImpostor = true, X = 20 }, ghostVolumePolicy, true).Gain);
+        CheckGain("impostor hearing ghost: tasks", 0.1d,
+            SpatialVoicePolicy.Calculate(tasks, new Player { IsImpostor = true },
+                new Player { IsDead = true }, ghostVolumePolicy).Gain);
+
         var lobbySettings = new LobbySettings
         {
             MaxDistance = 7.4d,
@@ -107,8 +122,8 @@ internal static class SpatialVoicePolicySelfTest
             (beforeRadioOnly with { Haunting = true }));
 
         Console.WriteLine(failures == 0
-            ? "[PASS] 3.2.7 radio policy: Tasks/Discussion, impostor/crew/ghost"
-            : $"[FAIL] 3.2.7 radio policy: {failures} cases failed");
+            ? "[PASS] 3.2.7 radio and listener-volume policy: Tasks/Discussion, impostor/crew/ghost"
+            : $"[FAIL] 3.2.7 radio and listener-volume policy: {failures} cases failed");
         return failures == 0 ? 0 : 1;
 
         void Check(string name, bool expected, bool actual)
@@ -116,6 +131,13 @@ internal static class SpatialVoicePolicySelfTest
             if (expected == actual) return;
             failures++;
             Console.Error.WriteLine($"[FAIL] {name}: expected={expected} actual={actual}");
+        }
+
+        void CheckGain(string name, double expected, double actual)
+        {
+            if (Math.Abs(expected - actual) < 0.0001d) return;
+            failures++;
+            Console.Error.WriteLine($"[FAIL] {name}: expected={expected:0.###} actual={actual:0.###}");
         }
     }
 

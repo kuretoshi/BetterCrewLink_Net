@@ -11,7 +11,7 @@ internal sealed record SpatialVoiceSettings(
     bool ImpostorRadioOnlyMode = false,
     bool CommsSabotage = false,
     bool Haunting = false,
-    double GhostVolumeAsImpostor = 1d,
+    double GhostVolumeAsImpostor = 0.1d,
     double CrewVolumeAsGhost = 1d,
     bool DeadOnly = false,
     bool MeetingGhostOnly = false);
@@ -60,18 +60,18 @@ internal static class SpatialVoicePolicy
                 return Muted(pan, distance, "not-in-game");
 
             case GameState.Lobby:
-                return new PeerVoiceMix(1d, 0d, distance, "lobby");
+                return ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "lobby"), me, other, settings);
 
             case GameState.Discussion:
                 if (otherUsingImpostorRadio)
                 {
                     return CanHearImpostorRadio(me, other, settings)
-                        ? new PeerVoiceMix(1d, 0d, distance, "impostor-radio")
+                        ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio"), me, other, settings)
                         : Muted(0, distance, "radio-private");
                 }
                 return !me.IsDead && other.IsDead
                     ? Muted(0, distance, "living-cannot-hear-ghost")
-                    : new PeerVoiceMix(1d, 0d, distance, "meeting");
+                    : ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "meeting"), me, other, settings);
 
             case GameState.Tasks:
                 break;
@@ -80,7 +80,7 @@ internal static class SpatialVoicePolicy
         if (otherUsingImpostorRadio)
         {
             return CanHearImpostorRadio(me, other, settings)
-                ? new PeerVoiceMix(1d, 0d, distance, "impostor-radio")
+                ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio"), me, other, settings)
                 : Muted(0, distance, "radio-private");
         }
 
@@ -116,10 +116,6 @@ internal static class SpatialVoicePolicy
 
             baseGain *= settings.GhostVolumeAsImpostor;
         }
-        else if (me.IsDead && !other.IsDead)
-        {
-            baseGain *= settings.CrewVolumeAsGhost;
-        }
 
         var distanceGain = LinearDistanceGain(distance, settings.MaxDistance);
         if (distanceGain <= 0)
@@ -127,8 +123,14 @@ internal static class SpatialVoicePolicy
             return Muted(pan, distance, "out-of-range");
         }
 
-        return new PeerVoiceMix(baseGain * distanceGain, pan, distance, "proximity");
+        return ApplyListenerVolume(new PeerVoiceMix(baseGain * distanceGain, pan, distance, "proximity"), me, other, settings);
     }
+
+    private static PeerVoiceMix ApplyListenerVolume(PeerVoiceMix mix, Player me, Player other,
+        SpatialVoiceSettings settings) =>
+        me.IsDead && !other.IsDead
+            ? mix with { Gain = mix.Gain * settings.CrewVolumeAsGhost }
+            : mix;
 
     private static double LinearDistanceGain(double distance, double maxDistance)
     {

@@ -11,6 +11,8 @@ internal sealed class ClientSettings
     public string? SpeakerName { get; set; }
     public bool AlwaysOnTop { get; set; }
     public int MasterVolume { get; set; } = 100;
+    public int CrewVolumeAsGhost { get; set; } = 100;
+    public int GhostVolumeAsImpostor { get; set; } = 10;
     public int MicrophoneGain { get; set; } = 100;
     public bool MicrophoneGainEnabled { get; set; }
     public double MicSensitivity { get; set; } = 0.15d;
@@ -27,6 +29,8 @@ internal sealed class ClientSettings
             ServerUrl = "https://bettercrewl.ink";
         }
         MasterVolume = Math.Clamp(MasterVolume, 0, 200);
+        CrewVolumeAsGhost = Math.Clamp(CrewVolumeAsGhost, 0, 100);
+        GhostVolumeAsImpostor = Math.Clamp(GhostVolumeAsImpostor, 0, 100);
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);
         MicSensitivity = Math.Clamp(MicSensitivity, 0d, 1d);
         MyLobbySettings = (MyLobbySettings ?? new LobbySettings()).Normalize();

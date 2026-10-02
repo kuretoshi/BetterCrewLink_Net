@@ -32,6 +32,8 @@ public partial class SettingsWindow : Window
             .FirstOrDefault(device => device.Name == settings.SpeakerName) ?? SpeakerCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
         AlwaysOnTopCheck.IsChecked = settings.AlwaysOnTop;
         MasterVolumeSlider.Value = settings.MasterVolume;
+        CrewVolumeAsGhostSlider.Value = settings.CrewVolumeAsGhost;
+        GhostVolumeAsImpostorSlider.Value = settings.GhostVolumeAsImpostor;
         MicrophoneGainSlider.Value = settings.MicrophoneGain;
         MicrophoneGainCheck.IsChecked = settings.MicrophoneGainEnabled;
         MicSensitivitySlider.Value = 1d - settings.MicSensitivity;
@@ -162,8 +164,11 @@ public partial class SettingsWindow : Window
 
     private void UpdateVolumeLabels()
     {
-        if (MasterVolumeValue is null || MicrophoneGainValue is null || MicSensitivityValue is null || DistanceValue is null) return;
+        if (MasterVolumeValue is null || CrewVolumeAsGhostValue is null || GhostVolumeAsImpostorValue is null ||
+            MicrophoneGainValue is null || MicSensitivityValue is null || DistanceValue is null) return;
         MasterVolumeValue.Text = $"{MasterVolumeSlider.Value:0}%";
+        CrewVolumeAsGhostValue.Text = $"{CrewVolumeAsGhostSlider.Value:0}%";
+        GhostVolumeAsImpostorValue.Text = $"{GhostVolumeAsImpostorSlider.Value:0}%";
         MicrophoneGainValue.Text = $"{MicrophoneGainSlider.Value:0}%";
         MicSensitivityValue.Text = $"{MicSensitivitySlider.Value:0.00}";
         DistanceValue.Text = $"{DistanceSlider.Value:0.0}";
@@ -186,6 +191,8 @@ public partial class SettingsWindow : Window
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,
             AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
             MasterVolume = (int)MasterVolumeSlider.Value,
+            CrewVolumeAsGhost = (int)CrewVolumeAsGhostSlider.Value,
+            GhostVolumeAsImpostor = (int)GhostVolumeAsImpostorSlider.Value,
             MicrophoneGain = (int)MicrophoneGainSlider.Value,
             MicrophoneGainEnabled = MicrophoneGainCheck.IsChecked == true,
             MicSensitivity = Math.Round(1d - MicSensitivitySlider.Value, 2),
@@ -207,6 +214,8 @@ public partial class SettingsWindow : Window
         settings.SpeakerName = candidate.SpeakerName;
         settings.AlwaysOnTop = candidate.AlwaysOnTop;
         settings.MasterVolume = candidate.MasterVolume;
+        settings.CrewVolumeAsGhost = candidate.CrewVolumeAsGhost;
+        settings.GhostVolumeAsImpostor = candidate.GhostVolumeAsImpostor;
         settings.MicrophoneGain = candidate.MicrophoneGain;
         settings.MicrophoneGainEnabled = candidate.MicrophoneGainEnabled;
         settings.MicSensitivity = candidate.MicSensitivity;

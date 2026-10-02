@@ -55,6 +55,7 @@ public partial class MainWindow : Window
         Topmost = settings.AlwaysOnTop;
         SelectConfiguredDevices();
         probe?.SetMasterVolume(settings.MasterVolume);
+        probe?.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         probe?.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe?.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
         probe?.SetOwnLobbySettings(settings.MyLobbySettings);
@@ -119,6 +120,7 @@ public partial class MainWindow : Window
         ]);
         probe = new VoiceServerProbe(options, "client");
         probe.SetMasterVolume(settings.MasterVolume);
+        probe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
         probe.SetOwnLobbySettings(settings.MyLobbySettings);
