@@ -16,6 +16,7 @@ internal sealed class ClientSettings
     public double MicSensitivity { get; set; } = 0.15d;
     public bool MicSensitivityEnabled { get; set; }
     public LobbySettings MyLobbySettings { get; set; } = new();
+    public LobbySettings? RadioOnlyBackup { get; set; }
 
     public void Normalize()
     {
@@ -29,6 +30,7 @@ internal sealed class ClientSettings
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);
         MicSensitivity = Math.Clamp(MicSensitivity, 0d, 1d);
         MyLobbySettings = (MyLobbySettings ?? new LobbySettings()).Normalize();
+        RadioOnlyBackup = RadioOnlyBackup?.Normalize();
     }
 }
 

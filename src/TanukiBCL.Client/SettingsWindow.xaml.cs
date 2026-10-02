@@ -8,11 +8,16 @@ namespace TanukiBCL.Client;
 public partial class SettingsWindow : Window
 {
     private readonly ClientSettings settings;
+    private LobbySettings lobbyDraft;
+    private LobbySettings? radioOnlyBackup;
+    private bool loadingLobbyControls;
 
     internal SettingsWindow(ClientSettings settings, bool lobbySettingsEditable)
     {
         InitializeComponent();
         this.settings = settings;
+        lobbyDraft = settings.MyLobbySettings;
+        radioOnlyBackup = settings.RadioOnlyBackup;
         LobbyPanel.IsEnabled = lobbySettingsEditable;
         MicrophoneCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
         SpeakerCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
@@ -25,13 +30,7 @@ public partial class SettingsWindow : Window
         MicrophoneGainSlider.Value = settings.MicrophoneGain;
         MicrophoneGainCheck.IsChecked = settings.MicrophoneGainEnabled;
         ServerUrlBox.Text = settings.ServerUrl;
-        DistanceSlider.Value = settings.MyLobbySettings.MaxDistance;
-        HauntingCheck.IsChecked = settings.MyLobbySettings.Haunting;
-        HearVentsCheck.IsChecked = settings.MyLobbySettings.HearImpostorsInVents;
-        ImpostorVentCheck.IsChecked = settings.MyLobbySettings.ImpostersHearImpostersInvent;
-        ImpostorRadioCheck.IsChecked = settings.MyLobbySettings.ImpostorRadioEnabled;
-        DeadOnlyCheck.IsChecked = settings.MyLobbySettings.DeadOnly;
-        MeetingGhostOnlyCheck.IsChecked = settings.MyLobbySettings.MeetingGhostOnly;
+        LoadLobbyControls(lobbyDraft);
         CategoryList.SelectedIndex = 0;
         UpdateVolumeLabels();
     }
@@ -46,6 +45,58 @@ public partial class SettingsWindow : Window
     }
 
     private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateVolumeLabels();
+
+    private LobbySettings ReadLobbyControls() => lobbyDraft with
+    {
+        MaxDistance = DistanceSlider.Value,
+        Haunting = HauntingCheck.IsChecked == true,
+        HearImpostorsInVents = HearVentsCheck.IsChecked == true,
+        ImpostersHearImpostersInvent = ImpostorVentCheck.IsChecked == true,
+        ImpostorRadioEnabled = ImpostorRadioCheck.IsChecked == true,
+        ImpostorRadioOnlyMode = RadioOnlyCheck.IsChecked == true,
+        DeadOnly = DeadOnlyCheck.IsChecked == true,
+        MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true
+    };
+
+    private void LoadLobbyControls(LobbySettings value)
+    {
+        loadingLobbyControls = true;
+        DistanceSlider.Value = value.MaxDistance;
+        HauntingCheck.IsChecked = value.Haunting;
+        HearVentsCheck.IsChecked = value.HearImpostorsInVents;
+        ImpostorVentCheck.IsChecked = value.ImpostersHearImpostersInvent;
+        ImpostorRadioCheck.IsChecked = value.ImpostorRadioEnabled;
+        DeadOnlyCheck.IsChecked = value.DeadOnly;
+        MeetingGhostOnlyCheck.IsChecked = value.MeetingGhostOnly;
+        RadioOnlyCheck.IsChecked = value.ImpostorRadioOnlyMode;
+        loadingLobbyControls = false;
+
+        var regularSettingsEnabled = !value.ImpostorRadioOnlyMode;
+        DistanceSlider.IsEnabled = regularSettingsEnabled;
+        HearVentsCheck.IsEnabled = regularSettingsEnabled;
+        ImpostorVentCheck.IsEnabled = regularSettingsEnabled;
+        ImpostorRadioCheck.IsEnabled = regularSettingsEnabled;
+        DeadOnlyCheck.IsEnabled = regularSettingsEnabled;
+        MeetingGhostOnlyCheck.IsEnabled = regularSettingsEnabled;
+    }
+
+    private void RadioOnlyCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (loadingLobbyControls || DistanceSlider is null) return;
+
+        var current = ReadLobbyControls();
+        if (RadioOnlyCheck.IsChecked == true)
+        {
+            radioOnlyBackup = current;
+            lobbyDraft = current.EnableImpostorRadioOnlyMode();
+        }
+        else
+        {
+            lobbyDraft = current.DisableImpostorRadioOnlyMode(radioOnlyBackup);
+            radioOnlyBackup = null;
+        }
+        LoadLobbyControls(lobbyDraft);
+    }
 
     private void DeadOnlyCheck_Checked(object sender, RoutedEventArgs e)
     {
@@ -86,16 +137,8 @@ public partial class SettingsWindow : Window
             MicrophoneGainEnabled = MicrophoneGainCheck.IsChecked == true,
             MicSensitivity = settings.MicSensitivity,
             MicSensitivityEnabled = settings.MicSensitivityEnabled,
-            MyLobbySettings = settings.MyLobbySettings with
-            {
-                MaxDistance = DistanceSlider.Value,
-                Haunting = HauntingCheck.IsChecked == true,
-                HearImpostorsInVents = HearVentsCheck.IsChecked == true,
-                ImpostersHearImpostersInvent = ImpostorVentCheck.IsChecked == true,
-                ImpostorRadioEnabled = ImpostorRadioCheck.IsChecked == true,
-                DeadOnly = DeadOnlyCheck.IsChecked == true,
-                MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true
-            }
+            MyLobbySettings = ReadLobbyControls(),
+            RadioOnlyBackup = radioOnlyBackup
         };
         try
         {
@@ -114,6 +157,7 @@ public partial class SettingsWindow : Window
         settings.MicrophoneGain = candidate.MicrophoneGain;
         settings.MicrophoneGainEnabled = candidate.MicrophoneGainEnabled;
         settings.MyLobbySettings = candidate.MyLobbySettings;
+        settings.RadioOnlyBackup = candidate.RadioOnlyBackup;
         DialogResult = true;
     }
 

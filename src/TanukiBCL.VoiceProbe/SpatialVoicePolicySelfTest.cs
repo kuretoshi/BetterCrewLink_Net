@@ -35,6 +35,19 @@ internal static class SpatialVoicePolicySelfTest
             SpatialVoicePolicy.Calculate(discussion, new Player(), new Player { IsDead = true },
                 new SpatialVoiceSettings()).Audible);
 
+        var radioOnlyPolicy = new SpatialVoiceSettings(ImpostorRadioEnabled: true,
+            ImpostorRadioOnlyMode: true, MeetingGhostOnly: true);
+        var tasks = new AmongUsState { GameState = GameState.Tasks };
+        Check("radio-only: proximity silenced", false,
+            SpatialVoicePolicy.Calculate(tasks, new Player { IsImpostor = true },
+                new Player { IsImpostor = true }, radioOnlyPolicy).Audible);
+        Check("radio-only: impostor radio audible", true,
+            SpatialVoicePolicy.Calculate(tasks, new Player { IsImpostor = true },
+                new Player { IsImpostor = true }, radioOnlyPolicy, true).Audible);
+        Check("radio-only: crew cannot hear radio", false,
+            SpatialVoicePolicy.Calculate(tasks, new Player(),
+                new Player { IsImpostor = true }, radioOnlyPolicy, true).Audible);
+
         var lobbySettings = new LobbySettings
         {
             MaxDistance = 7.4d,
@@ -57,6 +70,24 @@ internal static class SpatialVoicePolicySelfTest
         }
         Check("lobby wire: round trip", true,
             JsonSerializer.Deserialize<LobbySettings>(wire, LobbySettings.WireJsonOptions) == lobbySettings);
+
+        var beforeRadioOnly = lobbySettings with
+        {
+            ImpostorRadioEnabled = false,
+            HearImpostorsInVents = true,
+            DeadOnly = true,
+            MeetingGhostOnly = false,
+            JackalRadioEnabled = true
+        };
+        var radioOnly = beforeRadioOnly.EnableImpostorRadioOnlyMode();
+        Check("radio-only preset: enabled", true,
+            radioOnly.ImpostorRadioOnlyMode && radioOnly.ImpostorRadioEnabled &&
+            radioOnly.MeetingGhostOnly && !radioOnly.DeadOnly &&
+            !radioOnly.HearImpostorsInVents && !radioOnly.JackalRadioEnabled);
+        var editedRadioOnly = radioOnly with { Haunting = true };
+        Check("radio-only preset: restore forced fields, retain free fields", true,
+            editedRadioOnly.DisableImpostorRadioOnlyMode(beforeRadioOnly) ==
+            (beforeRadioOnly with { Haunting = true }));
 
         Console.WriteLine(failures == 0
             ? "[PASS] 3.2.7 radio policy: Tasks/Discussion, impostor/crew/ghost"

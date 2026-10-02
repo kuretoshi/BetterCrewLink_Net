@@ -51,5 +51,53 @@ internal sealed record LobbySettings
         PublicLobbyLanguage = string.IsNullOrWhiteSpace(PublicLobbyLanguage) ? "ja" : PublicLobbyLanguage
     };
 
+    // SettingsPanel.tsx RADIO_ONLY_FORCED_SETTINGS. Keep the original values so
+    // switching the preset off restores only the fields the preset changed.
+    public LobbySettings EnableImpostorRadioOnlyMode() => this with
+    {
+        ImpostorRadioOnlyMode = true,
+        ImpostorRadioEnabled = true,
+        MeetingGhostOnly = true,
+        DeadOnly = false,
+        WallsBlockAudio = false,
+        VisionHearing = false,
+        VoiceEffectEnabled = false,
+        HearImpostorsInVents = false,
+        ImpostersHearImpostersInvent = false,
+        CommsSabotage = false,
+        HearThroughCameras = false,
+        SnrJumboVoice = false,
+        JackalHearOutsideVents = false,
+        JackalTalkInVents = false,
+        JackalRadioEnabled = false,
+        SidekickHearOutsideVents = false,
+        SidekickTalkInVents = false,
+        NosVoicePositions = false
+    };
+
+    public LobbySettings DisableImpostorRadioOnlyMode(LobbySettings? backup) => backup is null
+        ? this with { ImpostorRadioOnlyMode = false }
+        : this with
+        {
+            ImpostorRadioOnlyMode = false,
+            ImpostorRadioEnabled = backup.ImpostorRadioEnabled,
+            MeetingGhostOnly = backup.MeetingGhostOnly,
+            DeadOnly = backup.DeadOnly,
+            WallsBlockAudio = backup.WallsBlockAudio,
+            VisionHearing = backup.VisionHearing,
+            VoiceEffectEnabled = backup.VoiceEffectEnabled,
+            HearImpostorsInVents = backup.HearImpostorsInVents,
+            ImpostersHearImpostersInvent = backup.ImpostersHearImpostersInvent,
+            CommsSabotage = backup.CommsSabotage,
+            HearThroughCameras = backup.HearThroughCameras,
+            SnrJumboVoice = backup.SnrJumboVoice,
+            JackalHearOutsideVents = backup.JackalHearOutsideVents,
+            JackalTalkInVents = backup.JackalTalkInVents,
+            JackalRadioEnabled = backup.JackalRadioEnabled,
+            SidekickHearOutsideVents = backup.SidekickHearOutsideVents,
+            SidekickTalkInVents = backup.SidekickTalkInVents,
+            NosVoicePositions = backup.NosVoicePositions
+        };
+
     public string ToWireJson() => JsonSerializer.Serialize(Normalize(), WireJsonOptions);
 }
