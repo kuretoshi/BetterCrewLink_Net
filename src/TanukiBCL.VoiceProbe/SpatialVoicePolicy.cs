@@ -11,6 +11,7 @@ internal sealed record SpatialVoiceSettings(
     bool ImpostorRadioOnlyMode = false,
     bool CommsSabotage = false,
     bool HearThroughCameras = false,
+    bool WallsBlockAudio = false,
     bool Haunting = false,
     double GhostVolumeAsImpostor = 0.1d,
     double CrewVolumeAsGhost = 1d,
@@ -152,6 +153,12 @@ internal static class SpatialVoicePolicy
         if (distanceGain <= 0)
         {
             return Muted(pan, distance, "out-of-range");
+        }
+
+        if (!cameraMuffle && settings.WallsBlockAudio && !me.IsDead &&
+            WallCollision.Intersects(me, other, state.Map, state.ClosedDoors))
+        {
+            return Muted(pan, distance, "wall-blocked");
         }
 
         return ApplyListenerVolume(new PeerVoiceMix(baseGain * distanceGain, pan, distance,

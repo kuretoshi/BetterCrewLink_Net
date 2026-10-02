@@ -147,6 +147,44 @@ internal static class SpatialVoicePolicySelfTest
         var cameraHighTone = MeasureCameraFilteredRms(8_000d);
         Check("camera DSP: high frequency attenuated", true, cameraHighTone < cameraLowTone * 0.25d);
 
+        var fungleListener = new Player { X = 12d, Y = -15d };
+        var fungleSpeaker = new Player { X = 15d, Y = -15d };
+        var fungleTasks = new AmongUsState { GameState = GameState.Tasks, Map = MapType.Fungle };
+        Check("wall map: Fungle path blocks line of sight", true,
+            WallCollision.Intersects(fungleListener, fungleSpeaker, MapType.Fungle, []));
+        Check("wall policy: living listener blocked", false,
+            SpatialVoicePolicy.Calculate(fungleTasks, fungleListener, fungleSpeaker,
+                new SpatialVoiceSettings(WallsBlockAudio: true)).Audible);
+        Check("wall policy: disabled option preserves proximity", true,
+            SpatialVoicePolicy.Calculate(fungleTasks, fungleListener, fungleSpeaker,
+                new SpatialVoiceSettings()).Audible);
+        Check("wall policy: dead listener ignores walls", true,
+            SpatialVoicePolicy.Calculate(fungleTasks, new Player { X = 12d, Y = -15d, IsDead = true },
+                fungleSpeaker, new SpatialVoiceSettings(WallsBlockAudio: true)).Audible);
+        Check("wall policy: meetings ignore walls", true,
+            SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Discussion, Map = MapType.Fungle },
+                fungleListener, fungleSpeaker, new SpatialVoiceSettings(WallsBlockAudio: true)).Audible);
+        Check("wall policy: radio overrides walls", true,
+            SpatialVoicePolicy.Calculate(fungleTasks,
+                new Player { X = 12d, Y = -15d, IsImpostor = true },
+                new Player { X = 15d, Y = -15d, IsImpostor = true },
+                new SpatialVoiceSettings(WallsBlockAudio: true, ImpostorRadioEnabled: true), true).Audible);
+        var skeldDoorLeft = new Player { X = 4.5d, Y = 1.5d };
+        var skeldDoorRight = new Player { X = 5.5d, Y = 1.5d };
+        Check("closed door: open Skeld gap", false,
+            WallCollision.Intersects(skeldDoorLeft, skeldDoorRight, MapType.TheSkeld, []));
+        Check("closed door: Skeld door ID 0", true,
+            WallCollision.Intersects(skeldDoorLeft, skeldDoorRight, MapType.TheSkeld, [0]));
+        Check("closed door: mirrored April Skeld", true,
+            WallCollision.Intersects(new Player { X = -4.5d, Y = 1.5d },
+                new Player { X = -5.5d, Y = 1.5d }, MapType.TheSkeldApril, [0]));
+        var airshipDoorTop = new Player { X = 32.5d, Y = -4.1d };
+        var airshipDoorBottom = new Player { X = 32.5d, Y = -4.5d };
+        Check("closed door: open Airship gap", false,
+            WallCollision.Intersects(airshipDoorTop, airshipDoorBottom, MapType.Airship, []));
+        Check("closed door: Airship door ID 20", true,
+            WallCollision.Intersects(airshipDoorTop, airshipDoorBottom, MapType.Airship, [20]));
+
         var lobbySettings = new LobbySettings
         {
             MaxDistance = 7.4d,
@@ -189,8 +227,8 @@ internal static class SpatialVoicePolicySelfTest
             (beforeRadioOnly with { Haunting = true }));
 
         Console.WriteLine(failures == 0
-            ? "[PASS] 3.2.7 radio, listener-volume, vent and camera audio policy"
-            : $"[FAIL] 3.2.7 radio, listener-volume, vent and camera audio policy: {failures} cases failed");
+            ? "[PASS] 3.2.7 radio, listener-volume, vent, camera and wall audio policy"
+            : $"[FAIL] 3.2.7 radio, listener-volume, vent, camera and wall audio policy: {failures} cases failed");
         return failures == 0 ? 0 : 1;
 
         void Check(string name, bool expected, bool actual)

@@ -1208,7 +1208,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                     return;
                 }
 
-                var doorCount = Math.Min(ReadInt32(allDoors, Offsets.PlayerCount), 16);
+                // Airship's upstream collision map has door IDs through 20.
+                var doorCount = Math.Min(ReadInt32(allDoors, Offsets.PlayerCount), 64);
                 for (var doorIndex = 0; doorIndex < doorCount; doorIndex++)
                 {
                     var door = ReadPointer(allDoors + Offsets.PlayerAddrPtr + (doorIndex * (Is64Bit ? 8 : 4)));

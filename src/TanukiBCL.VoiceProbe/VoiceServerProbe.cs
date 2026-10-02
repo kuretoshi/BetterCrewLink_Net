@@ -654,6 +654,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ImpostorRadioOnlyMode = next.ImpostorRadioOnlyMode,
             CommsSabotage = next.CommsSabotage,
             HearThroughCameras = next.HearThroughCameras,
+            WallsBlockAudio = next.WallsBlockAudio,
             Haunting = next.Haunting,
             DeadOnly = next.DeadOnly,
             MeetingGhostOnly = next.MeetingGhostOnly
