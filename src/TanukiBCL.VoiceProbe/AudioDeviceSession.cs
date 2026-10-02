@@ -23,6 +23,8 @@ internal sealed class AudioDeviceSession : IDisposable
     private volatile float masterVolume = 1f;
     private volatile float microphoneGain = 1f;
     private volatile bool microphoneSensitivityEnabled;
+    private volatile MicrophoneActivationMode activationMode;
+    private volatile bool pushToTalkPressed;
     private bool disposed;
 
     [DllImport("winmm.dll")]
@@ -118,6 +120,14 @@ internal sealed class AudioDeviceSession : IDisposable
         microphoneSensitivityEnabled = enabled;
     }
 
+    public void SetMicrophoneActivationMode(MicrophoneActivationMode mode)
+    {
+        activationMode = mode;
+        pushToTalkPressed = false;
+    }
+
+    public void SetPushToTalkPressed(bool pressed) => pushToTalkPressed = pressed;
+
     public void SubmitPlayback(string peerId, ReadOnlySpan<short> stereoPcm)
     {
         if (disposed || stereoPcm.IsEmpty)
@@ -185,11 +195,6 @@ internal sealed class AudioDeviceSession : IDisposable
             return;
         }
 
-        if (microphoneMuted)
-        {
-            return;
-        }
-
         var buffer = args.Buffer.AsMemory(0, args.BytesRecorded).ToArray();
         var sensitivityEnabled = microphoneSensitivityEnabled;
         // The upstream VAD analyses the raw microphone before output gain.
@@ -208,14 +213,16 @@ internal sealed class AudioDeviceSession : IDisposable
                 BitConverter.TryWriteBytes(buffer.AsSpan(index, sizeof(short)), adjusted);
             }
         }
-        if (sensitivityEnabled && !talking)
+        var audioAllowed = MicrophoneActivationPolicy.AllowsAudio(activationMode, pushToTalkPressed, microphoneMuted);
+        if (!audioAllowed || (sensitivityEnabled && !talking))
         {
             Array.Clear(buffer);
         }
-        if (lastVadState != talking)
+        var transmittedTalking = audioAllowed && talking;
+        if (lastVadState != transmittedTalking)
         {
-            lastVadState = talking;
-            onVadChanged(talking);
+            lastVadState = transmittedTalking;
+            onVadChanged(transmittedTalking);
         }
 
         onCaptured(buffer);

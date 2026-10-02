@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using TanukiBCL.VoiceProbe;
 
 namespace TanukiBCL.Client;
@@ -38,6 +39,13 @@ public partial class SettingsWindow : Window
         MicrophoneGainCheck.IsChecked = settings.MicrophoneGainEnabled;
         MicSensitivitySlider.Value = 1d - settings.MicSensitivity;
         MicSensitivityCheck.IsChecked = settings.MicSensitivityEnabled;
+        VoiceModeRadio.IsChecked = settings.PushToTalkMode == MicrophoneActivationMode.Voice;
+        PushToTalkModeRadio.IsChecked = settings.PushToTalkMode == MicrophoneActivationMode.PushToTalk;
+        PushToMuteModeRadio.IsChecked = settings.PushToTalkMode == MicrophoneActivationMode.PushToMute;
+        PushToTalkShortcutBox.Text = settings.PushToTalkShortcut;
+        ImpostorRadioShortcutBox.Text = settings.ImpostorRadioShortcut;
+        MuteShortcutBox.Text = settings.MuteShortcut;
+        DeafenShortcutBox.Text = settings.DeafenShortcut;
         ServerUrlBox.Text = settings.ServerUrl;
         LoadLobbyControls(lobbyDraft);
         if (currentLobbySettings is not null && preferCurrentLobby)
@@ -65,7 +73,26 @@ public partial class SettingsWindow : Window
         GeneralPanel.Visibility = CategoryList.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
         LobbyPanel.Visibility = CategoryList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         AudioPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
-        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
+        KeybindsPanel.Visibility = CategoryList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
+        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ShortcutBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var shortcut = GlobalHotkeyMonitor.FromKey(key);
+        if (shortcut is not null) box.Text = shortcut;
+        e.Handled = true;
+    }
+
+    private void ShortcutBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        if (e.ChangedButton == MouseButton.XButton1) box.Text = "MouseButton4";
+        else if (e.ChangedButton == MouseButton.XButton2) box.Text = "MouseButton5";
+        else return;
+        e.Handled = true;
     }
 
     private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateVolumeLabels();
@@ -197,6 +224,15 @@ public partial class SettingsWindow : Window
             MicrophoneGainEnabled = MicrophoneGainCheck.IsChecked == true,
             MicSensitivity = Math.Round(1d - MicSensitivitySlider.Value, 2),
             MicSensitivityEnabled = MicSensitivityCheck.IsChecked == true,
+            PushToTalkMode = PushToTalkModeRadio.IsChecked == true
+                ? MicrophoneActivationMode.PushToTalk
+                : PushToMuteModeRadio.IsChecked == true
+                    ? MicrophoneActivationMode.PushToMute
+                    : MicrophoneActivationMode.Voice,
+            PushToTalkShortcut = PushToTalkShortcutBox.Text,
+            ImpostorRadioShortcut = ImpostorRadioShortcutBox.Text,
+            MuteShortcut = MuteShortcutBox.Text,
+            DeafenShortcut = DeafenShortcutBox.Text,
             MyLobbySettings = showingCurrentLobby ? lobbyDraft : ReadLobbyControls(),
             RadioOnlyBackup = radioOnlyBackup
         };
@@ -220,6 +256,11 @@ public partial class SettingsWindow : Window
         settings.MicrophoneGainEnabled = candidate.MicrophoneGainEnabled;
         settings.MicSensitivity = candidate.MicSensitivity;
         settings.MicSensitivityEnabled = candidate.MicSensitivityEnabled;
+        settings.PushToTalkMode = candidate.PushToTalkMode;
+        settings.PushToTalkShortcut = candidate.PushToTalkShortcut;
+        settings.ImpostorRadioShortcut = candidate.ImpostorRadioShortcut;
+        settings.MuteShortcut = candidate.MuteShortcut;
+        settings.DeafenShortcut = candidate.DeafenShortcut;
         settings.MyLobbySettings = candidate.MyLobbySettings;
         settings.RadioOnlyBackup = candidate.RadioOnlyBackup;
         DialogResult = true;

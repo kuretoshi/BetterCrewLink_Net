@@ -38,6 +38,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private double microphoneGain = 100d;
     private bool microphoneSensitivityEnabled;
     private double microphoneSensitivity = 0.15d;
+    private MicrophoneActivationMode microphoneActivationMode;
+    private bool pushToTalkPressed;
     private readonly object radioTransmitGate = new();
     private volatile bool impostorRadioTransmitting;
     private volatile bool localVadTalking;
@@ -292,6 +294,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         audioSession?.SetMicrophoneSensitivity(enabled, microphoneSensitivity);
     }
 
+    public void SetMicrophoneActivationMode(MicrophoneActivationMode mode)
+    {
+        microphoneActivationMode = mode;
+        pushToTalkPressed = false;
+        audioSession?.SetMicrophoneActivationMode(mode);
+    }
+
+    public void SetPushToTalkPressed(bool pressed)
+    {
+        pushToTalkPressed = pressed;
+        audioSession?.SetPushToTalkPressed(pressed);
+    }
+
     public void SetDeafened(bool value)
     {
         deafened = value;
@@ -426,6 +441,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             audioSession.SetMasterVolume(masterVolume);
             audioSession.SetMicrophoneGain(microphoneGain);
             audioSession.SetMicrophoneSensitivity(microphoneSensitivityEnabled, microphoneSensitivity);
+            audioSession.SetMicrophoneActivationMode(microphoneActivationMode);
+            audioSession.SetPushToTalkPressed(pushToTalkPressed);
             audioSession.Start();
         }
 

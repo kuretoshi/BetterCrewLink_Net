@@ -17,6 +17,11 @@ internal sealed class ClientSettings
     public bool MicrophoneGainEnabled { get; set; }
     public double MicSensitivity { get; set; } = 0.15d;
     public bool MicSensitivityEnabled { get; set; }
+    public MicrophoneActivationMode PushToTalkMode { get; set; } = MicrophoneActivationMode.Voice;
+    public string PushToTalkShortcut { get; set; } = "V";
+    public string ImpostorRadioShortcut { get; set; } = "F";
+    public string MuteShortcut { get; set; } = "RAlt";
+    public string DeafenShortcut { get; set; } = "RControl";
     public LobbySettings MyLobbySettings { get; set; } = new();
     public LobbySettings? RadioOnlyBackup { get; set; }
 
@@ -33,6 +38,11 @@ internal sealed class ClientSettings
         GhostVolumeAsImpostor = Math.Clamp(GhostVolumeAsImpostor, 0, 100);
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);
         MicSensitivity = Math.Clamp(MicSensitivity, 0d, 1d);
+        if (!Enum.IsDefined(PushToTalkMode)) PushToTalkMode = MicrophoneActivationMode.Voice;
+        PushToTalkShortcut = GlobalHotkeyMonitor.NormalizeShortcut(PushToTalkShortcut, "V");
+        ImpostorRadioShortcut = GlobalHotkeyMonitor.NormalizeShortcut(ImpostorRadioShortcut, "F");
+        MuteShortcut = GlobalHotkeyMonitor.NormalizeShortcut(MuteShortcut, "RAlt");
+        DeafenShortcut = GlobalHotkeyMonitor.NormalizeShortcut(DeafenShortcut, "RControl");
         MyLobbySettings = (MyLobbySettings ?? new LobbySettings()).Normalize();
         RadioOnlyBackup = RadioOnlyBackup?.Normalize();
     }

@@ -14,6 +14,9 @@ public partial class MainWindow : Window
     private CancellationTokenSource? runCancellation;
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
+    private GlobalHotkeyMonitor? hotkeys;
+    private Task? hotkeyTask;
+    private volatile bool hotkeysSuspended;
     private readonly ObservableCollection<PeerRow> peers = [];
     private readonly ClientSettings settings;
     private AmongUsState? currentState;
@@ -41,6 +44,7 @@ public partial class MainWindow : Window
         var window = new SettingsWindow(settings, !hostInGame,
             probe?.CurrentLobbySettings, currentState?.IsHost != true) { Owner = this };
         settingsWindow = window;
+        hotkeysSuspended = true;
         bool? saved;
         try
         {
@@ -49,6 +53,7 @@ public partial class MainWindow : Window
         finally
         {
             settingsWindow = null;
+            hotkeysSuspended = false;
         }
         if (saved != true) return;
 
@@ -58,6 +63,8 @@ public partial class MainWindow : Window
         probe?.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         probe?.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe?.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
+        probe?.SetMicrophoneActivationMode(settings.PushToTalkMode);
+        hotkeys?.UpdateBindings(settings);
         probe?.SetOwnLobbySettings(settings.MyLobbySettings);
     }
 
@@ -123,6 +130,7 @@ public partial class MainWindow : Window
         probe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
+        probe.SetMicrophoneActivationMode(settings.PushToTalkMode);
         probe.SetOwnLobbySettings(settings.MyLobbySettings);
         probe.LobbySettingsChanged += _ => Dispatch(() =>
             settingsWindow?.UpdateCurrentLobbySettings(probe?.CurrentLobbySettings));
@@ -154,6 +162,26 @@ public partial class MainWindow : Window
             RadioButton.Content = active ? "インポスターラジオ: ON" : "インポスターラジオ: OFF";
             RadioButton.Background = active ? System.Windows.Media.Brushes.DarkOrange : null;
         });
+        hotkeys = new GlobalHotkeyMonitor(
+            pressed => probe?.SetPushToTalkPressed(pressed),
+            () => Dispatch(() =>
+            {
+                if (runCancellation?.IsCancellationRequested == false && probe?.CanUseImpostorRadio == true)
+                    probe.SetImpostorRadioTransmitting(!radioTransmitting);
+            }),
+            () => Dispatch(() =>
+            {
+                if (runCancellation?.IsCancellationRequested == false) ToggleMicrophoneMute();
+            }),
+            () => Dispatch(() =>
+            {
+                if (runCancellation?.IsCancellationRequested == false) ToggleDeafen();
+            }),
+            () => hotkeysSuspended);
+        hotkeys.UpdateBindings(settings);
+        var runningHotkeys = hotkeys;
+        var hotkeyCancellationToken = runCancellation.Token;
+        hotkeyTask = Task.Run(() => runningHotkeys.RunAsync(hotkeyCancellationToken));
 
         try
         {
@@ -169,6 +197,10 @@ public partial class MainWindow : Window
         finally
         {
             var wasStopped = runCancellation?.IsCancellationRequested == true;
+            runCancellation?.Cancel();
+            if (hotkeyTask is not null) await hotkeyTask;
+            hotkeyTask = null;
+            hotkeys = null;
             if (probe is not null)
             {
                 await probe.DisposeAsync();
@@ -187,6 +219,9 @@ public partial class MainWindow : Window
     private void StopButton_Click(object sender, RoutedEventArgs e) => runCancellation?.Cancel();
 
     private void MuteButton_Click(object sender, RoutedEventArgs e)
+        => ToggleMicrophoneMute();
+
+    private void ToggleMicrophoneMute()
     {
         microphoneMuted = !microphoneMuted;
         probe?.SetMicrophoneMuted(microphoneMuted);
@@ -195,6 +230,9 @@ public partial class MainWindow : Window
     }
 
     private void DeafenButton_Click(object sender, RoutedEventArgs e)
+        => ToggleDeafen();
+
+    private void ToggleDeafen()
     {
         deafened = !deafened;
         probe?.SetDeafened(deafened);

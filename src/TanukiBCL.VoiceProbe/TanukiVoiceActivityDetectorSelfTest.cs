@@ -55,7 +55,18 @@ internal static class TanukiVoiceActivityDetectorSelfTest
             return 1;
         }
 
-        Console.WriteLine("[PASS] 3.2.7 frequency-band VAD: speech-band start, silence stop, out-of-band rejection, sensitivity threshold");
+        if (!MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.Voice, false, false) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToTalk, false, false) ||
+            !MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToTalk, true, false) ||
+            !MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToMute, false, false) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToMute, true, false) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.Voice, true, true))
+        {
+            Console.Error.WriteLine("[FAIL] Microphone activation mode or manual mute policy.");
+            return 1;
+        }
+
+        Console.WriteLine("[PASS] 3.2.7 frequency-band VAD and push-to-talk/mute policy");
         return 0;
     }
 

@@ -28,6 +28,7 @@
                     <ListBoxItem Content="一般" Padding="12,9" />
                     <ListBoxItem Content="ロビー設定" Padding="12,9" />
                     <ListBoxItem Content="オーディオ" Padding="12,9" />
+                    <ListBoxItem Content="キー割り当て" Padding="12,9" />
                     <ListBoxItem Content="詳細設定" Padding="12,9" />
                 </ListBox>
             </StackPanel>
@@ -86,6 +87,10 @@
                         <ComboBox x:Name="SpeakerCombo" Margin="0,0,0,10" />
                         <TextBlock Text="デバイスの変更は再接続後に反映されます。"
                                    Foreground="#B7AABD" Margin="0,0,0,20" />
+                        <TextBlock Text="音声操作モード" Margin="0,0,0,8" />
+                        <RadioButton x:Name="VoiceModeRadio" Content="声で起動" GroupName="MicrophoneMode" Margin="0,0,0,7" />
+                        <RadioButton x:Name="PushToTalkModeRadio" Content="押している間だけ話す" GroupName="MicrophoneMode" Margin="0,0,0,7" />
+                        <RadioButton x:Name="PushToMuteModeRadio" Content="押している間だけミュート" GroupName="MicrophoneMode" Margin="0,0,0,20" />
                         <TextBlock Text="マスター音量" />
                         <DockPanel Margin="0,5,0,20">
                             <TextBlock x:Name="MasterVolumeValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
@@ -125,6 +130,23 @@
                         </DockPanel>
                         <TextBlock Text="値を上げるほど小さな声にも反応します。無音時は送信音声を抑えます。"
                                    TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,18" />
+                    </StackPanel>
+                    <StackPanel x:Name="KeybindsPanel" Visibility="Collapsed">
+                        <TextBlock Text="キー割り当て" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
+                        <TextBlock Text="欄をクリックしてキーを押してください。Escで無効化できます。"
+                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,18" />
+                        <TextBlock Text="押して話す／押してミュート" />
+                        <TextBox x:Name="PushToTalkShortcutBox" IsReadOnly="True" Margin="0,6,0,16"
+                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                        <TextBlock Text="インポスターラジオ" />
+                        <TextBox x:Name="ImpostorRadioShortcutBox" IsReadOnly="True" Margin="0,6,0,16"
+                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                        <TextBlock Text="マイクミュート切替" />
+                        <TextBox x:Name="MuteShortcutBox" IsReadOnly="True" Margin="0,6,0,16"
+                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                        <TextBlock Text="スピーカーミュート切替" />
+                        <TextBox x:Name="DeafenShortcutBox" IsReadOnly="True" Margin="0,6,0,16"
+                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
                     </StackPanel>
                     <StackPanel x:Name="AdvancedPanel" Visibility="Collapsed">
                         <TextBlock Text="詳細設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
