@@ -856,6 +856,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         if (HasNosJackalRadio(state, player))
             return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode;
+        if (state.Mod == AmongUsModType.SuperNewRoles && player.SnrRole?.IsJackalTeam == true)
+            return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode;
         return player.IsImpostor &&
             (spatialVoiceSettings.ImpostorRadioEnabled || spatialVoiceSettings.ImpostorRadioOnlyMode);
     }
@@ -886,7 +888,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             MeetingGhostOnly = next.MeetingGhostOnly,
             NosVoicePositions = next.NosVoicePositions,
             NosFixerJammingVoiceBlock = next.NosFixerJammingVoiceBlock,
-            JackalRadioEnabled = next.JackalRadioEnabled
+            JackalRadioEnabled = next.JackalRadioEnabled,
+            JackalHaunting = next.JackalHaunting,
+            JackalHearOutsideVents = next.JackalHearOutsideVents,
+            JackalTalkInVents = next.JackalTalkInVents,
+            SidekickHaunting = next.SidekickHaunting,
+            SidekickHearOutsideVents = next.SidekickHearOutsideVents,
+            SidekickTalkInVents = next.SidekickTalkInVents
         };
         if (options.AutoRadioTone && !impostorRadioTransmitting && CanUseImpostorRadio)
         {
@@ -972,6 +980,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         if (HasNosJackalRadio(state, sender))
             return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode &&
                 CanHearNosJackalRadio(state, sender, listener);
+        if (state.Mod == AmongUsModType.SuperNewRoles && sender.SnrRole?.IsJackalTeam == true)
+            return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode &&
+                listener.SnrRole?.IsJackalTeam == true && !listener.IsDead;
         return listener is { IsImpostor: true, IsDead: false } or { IsDead: true };
     }
 

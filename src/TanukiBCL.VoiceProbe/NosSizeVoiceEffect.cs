@@ -29,6 +29,23 @@ internal static class VoiceDisguiseEffectPolicy
             double.IsFinite(x) && x > 0d)
             return null;
 
+        // 3.2.7 gives SNR Jumbo priority over the ordinary disguise. A role
+        // without a valid live size must not fall through to that disguise.
+        if (state.Mod == AmongUsModType.SuperNewRoles && lobby.SnrJumboVoice &&
+            speaker.SnrRole is { HasJumbo: true } snrRole)
+        {
+            if (!audible || state.GameState != GameState.Tasks || speaker.IsDead ||
+                speaker.Disconnected || speaker.IsDummy)
+                return null;
+            if (snrRole.JumboCurrentSize is not { } current ||
+                snrRole.JumboMaxSize is not { } max ||
+                !double.IsFinite(current) || !double.IsFinite(max) ||
+                current <= 0d || max <= 0d)
+                return null;
+            return new NosSizeVoiceEffect(NosSizeEffectMode.Jumbo,
+                Math.Min(1d, current / max), 1d);
+        }
+
         if (!audible || state.GameState != GameState.Tasks || speaker.IsDead ||
             speaker.Disconnected || speaker.IsDummy || listener.IsDead ||
             !lobby.VoiceEffectEnabled || strengthPercent <= 0)
@@ -36,6 +53,10 @@ internal static class VoiceDisguiseEffectPolicy
 
         if (impostorRadioActive && listener.IsImpostor && speaker.IsImpostor &&
             (lobby.ImpostorRadioEnabled || lobby.ImpostorRadioOnlyMode))
+            return null;
+        if (impostorRadioActive && state.Mod == AmongUsModType.SuperNewRoles &&
+            lobby.JackalRadioEnabled && !lobby.ImpostorRadioOnlyMode &&
+            listener.SnrRole?.IsJackalTeam == true && speaker.SnrRole?.IsJackalTeam == true)
             return null;
 
         static bool ChangedName(Player player) =>

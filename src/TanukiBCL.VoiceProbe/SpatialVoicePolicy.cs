@@ -20,6 +20,12 @@ internal sealed record SpatialVoiceSettings(
     bool NosVoicePositions = false,
     bool NosFixerJammingVoiceBlock = true,
     bool JackalRadioEnabled = false,
+    bool JackalHaunting = false,
+    bool JackalHearOutsideVents = false,
+    bool JackalTalkInVents = false,
+    bool SidekickHaunting = false,
+    bool SidekickHearOutsideVents = false,
+    bool SidekickTalkInVents = false,
     bool VisionHearing = false);
 
 internal sealed record PeerVoiceMix(
@@ -48,6 +54,11 @@ internal static class SpatialVoicePolicy
         bool nosJackalRadioHearable = false)
     {
         var isNos = state.Mod == AmongUsModType.NebulaOnTheShip;
+        var isSnr = state.Mod == AmongUsModType.SuperNewRoles;
+        var meJackal = isSnr && me.SnrRole?.IsJackal == true;
+        var meSidekick = isSnr && me.SnrRole?.IsSidekick == true;
+        var meJackalTeam = meJackal || meSidekick;
+        var otherJackalTeam = isSnr && other.SnrRole?.IsJackalTeam == true;
         var airshipMeetingFallback = state.Map == MapType.Airship && state.AirshipMeetingByOutfit;
         var useNosPositions = isNos && settings.NosVoicePositions;
         var meX = useNosPositions ? state.NosLocalMicPosition?.X ?? me.X : me.X;
@@ -89,7 +100,8 @@ internal static class SpatialVoicePolicy
         if (otherUsingImpostorRadio)
         {
             return CanHearImpostorRadio(me, other, settings) ||
-                   CanHearNosJackalRadio(state, settings, nosJackalRadioHearable)
+                   CanHearNosJackalRadio(state, settings, nosJackalRadioHearable) ||
+                   CanHearSnrJackalRadio(me, other, settings, isSnr)
                 ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio",
                     RadioHighPass: true, RadioEcho: true), me, other, settings)
                         : Muted(0, distance, "radio-private");
@@ -105,7 +117,8 @@ internal static class SpatialVoicePolicy
         if (otherUsingImpostorRadio)
         {
             return CanHearImpostorRadio(me, other, settings) ||
-                   CanHearNosJackalRadio(state, settings, nosJackalRadioHearable)
+                   CanHearNosJackalRadio(state, settings, nosJackalRadioHearable) ||
+                   CanHearSnrJackalRadio(me, other, settings, isSnr)
                 ? ApplyListenerVolume(CreateTaskRadioMix(me, other, distance), me, other, settings)
                 : Muted(0, distance, "radio-private");
         }
@@ -125,9 +138,13 @@ internal static class SpatialVoicePolicy
             return Muted(pan, distance, "comms-sabotage");
         }
 
-        if (other.InVent &&
-            !(settings.HearImpostorsInVents ||
-              (settings.ImpostorsHearImpostorsInVents && me.IsImpostor && me.InVent)))
+        var canHearVented = (meJackalTeam || otherJackalTeam) && me.InVent
+            ? meJackalTeam && otherJackalTeam &&
+              (meSidekick || other.SnrRole?.IsSidekick == true
+                  ? settings.SidekickTalkInVents : settings.JackalTalkInVents)
+            : settings.HearImpostorsInVents ||
+              settings.ImpostorsHearImpostorsInVents && me.InVent;
+        if (other.InVent && !canHearVented)
         {
             return Muted(pan, distance, "peer-in-vent");
         }
@@ -135,13 +152,21 @@ internal static class SpatialVoicePolicy
         var baseGain = 1d;
         if (!me.IsDead && other.IsDead)
         {
-            if (!me.IsImpostor || !settings.Haunting)
+            var snrHearingGhosts = isSnr && (meJackal
+                ? settings.JackalHaunting
+                : meSidekick ? settings.SidekickHaunting
+                : me.SnrRole?.IsNeutralKiller == true && settings.JackalHaunting);
+            if (!snrHearingGhosts && (!me.IsImpostor || !settings.Haunting))
             {
                 return Muted(pan, distance, "living-cannot-hear-ghost");
             }
 
             baseGain *= settings.GhostVolumeAsImpostor;
         }
+
+        if (meJackalTeam && me.InVent && !other.InVent &&
+            !(meJackal ? settings.JackalHearOutsideVents : settings.SidekickHearOutsideVents))
+            return Muted(pan, distance, "snr-vent-private");
 
         // When the speaker is outside proximity, v3.2.7 can hear them from the
         // selected camera instead. Camera reception uses that camera's position
@@ -241,6 +266,12 @@ internal static class SpatialVoicePolicy
         bool hearable) =>
         state.Mod == AmongUsModType.NebulaOnTheShip && settings.JackalRadioEnabled &&
         !settings.ImpostorRadioOnlyMode && hearable;
+
+    private static bool CanHearSnrJackalRadio(Player me, Player other,
+        SpatialVoiceSettings settings, bool isSnr) =>
+        isSnr && settings.JackalRadioEnabled && !settings.ImpostorRadioOnlyMode &&
+        !me.IsDead && !other.IsDead && me.SnrRole?.IsJackalTeam == true &&
+        other.SnrRole?.IsJackalTeam == true;
 
     private static PeerVoiceMix CreateTaskRadioMix(Player me, Player other, double distance)
     {

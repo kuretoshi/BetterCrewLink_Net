@@ -23,4 +23,16 @@
       </ResolvedFileToPublish>
     </ItemGroup>
   </Target>
+
+  <Target Name="BundleSnrRoleReader" BeforeTargets="ComputeFilesToPublish">
+    <MSBuild Projects="..\..\tools\SnrRoleReader\SnrRoleReader.csproj"
+             Targets="Publish"
+             Properties="Configuration=Release;RuntimeIdentifier=win-x86;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;DebugType=None;PublishDir=$(MSBuildProjectDirectory)\obj\snr-reader-publish\" />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)\obj\snr-reader-publish\SnrRoleReader.exe">
+        <RelativePath>RoleReaders\SnrRoleReader.exe</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>

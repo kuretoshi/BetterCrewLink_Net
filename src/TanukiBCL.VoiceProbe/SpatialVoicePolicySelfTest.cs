@@ -9,6 +9,10 @@ internal static class SpatialVoicePolicySelfTest
     public static int Run()
     {
         var failures = 0;
+        var snrReader = SnrLiveRoleReaderSelfTest.Verify();
+        Check("SNR live reader: role and modifier names", true, snrReader.Role);
+        Check("SNR live reader: Jumbo size", true, snrReader.Jumbo);
+        Check("SNR live reader: torn role sample rejected", true, snrReader.TornSampleRejected);
         foreach (var gameState in new[] { GameState.Tasks, GameState.Discussion })
         {
             var state = new AmongUsState { GameState = gameState };
@@ -103,6 +107,34 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS radio: non-NoS game ignores recipient mask", false,
             SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks },
                 new Player(), distantNosSender, nosRadioPolicy, true, true).Audible);
+        var snrTasks = new AmongUsState { Mod = AmongUsModType.SuperNewRoles,
+            GameState = GameState.Tasks };
+        var snrJackal = new Player { SnrRole = new SnrRoleData(7, "Jackal", null, null,
+            null, null) };
+        var snrSidekick = new Player { X = 20d,
+            SnrRole = new SnrRoleData(9, "Sidekick", null, null, null, null) };
+        Check("SNR radio: Jackal hears distant Sidekick", true,
+            SpatialVoicePolicy.Calculate(snrTasks, snrJackal, snrSidekick,
+                new SpatialVoiceSettings(JackalRadioEnabled: true), true).Audible);
+        Check("SNR radio: crewmate cannot hear Sidekick", false,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player(), snrSidekick,
+                new SpatialVoiceSettings(JackalRadioEnabled: true), true).Audible);
+        Check("SNR radio: ghost cannot hear Jackal channel", false,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player { IsDead = true,
+                SnrRole = snrJackal.SnrRole }, snrSidekick,
+                new SpatialVoiceSettings(JackalRadioEnabled: true), true).Audible);
+        Check("SNR vent: Jackal hears Sidekick inside vent when enabled", true,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player { InVent = true,
+                SnrRole = snrJackal.SnrRole }, new Player { InVent = true,
+                SnrRole = snrSidekick.SnrRole },
+                new SpatialVoiceSettings(SidekickTalkInVents: true)).Audible);
+        Check("SNR vent: Jackal cannot hear Sidekick inside vent when disabled", false,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player { InVent = true,
+                SnrRole = snrJackal.SnrRole }, new Player { InVent = true,
+                SnrRole = snrSidekick.SnrRole }, new SpatialVoiceSettings()).Audible);
+        Check("SNR haunting: Jackal hears ghost when enabled", true,
+            SpatialVoicePolicy.Calculate(snrTasks, snrJackal, new Player { IsDead = true },
+                new SpatialVoiceSettings(JackalHaunting: true)).Audible);
         var nosJackalChannels = new List<NosRadioData>
         {
             new(0, -1, "impostor"),
@@ -207,6 +239,23 @@ internal static class SpatialVoicePolicySelfTest
         Check("disguise: Airship meeting fallback suppresses all effects", true,
             VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
                 new LobbySettings(), 100, true, false) is null);
+        disguiseTasks.AirshipMeetingByOutfit = false;
+        disguiseTasks.Mod = AmongUsModType.SuperNewRoles;
+        disguisedSpeaker.SnrRole = new SnrRoleData(7, "Jackal", 4, "JumboModifier",
+            null, null, JumboCurrentSize: 2.5d, JumboMaxSize: 5d);
+        var snrJumbo = VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener,
+            disguisedSpeaker, new LobbySettings { SnrJumboVoice = true,
+                VoiceEffectEnabled = false }, 0, true, false);
+        Check("SNR Jumbo: live size takes priority over disguise toggle", true,
+            snrJumbo is { Mode: NosSizeEffectMode.Jumbo, Strength: 0.5d });
+        disguisedSpeaker.SnrRole = disguisedSpeaker.SnrRole with { JumboMaxSize = null };
+        Check("SNR Jumbo: missing size blocks disguise fallback", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings { SnrJumboVoice = true }, 100, true, false) is null);
+        disguisedSpeaker.SnrRole = disguisedSpeaker.SnrRole with { JumboMaxSize = 5d };
+        Check("SNR Jumbo: inaudible speaker gets no effect", true,
+            VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
+                new LobbySettings { SnrJumboVoice = true }, 100, false, false) is null);
         var disguiseAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(NosSizeEffectMode.Disguise, 1d, 1d), 850d);
         Check("disguise DSP: pitch-up path shifts center-band voice", true,
             ToneAmplitude(disguiseAudio, 1700d) > ToneAmplitude(disguiseAudio, 850d));

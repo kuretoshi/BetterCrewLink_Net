@@ -34,6 +34,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     private DateTimeOffset nextModCheck = DateTimeOffset.MinValue;
     private readonly NosSnapshotReader nosReader = new();
     private int nosRound;
+    private readonly SnrLiveRoleReader snrReader = new();
+    private int snrRound;
 
     public event EventHandler<AmongUsState>? StateChanged;
     public event EventHandler<string>? Error;
@@ -56,6 +58,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             nextModCheck = DateTimeOffset.UtcNow.AddSeconds(2);
             nosReader.Reset();
             nosRound = 0;
+            snrReader.Reset();
+            snrRound = 0;
         }
 
         if (nextProcessInfo is null)
@@ -274,6 +278,25 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             nosReader.Reset();
         }
 
+        if (mod == AmongUsModType.SuperNewRoles &&
+            gameState is GameState.Tasks or GameState.Discussion)
+        {
+            if (previousGameState is GameState.Menu or GameState.Lobby or GameState.Unknown)
+                snrRound++;
+            var snrRoles = snrReader.Update(currentProcess.ProcessId,
+                $"{lobbyCode}:{snrRound}", currentContext.ReadBytes);
+            foreach (var player in players)
+            {
+                player.SnrRole = !player.Disconnected && snrRoles.TryGetValue(player.Id, out var role)
+                    ? role : null;
+                player.IsThirdParty = player.SnrRole?.IsNeutral == true;
+            }
+        }
+        else if (mod != AmongUsModType.SuperNewRoles || gameState == GameState.Menu)
+        {
+            snrReader.Reset();
+        }
+
         ReportDiagnostic(string.Join(" | ",
             $"raw={rawGameState}",
             $"state={gameState}",
@@ -285,6 +308,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             $"client={clientId}",
             $"host={hostId}",
             mod == AmongUsModType.NebulaOnTheShip ? $"nos={nosReader.Status}" : string.Empty,
+            mod == AmongUsModType.SuperNewRoles ? $"snr={snrReader.Status}" : string.Empty,
             $"inner=0x{innerNetClient:X}",
             $"all=0x{allPlayers:X}"));
 
