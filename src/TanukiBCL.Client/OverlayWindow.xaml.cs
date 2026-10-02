@@ -245,30 +245,28 @@ public partial class OverlayWindow : Window
             MeetingCanvas.Visibility = Visibility.Collapsed;
             return;
         }
-        var ratioDifference = Math.Abs(Width / Height - 1.7d);
-        var hudWidth = Width / (ratioDifference < 0.25d ? 1.192d :
-            ratioDifference < 0.5d ? 1.146d : 1.591d);
-        var hudHeight = hudWidth / 1.72d;
+        var layout = MeetingOverlayLayout.Create(Width, Height, state.OldMeetingHud);
+        var hudWidth = layout.Width;
+        var hudHeight = layout.Height;
         MeetingCanvas.Width = hudWidth;
         MeetingCanvas.Height = hudHeight;
         Canvas.SetLeft(MeetingCanvas, (Width - hudWidth) / 2d);
         Canvas.SetTop(MeetingCanvas, (Height - hudHeight) / 2d);
-        var slotWidth = hudWidth * 0.3d;
-        var slotHeight = hudHeight * 0.109d;
         for (var index = 0; index < meetingOrder.Count; index++)
         {
             var player = state.Players.FirstOrDefault(candidate => candidate.Id == meetingOrder[index]);
             if (player is null) continue;
             peers.TryGetValue(player.ClientId, out var peer);
             var talking = player.IsLocal ? localTalking && !microphoneMuted : peer?.VoiceActive == true;
+            var bounds = layout.Slot(index);
             var color = state.Mod == AmongUsModType.NebulaOnTheShip && player.NosPlayer is { } nos &&
                 double.IsFinite(nos.ColorR) && double.IsFinite(nos.ColorG) && double.IsFinite(nos.ColorB)
                 ? Color.FromRgb(ToByte(nos.ColorR), ToByte(nos.ColorG), ToByte(nos.ColorB))
                 : AvatarImageFactory.GetSwatchColors(player.ColorId, state.PlayerColors).Main;
             var slot = new Border
             {
-                Width = slotWidth, Height = slotHeight,
-                CornerRadius = new CornerRadius(Math.Max(3d, hudHeight / 100d)),
+                Width = bounds.Width, Height = bounds.Height,
+                CornerRadius = new CornerRadius(hudHeight / 100d),
                 BorderThickness = new Thickness(2d),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(0x37, 0, 0, 0)),
                 Background = Brushes.Transparent,
@@ -279,8 +277,8 @@ public partial class OverlayWindow : Window
                     ShadowDepth = 0d, Opacity = 0.95d
                 }
             };
-            Canvas.SetLeft(slot, hudWidth * (0.004d + index % 3 * 0.3263d));
-            Canvas.SetTop(slot, hudHeight * (0.15d + index / 3 * 0.128d));
+            Canvas.SetLeft(slot, bounds.X);
+            Canvas.SetTop(slot, bounds.Y);
             MeetingCanvas.Children.Add(slot);
         }
         MeetingCanvas.Visibility = Visibility.Visible;
@@ -291,6 +289,7 @@ public partial class OverlayWindow : Window
 
     internal static void VerifyRender()
     {
+        MeetingOverlayLayout.Verify();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
         var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
         try
@@ -310,6 +309,21 @@ public partial class OverlayWindow : Window
                 window.MeetingCanvas.Children.Count != 2 ||
                 window.WatermarkTitle.Text.Length == 0)
                 throw new InvalidOperationException("Overlay render smoke test failed");
+            foreach (var oldHud in new[] { true, false })
+            {
+                state.OldMeetingHud = oldHud;
+                window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, true, false) }, false, false, false);
+                var expected = MeetingOverlayLayout.Create(window.Width, window.Height, oldHud);
+                var box = (Border)window.MeetingCanvas.Children[1];
+                var expectedBox = expected.Slot(1);
+                if (Math.Abs(window.MeetingCanvas.Width - expected.Width) > 0.000001 ||
+                    Math.Abs(window.MeetingCanvas.Height - expected.Height) > 0.000001 ||
+                    Math.Abs(Canvas.GetLeft(box) - expectedBox.X) > 0.000001 ||
+                    Math.Abs(Canvas.GetTop(box) - expectedBox.Y) > 0.000001 ||
+                    Math.Abs(box.Width - expectedBox.Width) > 0.000001 ||
+                    Math.Abs(box.Height - expectedBox.Height) > 0.000001)
+                    throw new InvalidOperationException("Meeting HUD layout was not applied to WPF slots");
+            }
             foreach (var (position, mirrored, side, alternate) in new[] {
                 ("left", false, true, false), ("left1", false, true, true),
                 ("right", true, true, false), ("right1", true, true, true),
