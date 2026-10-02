@@ -20,6 +20,10 @@ internal static class Program
             {
                 return MobileHostBeaconSelfTest.Run();
             }
+            if (args.Contains("--server-reconnect-self-test"))
+            {
+                return await ServerReconnectSelfTest.RunAsync();
+            }
             var options = ProbeOptions.Parse(args);
             if (options.PolicySelfTest)
             {
@@ -142,6 +146,7 @@ internal static class Program
               --vad-self-test     3.2.7の周波数帯VADとマイク操作モードを検証
               --audio-processing-self-test  エコーキャンセル・ノイズ抑制・自動ゲイン処理を検証
               --mobile-host-self-test  3.2.7モバイルホスト通知を検証
+              --server-reconnect-self-test  ローカルサーバーの切断・再接続とロビー再参加を検証
               --tanuki-interop-test 起動中のTanukiBCLとのWebRTC・Opus相互接続を検証
               --expected-peer-client-id <id> 相互接続テストの対象client IDを固定
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生

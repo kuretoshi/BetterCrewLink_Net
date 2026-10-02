@@ -25,13 +25,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private AmongUsState? currentGameState;
     private AmongUsMemoryReaderService? gameReader;
     private readonly SemaphoreSlim gameStateGate = new(1, 1);
+    private readonly CancellationTokenSource lifetimeCancellation = new();
+    private readonly CancellationToken lifetimeToken;
+    private readonly object disposalGate = new();
+    private Task? disposalTask;
+    private long serverConnectionVersion;
+    private long joinedConnectionVersion = -1;
+    private volatile TaskCompletionSource currentConnectionReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private string currentJoinedLobby = "MENU";
     private string lastMixSignature = string.Empty;
     private SpatialVoiceSettings spatialVoiceSettings = new();
     private bool spatialAudioEnabled = true;
     private volatile bool mobileHostEnabled = true;
     private volatile bool mobileRunning;
-    private Task? mobileBeaconTask;
     private IReadOnlyDictionary<int, PlayerAudioConfig> playerConfigs = new Dictionary<int, PlayerAudioConfig>();
     private LobbySettings ownLobbySettings = new();
     private LobbySettings activeLobbySettings = new();
@@ -77,6 +83,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         this.options = options;
         this.label = label;
+        lifetimeToken = lifetimeCancellation.Token;
         socket = new SocketIOClient.SocketIO(options.Server, new SocketIOOptions
         {
             Transport = TransportProtocol.WebSocket,
@@ -192,7 +199,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         state.Players.Any(player => player.IsLocal && !player.IsDead && CanUseRadio(state, player));
 
     public LobbySettings? CurrentLobbySettings =>
-        hasActiveLobbySettings && currentJoinedLobby != "MENU" ? activeLobbySettings : null;
+        hasActiveLobbySettings && currentJoinedLobby != "MENU" &&
+        Volatile.Read(ref joinedConnectionVersion) == Volatile.Read(ref serverConnectionVersion)
+            ? activeLobbySettings : null;
 
     public bool IsPeerPresent(int clientId) =>
         peerClientIds.Any(peer => peer.Value == clientId);
@@ -212,7 +221,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             lastObsPayload = payload;
             lastObsSecret = secret;
         }
-        _ = RunPeerOperationAsync(() => socket.EmitAsync("signal", new { to = secret, data }));
+        _ = RunPeerOperationAsync(() => socket.EmitAsync("signal", new { to = secret, data }).WaitAsync(lifetimeToken));
     }
 
     private bool IsCurrentHost => currentGameState?.IsHost ?? options.IsHost;
@@ -462,7 +471,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public async Task RejoinCurrentGameLobbyAsync()
     {
-        await gameStateGate.WaitAsync();
+        await gameStateGate.WaitAsync(lifetimeToken);
         try
         {
             var state = currentGameState ?? throw new InvalidOperationException("ゲーム状態をまだ取得していません。");
@@ -472,17 +481,20 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             {
                 SetImpostorRadioTransmitting(false);
             }
-            await socket.EmitAsync("leave");
+            await socket.EmitAsync("leave").WaitAsync(lifetimeToken);
             ResetPeerState();
             currentJoinedLobby = "MENU";
-            await Task.Delay(500);
-            await socket.EmitAsync("id", local.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString());
-            await socket.EmitAsync("join", state.LobbyCode, local.Id, state.ClientId, state.IsHost);
+            var version = Volatile.Read(ref serverConnectionVersion);
+            await Task.Delay(500, lifetimeToken);
+            await socket.EmitAsync("id", local.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString()).WaitAsync(lifetimeToken);
+            await socket.EmitAsync("join", state.LobbyCode, local.Id, state.ClientId, state.IsHost).WaitAsync(lifetimeToken);
+            if (!socket.Connected || version != Volatile.Read(ref serverConnectionVersion)) return;
+            Volatile.Write(ref joinedConnectionVersion, version);
             currentJoinedLobby = state.LobbyCode;
-            await Task.Delay(500);
+            await Task.Delay(500, lifetimeToken);
             foreach (var remoteSocketId in peerClientIds.Keys.ToArray())
             {
-                await peerManager.InitiateAsync(remoteSocketId);
+                await RunPeerOperationAsync(remoteSocketId, () => peerManager.InitiateAsync(remoteSocketId));
             }
             Log("INFO", $"復旧試験でロビー再参加 code={state.LobbyCode} client={state.ClientId}");
         }
@@ -494,6 +506,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public async Task RestartServerConnectionAsync(CancellationToken cancellationToken)
     {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetimeToken);
+        cancellationToken = cancellation.Token;
         await gameStateGate.WaitAsync(cancellationToken);
         try
         {
@@ -503,16 +517,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
             ResetPeerState();
             currentJoinedLobby = "MENU";
-            await socket.DisconnectAsync();
+            await socket.DisconnectAsync().WaitAsync(cancellationToken);
             await Task.Delay(500, cancellationToken);
             await socket.ConnectAsync().WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-            await socket.EmitAsync("id", local.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString());
-            await socket.EmitAsync("join", state.LobbyCode, local.Id, state.ClientId, state.IsHost);
-            currentJoinedLobby = state.LobbyCode;
+            await currentConnectionReady.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            await SynchronizeGameStateCoreAsync(currentGameState ?? state);
             await Task.Delay(500, cancellationToken);
             foreach (var remoteSocketId in peerClientIds.Keys.ToArray())
             {
-                await peerManager.InitiateAsync(remoteSocketId);
+                await RunPeerOperationAsync(remoteSocketId, () => peerManager.InitiateAsync(remoteSocketId));
             }
 
             Log("INFO", $"復旧試験でサーバー再接続 code={state.LobbyCode} client={state.ClientId} socketId={socket.Id}");
@@ -525,18 +538,35 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private void ResetPeerState()
     {
+        var previousPeers = peerClientIds.ToArray();
+        peerClientIds.Clear();
         peerManager.RemoveAllPeers();
-        foreach (var socketId in peerClientIds.Keys.ToArray())
+        foreach (var (socketId, clientId) in previousPeers)
         {
             audioSession?.RemovePeer(socketId);
+            PeerVadChanged?.Invoke(clientId, false);
+            PeerConnectionStatusChanged?.Invoke(clientId, "closed");
         }
-        peerClientIds.Clear();
         stalledReconnectAttempts.Clear();
         pendingOfferFallbacks.Clear();
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        using var registration = cancellationToken.Register(lifetimeCancellation.Cancel);
+        try
+        {
+            await RunCoreAsync(lifetimeToken);
+        }
+        finally
+        {
+            lifetimeCancellation.Cancel();
+        }
+    }
+
+    private async Task RunCoreAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         Log("INFO", $"接続開始: {options.Server}");
         // SocketIOClient 3.1.2 は、接続完了後に渡したトークンをキャンセルすると
         // 内部TaskCompletionSourceを再度完了させようとするため、待機側で制限する。
@@ -601,7 +631,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 : "ゲーム状態からロビー参加情報を待機しています。");
         }
 
-        mobileBeaconTask = RunMobileBeaconLoopAsync(cancellationToken);
+        var mobileBeaconTask = MobileHostBeacon.RunAsync(
+            () => socket.Connected ? MobileHostBeacon.Create(currentGameState, mobileHostEnabled) : null,
+            beacon => socket.EmitAsync("signal", beacon),
+            error => Log("WARN", $"Mobile host beacon failed: {error.Message}"),
+            cancellationToken);
         try
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
@@ -609,33 +643,6 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         finally
         {
             await mobileBeaconTask;
-            mobileBeaconTask = null;
-        }
-    }
-
-    private async Task RunMobileBeaconLoopAsync(CancellationToken cancellationToken)
-    {
-        using var timer = new PeriodicTimer(MobileHostBeacon.Interval);
-        try
-        {
-            do
-            {
-                if (socket.Connected &&
-                    MobileHostBeacon.Create(currentGameState, mobileHostEnabled) is { } beacon)
-                {
-                    try
-                    {
-                        await socket.EmitAsync("signal", beacon);
-                    }
-                    catch (Exception error) when (!cancellationToken.IsCancellationRequested)
-                    {
-                        Log("WARN", $"Mobile host beacon failed: {error.Message}");
-                    }
-                }
-            } while (await timer.WaitForNextTickAsync(cancellationToken));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
         }
     }
 
@@ -643,10 +650,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         socket.OnConnected += (_, _) =>
         {
+            if (lifetimeToken.IsCancellationRequested) return;
             lock (obsPayloadGate) { lastObsPayload = string.Empty; lastObsSecret = string.Empty; }
             Log("OK", $"Socket.IO接続成功 socketId={socket.Id}");
             ConnectionStatusChanged?.Invoke("ボイスサーバー接続済み");
-            connected.TrySetResult();
+            currentConnectionReady.TrySetResult();
+            if (!connected.TrySetResult())
+            {
+                _ = RecoverServerSessionAsync();
+            }
         };
 
         socket.OnPong += (_, duration) =>
@@ -661,6 +673,17 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
         socket.OnDisconnected += (_, reason) =>
         {
+            if (lifetimeToken.IsCancellationRequested) return;
+            // A new Socket.IO transport has a new server-side room membership.
+            // Keep the game snapshot, but invalidate the old room and its peers.
+            Interlocked.Increment(ref serverConnectionVersion);
+            currentConnectionReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            currentJoinedLobby = "MENU";
+            ResetPeerState();
+            hasActiveLobbySettings = false;
+            impostorRadioStates.Clear();
+            nosRadioReports.Clear();
+            LobbySettingsChanged?.Invoke(null);
             mobileRunning = false;
             lock (obsPayloadGate) { lastObsPayload = string.Empty; lastObsSecret = string.Empty; }
             ServerQualityChanged?.Invoke(null);
@@ -825,7 +848,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         // peer must be processed while we wait for its own recovery attempt.
         if (string.CompareOrdinal(socket.Id, remoteSocketId) > 0)
         {
-            await Task.Delay(4_000);
+            await Task.Delay(4_000, lifetimeToken);
         }
         if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
             peerManager.HasOpenDataChannel(remoteSocketId)) return;
@@ -833,7 +856,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var attempt = stalledReconnectAttempts.AddOrUpdate(remoteSocketId, 1, (_, count) => count + 1);
         if (attempt > 1)
         {
-            await Task.Delay(Math.Min(1_000 * (1 << Math.Min(attempt - 2, 4)), 15_000));
+            await Task.Delay(Math.Min(1_000 * (1 << Math.Min(attempt - 2, 4)), 15_000), lifetimeToken);
         }
         await RunPeerOperationAsync(remoteSocketId, async () =>
         {
@@ -848,7 +871,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(30));
+            await Task.Delay(TimeSpan.FromSeconds(30), lifetimeToken);
             if (!socket.Connected || currentJoinedLobby == "MENU" ||
                 !peerClientIds.ContainsKey(remoteSocketId)) return;
             await RunPeerOperationAsync(remoteSocketId, async () =>
@@ -857,6 +880,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 Log("INFO", $"offer未着のpeerへ接続を開始 peer={remoteSocketId}");
                 await peerManager.InitiateAsync(remoteSocketId);
             });
+        }
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
+        {
         }
         finally
         {
@@ -1383,56 +1409,16 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private async Task SynchronizeGameStateAsync(AmongUsState state)
     {
-        await gameStateGate.WaitAsync();
+        if (lifetimeToken.IsCancellationRequested) return;
+        var acquired = false;
         try
         {
-            var wasHost = currentGameState?.IsHost == true;
-            ApplyGameState(state);
-            var local = state.Players.SingleOrDefault(player => player.IsLocal);
-            var targetLobby = state.GameState == GameState.Menu || local is null ? "MENU" : state.LobbyCode;
-            if (string.Equals(targetLobby, currentJoinedLobby, StringComparison.Ordinal))
-            {
-                if (state.IsHost && !wasHost)
-                {
-                    ApplyLobbySettings(ownLobbySettings);
-                    BroadcastLobbySettings();
-                }
-                return;
-            }
-
-            if (impostorRadioTransmitting)
-            {
-                SetImpostorRadioTransmitting(false);
-            }
-            await socket.EmitAsync("leave");
-            currentJoinedLobby = "MENU";
-            spatialVoiceSettings = new SpatialVoiceSettings(
-                SpatialAudio: spatialAudioEnabled,
-                CrewVolumeAsGhost: crewVolumeAsGhost,
-                GhostVolumeAsImpostor: ghostVolumeAsImpostor);
-            activeLobbySettings = new LobbySettings();
-            hasActiveLobbySettings = false;
-            LobbySettingsChanged?.Invoke(null);
-            hostClientId = state.HostId > 0 ? state.HostId : null;
-            impostorRadioStates.Clear();
-            nosRadioReports.Clear();
-            nosRadioSession = string.Empty;
-            if (targetLobby == "MENU")
-            {
-                Log("INFO", "ゲーム状態に追従してロビー退出");
-                return;
-            }
-
-            await socket.EmitAsync("id", local!.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString());
-            await socket.EmitAsync("join", targetLobby, local.Id, state.ClientId, state.IsHost);
-            currentJoinedLobby = targetLobby;
-            Log("INFO", $"ゲーム状態に追従してロビー参加 code={targetLobby} client={state.ClientId} player={local.Id}");
-            if (state.IsHost)
-            {
-                ApplyLobbySettings(ownLobbySettings);
-                BroadcastLobbySettings();
-            }
-            LobbySettingsChanged?.Invoke(CurrentLobbySettings);
+            await gameStateGate.WaitAsync(lifetimeToken);
+            acquired = true;
+            await SynchronizeGameStateCoreAsync(state);
+        }
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -1440,7 +1426,92 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
         finally
         {
-            gameStateGate.Release();
+            if (acquired) gameStateGate.Release();
+        }
+    }
+
+    private async Task SynchronizeGameStateCoreAsync(AmongUsState state)
+    {
+        var wasHost = currentGameState?.IsHost == true;
+        ApplyGameState(state);
+        if (!socket.Connected) return;
+        var local = state.Players.SingleOrDefault(player => player.IsLocal);
+        var targetLobby = state.GameState is GameState.Menu or GameState.Unknown || local is null ? "MENU" : state.LobbyCode;
+        var version = Volatile.Read(ref serverConnectionVersion);
+        if (string.Equals(targetLobby, currentJoinedLobby, StringComparison.Ordinal) &&
+            (targetLobby == "MENU" || Volatile.Read(ref joinedConnectionVersion) == version))
+        {
+            if (state.IsHost && !wasHost)
+            {
+                ApplyLobbySettings(ownLobbySettings);
+                BroadcastLobbySettings();
+            }
+            return;
+        }
+
+        if (impostorRadioTransmitting) SetImpostorRadioTransmitting(false);
+        await socket.EmitAsync("leave").WaitAsync(lifetimeToken);
+        currentJoinedLobby = "MENU";
+        ResetPeerState();
+        spatialVoiceSettings = new SpatialVoiceSettings(
+            SpatialAudio: spatialAudioEnabled,
+            CrewVolumeAsGhost: crewVolumeAsGhost,
+            GhostVolumeAsImpostor: ghostVolumeAsImpostor);
+        activeLobbySettings = new LobbySettings();
+        hasActiveLobbySettings = false;
+        LobbySettingsChanged?.Invoke(null);
+        hostClientId = state.HostId > 0 ? state.HostId : null;
+        impostorRadioStates.Clear();
+        nosRadioReports.Clear();
+        nosRadioSession = string.Empty;
+        if (targetLobby == "MENU")
+        {
+            Log("INFO", "ゲーム状態に追従してロビー退出");
+            return;
+        }
+
+        await socket.EmitAsync("id", local!.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString()).WaitAsync(lifetimeToken);
+        await socket.EmitAsync("join", targetLobby, local.Id, state.ClientId, state.IsHost).WaitAsync(lifetimeToken);
+        // A disconnect can run while the send is awaiting transport I/O.
+        // Never restore membership belonging to that disconnected socket.
+        if (!socket.Connected || version != Volatile.Read(ref serverConnectionVersion)) return;
+        Volatile.Write(ref joinedConnectionVersion, version);
+        currentJoinedLobby = targetLobby;
+        Log("INFO", $"ゲーム状態に追従してロビー参加 code={targetLobby} client={state.ClientId} player={local.Id}");
+        if (state.IsHost)
+        {
+            ApplyLobbySettings(ownLobbySettings);
+            BroadcastLobbySettings();
+        }
+        LobbySettingsChanged?.Invoke(CurrentLobbySettings);
+    }
+
+    private async Task RecoverServerSessionAsync()
+    {
+        if (lifetimeToken.IsCancellationRequested) return;
+        var acquired = false;
+        try
+        {
+            await gameStateGate.WaitAsync(lifetimeToken);
+            acquired = true;
+            // Read the latest snapshot after acquiring the gate; an old snapshot
+            // captured by OnConnected could otherwise rejoin a lobby already left.
+            if (currentGameState is { } state)
+                await SynchronizeGameStateCoreAsync(state);
+            else if (options.LobbyCode is { } lobby && socket.Connected &&
+                (currentJoinedLobby != lobby || Volatile.Read(ref joinedConnectionVersion) != Volatile.Read(ref serverConnectionVersion)))
+                await JoinLobbyCoreAsync();
+        }
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            Log("ERROR", $"サーバー再接続後のロビー復旧失敗: {exception.Message}");
+        }
+        finally
+        {
+            if (acquired) gameStateGate.Release();
         }
     }
 
@@ -1483,7 +1554,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         try
         {
+            lifetimeToken.ThrowIfCancellationRequested();
             await operation();
+        }
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
+        {
         }
         catch (Exception exception)
         {
@@ -1493,21 +1568,28 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private async Task RunPeerOperationAsync(string remoteSocketId, Func<Task> operation)
     {
+        if (lifetimeToken.IsCancellationRequested) return;
         var gate = peerOperationGates.GetOrAdd(remoteSocketId, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync();
+        var acquired = false;
         try
         {
+            await gate.WaitAsync(lifetimeToken);
+            acquired = true;
             await RunPeerOperationAsync(operation);
+        }
+        catch (OperationCanceledException) when (lifetimeToken.IsCancellationRequested)
+        {
         }
         finally
         {
-            gate.Release();
+            if (acquired) gate.Release();
         }
     }
 
     private Task SendSignalAsync(string remoteSocketId, object data)
     {
-        return socket.EmitAsync("signal", new { to = remoteSocketId, data });
+        if (lifetimeToken.IsCancellationRequested) return Task.FromCanceled(lifetimeToken);
+        return socket.EmitAsync("signal", new { to = remoteSocketId, data }).WaitAsync(lifetimeToken);
     }
 
     private static string DescribeCandidate(JsonElement signal)
@@ -1551,37 +1633,89 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private async Task JoinLobbyAsync()
     {
+        await gameStateGate.WaitAsync(lifetimeToken);
+        try
+        {
+            if (socket.Connected && (currentJoinedLobby != options.LobbyCode ||
+                Volatile.Read(ref joinedConnectionVersion) != Volatile.Read(ref serverConnectionVersion)))
+                await JoinLobbyCoreAsync();
+        }
+        finally
+        {
+            gameStateGate.Release();
+        }
+    }
+
+    private async Task JoinLobbyCoreAsync()
+    {
         Log(
             "INFO",
             $"ロビー参加: code={options.LobbyCode} playerId={options.PlayerId} clientId={options.ClientId} host={options.IsHost}");
 
-        // TanukiBCL v3.2.5 ConnectionController.joinLobby と同じ送信順序・引数。
-        await socket.EmitAsync("leave");
-        await socket.EmitAsync("id", options.PlayerId, options.ClientId, string.Empty, string.Empty, string.Empty);
-        await socket.EmitAsync("join", options.LobbyCode!, options.PlayerId, options.ClientId, options.IsHost);
+        var version = Volatile.Read(ref serverConnectionVersion);
+        // TanukiBCL v3.2.7 ConnectionController.joinLobby と同じ送信順序・引数。
+        await socket.EmitAsync("leave").WaitAsync(lifetimeToken);
+        await socket.EmitAsync("id", options.PlayerId, options.ClientId, string.Empty, string.Empty, string.Empty).WaitAsync(lifetimeToken);
+        await socket.EmitAsync("join", options.LobbyCode!, options.PlayerId, options.ClientId, options.IsHost).WaitAsync(lifetimeToken);
+        if (!socket.Connected || version != Volatile.Read(ref serverConnectionVersion)) return;
+        Volatile.Write(ref joinedConnectionVersion, version);
         currentJoinedLobby = options.LobbyCode!;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if (socket.Connected)
+        lock (disposalGate)
         {
-            try
-            {
-                await socket.EmitAsync("leave");
-                await socket.DisconnectAsync();
-            }
-            catch (Exception exception)
-            {
-                Log("WARN", $"終了処理: {exception.Message}");
-            }
+            return new ValueTask(disposalTask ??= DisposeCoreAsync());
         }
+    }
 
-        gameReader?.Dispose();
-        audioSession?.Dispose();
-        peerManager.Dispose();
-        socket.Dispose();
-        gameStateGate.Dispose();
+    private async Task DisposeCoreAsync()
+    {
+        TryCleanup("session cancellation", lifetimeCancellation.Cancel);
+        TryCleanup("game reader", () => gameReader?.Dispose());
+        // Drain the in-flight game join/reload. Its socket waits use lifetimeToken.
+        await gameStateGate.WaitAsync();
+        try
+        {
+            // Keep each peer operation's gate held until its actual work ends;
+            // disposing the peer manager before then would race SDP mutations.
+            foreach (var gate in peerOperationGates.Values)
+            {
+                await gate.WaitAsync();
+                gate.Release();
+            }
+            if (socket.Connected)
+            {
+                try
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    await socket.EmitAsync("leave").WaitAsync(timeout.Token);
+                    await socket.DisconnectAsync().WaitAsync(timeout.Token);
+                }
+                catch (Exception exception)
+                {
+                    Log("WARN", $"終了処理: {exception.Message}");
+                }
+            }
+
+            TryCleanup("audio session", () => audioSession?.Dispose());
+            TryCleanup("peer manager", peerManager.Dispose);
+            TryCleanup("voice socket", socket.Dispose);
+        }
+        finally
+        {
+            gameStateGate.Release();
+            // Memory-reader callbacks can already be queued when Dispose is
+            // called. Leave this managed semaphore alive so late callbacks can
+            // observe cancellation instead of touching a disposed gate.
+        }
+    }
+
+    private void TryCleanup(string resource, Action cleanup)
+    {
+        try { cleanup(); }
+        catch (Exception exception) { Log("WARN", $"終了処理 ({resource}): {exception.Message}"); }
     }
 
     private void Log(string level, string message)
