@@ -39,9 +39,9 @@ public partial class PlayerAvatar : UserControl
         CosmeticBack.Visibility = CosmeticSkin.Visibility = CosmeticFront.Visibility =
             hideAvatar || player.IsDead ? Visibility.Hidden : Visibility.Visible;
         SpeechRing.Visibility = hideAvatar ? Visibility.Hidden : Visibility.Visible;
-        var colorId = player.CurrentOutfit is > 0 and <= 10 && player.AppearanceColorId >= 0
-            ? player.AppearanceColorId : player.ColorId;
-        var image = AvatarImageFactory.GetNos(player) ?? AvatarImageFactory.Get(colorId, player.IsDead, colors);
+        var colorId = AvatarImageFactory.GetDisplayColorId(player, colors, mod);
+        var image = (mod == AmongUsModType.NebulaOnTheShip ? AvatarImageFactory.GetNos(player) : null)
+            ?? AvatarImageFactory.Get(colorId, player.IsDead, colors);
         if (!ReferenceEquals(image, currentImage))
         {
             AvatarBody.Source = image;

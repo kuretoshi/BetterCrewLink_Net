@@ -50,6 +50,27 @@ internal static class AvatarImageFactory
     public static (Color Main, Color Shadow) GetSwatchColors(int colorId,
         IReadOnlyList<PlayerColorPair>? playerColors) => ResolveColors(colorId, playerColors);
 
+    internal static int GetDisplayColorId(Player player, IReadOnlyList<PlayerColorPair>? palette,
+        AmongUsModType mod)
+    {
+        // Avatar.tsx uses the first palette entry within one byte per channel,
+        // not the nearest color. Lobby-only RGB affects the body, not this lookup.
+        if (mod == AmongUsModType.NebulaOnTheShip && player.NosPlayer is { } nos && palette is not null &&
+            NosColor.ToHex(nos.ColorR, nos.ColorG, nos.ColorB) is { } hex)
+        {
+            var rgb = Convert.ToUInt32(hex[1..], 16);
+            var published = Rgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+            for (var i = 0; i < palette.Count; i++)
+            {
+                var color = FromGameColor(palette[i].Main);
+                if (Math.Abs(color.R - published.R) <= 1 && Math.Abs(color.G - published.G) <= 1 &&
+                    Math.Abs(color.B - published.B) <= 1) return i;
+            }
+        }
+        return player.CurrentOutfit is > 0 and <= 10 && player.AppearanceColorId >= 0
+            ? player.AppearanceColorId : player.ColorId;
+    }
+
     public static Color? GetNosColor(Player player)
     {
         var hex = NosColor.For(player);
@@ -171,7 +192,31 @@ internal static class AvatarImageFactory
         if (ReferenceEquals(alive, GetNos(player))) throw new InvalidOperationException("NoS ghost reused alive mask");
         player.NosLobbyColor = "bad";
         if (GetNos(player) is not null) throw new InvalidOperationException("Invalid NoS color accepted");
+        PlayerColorPair[] palette = [new() { Main = 0xffcc6414 },
+            new() { Main = 0xffc96513, Shadow = 0xff030201 }, new() { Main = 0xffc86414 }];
+        var outfit = new Player { ColorId = 7, CurrentOutfit = 1, AppearanceColorId = 8,
+            NosLobbyColor = "#ffffff", NosPlayer = new() { ColorR = 20d / 255, ColorG = 100d / 255, ColorB = 200d / 255 } };
+        if (GetDisplayColorId(outfit, palette, AmongUsModType.NebulaOnTheShip) != 1)
+            throw new InvalidOperationException("NoS must choose first byte-tolerant match, not closest or lobby color");
+        if (GetDisplayColorId(outfit, palette, AmongUsModType.None) != 8 ||
+            GetDisplayColorId(outfit, null, AmongUsModType.NebulaOnTheShip) != 8)
+            throw new InvalidOperationException("Appearance fallback or MOD isolation failed");
+        outfit.NosPlayer.ColorR = 80d / 255;
+        if (GetDisplayColorId(outfit, palette, AmongUsModType.NebulaOnTheShip) != 8)
+            throw new InvalidOperationException("Unmatched finite RGB must not select the nearest palette color");
+        outfit.NosPlayer.ColorR = double.NaN;
+        if (GetDisplayColorId(outfit, palette, AmongUsModType.NebulaOnTheShip) != 8)
+            throw new InvalidOperationException("Invalid RGB should fall back to appearance");
+        outfit.CurrentOutfit = 11;
+        if (GetDisplayColorId(outfit, palette, AmongUsModType.NebulaOnTheShip) != 7)
+            throw new InvalidOperationException("Out-of-range outfit should use normal color");
+        outfit.NosPlayer = null;
+        outfit.CurrentOutfit = 10;
+        outfit.AppearanceColorId = -1;
+        if (GetDisplayColorId(outfit, palette, AmongUsModType.NebulaOnTheShip) != 7)
+            throw new InvalidOperationException("Lobby-only RGB must not change cosmetic palette selection");
         Console.WriteLine("[PASS] NoS avatar published RGB, visor, shadow, alpha and alive/ghost caching");
+        Console.WriteLine("[PASS] NoS cosmetic palette byte tolerance, first match, MOD isolation and outfit fallbacks");
     }
 
     private static Color FromGameColor(uint packed) =>

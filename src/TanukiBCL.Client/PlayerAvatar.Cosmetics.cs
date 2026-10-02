@@ -145,6 +145,25 @@ public partial class PlayerAvatar
         System.Windows.Threading.Dispatcher.PushFrame(frame);
         Require(avatar.CosmeticBack.Children.Count == 0 && avatar.CosmeticFront.Children.Count == 0,
             "Late cosmetic image replaced a newer outfit");
+        // Exercise the real SetPlayer -> palette selection -> adaptive recolor path.
+        avatar.catalogLoader = () => Task.FromResult(CosmeticCatalog.Parse("""
+            {"NONE":{"defaultWidth":"100%","hats":{"adaptive":{"image":"test.png","multi_color":true}}}}
+            """));
+        avatar.imageLoader = _ => Task.FromResult(bitmap);
+        var adaptivePlayer = new Player { HatId = "adaptive", ColorId = 0,
+            NosPlayer = new() { ColorR = 20d / 255, ColorG = 100d / 255, ColorB = 200d / 255 } };
+        PlayerColorPair[] palette = [new() { Main = 0xff0000ff }, new() { Main = 0xffc86414 }];
+        avatar.SetPlayer(adaptivePlayer, palette, mod: AmongUsModType.NebulaOnTheShip);
+        byte[] painted = new byte[4];
+        ((System.Windows.Media.Imaging.BitmapSource)((Image)avatar.CosmeticFront.Children[0]).Source)
+            .CopyPixels(painted, 4, 0);
+        Require(painted.SequenceEqual(new byte[] { 200, 100, 20, 255 }), "Adaptive cosmetic ignored NoS palette match");
+        adaptivePlayer.NosPlayer.ColorR = 1; adaptivePlayer.NosPlayer.ColorG = 0; adaptivePlayer.NosPlayer.ColorB = 0;
+        avatar.SetPlayer(adaptivePlayer, palette, mod: AmongUsModType.NebulaOnTheShip);
+        ((System.Windows.Media.Imaging.BitmapSource)((Image)avatar.CosmeticFront.Children[0]).Source)
+            .CopyPixels(painted, 4, 0);
+        Require(painted.SequenceEqual(new byte[] { 0, 0, 255, 255 }), "Published color change did not refresh cosmetic");
         Console.WriteLine("[PASS] Cosmetic layers, placement, base clip, death and stale asynchronous results");
+        Console.WriteLine("[PASS] NoS adaptive cosmetic rendered pixels and published color changes");
     }
 }
