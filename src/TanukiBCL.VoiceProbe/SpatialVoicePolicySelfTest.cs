@@ -131,6 +131,15 @@ internal static class SpatialVoicePolicySelfTest
             AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], [])
                 .Id == AmongUsModType.None);
 
+        Check("appearance: shifted color is visible change", true,
+            new Player { ColorId = 1, CurrentOutfit = 1, AppearanceColorId = 2 }.HasVisibleAppearanceChanged());
+        Check("appearance: empty cosmetic aliases do not change look", true,
+            !new Player { ColorId = 1, CurrentOutfit = 1, AppearanceColorId = 1,
+                HatId = "hat_NoHat", SkinId = "skin_None", VisorId = "visor_EmptyVisor" }
+                .HasVisibleAppearanceChanged());
+        Check("appearance: inactive outfit is not hidden", true,
+            !new Player { ColorId = 1, CurrentOutfit = 0, AppearanceColorId = 2 }.HasVisibleAppearanceChanged());
+
         var ventPolicy = new SpatialVoiceSettings(HearImpostorsInVents: true,
             ImpostorsHearImpostorsInVents: true, ImpostorRadioEnabled: true);
         var ventSpeaker = new Player { IsImpostor = true, InVent = true };

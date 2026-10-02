@@ -47,6 +47,20 @@ public sealed class Player
 
     public int ColorId { get; set; }
 
+    public int CurrentOutfit { get; set; }
+
+    public string AppearanceName { get; set; } = string.Empty;
+
+    public int AppearanceColorId { get; set; } = -1;
+
+    public string AppearanceHatId { get; set; } = string.Empty;
+
+    public string AppearanceSkinId { get; set; } = string.Empty;
+
+    public string AppearanceVisorId { get; set; } = string.Empty;
+
+    public int ShiftedColor { get; set; } = -1;
+
     public string HatId { get; set; } = string.Empty;
 
     public string SkinId { get; set; } = string.Empty;
@@ -72,6 +86,17 @@ public sealed class Player
     public double Y { get; set; }
 
     public bool InVent { get; set; }
+
+    public bool HasVisibleAppearanceChanged()
+    {
+        if (CurrentOutfit is <= 0 or > 10) return false;
+        return ColorId != AppearanceColorId ||
+            Normalize(HatId, "hat_NoHat") != Normalize(AppearanceHatId, "hat_NoHat") ||
+            Normalize(SkinId, "skin_None") != Normalize(AppearanceSkinId, "skin_None") ||
+            Normalize(VisorId, "visor_EmptyVisor") != Normalize(AppearanceVisorId, "visor_EmptyVisor");
+    }
+
+    private static string Normalize(string id, string emptyId) => id == emptyId ? string.Empty : id;
 }
 
 public sealed class AmongUsState

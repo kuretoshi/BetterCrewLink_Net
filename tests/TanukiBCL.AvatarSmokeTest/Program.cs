@@ -26,6 +26,7 @@ internal static class Program
             {
                 throw new InvalidOperationException("Avatar appearance or state badge did not change the rendered image.");
             }
+            VerifyAppearanceChangedAvatar();
 
             var voiceView = RenderVoiceView(args.Skip(1).FirstOrDefault());
             if (voiceView.Length != 64) throw new InvalidOperationException("VoiceView did not render.");
@@ -66,6 +67,20 @@ internal static class Program
             throw new InvalidOperationException("Avatar rendered as an empty image.");
         }
         return Convert.ToHexString(SHA256.HashData(pixels));
+    }
+
+    private static void VerifyAppearanceChangedAvatar()
+    {
+        var avatar = new PlayerAvatar();
+        var player = new Player { Name = "Original", AppearanceName = "Disguised",
+            ColorId = 1, CurrentOutfit = 1, AppearanceColorId = 2 };
+        avatar.SetPlayer(player, null, hideWhenAppearanceChanged: true);
+        if (avatar.FindName("AvatarBody") is not System.Windows.Shapes.Ellipse body ||
+            body.Visibility != Visibility.Hidden)
+            throw new InvalidOperationException("Changed outfit should hide the avatar during tasks.");
+        avatar.SetPlayer(player, null, hideWhenAppearanceChanged: false);
+        if (body.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Changed outfit should be visible during meetings.");
     }
 
     private static string RenderVoiceView(string? previewPath)

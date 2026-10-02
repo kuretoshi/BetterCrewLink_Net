@@ -401,10 +401,16 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         var skinId = string.Empty;
         var normalSkinId = string.Empty;
         var visorId = string.Empty;
+        var currentName = string.Empty;
+        var currentColor = -1;
+        var currentHatId = string.Empty;
+        var currentSkinId = string.Empty;
+        var currentVisorId = string.Empty;
+        var hasCurrentOutfit = false;
 
         if (data.OutfitsPtr != 0)
         {
-            context.ReadDictionary(data.OutfitsPtr, 6, (keyAddress, valueAddress, index) =>
+            context.ReadDictionary(data.OutfitsPtr, 12, (keyAddress, valueAddress, index) =>
             {
                 var key = context.ReadInt32(keyAddress);
                 var value = context.ReadPointer(valueAddress);
@@ -422,21 +428,20 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                     var outfitSkinId = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitSkinId));
                     var outfitVisorId = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitVisorId));
 
+                    color = outfitColor;
+                    hatId = outfitHatId;
+                    skinId = outfitSkinId;
+                    visorId = outfitVisorId;
                     normalSkinId = outfitSkinId;
-                    if (currentOutfit == 0)
-                    {
-                        color = outfitColor;
-                        hatId = outfitHatId;
-                        skinId = outfitSkinId;
-                        visorId = outfitVisorId;
-                    }
                 }
-                if (key == currentOutfit)
+                else if (currentOutfit is > 0 and <= 10 && key == currentOutfit)
                 {
-                    color = unchecked((int)context.ReadUInt32(value, context.Offsets.PlayerOutfitColorId));
-                    hatId = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitHatId));
-                    skinId = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitSkinId));
-                    visorId = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitVisorId));
+                    currentName = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitName), 1000);
+                    currentColor = unchecked((int)context.ReadUInt32(value, context.Offsets.PlayerOutfitColorId));
+                    currentHatId = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitHatId));
+                    currentSkinId = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitSkinId));
+                    currentVisorId = context.ReadString(context.ReadPointer(value, context.Offsets.PlayerOutfitVisorId));
+                    hasCurrentOutfit = true;
                 }
             });
         }
@@ -448,6 +453,11 @@ public sealed class AmongUsMemoryReaderService : IDisposable
 
         var roleTeam = data.RolePtr == 0 ? 0 : context.ReadUInt32(data.RolePtr, context.Offsets.PlayerRoleTeam);
         var cleanName = StripRichText(name);
+        var appearanceName = string.IsNullOrWhiteSpace(currentName) ? cleanName : StripRichText(currentName);
+        var appearanceColor = hasCurrentOutfit && currentColor >= 0 ? currentColor : color;
+        var appearanceHat = hasCurrentOutfit ? currentHatId : hatId;
+        var appearanceSkin = hasCurrentOutfit ? currentSkinId : skinId;
+        var appearanceVisor = hasCurrentOutfit ? currentVisorId : visorId;
         var nameHash = HashCode(cleanName);
         var playerUid = context.ReadString(data.PuidPtr);
 
@@ -459,11 +469,18 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             NameHash = nameHash,
             PlayerConfigId = string.IsNullOrEmpty(playerUid) ? nameHash : HashCode(playerUid),
             ColorId = color,
+            CurrentOutfit = unchecked((int)currentOutfit),
+            AppearanceName = appearanceName,
+            AppearanceColorId = appearanceColor,
+            AppearanceHatId = appearanceHat,
+            AppearanceSkinId = appearanceSkin,
+            AppearanceVisorId = appearanceVisor,
+            ShiftedColor = hasCurrentOutfit ? currentColor : -1,
             HatId = hatId,
             SkinId = skinId,
             NormalSkinId = normalSkinId,
             VisorId = visorId,
-            AppearanceId = $"{color}|{hatId}|{skinId}|{visorId}",
+            AppearanceId = $"{appearanceColor}|{appearanceHat}|{appearanceSkin}|{appearanceVisor}",
             Disconnected = data.Disconnected != 0,
             IsImpostor = roleTeam == 1,
             IsThirdParty = roleTeam != 0 && roleTeam != 1,

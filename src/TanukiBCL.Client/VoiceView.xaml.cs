@@ -73,10 +73,11 @@ public partial class VoiceView : UserControl
             return;
         }
 
-        LocalName.Text = local.Name;
+        var hideAppearance = game.GameState == GameState.Tasks;
+        LocalName.Text = string.IsNullOrWhiteSpace(local.AppearanceName) ? local.Name : local.AppearanceName;
         LobbyCode.Text = hideCode ? "LOBBY" : game.LobbyCode;
-        LocalAvatar.SetPlayer(local, game.PlayerColors);
-        LocalAvatar.SetVisualState(localTalking, muted, deafened,
+        LocalAvatar.SetPlayer(local, game.PlayerColors, hideAppearance);
+        LocalAvatar.SetVisualState(localTalking && (local.ShiftedColor < 0 || game.GameState == GameState.Discussion), muted, deafened,
             connected ? "connected" : "disconnected", localUsingRadio, serverQuality);
         MuteIcon.Data = muted || deafened ? MicOff : Mic;
         DeafenIcon.Data = deafened ? VolumeOff : VolumeUp;
@@ -110,12 +111,13 @@ public partial class VoiceView : UserControl
 
             avatar.Width = avatarSize;
             avatar.Height = avatarSize;
-            avatar.SetPlayer(player, game.PlayerColors);
+            avatar.SetPlayer(player, game.PlayerColors, hideAppearance);
             var status = peers.TryGetValue(player.ClientId, out var snapshot)
                 ? snapshot
                 : VoicePlayerStatus.Disconnected;
             var config = PlayerAudioConfig.For(player, this.playerConfigs);
-            avatar.SetVisualState(status.Talking && !player.InVent, false,
+            avatar.SetVisualState(status.Talking && !player.InVent &&
+                (player.ShiftedColor < 0 || game.GameState == GameState.Discussion), false,
                 config.IsMuted || config.Volume == 0d, status.ConnectionState, status.UsingRadio, status.Quality);
         }
     }
@@ -147,7 +149,7 @@ public partial class VoiceView : UserControl
         if (popupDirty && popupClientId != clientId) PersistPlayerVolume();
         popupClientId = clientId;
         PlayerConfigPopup.PlacementTarget = avatar;
-        PlayerConfigName.Text = player.Name;
+        PlayerConfigName.Text = string.IsNullOrWhiteSpace(player.AppearanceName) ? player.Name : player.AppearanceName;
         SetPopupVisual(PlayerAudioConfig.For(player, playerConfigs));
         popupDirty = false;
         PlayerConfigPopup.IsOpen = true;
