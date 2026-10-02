@@ -79,8 +79,9 @@ internal static partial class UpdateCatalog
             if (!match.Success) return [0, 0, 0, 0];
             var suffix = match.Groups[4].Value;
             var numericSuffix = Regex.Match(suffix, @"\d+");
-            return [int.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value),
-                int.Parse(match.Groups[3].Value), numericSuffix.Success ? int.Parse(numericSuffix.Value) : 0];
+            static int SafePart(string part) => int.TryParse(part, out var parsed) ? parsed : 0;
+            return [SafePart(match.Groups[1].Value), SafePart(match.Groups[2].Value),
+                SafePart(match.Groups[3].Value), numericSuffix.Success ? SafePart(numericSuffix.Value) : 0];
         }
         var a = Parts(left);
         var b = Parts(right);

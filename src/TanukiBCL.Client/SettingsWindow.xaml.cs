@@ -49,6 +49,7 @@ public partial class SettingsWindow : Window
         Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged, Action<ClientSettings>? persistSettings = null)
     {
         InitializeComponent();
+        InitializeUpdatePanel();
         this.settings = settings;
         settingsTransaction = new ClientSettingsTransaction(settings, persistSettings ?? ClientSettingsStore.Save);
         settingsTransaction.Changed += change => SettingsApplied?.Invoke(change);
@@ -268,8 +269,9 @@ public partial class SettingsWindow : Window
         KeybindsPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
         OverlayPanel.Visibility = CategoryList.SelectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
         AdvancedPanel.Visibility = CategoryList.SelectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
-        StreamingPanel.Visibility = CategoryList.SelectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
-        if (CategoryList.SelectedIndex == 7) UpdateObsUrl();
+        UpdatePanel.Visibility = CategoryList.SelectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
+        StreamingPanel.Visibility = CategoryList.SelectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;
+        if (CategoryList.SelectedIndex == 8) UpdateObsUrl();
         if (IsLoaded)
         {
             UpdateMicrophoneLevelSession();
@@ -469,6 +471,8 @@ public partial class SettingsWindow : Window
         StopMicrophoneLevelSession();
         StopSpeakerTest();
         StopVoiceEffectPreview();
+        updateCancellation.Cancel();
+        updateClient.Dispose();
         base.OnClosed(e);
     }
 
@@ -803,6 +807,10 @@ public partial class SettingsWindow : Window
             if (window.ReadLobbyControls().JackalRadioEnabled || window.SnrJackalRadioCheck.IsChecked != false)
                 throw new InvalidOperationException("Shared Jackal radio setting did not follow MOD switch");
             window.CategoryList.SelectedIndex = 7;
+            if (window.UpdatePanel.Visibility != Visibility.Visible || window.StartUpdateButton.IsEnabled ||
+                !window.UpdateVersionText.Text.Contains(UpdateCatalog.CurrentVersion))
+                throw new InvalidOperationException("Update settings did not initialize");
+            window.CategoryList.SelectedIndex = 8;
             window.ObsOverlayCheck.IsChecked = true;
             if (window.StreamingPanel.Visibility != Visibility.Visible ||
                 !StreamingSettings.IsValidSecret(window.obsSecretDraft) ||

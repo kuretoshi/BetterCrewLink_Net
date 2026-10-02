@@ -25,6 +25,14 @@ Socket.IO、WebRTC、Opus音声、音声デバイス、ゲームメモリ読み�
 dotnet build TanukiBCL.Net.sln
 ```
 
+Windows向けのself-contained配布ZIPは、バージョンを指定してローカルで作成できます。
+
+```powershell
+& tools/package-release.ps1 -Version 3.2.7-netdev.0
+```
+
+`dist/<version>/TanukiBCL.Net-win-x64.zip`とSHA-256が生成・表示されます。配布物にはNoS/SNR補助リーダーと更新補助ツールが入ります。このコマンドはGitHub Releaseを公開しません。アプリ内の「アップデート」は、このリポジトリに同名のZIPを含む新しいReleaseがある場合にだけ有効になります。公開Releaseからの実更新、新規Windows環境での起動、完全互換はまだ未検証です。
+
 ## サーバー接続だけを確認
 
 ```powershell

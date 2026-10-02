@@ -1,0 +1,107 @@
+using System.IO;
+using System.Net.Http;
+using System.Windows;
+
+namespace TanukiBCL.Client;
+
+public partial class SettingsWindow
+{
+    private readonly HttpClient updateClient = new() { Timeout = TimeSpan.FromMinutes(10) };
+    private readonly CancellationTokenSource updateCancellation = new();
+    private UpdateCandidate? updateCandidate;
+    private bool updateBusy;
+    internal event Action<StagedUpdate>? UpdateInstallRequested;
+
+    private void InitializeUpdatePanel()
+    {
+        UpdateVersionText.Text = $"現在のバージョン v{UpdateCatalog.CurrentVersion}";
+        UpdateStatusText.Text = "アップデートを確認してください。";
+        UpdateProgress.Visibility = Visibility.Collapsed;
+    }
+
+    private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (updateBusy) return;
+        updateBusy = true;
+        updateCandidate = null;
+        CheckUpdateButton.IsEnabled = false;
+        StartUpdateButton.IsEnabled = false;
+        UpdateProgress.Visibility = Visibility.Collapsed;
+        UpdateStatusText.Text = "アップデートを確認中…";
+        try
+        {
+            updateCandidate = await UpdateCatalog.CheckAsync(updateClient, UpdateCatalog.CurrentVersion,
+                cancellationToken: updateCancellation.Token);
+            if (updateCancellation.IsCancellationRequested) return;
+            if (updateCandidate is null)
+            {
+                UpdateStatusText.Text = "利用できる.NET版の更新はありません。";
+            }
+            else if (!UpdateInstallationAvailable())
+            {
+                UpdateStatusText.Text = $"新しいバージョン {updateCandidate.Version} があります。" +
+                    "この起動場所には更新補助ツールがないため、配布版から起動してください。";
+            }
+            else
+            {
+                UpdateStatusText.Text = $"最新バージョン {updateCandidate.Version} を利用できます。";
+                StartUpdateButton.IsEnabled = true;
+            }
+        }
+        catch (OperationCanceledException) when (updateCancellation.IsCancellationRequested) { }
+        catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
+            System.Text.Json.JsonException or TaskCanceledException or InvalidOperationException)
+        {
+            UpdateStatusText.Text = $"アップデートを確認できませんでした。{error.Message}";
+        }
+        finally
+        {
+            updateBusy = false;
+            if (!updateCancellation.IsCancellationRequested) CheckUpdateButton.IsEnabled = true;
+        }
+    }
+
+    private async void StartUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (updateBusy || updateCandidate is null || !UpdateInstallationAvailable()) return;
+        updateBusy = true;
+        CheckUpdateButton.IsEnabled = false;
+        StartUpdateButton.IsEnabled = false;
+        UpdateProgress.Value = 0;
+        UpdateProgress.Visibility = Visibility.Visible;
+        UpdateStatusText.Text = "ダウンロード中…";
+        try
+        {
+            var progress = new Progress<double>(percent =>
+            {
+                UpdateProgress.Value = percent;
+                UpdateStatusText.Text = $"ダウンロード中… {percent:0}%";
+            });
+            var staged = await UpdatePackage.StageAsync(updateClient, updateCandidate, progress,
+                updateCancellation.Token);
+            if (updateCancellation.IsCancellationRequested) return;
+            UpdateStatusText.Text = "アップデートの準備ができました。アプリを終了して更新します。";
+            if (UpdateInstallRequested is null)
+                throw new InvalidOperationException("更新処理を開始できません。");
+            UpdateInstallRequested.Invoke(staged);
+        }
+        catch (OperationCanceledException) when (updateCancellation.IsCancellationRequested) { }
+        catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
+            System.Text.Json.JsonException or InvalidOperationException or UnauthorizedAccessException or
+            System.Security.Cryptography.CryptographicException)
+        {
+            UpdateStatusText.Text = $"アップデートを取得できませんでした。{error.Message}";
+            UpdateProgress.Visibility = Visibility.Collapsed;
+            if (!updateCancellation.IsCancellationRequested) StartUpdateButton.IsEnabled = true;
+        }
+        finally
+        {
+            updateBusy = false;
+            if (!updateCancellation.IsCancellationRequested) CheckUpdateButton.IsEnabled = true;
+        }
+    }
+
+    private static bool UpdateInstallationAvailable() =>
+        File.Exists(Path.Combine(AppContext.BaseDirectory, "update-manifest.json")) &&
+        File.Exists(Path.Combine(AppContext.BaseDirectory, "Updater", "TanukiBCL.Updater.exe"));
+}

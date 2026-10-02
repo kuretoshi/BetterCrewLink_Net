@@ -31,7 +31,8 @@ public partial class App : Application
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
             e.Args.Contains("--input-processing-self-test") || e.Args.Contains("--inquiry-self-test") ||
-            e.Args.Contains("--support-log-self-test") || e.Args.Contains("--update-catalog-self-test"))
+            e.Args.Contains("--support-log-self-test") || e.Args.Contains("--update-catalog-self-test") ||
+            e.Args.Contains("--update-package-self-test") || e.Args.Contains("--update-package-file-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
@@ -74,6 +75,16 @@ public partial class App : Application
                 if (e.Args.Contains("--support-log-self-test")) SupportLog.Verify();
                 if (e.Args.Contains("--update-catalog-self-test"))
                     Task.Run(UpdateCatalog.VerifyAsync).GetAwaiter().GetResult();
+                if (e.Args.Contains("--update-package-self-test"))
+                    Task.Run(UpdatePackage.VerifyAsync).GetAwaiter().GetResult();
+                var packageFileIndex = Array.IndexOf(e.Args, "--update-package-file-test");
+                if (packageFileIndex >= 0)
+                {
+                    if (packageFileIndex + 1 >= e.Args.Length)
+                        throw new ArgumentException("--update-package-file-test needs a ZIP path");
+                    Task.Run(() => UpdatePackage.VerifyPublishedArchiveAsync(e.Args[packageFileIndex + 1]))
+                        .GetAwaiter().GetResult();
+                }
                 if (e.Args.Contains("--self-test-failure-exit"))
                     throw new InvalidOperationException("Deliberate self-test exit-code verification.");
                 Shutdown(0);

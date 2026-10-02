@@ -39,6 +39,7 @@
                     <ListBoxItem Content="キー割り当て" Padding="12,9" />
                     <ListBoxItem Content="オーバーレイ" Padding="12,9" />
                     <ListBoxItem Content="詳細設定" Padding="12,9" />
+                    <ListBoxItem Content="アップデート" Padding="12,9" />
                     <ListBoxItem Content="配信設定" Padding="12,9" />
                 </ListBox>
             </StackPanel>
@@ -305,6 +306,28 @@
                         <CheckBox x:Name="OldSampleDebugCheck" Content="サンプルレートデバッグ" Margin="0,0,0,8" />
                         <TextBlock Text="依頼された場合のみ有効にするテスト機能です。ONではマイク入力を48 kHzで要求します。"
                                    TextWrapping="Wrap" Foreground="#A8A4B0" Margin="0,0,0,8" />
+                    </StackPanel>
+                    <StackPanel x:Name="UpdatePanel" Visibility="Collapsed">
+                        <TextBlock Text="アップデート" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
+                        <Border Background="#29252F" Padding="20" CornerRadius="6">
+                            <StackPanel>
+                                <TextBlock x:Name="UpdateVersionText" Margin="0,0,0,12" />
+                                <TextBlock x:Name="UpdateStatusText" Text="アップデートを確認してください。"
+                                           FontSize="15" FontWeight="Medium" TextWrapping="Wrap" Margin="0,0,0,14" />
+                                <ProgressBar x:Name="UpdateProgress" Height="6" Minimum="0" Maximum="100"
+                                             Visibility="Collapsed" Margin="0,0,0,16" />
+                                <WrapPanel>
+                                    <Button x:Name="CheckUpdateButton" Content="アップデートを確認"
+                                            Padding="14,8" MinWidth="175" Margin="0,0,12,8"
+                                            Click="CheckUpdateButton_Click" />
+                                    <Button x:Name="StartUpdateButton" Content="アップデート開始"
+                                            Padding="14,8" MinWidth="175" Margin="0,0,0,8" IsEnabled="False"
+                                            Background="#8B4D99" Foreground="White" Click="StartUpdateButton_Click" />
+                                </WrapPanel>
+                                <TextBlock Text="開始後はダウンロードを検証し、アプリを終了して更新します。旧版はバックアップとして残します。"
+                                           FontSize="12" Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                     <StackPanel x:Name="StreamingPanel" Visibility="Collapsed">
                         <TextBlock Text="配信設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />

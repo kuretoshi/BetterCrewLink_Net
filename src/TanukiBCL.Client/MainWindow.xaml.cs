@@ -81,6 +81,7 @@ public partial class MainWindow : Window
         hotkeysSuspended = true;
         window.SettingsApplied += SettingsWindow_SettingsApplied;
         window.SettingsReset += SettingsWindow_SettingsReset;
+        window.UpdateInstallRequested += QueueUpdateInstall;
         try
         {
             window.ShowDialog();
@@ -89,6 +90,7 @@ public partial class MainWindow : Window
         {
             window.SettingsApplied -= SettingsWindow_SettingsApplied;
             window.SettingsReset -= SettingsWindow_SettingsReset;
+            window.UpdateInstallRequested -= QueueUpdateInstall;
             settingsWindow = null;
             hotkeysSuspended = false;
         }
@@ -779,6 +781,48 @@ public partial class MainWindow : Window
             relaunch = ApplicationRelaunch.Create(Environment.ProcessPath!,
                 typeof(App).Assembly.Location, resumeGamePid);
             Close(); // OnClosing drains native audio/socket work before OnClosed launches.
+        }));
+    }
+
+    private void QueueUpdateInstall(StagedUpdate staged)
+    {
+        if (relaunchRequested || isClosing) return;
+        var source = Path.Combine(AppContext.BaseDirectory, "Updater", "TanukiBCL.Updater.exe");
+        if (!File.Exists(source) || !File.Exists(Path.Combine(AppContext.BaseDirectory, "update-manifest.json")) ||
+            !Directory.Exists(staged.PayloadDirectory) ||
+            !string.Equals(Path.GetDirectoryName(staged.PayloadDirectory), staged.Root,
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("更新補助ツールまたは検証済み配布物がありません。");
+        var helper = Path.Combine(staged.Root, "TanukiBCL.Updater.exe");
+        File.Copy(source, helper, overwrite: false);
+        var gamePid = sessions.Current is not null ? activeGamePid : null;
+        relaunchRequested = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            relaunchRequested = false;
+            if (isClosing) return;
+            var dialog = settingsWindow;
+            dialog?.Close();
+            if (dialog?.IsVisible == true) return;
+            relaunch = new ProcessStartInfo(helper)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = staged.Root,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            relaunch.ArgumentList.Add("--parent-pid");
+            relaunch.ArgumentList.Add(Environment.ProcessId.ToString());
+            relaunch.ArgumentList.Add("--install-dir");
+            relaunch.ArgumentList.Add(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory));
+            relaunch.ArgumentList.Add("--stage-root");
+            relaunch.ArgumentList.Add(staged.Root);
+            if (gamePid is > 0)
+            {
+                relaunch.ArgumentList.Add("--game-process-id");
+                relaunch.ArgumentList.Add(gamePid.Value.ToString());
+            }
+            Close();
         }));
     }
 
