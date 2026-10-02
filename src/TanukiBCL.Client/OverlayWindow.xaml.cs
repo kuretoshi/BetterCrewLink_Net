@@ -29,6 +29,7 @@ public partial class OverlayWindow : Window
     private bool microphoneMuted;
     private bool deafened;
     private List<int> meetingOrder = [];
+    private readonly Dictionary<int, MeetingVoiceBorder> meetingSlots = [];
     private GameState previousGameState = GameState.Unknown;
 
     internal OverlayWindow(int gameProcessId, ClientSettings settings)
@@ -61,6 +62,8 @@ public partial class OverlayWindow : Window
         if (gameState?.GameState == GameState.Discussion &&
             previousGameState != GameState.Discussion)
         {
+            meetingSlots.Clear();
+            MeetingCanvas.Children.Clear();
             meetingOrder = gameState.Players.OrderBy(player => player.Disconnected || player.IsDead)
                 .ThenBy(player => player.Id).Select(player => player.Id).ToList();
         }
@@ -238,10 +241,11 @@ public partial class OverlayWindow : Window
 
     private void RenderMeeting(AmongUsState state)
     {
-        MeetingCanvas.Children.Clear();
         if (!settings.MeetingOverlay || state.GameState != GameState.Discussion ||
             meetingOrder.Count == 0)
         {
+            meetingSlots.Clear();
+            MeetingCanvas.Children.Clear();
             MeetingCanvas.Visibility = Visibility.Collapsed;
             return;
         }
@@ -255,7 +259,11 @@ public partial class OverlayWindow : Window
         for (var index = 0; index < meetingOrder.Count; index++)
         {
             var player = state.Players.FirstOrDefault(candidate => candidate.Id == meetingOrder[index]);
-            if (player is null) continue;
+            if (player is null)
+            {
+                if (meetingSlots.TryGetValue(meetingOrder[index], out var missing)) missing.SetTalking(false);
+                continue;
+            }
             peers.TryGetValue(player.ClientId, out var peer);
             var talking = player.IsLocal ? localTalking && !microphoneMuted : peer?.VoiceActive == true;
             var bounds = layout.Slot(index);
@@ -263,23 +271,25 @@ public partial class OverlayWindow : Window
                 double.IsFinite(nos.ColorR) && double.IsFinite(nos.ColorG) && double.IsFinite(nos.ColorB)
                 ? Color.FromRgb(ToByte(nos.ColorR), ToByte(nos.ColorG), ToByte(nos.ColorB))
                 : AvatarImageFactory.GetSwatchColors(player.ColorId, state.PlayerColors).Main;
-            var slot = new Border
+            if (!meetingSlots.TryGetValue(player.Id, out var slot))
             {
-                Width = bounds.Width, Height = bounds.Height,
-                CornerRadius = new CornerRadius(hudHeight / 100d),
-                BorderThickness = new Thickness(2d),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x37, 0, 0, 0)),
-                Background = Brushes.Transparent,
-                Opacity = talking ? 1d : 0d,
-                Effect = new DropShadowEffect
+                slot = new MeetingVoiceBorder
                 {
-                    Color = color, BlurRadius = Math.Max(5d, hudHeight / 50d),
-                    ShadowDepth = 0d, Opacity = 0.95d
-                }
-            };
+                    BorderThickness = new Thickness(2d),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(0x37, 0, 0, 0)),
+                    Background = Brushes.Transparent,
+                    Effect = new DropShadowEffect { ShadowDepth = 0d, Opacity = 0.95d }
+                };
+                meetingSlots.Add(player.Id, slot);
+                MeetingCanvas.Children.Add(slot);
+            }
+            slot.Width = bounds.Width; slot.Height = bounds.Height;
+            slot.CornerRadius = new CornerRadius(hudHeight / 100d);
+            var shadow = (DropShadowEffect)slot.Effect;
+            shadow.Color = color; shadow.BlurRadius = Math.Max(5d, hudHeight / 50d);
+            slot.SetTalking(talking);
             Canvas.SetLeft(slot, bounds.X);
             Canvas.SetTop(slot, bounds.Y);
-            MeetingCanvas.Children.Add(slot);
         }
         MeetingCanvas.Visibility = Visibility.Visible;
     }
@@ -290,6 +300,7 @@ public partial class OverlayWindow : Window
     internal static void VerifyRender()
     {
         MeetingOverlayLayout.Verify();
+        MeetingVoiceBorder.Verify();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
         var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
         try
@@ -309,6 +320,10 @@ public partial class OverlayWindow : Window
                 window.MeetingCanvas.Children.Count != 2 ||
                 window.WatermarkTitle.Text.Length == 0)
                 throw new InvalidOperationException("Overlay render smoke test failed");
+            var retainedSlot = window.MeetingCanvas.Children[1];
+            window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, false, false) }, false, false, false);
+            if (!ReferenceEquals(retainedSlot, window.MeetingCanvas.Children[1]))
+                throw new InvalidOperationException("Meeting update replaced the animated slot");
             foreach (var oldHud in new[] { true, false })
             {
                 state.OldMeetingHud = oldHud;
@@ -375,6 +390,16 @@ public partial class OverlayWindow : Window
                     throw new InvalidOperationException("Local radio toggle was lost or changed remote radio badge");
             }
             Console.WriteLine("[PASS] Overlay local radio on/off reaches rendered badge independently of remote radio");
+            var lastSlot = window.MeetingCanvas.Children[0];
+            state.GameState = GameState.Tasks;
+            window.Update(state, new Dictionary<int, OverlayPeerStatus>(), false, false, false);
+            if (window.MeetingCanvas.Children.Count != 0 || window.meetingSlots.Count != 0)
+                throw new InvalidOperationException("Meeting exit retained animated slots");
+            state.GameState = GameState.Discussion;
+            window.Update(state, new Dictionary<int, OverlayPeerStatus>(), false, false, false);
+            if (ReferenceEquals(lastSlot, window.MeetingCanvas.Children[0]))
+                throw new InvalidOperationException("New meeting reused previous meeting's fade state");
+            Console.WriteLine("[PASS] Meeting slots persist across updates and reset between meetings");
         }
         finally
         {
