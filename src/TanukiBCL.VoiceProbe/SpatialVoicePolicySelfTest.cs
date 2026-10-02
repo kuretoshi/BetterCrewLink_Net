@@ -61,6 +61,16 @@ internal static class SpatialVoicePolicySelfTest
                 .GetProperty("bugged").GetBoolean() &&
             obs.GetProperty("overlayState").GetProperty("players")[0]
                 .GetProperty("usingRadio").GetBoolean());
+        obsState.GameState = GameState.Lobby;
+        obsState.Players[1].NosLobbyColor = "#20ff00";
+        var lobbyObs = ObsOverlayWire.Build(obsState, new Dictionary<int, ObsPeerState>(), false, false);
+        Check("OBS: NoS lobby color overrides snapshot", true,
+            lobbyObs.GetProperty("overlayState").GetProperty("players")[1].GetProperty("nosColor").GetString() == "#20ff00");
+        obsState.Players[1].NosLobbyColor = null;
+        obsState.Players[1].NosPlayer = null;
+        var missingObs = ObsOverlayWire.Build(obsState, new Dictionary<int, ObsPeerState>(), false, false);
+        Check("OBS: missing NoS color is omitted", true,
+            !missingObs.GetProperty("overlayState").GetProperty("players")[1].TryGetProperty("nosColor", out _));
         var vanillaObs = ObsOverlayWire.Build(new AmongUsState
         {
             GameState = GameState.Lobby,

@@ -41,7 +41,7 @@ internal static class ObsOverlayWire
             };
             if (state.Mod == AmongUsModType.NebulaOnTheShip)
             {
-                if (NosColorHex(player.NosPlayer) is { } nosColor) data["nosColor"] = nosColor;
+                if (NosColor.For(player) is { } nosColor) data["nosColor"] = nosColor;
             }
             else
             {
@@ -79,15 +79,6 @@ internal static class ObsOverlayWire
 
     private static string ColorHex(uint packed) =>
         $"#{(byte)packed:x2}{(byte)(packed >> 8):x2}{(byte)(packed >> 16):x2}";
-
-    private static string? NosColorHex(NosPlayerData? data)
-    {
-        if (data is null || !double.IsFinite(data.ColorR) ||
-            !double.IsFinite(data.ColorG) || !double.IsFinite(data.ColorB)) return null;
-        static int Byte(double value) => (int)Math.Round(Math.Clamp(value, 0d, 1d) * 255d,
-            MidpointRounding.AwayFromZero);
-        return $"#{Byte(data.ColorR):x2}{Byte(data.ColorG):x2}{Byte(data.ColorB):x2}";
-    }
 
     private static string ModName(AmongUsModType mod) => mod switch
     {
