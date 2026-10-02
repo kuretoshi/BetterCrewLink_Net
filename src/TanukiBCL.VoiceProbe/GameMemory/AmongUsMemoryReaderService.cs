@@ -32,6 +32,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     private string currentServer = string.Empty;
     private AmongUsModType currentMod = AmongUsModType.None;
     private DateTimeOffset nextModCheck = DateTimeOffset.MinValue;
+    private readonly NosSnapshotReader nosReader = new();
+    private int nosRound;
 
     public event EventHandler<AmongUsState>? StateChanged;
     public event EventHandler<string>? Error;
@@ -52,6 +54,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             currentServer = string.Empty;
             currentMod = nextProcessInfo?.InstalledMod.Id ?? AmongUsModType.None;
             nextModCheck = DateTimeOffset.UtcNow.AddSeconds(2);
+            nosReader.Reset();
+            nosRound = 0;
         }
 
         if (nextProcessInfo is null)
@@ -247,6 +251,29 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         var lobbyCode = gameState != GameState.Menu ? gameCode : "MENU";
         lobbyCode = string.IsNullOrWhiteSpace(lobbyCode) ? "MENU" : lobbyCode;
 
+        NosSnapshot? nos = null;
+        if (mod == AmongUsModType.NebulaOnTheShip &&
+            gameState is GameState.Tasks or GameState.Discussion)
+        {
+            if (previousGameState is GameState.Menu or GameState.Lobby or GameState.Unknown)
+                nosRound++;
+            nos = nosReader.Update(currentProcess.ProcessId, $"{lobbyCode}:{nosRound}", currentContext.ReadBytes);
+            foreach (var player in players)
+            {
+                var published = !player.Disconnected && nos?.Players.TryGetValue(player.Id, out var data) == true
+                    ? data : null;
+                player.NosPlayer = published;
+                // The vanilla role is only a substitute and is not authoritative for NoS.
+                player.IsImpostor = published?.IsImpostor ?? false;
+                player.IsThirdParty = published?.IsNeutral ?? false;
+                if (published is not null) player.AppearanceName = published.Name;
+            }
+        }
+        else if (mod != AmongUsModType.NebulaOnTheShip || gameState == GameState.Menu)
+        {
+            nosReader.Reset();
+        }
+
         ReportDiagnostic(string.Join(" | ",
             $"raw={rawGameState}",
             $"state={gameState}",
@@ -257,6 +284,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             $"local={(localPlayer is null ? "none" : localPlayer.Name)}",
             $"client={clientId}",
             $"host={hostId}",
+            mod == AmongUsModType.NebulaOnTheShip ? $"nos={nosReader.Status}" : string.Empty,
             $"inner=0x{innerNetClient:X}",
             $"all=0x{allPlayers:X}"));
 
@@ -282,6 +310,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             CurrentServer = currentServer,
             MaxPlayers = maxPlayers,
             Map = map,
+            NosLocalMicPosition = nos?.LocalMicPosition,
+            NosRadios = nos?.Radios ?? [],
             CommsSabotaged = taskEnvironment.CommsSabotaged,
             CurrentCamera = taskEnvironment.CurrentCamera,
             ClosedDoors = taskEnvironment.ClosedDoors
@@ -1385,7 +1415,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                 throw new InvalidOperationException($"Among Us memory address is not readable at 0x{address:X}.");
             }
 
-            if (!ReadProcessMemory(Handle, new IntPtr(address), buffer, size, out var bytesRead) || bytesRead.ToInt64() <= 0)
+            if (!ReadProcessMemory(Handle, new IntPtr(address), buffer, size, out var bytesRead) ||
+                bytesRead.ToInt64() != size)
             {
                 throw new InvalidOperationException($"Failed to read Among Us memory at 0x{address:X}.");
             }

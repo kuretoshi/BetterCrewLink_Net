@@ -11,4 +11,16 @@
     <ProjectReference Include="..\TanukiBCL.VoiceProbe\TanukiBCL.VoiceProbe.csproj" />
     <Resource Include="Assets\Avatar\*.png" />
   </ItemGroup>
+
+  <Target Name="BundleNosSnapshotReader" BeforeTargets="ComputeFilesToPublish">
+    <MSBuild Projects="..\..\tools\TbclSnapshotReader\TbclSnapshotReader.csproj"
+             Targets="Publish"
+             Properties="Configuration=Release;RuntimeIdentifier=win-x86;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;DebugType=None;PublishDir=$(MSBuildProjectDirectory)\obj\nos-reader-publish\" />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)\obj\nos-reader-publish\TbclSnapshotReader.exe">
+        <RelativePath>NoSReader\TbclSnapshotReader.exe</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>

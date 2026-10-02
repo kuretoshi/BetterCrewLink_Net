@@ -105,14 +105,40 @@ public sealed class Player
 
 public sealed class NosPlayerData
 {
+    public int PlayerId { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public bool IsKiller { get; set; }
+
+    public bool IsImpostor { get; set; }
+
+    public bool IsCrewmate { get; set; }
+
+    public bool IsNeutral { get; set; }
+
+    public bool IsImpostorlike { get; set; }
+
     public bool? IsJammed { get; set; }
 
     public double SpeakerPositionX { get; set; }
 
     public double SpeakerPositionY { get; set; }
+
+    public double? BodyRateX { get; set; }
+
+    public double? BodyRateY { get; set; }
+
+    public double ColorR { get; set; }
+
+    public double ColorG { get; set; }
+
+    public double ColorB { get; set; }
 }
 
 public sealed record VoicePosition(double X, double Y);
+
+public sealed record NosRadioData(int Kind, int HearableMask, string Name);
 
 public sealed class AmongUsState
 {
@@ -147,6 +173,8 @@ public sealed class AmongUsState
     public CameraLocation CurrentCamera { get; set; } = CameraLocation.None;
 
     public VoicePosition? NosLocalMicPosition { get; set; }
+
+    public List<NosRadioData> NosRadios { get; set; } = [];
 
     public List<int> ClosedDoors { get; set; } = [];
 }
