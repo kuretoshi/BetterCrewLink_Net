@@ -84,9 +84,9 @@ internal static class Program
         };
         var peers = new Dictionary<int, VoicePlayerStatus>
         {
-            [2] = new("connected", true, false, 1d, false, 3),
-            [3] = new("novoice", false, false, 1d, false, 0),
-            [4] = new("connected", false, false, 1d, false, 2)
+            [2] = new("connected", true, false, 3),
+            [3] = new("novoice", false, false, 0),
+            [4] = new("connected", false, false, 2)
         };
         view.Update(game, connected: true, localTalking: true, muted: false, deafened: false, peers);
         view.Measure(new Size(280, 390));

@@ -25,6 +25,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private string currentJoinedLobby = "MENU";
     private string lastMixSignature = string.Empty;
     private SpatialVoiceSettings spatialVoiceSettings = new();
+    private IReadOnlyDictionary<int, PlayerAudioConfig> playerConfigs = new Dictionary<int, PlayerAudioConfig>();
     private LobbySettings ownLobbySettings = new();
     private LobbySettings activeLobbySettings = new();
     private volatile bool hasActiveLobbySettings;
@@ -269,6 +270,23 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         masterVolume = Math.Clamp(volumePercent, 0d, 200d);
         audioSession?.SetMasterVolume(masterVolume);
+    }
+
+    public void SetPlayerConfigs(IReadOnlyDictionary<int, PlayerAudioConfig> configs)
+    {
+        Volatile.Write(ref playerConfigs, configs.ToDictionary(
+            pair => pair.Key, pair => pair.Value.Normalize()));
+        RefreshPeerMixes();
+    }
+
+    public void SetPlayerConfig(int configId, PlayerAudioConfig config)
+    {
+        var updated = new Dictionary<int, PlayerAudioConfig>(Volatile.Read(ref playerConfigs))
+        {
+            [configId] = config.Normalize()
+        };
+        Volatile.Write(ref playerConfigs, updated);
+        RefreshPeerMixes();
     }
 
     public void SetListenerVolumes(double crewAsGhostPercent, double ghostAsImpostorPercent)
@@ -854,6 +872,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
 
         var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings, IsImpostorRadioActive(clientId));
+        mix = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs)).Apply(mix);
         audioSession?.SetPeerMix(socketId, mix);
         PeerMixChanged?.Invoke(clientId, mix);
     }

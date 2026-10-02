@@ -84,6 +84,31 @@ internal static class SpatialVoicePolicySelfTest
             SpatialVoicePolicy.Calculate(tasks, new Player { IsImpostor = true },
                 new Player { IsDead = true }, ghostVolumePolicy).Gain);
 
+        var configuredPlayer = new Player { PlayerConfigId = 123, NameHash = 456 };
+        var playerConfigs = new Dictionary<int, PlayerAudioConfig>
+        {
+            [123] = new(0.4d),
+            [456] = new(0.7d)
+        };
+        var normalMix = new PeerVoiceMix(0.8d, 0d, 0d, "proximity");
+        CheckGain("player config: uid takes precedence over name", 0.32d,
+            PlayerAudioConfig.For(configuredPlayer, playerConfigs).Apply(normalMix).Gain);
+        playerConfigs.Remove(123);
+        CheckGain("player config: name-hash fallback", 0.56d,
+            PlayerAudioConfig.For(configuredPlayer, playerConfigs).Apply(normalMix).Gain);
+        CheckGain("player config: default volume", 0.8d,
+            PlayerAudioConfig.For(configuredPlayer, new Dictionary<int, PlayerAudioConfig>()).Apply(normalMix).Gain);
+        CheckGain("player config: muted", 0d,
+            new PlayerAudioConfig(2d, true).Apply(normalMix).Gain);
+        CheckGain("player config: zero volume", 0d,
+            new PlayerAudioConfig(0d).Apply(normalMix).Gain);
+        CheckGain("player config: 200 percent", 1.6d,
+            new PlayerAudioConfig(2d).Apply(normalMix).Gain);
+        CheckGain("player config: preserve stored fractional volume", 0.117d,
+            new PlayerAudioConfig(0.117d).Normalize().Volume);
+        CheckGain("player config: clamp invalid volume", 2d,
+            new PlayerAudioConfig(5d).Normalize().Volume);
+
         var ventPolicy = new SpatialVoiceSettings(HearImpostorsInVents: true,
             ImpostorsHearImpostorsInVents: true, ImpostorRadioEnabled: true);
         var ventSpeaker = new Player { IsImpostor = true, InVent = true };

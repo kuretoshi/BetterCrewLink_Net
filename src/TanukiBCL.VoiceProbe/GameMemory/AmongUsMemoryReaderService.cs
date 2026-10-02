@@ -339,6 +339,11 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             data.OutfitsPtr = context.ReadPointer(playerDataAddress + context.GetPlayerStructOffset("outfitsPtr"));
             data.TaskPtr = context.ReadPointer(playerDataAddress + context.GetPlayerStructOffset("taskPtr"));
             data.RolePtr = context.ReadPointer(playerDataAddress + context.GetPlayerStructOffset("rolePtr"));
+            var puidField = context.Offsets.PlayerStruct.FirstOrDefault(field => field.Name == "puid");
+            if (puidField is not null)
+            {
+                data.PuidPtr = context.ReadPointer(playerDataAddress + puidField.Offset);
+            }
         }
 
         if (data.ObjectPtr == 0)
@@ -409,13 +414,17 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         }
 
         var roleTeam = data.RolePtr == 0 ? 0 : context.ReadUInt32(data.RolePtr, context.Offsets.PlayerRoleTeam);
+        var cleanName = StripRichText(name);
+        var nameHash = HashCode(cleanName);
+        var playerUid = context.ReadString(data.PuidPtr);
 
         return new Player
         {
             Id = unchecked((int)data.Id),
             ClientId = clientId,
-            Name = StripRichText(name),
-            NameHash = HashCode(StripRichText(name)),
+            Name = cleanName,
+            NameHash = nameHash,
+            PlayerConfigId = string.IsNullOrEmpty(playerUid) ? nameHash : HashCode(playerUid),
             ColorId = color,
             HatId = hatId,
             SkinId = skinId,
@@ -850,6 +859,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         public long OutfitsPtr { get; set; }
         public long TaskPtr { get; set; }
         public long RolePtr { get; set; }
+        public long PuidPtr { get; set; }
     }
 
     private sealed class ReaderContext : IDisposable
@@ -983,6 +993,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                         break;
                     case "rolePtr":
                         data.RolePtr = ReadUInt32FromBuffer(buffer, field.Offset);
+                        break;
+                    case "puid":
+                        data.PuidPtr = ReadUInt32FromBuffer(buffer, field.Offset);
                         break;
                 }
             }

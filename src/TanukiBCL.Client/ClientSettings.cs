@@ -24,6 +24,7 @@ internal sealed class ClientSettings
     public string DeafenShortcut { get; set; } = "RControl";
     public LobbySettings MyLobbySettings { get; set; } = new();
     public LobbySettings? RadioOnlyBackup { get; set; }
+    public Dictionary<int, PlayerAudioConfig> PlayerConfigMap { get; set; } = [];
 
     public void Normalize()
     {
@@ -45,6 +46,9 @@ internal sealed class ClientSettings
         DeafenShortcut = GlobalHotkeyMonitor.NormalizeShortcut(DeafenShortcut, "RControl");
         MyLobbySettings = (MyLobbySettings ?? new LobbySettings()).Normalize();
         RadioOnlyBackup = RadioOnlyBackup?.Normalize();
+        PlayerConfigMap = (PlayerConfigMap ?? []).ToDictionary(
+            pair => pair.Key,
+            pair => (pair.Value ?? PlayerAudioConfig.Default).Normalize());
     }
 }
 

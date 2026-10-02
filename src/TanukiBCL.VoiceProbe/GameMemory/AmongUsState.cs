@@ -43,6 +43,8 @@ public sealed class Player
 
     public int NameHash { get; set; }
 
+    public int PlayerConfigId { get; set; }
+
     public int ColorId { get; set; }
 
     public string HatId { get; set; } = string.Empty;

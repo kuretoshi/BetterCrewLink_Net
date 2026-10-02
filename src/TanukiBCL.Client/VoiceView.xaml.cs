@@ -3,6 +3,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
+using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.Client;
@@ -23,10 +25,24 @@ public partial class VoiceView : UserControl
     private static readonly Geometry VolumeUp = Geometry.Parse(
         "M3 9v6h4l5 5V4L7 9zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77");
     private readonly Dictionary<int, PlayerAvatar> remoteAvatars = [];
+    private readonly Dictionary<int, Player> displayedPlayers = [];
+    private readonly DispatcherTimer popupCloseTimer;
+    private IReadOnlyDictionary<int, PlayerAudioConfig> playerConfigs = new Dictionary<int, PlayerAudioConfig>();
+    private int? popupClientId;
+    private bool updatingPopup;
+    private bool popupDirty;
 
     public VoiceView()
     {
         InitializeComponent();
+        popupCloseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        popupCloseTimer.Tick += (_, _) =>
+        {
+            popupCloseTimer.Stop();
+            if (PlayerConfigPopupContent.IsMouseOver ||
+                PlayerConfigPopup.PlacementTarget is UIElement { IsMouseOver: true }) return;
+            ClosePlayerConfigPopup();
+        };
     }
 
     public event EventHandler? SettingsRequested;
@@ -35,11 +51,13 @@ public partial class VoiceView : UserControl
     public event EventHandler? MuteRequested;
     public event EventHandler? DeafenRequested;
     public event EventHandler? HelpRequested;
+    public event Action<int, PlayerAudioConfig, bool>? PlayerConfigChanged;
 
     public void Update(AmongUsState? game, bool connected, bool localTalking, bool muted,
         bool deafened, IReadOnlyDictionary<int, VoicePlayerStatus> peers, bool hideCode = false,
-        bool localUsingRadio = false)
+        bool localUsingRadio = false, IReadOnlyDictionary<int, PlayerAudioConfig>? playerConfigs = null)
     {
+        this.playerConfigs = playerConfigs ?? new Dictionary<int, PlayerAudioConfig>();
         var local = game?.Players.FirstOrDefault(player => player.IsLocal);
         var inLobby = local is not null && game is not null && !string.IsNullOrWhiteSpace(game.LobbyCode) &&
                       game.GameState is not (GameState.Menu or GameState.Unknown);
@@ -47,8 +65,10 @@ public partial class VoiceView : UserControl
         LobbyHeader.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
         if (!inLobby || local is null || game is null)
         {
+            ClosePlayerConfigPopup();
             OtherPlayersPanel.Children.Clear();
             remoteAvatars.Clear();
+            displayedPlayers.Clear();
             return;
         }
 
@@ -63,6 +83,10 @@ public partial class VoiceView : UserControl
         DeafenButton.ToolTip = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
 
         var others = game.Players.Where(player => !player.IsLocal).ToArray();
+        if (popupClientId is int activeClientId && others.All(player => player.ClientId != activeClientId))
+            ClosePlayerConfigPopup();
+        displayedPlayers.Clear();
+        foreach (var player in others) displayedPlayers[player.ClientId] = player;
         var perRow = others.Length <= 9 ? 3 : Math.Min(12, (int)Math.Ceiling(Math.Sqrt(others.Length)));
         var avatarSize = 225d / perRow - 8d;
         foreach (var stale in remoteAvatars.Keys.Where(id => others.All(player => player.ClientId != id)).ToArray())
@@ -76,6 +100,9 @@ public partial class VoiceView : UserControl
             if (!remoteAvatars.TryGetValue(player.ClientId, out var avatar))
             {
                 avatar = new PlayerAvatar { Margin = new Thickness(4) };
+                avatar.Tag = player.ClientId;
+                avatar.MouseEnter += PlayerAvatar_MouseEnter;
+                avatar.MouseLeave += PlayerAvatar_MouseLeave;
                 remoteAvatars.Add(player.ClientId, avatar);
                 OtherPlayersPanel.Children.Add(avatar);
             }
@@ -86,8 +113,9 @@ public partial class VoiceView : UserControl
             var status = peers.TryGetValue(player.ClientId, out var snapshot)
                 ? snapshot
                 : VoicePlayerStatus.Disconnected;
-            avatar.SetVisualState(status.Talking && !player.InVent, status.Muted,
-                status.Volume == 0, status.ConnectionState, status.UsingRadio, status.QualityBars);
+            var config = PlayerAudioConfig.For(player, this.playerConfigs);
+            avatar.SetVisualState(status.Talking && !player.InVent, false,
+                config.IsMuted || config.Volume == 0d, status.ConnectionState, status.UsingRadio, status.QualityBars);
         }
     }
 
@@ -110,6 +138,76 @@ public partial class VoiceView : UserControl
     private void DeafenButton_Click(object sender, RoutedEventArgs e) => DeafenRequested?.Invoke(this, EventArgs.Empty);
     private void HelpButton_Click(object sender, RoutedEventArgs e) => HelpRequested?.Invoke(this, EventArgs.Empty);
 
+    private void PlayerAvatar_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (sender is not PlayerAvatar { Tag: int clientId } avatar ||
+            !displayedPlayers.TryGetValue(clientId, out var player)) return;
+        popupCloseTimer.Stop();
+        if (popupDirty && popupClientId != clientId) PersistPlayerVolume();
+        popupClientId = clientId;
+        PlayerConfigPopup.PlacementTarget = avatar;
+        PlayerConfigName.Text = player.Name;
+        SetPopupVisual(PlayerAudioConfig.For(player, playerConfigs));
+        popupDirty = false;
+        PlayerConfigPopup.IsOpen = true;
+    }
+
+    private void PlayerAvatar_MouseLeave(object sender, MouseEventArgs e) => popupCloseTimer.Start();
+    private void PlayerConfigPopup_MouseEnter(object sender, MouseEventArgs e) => popupCloseTimer.Stop();
+    private void PlayerConfigPopup_MouseLeave(object sender, MouseEventArgs e) => popupCloseTimer.Start();
+
+    private void ClosePlayerConfigPopup()
+    {
+        popupCloseTimer.Stop();
+        if (popupDirty) PersistPlayerVolume();
+        PlayerConfigPopup.IsOpen = false;
+        popupClientId = null;
+    }
+
+    public void DismissPlayerConfigPopup() => ClosePlayerConfigPopup();
+
+    private void SetPopupVisual(PlayerAudioConfig config)
+    {
+        updatingPopup = true;
+        PlayerVolumeSlider.Value = config.Volume;
+        PlayerVolumeText.Text = $"{Math.Floor(config.Volume * 100d)}%";
+        PlayerMuteIcon.Data = config.IsMuted || config.Volume == 0d ? VolumeOff : VolumeUp;
+        PlayerMuteButton.ToolTip = config.IsMuted ? "このプレイヤーのミュートを解除" : "このプレイヤーをミュート";
+        updatingPopup = false;
+    }
+
+    private void PlayerMuteButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (popupClientId is not int clientId || !displayedPlayers.TryGetValue(clientId, out var player)) return;
+        var current = PlayerAudioConfig.For(player, playerConfigs);
+        var config = current with { IsMuted = !current.IsMuted };
+        popupDirty = false;
+        PlayerConfigChanged?.Invoke(player.PlayerConfigId, config, true);
+        SetPopupVisual(config);
+    }
+
+    private void PlayerVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (updatingPopup || popupClientId is not int clientId ||
+            !displayedPlayers.TryGetValue(clientId, out var player)) return;
+        var config = PlayerAudioConfig.For(player, playerConfigs) with { Volume = PlayerVolumeSlider.Value };
+        PlayerVolumeText.Text = $"{Math.Floor(config.Volume * 100d)}%";
+        PlayerMuteIcon.Data = config.IsMuted || config.Volume == 0d ? VolumeOff : VolumeUp;
+        popupDirty = true;
+        PlayerConfigChanged?.Invoke(player.PlayerConfigId, config, false);
+    }
+
+    private void PlayerVolumeSlider_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) => PersistPlayerVolume();
+    private void PlayerVolumeSlider_KeyUp(object sender, KeyEventArgs e) => PersistPlayerVolume();
+
+    private void PersistPlayerVolume()
+    {
+        if (popupClientId is not int clientId || !displayedPlayers.TryGetValue(clientId, out var player)) return;
+        var config = PlayerAudioConfig.For(player, playerConfigs) with { Volume = PlayerVolumeSlider.Value };
+        popupDirty = false;
+        PlayerConfigChanged?.Invoke(player.PlayerConfigId, config, true);
+    }
+
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.OriginalSource is Button || e.ClickCount != 1) return;
@@ -131,10 +229,8 @@ public partial class VoiceView : UserControl
 public sealed record VoicePlayerStatus(
     string ConnectionState,
     bool Talking,
-    bool Muted,
-    double Volume,
     bool UsingRadio,
     int QualityBars)
 {
-    public static readonly VoicePlayerStatus Disconnected = new("disconnected", false, false, 1d, false, 0);
+    public static readonly VoicePlayerStatus Disconnected = new("disconnected", false, false, 0);
 }

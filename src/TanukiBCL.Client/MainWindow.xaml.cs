@@ -44,6 +44,21 @@ public partial class MainWindow : Window
         CompactVoiceView.MuteRequested += (_, _) => ToggleMicrophoneMute();
         CompactVoiceView.DeafenRequested += (_, _) => ToggleDeafen();
         CompactVoiceView.HelpRequested += (_, _) => ShowDiagnostics();
+        CompactVoiceView.PlayerConfigChanged += (configId, config, persist) =>
+        {
+            settings.PlayerConfigMap[configId] = config.Normalize();
+            probe?.SetPlayerConfig(configId, config);
+            UpdateCompactView();
+            if (!persist) return;
+            try
+            {
+                ClientSettingsStore.Save(settings);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show(this, $"プレイヤー別音量を保存できませんでした: {exception.Message}", "TanukiBCL");
+            }
+        };
         UpdateCompactView();
         Loaded += (_, _) =>
         {
@@ -60,6 +75,7 @@ public partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        CompactVoiceView.DismissPlayerConfigPopup();
         var hostInGame = currentState is { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         var window = new SettingsWindow(settings, !hostInGame,
             probe?.CurrentLobbySettings, currentState?.IsHost != true) { Owner = this };
@@ -148,6 +164,7 @@ public partial class MainWindow : Window
         ]);
         probe = new VoiceServerProbe(options, "client");
         probe.SetMasterVolume(settings.MasterVolume);
+        probe.SetPlayerConfigs(settings.PlayerConfigMap);
         probe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
@@ -425,9 +442,10 @@ public partial class MainWindow : Window
             row.Connection is "data-ready" or "接続済み"
                 ? row.HasReceivedFrames ? "connected" : "novoice"
                 : "disconnected",
-            row.Talking, false, 1d, row.Radio == "送信中", 0));
+            row.Talking, row.Radio == "送信中", 0));
         CompactVoiceView.Update(currentState, voiceServerConnected, localTalking && !microphoneMuted,
-            microphoneMuted, deafened, statuses, localUsingRadio: radioTransmitting);
+            microphoneMuted, deafened, statuses, localUsingRadio: radioTransmitting,
+            playerConfigs: settings.PlayerConfigMap);
         var active = probe?.CurrentLobbySettings;
         CompactVoiceView.SetWarning(active?.DeadOnly == true
             ? "幽霊のみのボイス設定です"
@@ -438,6 +456,7 @@ public partial class MainWindow : Window
 
     private void ShowDiagnostics()
     {
+        CompactVoiceView.DismissPlayerConfigPopup();
         CompactVoiceView.Visibility = Visibility.Collapsed;
         DiagnosticsGrid.Visibility = Visibility.Visible;
         MinWidth = 620;

@@ -127,5 +127,33 @@
                 </Button>
             </StackPanel>
         </Grid>
+        <Popup x:Name="PlayerConfigPopup" Placement="Top" AllowsTransparency="True"
+               StaysOpen="True" PopupAnimation="Fade" IsOpen="False">
+            <Border x:Name="PlayerConfigPopupContent" Background="#353239" BorderBrush="#68616C"
+                    BorderThickness="1" CornerRadius="4" Padding="9,6"
+                    MouseEnter="PlayerConfigPopup_MouseEnter" MouseLeave="PlayerConfigPopup_MouseLeave">
+                <StackPanel>
+                    <TextBlock x:Name="PlayerConfigName" TextAlignment="Center" FontWeight="Bold"
+                               MaxWidth="175" TextTrimming="CharacterEllipsis" />
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,0,0">
+                        <Button x:Name="PlayerMuteButton" Width="30" Height="30" Background="Transparent"
+                                Click="PlayerMuteButton_Click" ToolTip="このプレイヤーをミュート">
+                            <Viewbox Width="20" Height="20">
+                                <Path x:Name="PlayerMuteIcon" Fill="#CE93D8" Width="24" Height="24"
+                                      Stretch="Uniform" />
+                            </Viewbox>
+                        </Button>
+                        <Slider x:Name="PlayerVolumeSlider" Width="118" Minimum="0" Maximum="2"
+                                TickFrequency="0.02" IsSnapToTickEnabled="True" SmallChange="0.02"
+                                LargeChange="0.1" IsMoveToPointEnabled="True" Value="1" Margin="4,0,0,0"
+                                ValueChanged="PlayerVolumeSlider_ValueChanged"
+                                PreviewMouseLeftButtonUp="PlayerVolumeSlider_MouseLeftButtonUp"
+                                KeyUp="PlayerVolumeSlider_KeyUp" />
+                        <TextBlock x:Name="PlayerVolumeText" Width="40" Text="100%"
+                                   TextAlignment="Right" VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
     </Grid>
 </UserControl>
