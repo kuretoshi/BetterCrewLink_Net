@@ -16,14 +16,13 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly object playbackGate = new();
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
     private readonly Action<bool> onVadChanged;
+    private readonly TanukiVoiceActivityDetector voiceDetector = new();
     private bool? lastVadState;
     private volatile bool microphoneMuted;
     private volatile bool deafened;
     private volatile float masterVolume = 1f;
     private volatile float microphoneGain = 1f;
     private volatile bool microphoneSensitivityEnabled;
-    private volatile float minimumNoiseLevel = 0.15f;
-    private int voiceActivityCounter;
     private bool disposed;
 
     [DllImport("winmm.dll")]
@@ -82,7 +81,10 @@ internal sealed class AudioDeviceSession : IDisposable
     public void SetMicrophoneMuted(bool muted)
     {
         microphoneMuted = muted;
-        if (muted) voiceActivityCounter = 0;
+        if (muted)
+        {
+            lock (voiceDetector) voiceDetector.ResetActivity();
+        }
         if (muted && lastVadState != false)
         {
             lastVadState = false;
@@ -109,7 +111,10 @@ internal sealed class AudioDeviceSession : IDisposable
 
     public void SetMicrophoneSensitivity(bool enabled, double minimumNoiseLevel)
     {
-        this.minimumNoiseLevel = (float)Math.Clamp(minimumNoiseLevel, 0d, 1d);
+        lock (voiceDetector)
+        {
+            voiceDetector.SetMinimumNoiseLevel(enabled ? minimumNoiseLevel : 0.15d);
+        }
         microphoneSensitivityEnabled = enabled;
     }
 
@@ -187,9 +192,12 @@ internal sealed class AudioDeviceSession : IDisposable
 
         var buffer = args.Buffer.AsMemory(0, args.BytesRecorded).ToArray();
         var sensitivityEnabled = microphoneSensitivityEnabled;
-        // The upstream slider stores an inverse minimum-noise level (default
-        // 0.15). Use its raw-microphone level before output gain is applied.
-        var rawRms = sensitivityEnabled ? CalculateRms(buffer) : 0d;
+        // The upstream VAD analyses the raw microphone before output gain.
+        bool talking;
+        lock (voiceDetector)
+        {
+            talking = voiceDetector.ProcessPcm16(buffer);
+        }
         var gain = microphoneGain;
         if (gain != 1f)
         {
@@ -200,23 +208,9 @@ internal sealed class AudioDeviceSession : IDisposable
                 BitConverter.TryWriteBytes(buffer.AsSpan(index, sizeof(short)), adjusted);
             }
         }
-        bool talking;
-        if (sensitivityEnabled)
+        if (sensitivityEnabled && !talking)
         {
-            // Match the upstream VAD's 0..30 activity counter and >5 voice
-            // decision; the PCM RMS scale is one tenth of its analyser level.
-            var aboveThreshold = rawRms >= Math.Max(0.001d, minimumNoiseLevel * 0.1d);
-            voiceActivityCounter = Math.Clamp(voiceActivityCounter + (aboveThreshold ? 1 : -1), 0, 30);
-            talking = voiceActivityCounter > 5;
-            if (!talking)
-            {
-                Array.Clear(buffer);
-            }
-        }
-        else
-        {
-            voiceActivityCounter = 0;
-            talking = CalculateRms(buffer) >= 0.015d;
+            Array.Clear(buffer);
         }
         if (lastVadState != talking)
         {
@@ -225,24 +219,6 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         onCaptured(buffer);
-    }
-
-    private static double CalculateRms(byte[] pcm16)
-    {
-        if (pcm16.Length < 2)
-        {
-            return 0;
-        }
-
-        double sumSquares = 0;
-        var samples = pcm16.Length / 2;
-        for (var index = 0; index < samples; index++)
-        {
-            var sample = BitConverter.ToInt16(pcm16, index * 2) / 32768d;
-            sumSquares += sample * sample;
-        }
-
-        return Math.Sqrt(sumSquares / samples);
     }
 
     public static void PrintDevices()

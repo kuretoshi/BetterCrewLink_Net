@@ -17,6 +17,11 @@ internal static class Program
             {
                 return SpatialVoicePolicySelfTest.Run();
             }
+
+            if (options.VadSelfTest)
+            {
+                return TanukiVoiceActivityDetectorSelfTest.Run();
+            }
             if (options.ListAudioDevices)
             {
                 AudioDeviceSession.PrintDevices();
@@ -121,6 +126,7 @@ internal static class Program
               --seconds <number>   指定秒数後に自動終了
               --self-test         2クライアントでP2Pデータチャネルを自動検証
               --policy-self-test  3.2.7の音声ポリシーをローカルで検証
+              --vad-self-test     3.2.7の周波数帯VADを合成音で検証
               --tanuki-interop-test 起動中のTanukiBCLとのWebRTC・Opus相互接続を検証
               --expected-peer-client-id <id> 相互接続テストの対象client IDを固定
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
