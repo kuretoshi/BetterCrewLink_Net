@@ -8,6 +8,8 @@ namespace TanukiBCL.Client;
 /// <summary>Visual portion of the v3.2.7 Avatar and ConnectionIndicator components.</summary>
 public partial class PlayerAvatar : UserControl
 {
+    private System.Windows.Media.Imaging.BitmapSource? currentImage;
+    private string? currentName;
     // Material icon paths used by the upstream Avatar.tsx status badges.
     private static readonly Geometry WifiOff = Geometry.Parse(
         "M22.99 9C19.15 5.16 13.8 3.76 8.84 4.78l2.52 2.52c3.47-.17 6.99 1.05 9.63 3.7zm-4 4c-1.29-1.29-2.84-2.13-4.49-2.56l3.53 3.53zM2 3.05 5.07 6.1C3.6 6.82 2.22 7.78 1 9l1.99 2c1.24-1.24 2.67-2.16 4.2-2.77l2.24 2.24C7.81 10.89 6.27 11.73 5 13v.01L6.99 15c1.36-1.36 3.14-2.04 4.92-2.06L18.98 20l1.27-1.26L3.29 1.79zM9 17l3 3 3-3c-1.65-1.66-4.34-1.66-6 0");
@@ -25,11 +27,17 @@ public partial class PlayerAvatar : UserControl
 
     public void SetPlayer(Player player, IReadOnlyList<PlayerColorPair>? colors)
     {
-        AvatarBody.Fill = new ImageBrush(AvatarImageFactory.Get(player.ColorId, player.IsDead, colors))
+        var image = AvatarImageFactory.Get(player.ColorId, player.IsDead, colors);
+        if (!ReferenceEquals(image, currentImage))
         {
-            Stretch = Stretch.UniformToFill
-        };
-        ToolTip = player.Name;
+            AvatarBody.Fill = new ImageBrush(image) { Stretch = Stretch.UniformToFill };
+            currentImage = image;
+        }
+        if (player.Name != currentName)
+        {
+            ToolTip = player.Name;
+            currentName = player.Name;
+        }
     }
 
     public void SetVisualState(bool talking, bool muted, bool deafened, string connectionState,

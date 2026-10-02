@@ -164,6 +164,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public event Action<bool>? LocalVadChanged;
 
+    public event Action<int, bool>? PeerVadChanged;
+
     public event Action<int>? LocalAudioFrameSent;
 
     public event Action<string>? ConnectionStatusChanged;
@@ -540,11 +542,32 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             {
                 stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
                 impostorRadioStates.TryRemove(departedClientId, out _);
+                PeerVadChanged?.Invoke(departedClientId, false);
             }
             peerManager.RemovePeer(remoteSocketId);
             audioSession?.RemovePeer(remoteSocketId);
         });
-        Observe("VAD");
+        socket.On("VAD", response =>
+        {
+            var payload = response.GetValue<JsonElement>();
+            if (payload.ValueKind != JsonValueKind.Object ||
+                !payload.TryGetProperty("activity", out var activity) ||
+                activity.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+                !payload.TryGetProperty("client", out var client) ||
+                client.ValueKind != JsonValueKind.Object ||
+                !client.TryGetProperty("clientId", out var id) ||
+                !id.TryGetInt32(out var clientId) ||
+                !payload.TryGetProperty("socketId", out var socketIdElement) ||
+                socketIdElement.ValueKind != JsonValueKind.String ||
+                socketIdElement.GetString() is not { Length: > 0 } socketId ||
+                !peerClientIds.TryGetValue(socketId, out var knownClientId) ||
+                knownClientId != clientId)
+            {
+                return;
+            }
+
+            PeerVadChanged?.Invoke(clientId, activity.GetBoolean());
+        });
         socket.On("signal", response =>
         {
             var envelope = response.GetValue<JsonElement>();

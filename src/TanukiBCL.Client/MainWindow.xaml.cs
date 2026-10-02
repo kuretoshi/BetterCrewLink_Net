@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     private bool microphoneMuted;
     private bool deafened;
     private bool radioTransmitting;
+    private bool localTalking;
+    private bool voiceServerConnected;
     private long sentAudioFrames;
 
     public MainWindow()
@@ -35,7 +37,25 @@ public partial class MainWindow : Window
         OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
         SelectConfiguredDevices();
         RefreshProcesses();
-        SelectProcessFromCommandLine();
+        var explicitProcess = SelectProcessFromCommandLine();
+        CompactVoiceView.SettingsRequested += (_, _) => SettingsButton_Click(this, new RoutedEventArgs());
+        CompactVoiceView.ReloadRequested += (_, _) => ShowDiagnostics();
+        CompactVoiceView.CloseRequested += (_, _) => Close();
+        CompactVoiceView.MuteRequested += (_, _) => ToggleMicrophoneMute();
+        CompactVoiceView.DeafenRequested += (_, _) => ToggleDeafen();
+        CompactVoiceView.HelpRequested += (_, _) => ShowDiagnostics();
+        UpdateCompactView();
+        Loaded += (_, _) =>
+        {
+            if (explicitProcess || ProcessCombo.Items.Count == 1)
+            {
+                StartButton_Click(this, new RoutedEventArgs());
+            }
+            else if (ProcessCombo.Items.Count > 1)
+            {
+                ShowDiagnostics();
+            }
+        };
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -117,6 +137,7 @@ public partial class MainWindow : Window
             MessageBox.Show(this, $"デバイス設定を保存できませんでした: {exception.Message}", "TanukiBCL");
         }
         SetRunning(true);
+        ShowCompactView();
         runCancellation = new CancellationTokenSource();
         var options = ProbeOptions.Parse([
             "--server", settings.ServerUrl,
@@ -132,16 +153,34 @@ public partial class MainWindow : Window
         probe.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
         probe.SetMicrophoneActivationMode(settings.PushToTalkMode);
         probe.SetOwnLobbySettings(settings.MyLobbySettings);
+        probe.SetMicrophoneMuted(microphoneMuted);
+        probe.SetDeafened(deafened);
         probe.LobbySettingsChanged += _ => Dispatch(() =>
             settingsWindow?.UpdateCurrentLobbySettings(probe?.CurrentLobbySettings));
-        probe.ConnectionStatusChanged += status => Dispatch(() => StatusText.Text = status);
+        probe.ConnectionStatusChanged += status => Dispatch(() =>
+        {
+            StatusText.Text = status;
+            voiceServerConnected = status == "ボイスサーバー接続済み";
+            UpdateCompactView();
+        });
         probe.GameStateApplied += state => Dispatch(() => ShowGameState(state));
         probe.PeerMixChanged += (clientId, mix) => Dispatch(() => UpdatePeerMix(clientId, mix));
         probe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(() => UpdatePeerConnection(clientId, status));
+        probe.PeerVadChanged += (clientId, active) => Dispatch(() =>
+        {
+            var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+            var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
+            row.VadActive = active;
+            row.Talking = active && row.Audible && player?.InVent != true;
+            UpdateCompactView();
+        });
         probe.PeerPcmReceived += (clientId, _) => Dispatch(() =>
         {
             var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
-            FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}").IncrementReceived();
+            var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
+            var firstFrame = !row.HasReceivedFrames;
+            row.IncrementReceived();
+            if (firstFrame) UpdateCompactView();
         });
         probe.LocalAudioFrameSent += peerCount => Dispatch(() =>
         {
@@ -150,10 +189,12 @@ public partial class MainWindow : Window
         });
         probe.LocalVadChanged += talking => Dispatch(() =>
         {
+            localTalking = talking;
             VadText.Text = microphoneMuted ? "マイク: ミュート中" : talking ? "マイク: 発話中" : "マイク: 待機中";
             VadText.Foreground = talking && !microphoneMuted
                 ? System.Windows.Media.Brushes.LightGreen
                 : System.Windows.Media.Brushes.LightGray;
+            UpdateCompactView();
         });
         probe.ImpostorRadioAvailabilityChanged += available => Dispatch(() => RadioButton.IsEnabled = available);
         probe.ImpostorRadioTransmitChanged += active => Dispatch(() =>
@@ -161,6 +202,7 @@ public partial class MainWindow : Window
             radioTransmitting = active;
             RadioButton.Content = active ? "インポスターラジオ: ON" : "インポスターラジオ: OFF";
             RadioButton.Background = active ? System.Windows.Media.Brushes.DarkOrange : null;
+            UpdateCompactView();
         });
         hotkeys = new GlobalHotkeyMonitor(
             pressed => probe?.SetPushToTalkPressed(pressed),
@@ -193,6 +235,7 @@ public partial class MainWindow : Window
         catch (Exception exception)
         {
             StatusText.Text = $"接続失敗: {exception.Message}";
+            ShowDiagnostics();
         }
         finally
         {
@@ -227,6 +270,7 @@ public partial class MainWindow : Window
         probe?.SetMicrophoneMuted(microphoneMuted);
         MuteButton.Content = microphoneMuted ? "マイクミュート解除" : "マイクをミュート";
         VadText.Text = microphoneMuted ? "マイク: ミュート中" : "マイク: 待機中";
+        UpdateCompactView();
     }
 
     private void DeafenButton_Click(object sender, RoutedEventArgs e)
@@ -237,6 +281,7 @@ public partial class MainWindow : Window
         deafened = !deafened;
         probe?.SetDeafened(deafened);
         DeafenButton.Content = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
+        UpdateCompactView();
     }
 
     private void RadioButton_Click(object sender, RoutedEventArgs e) =>
@@ -251,27 +296,40 @@ public partial class MainWindow : Window
         var remotePlayers = state.Players.Where(player => !player.IsLocal).OrderBy(player => player.ClientId).ToArray();
         foreach (var player in remotePlayers)
         {
-            FindOrCreatePeer(player.ClientId, player.Name).Name = player.Name;
+            var row = FindOrCreatePeer(player.ClientId, player.Name);
+            row.Name = player.Name;
+            row.Talking = row.VadActive && row.Audible && !player.InVent;
         }
         foreach (var stale in peers.Where(row => remotePlayers.All(player => player.ClientId != row.ClientId)).ToArray())
         {
             peers.Remove(stale);
         }
+        UpdateCompactView();
     }
 
     private void UpdatePeerMix(int clientId, PeerVoiceMix mix)
     {
         var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
         var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
+        row.Audible = mix.Audible;
+        row.Talking = row.VadActive && mix.Audible && player?.InVent != true;
         row.Voice = mix.Audible ? "聞こえる" : LocalizeReason(mix.Reason);
         row.Radio = mix.Audible && mix.Reason == "impostor-radio" ? "送信中" : "—";
         row.Gain = mix.Audible ? $"{mix.Gain * 100:0}%" : "0%";
+        UpdateCompactView();
     }
 
     private void UpdatePeerConnection(int clientId, string status)
     {
         var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
-        FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}").Connection = status switch
+        var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
+        if (status is "connecting" or "failed" or "closed")
+        {
+            row.ResetReceived();
+            row.VadActive = false;
+            row.Talking = false;
+        }
+        row.Connection = status switch
         {
             "connected" => "接続済み",
             "connecting" => "接続中",
@@ -279,6 +337,7 @@ public partial class MainWindow : Window
             "closed" => "切断",
             _ => status
         };
+        UpdateCompactView();
     }
 
     private PeerRow FindOrCreatePeer(int clientId, string name)
@@ -319,24 +378,35 @@ public partial class MainWindow : Window
             microphoneMuted = false;
             deafened = false;
             radioTransmitting = false;
+            localTalking = false;
+            voiceServerConnected = false;
             RadioButton.Content = "インポスターラジオ: OFF";
             RadioButton.Background = null;
             MuteButton.Content = "マイクをミュート";
             DeafenButton.Content = "スピーカーをミュート";
             VadText.Text = "マイク: 待機中";
             SentText.Text = "Opus送信: 待機中";
+            foreach (var row in peers)
+            {
+                row.Connection = "待機中";
+                row.ResetReceived();
+                row.VadActive = false;
+                row.Audible = false;
+                row.Talking = false;
+            }
         }
+        UpdateCompactView();
     }
 
     private void Dispatch(Action action) => Dispatcher.BeginInvoke(action);
 
-    private void SelectProcessFromCommandLine()
+    private bool SelectProcessFromCommandLine()
     {
         var args = Environment.GetCommandLineArgs();
         var optionIndex = Array.IndexOf(args, "--game-process-id");
         if (optionIndex < 0 || optionIndex + 1 >= args.Length || !int.TryParse(args[optionIndex + 1], out var processId))
         {
-            return;
+            return false;
         }
 
         if (ProcessCombo.ItemsSource is IEnumerable<ProcessChoice> choices &&
@@ -344,8 +414,51 @@ public partial class MainWindow : Window
         {
             ProcessCombo.SelectedItem = choice;
             StatusText.Text = $"Among Us PID {processId}を選択しました";
+            return true;
         }
+        return false;
     }
+
+    private void UpdateCompactView()
+    {
+        var statuses = peers.ToDictionary(row => row.ClientId, row => new VoicePlayerStatus(
+            row.Connection is "data-ready" or "接続済み"
+                ? row.HasReceivedFrames ? "connected" : "novoice"
+                : "disconnected",
+            row.Talking, false, 1d, row.Radio == "送信中", 0));
+        CompactVoiceView.Update(currentState, voiceServerConnected, localTalking && !microphoneMuted,
+            microphoneMuted, deafened, statuses, localUsingRadio: radioTransmitting);
+        var active = probe?.CurrentLobbySettings;
+        CompactVoiceView.SetWarning(active?.DeadOnly == true
+            ? "幽霊のみのボイス設定です"
+            : active?.MeetingGhostOnly == true
+                ? "会議中は幽霊のみ会話できます"
+                : null);
+    }
+
+    private void ShowDiagnostics()
+    {
+        CompactVoiceView.Visibility = Visibility.Collapsed;
+        DiagnosticsGrid.Visibility = Visibility.Visible;
+        MinWidth = 620;
+        MinHeight = 540;
+        Width = 720;
+        Height = 650;
+    }
+
+    private void ShowCompactView()
+    {
+        DiagnosticsGrid.Visibility = Visibility.Collapsed;
+        CompactVoiceView.Visibility = Visibility.Visible;
+        MinWidth = 280;
+        MinHeight = 390;
+        Width = 280;
+        Height = 390;
+    }
+
+    private void BackButton_Click(object sender, RoutedEventArgs e) => ShowCompactView();
+
+    private void DiagnosticsCloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
     protected override void OnClosed(EventArgs e)
     {
@@ -366,6 +479,9 @@ public partial class MainWindow : Window
         private string radio = "—";
         private long receivedFrames;
         private string gain = "—";
+        private bool vadActive;
+        private bool audible;
+        private bool talking;
 
         public int ClientId { get; } = clientId;
         public string Name { get => currentName; set => Set(ref currentName, value); }
@@ -373,7 +489,11 @@ public partial class MainWindow : Window
         public string Voice { get => voice; set => Set(ref voice, value); }
         public string Radio { get => radio; set => Set(ref radio, value); }
         public string Received => receivedFrames == 0 ? "待機中" : $"{receivedFrames} frame";
+        public bool HasReceivedFrames => receivedFrames > 0;
         public string Gain { get => gain; set => Set(ref gain, value); }
+        public bool VadActive { get => vadActive; set => Set(ref vadActive, value); }
+        public bool Audible { get => audible; set => Set(ref audible, value); }
+        public bool Talking { get => talking; set => Set(ref talking, value); }
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public void IncrementReceived()
@@ -382,9 +502,16 @@ public partial class MainWindow : Window
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Received)));
         }
 
-        private void Set(ref string field, string value, [CallerMemberName] string? propertyName = null)
+        public void ResetReceived()
         {
-            if (field == value)
+            if (receivedFrames == 0) return;
+            receivedFrames = 0;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Received)));
+        }
+
+        private void Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(field, value))
             {
                 return;
             }
