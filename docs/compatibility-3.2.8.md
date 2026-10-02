@@ -18,6 +18,7 @@ Target: released [`v3.2.8`](https://github.com/kuretoshi/TanukiBCL/releases/tag/
 - The .NET `--nos-snapshot --game-process-id 21604` diagnostic read lobby `SWWIDN` in Tasks state: four players and one impostor radio. This verifies the .NET snapshot path against a live 64-bit game, not just helper output.
 - A self-contained `win-x64` WPF publish succeeded, and its bundled `NoSReader/TbclSnapshotReader.exe layout 21604` returned pointer size 8 and the expected live structure offsets.
 - The SNR role helper, its live role/Jumbo reader, and the packaged helper RID now use 64-bit object/array pointers. The synthetic high-address role/Jumbo/torn-read policy test and self-contained WPF publish pass. Running the packaged helper against a NoS-only live process reached the expected "no SNR player array" diagnostic, confirming attachment but **not** SNR role correctness in an SNR game.
+- The TOH4E branch of the same helper and the TOH4E dictionary/active-killer reader now use 64-bit object and entry pointers. High-address synthetic role/Opportunist/IKiller/torn-read tests pass. The combined x64 WPF publish succeeds. No live TOH4E game was available to validate actual role addresses.
 
 ## Remaining proof and work
 
@@ -25,3 +26,4 @@ Target: released [`v3.2.8`](https://github.com/kuretoshi/TanukiBCL/releases/tag/
 - Finish the existing 3.2.7 compatibility checklist's incomplete feature, audio, settings, and visual parity items; the 3.2.8 additions do not make those complete.
 - Test package contents and update behavior on a clean Windows x64 environment.
 - Verify SNR role, modifier, ghost-role, Jumbo size, and secondary cosmetics against a live 64-bit SNR game; synthetic layout checks alone cannot establish this.
+- Verify TOH4E role, active-killer, and Opportunist CanKill behavior in a live 64-bit TOH4E game.

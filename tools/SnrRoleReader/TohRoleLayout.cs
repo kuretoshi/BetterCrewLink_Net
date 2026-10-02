@@ -14,7 +14,7 @@ internal static class TohRoleLayout
     public static object Resolve(ClrRuntime runtime, int pid, int pointerSize,
         Func<string, Dictionary<string, Dictionary<long,string>>> readEnums)
     {
-        if (pointerSize != 4) throw new InvalidOperationException("TOH4E reader currently supports x86 only");
+        if (pointerSize != 8) throw new InvalidOperationException("TOH4E reader requires 64-bit Among Us");
         var sources = runtime.EnumerateModules()
             // Official TOH4E uses TownOfHost_ForE.dll. TOH4E_EM v6180.383 copies the
             // same assembly to TownOfHostForE_EM.dll and removes the original file.

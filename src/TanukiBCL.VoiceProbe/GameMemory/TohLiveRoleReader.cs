@@ -138,8 +138,8 @@ internal sealed class TohLiveRoleReader
     private static Dictionary<int, TohRoleData> ReadSnapshot(TohLayout layout,
         Func<long, int, byte[]> read)
     {
-        uint U32(long address) => BitConverter.ToUInt32(read(address, 4));
-        var killers = new Dictionary<int, (uint State, bool? IsKiller)>();
+        ulong U64(ulong address) => BitConverter.ToUInt64(read(checked((long)address), 8));
+        var killers = new Dictionary<int, (ulong State, bool? IsKiller)>();
         DictionaryImage? killerImage = null;
         if (layout.KillerLayout is { } killerLayout)
         {
@@ -149,8 +149,8 @@ internal sealed class TohLiveRoleReader
                 var role = entry.Value;
                 if (!TohLayout.ValidPointer(role) || killers.ContainsKey(entry.Id))
                     throw new InvalidDataException("Invalid TOH4E active role");
-                var type = killerLayout.Types.GetValueOrDefault(U32(role).ToString(CultureInfo.InvariantCulture));
-                killers.Add(entry.Id, (type is null ? 0 : U32(role + type.StateOffset), type?.IsKiller));
+                var type = killerLayout.Types.GetValueOrDefault(U64(role).ToString(CultureInfo.InvariantCulture));
+                killers.Add(entry.Id, (type is null ? 0 : U64(role + (ulong)type.StateOffset), type?.IsKiller));
             }
         }
 
@@ -158,7 +158,7 @@ internal sealed class TohLiveRoleReader
         bool? canKill = null;
         if (layout.OpportunistCanKillSlot != 0)
         {
-            var value = read(layout.OpportunistCanKillSlot, 1)[0];
+            var value = read(checked((long)layout.OpportunistCanKillSlot), 1)[0];
             if (value > 1) throw new InvalidDataException("Invalid TOH4E CanKill");
             canKill = value == 1;
         }
@@ -166,10 +166,10 @@ internal sealed class TohLiveRoleReader
         foreach (var entry in Enumerate(image, layout))
         {
             var player = entry.Value;
-            if (!TohLayout.ValidPointer(player) || U32(player) != layout.PlayerType ||
-                read(player + layout.IdOffset, 1)[0] != entry.Id || result.ContainsKey(entry.Id))
+            if (!TohLayout.ValidPointer(player) || U64(player) != layout.PlayerType ||
+                read(checked((long)(player + (ulong)layout.IdOffset)), 1)[0] != entry.Id || result.ContainsKey(entry.Id))
                 throw new InvalidDataException("TOH4E player identity changed");
-            var roleId = BitConverter.ToInt32(read(player + layout.RoleOffset, 4));
+            var roleId = BitConverter.ToInt32(read(checked((long)(player + (ulong)layout.RoleOffset)), 4));
             layout.Names.TryGetValue(roleId.ToString(CultureInfo.InvariantCulture), out var name);
             var neutralKiller = NeutralKiller(name, canKill);
             var killer = name is not null and not "NotAssigned" &&
@@ -193,21 +193,23 @@ internal sealed class TohLiveRoleReader
     private static DictionaryImage ReadDictionary(TohDictionaryLayout layout,
         Func<long, int, byte[]> read)
     {
-        uint U32(long address) => BitConverter.ToUInt32(read(address, 4));
-        var dictionary = U32(layout.DictionarySlot);
-        if (!TohLayout.ValidPointer(dictionary) || U32(dictionary) != layout.DictionaryType)
+        ulong U64(ulong address) => BitConverter.ToUInt64(read(checked((long)address), 8));
+        int I32(ulong address) => BitConverter.ToInt32(read(checked((long)address), 4));
+        var dictionary = U64(layout.DictionarySlot);
+        if (!TohLayout.ValidPointer(dictionary) || U64(dictionary) != layout.DictionaryType)
             throw new InvalidDataException("TOH4E dictionary unavailable");
-        var version = U32(dictionary + layout.VersionOffset);
-        var entries = U32(dictionary + layout.EntriesOffset);
-        var count = U32(dictionary + layout.CountOffset);
-        if (!TohLayout.ValidPointer(entries) || U32(entries) != layout.EntriesType ||
-            count > 256 || count > U32(entries + 4))
+        var version = I32(dictionary + (ulong)layout.VersionOffset);
+        var entries = U64(dictionary + (ulong)layout.EntriesOffset);
+        var count = I32(dictionary + (ulong)layout.CountOffset);
+        if (!TohLayout.ValidPointer(entries) || U64(entries) != layout.EntriesType ||
+            count is < 0 or > 256 || count > I32(entries + 8))
             throw new InvalidDataException("Invalid TOH4E entries");
-        var bytes = count == 0 ? [] : read(entries + layout.DataOffset, checked((int)count * layout.Stride));
+        var bytes = count == 0 ? [] : read(checked((long)(entries + (ulong)layout.DataOffset)),
+            checked(count * layout.Stride));
         return new DictionaryImage(dictionary, version, entries, count, bytes);
     }
 
-    private static IEnumerable<(int Id, uint Value)> Enumerate(DictionaryImage image,
+    private static IEnumerable<(int Id, ulong Value)> Enumerate(DictionaryImage image,
         TohDictionaryLayout layout)
     {
         for (var i = 0; i < image.Count; i++)
@@ -215,27 +217,28 @@ internal sealed class TohLiveRoleReader
             var start = checked((int)i * layout.Stride);
             if (BitConverter.ToInt32(image.Bytes, start + layout.NextOffset) < -1) continue;
             yield return (image.Bytes[start + layout.KeyOffset],
-                BitConverter.ToUInt32(image.Bytes, start + layout.ValueOffset));
+                BitConverter.ToUInt64(image.Bytes, start + layout.ValueOffset));
         }
     }
 
     private static void ValidateDictionary(DictionaryImage image, TohDictionaryLayout layout,
         Func<long, int, byte[]> read)
     {
-        uint U32(long address) => BitConverter.ToUInt32(read(address, 4));
-        if (U32(layout.DictionarySlot) != image.Dictionary ||
-            U32(image.Dictionary) != layout.DictionaryType ||
-            U32(image.Dictionary + layout.VersionOffset) != image.Version ||
-            U32(image.Dictionary + layout.EntriesOffset) != image.Entries ||
-            U32(image.Dictionary + layout.CountOffset) != image.Count ||
-            U32(image.Entries) != layout.EntriesType ||
-            (image.Bytes.Length > 0 && !read(image.Entries + layout.DataOffset, image.Bytes.Length)
+        ulong U64(ulong address) => BitConverter.ToUInt64(read(checked((long)address), 8));
+        int I32(ulong address) => BitConverter.ToInt32(read(checked((long)address), 4));
+        if (U64(layout.DictionarySlot) != image.Dictionary ||
+            U64(image.Dictionary) != layout.DictionaryType ||
+            I32(image.Dictionary + (ulong)layout.VersionOffset) != image.Version ||
+            U64(image.Dictionary + (ulong)layout.EntriesOffset) != image.Entries ||
+            I32(image.Dictionary + (ulong)layout.CountOffset) != image.Count ||
+            U64(image.Entries) != layout.EntriesType ||
+            (image.Bytes.Length > 0 && !read(checked((long)(image.Entries + (ulong)layout.DataOffset)), image.Bytes.Length)
                 .AsSpan().SequenceEqual(image.Bytes)))
             throw new InvalidDataException("TOH4E dictionary changed");
     }
 
-    private sealed record DictionaryImage(uint Dictionary, uint Version, uint Entries,
-        uint Count, byte[] Bytes);
+    private sealed record DictionaryImage(ulong Dictionary, int Version, ulong Entries,
+        int Count, byte[] Bytes);
 
     private sealed class TohDiscovery
     {
@@ -248,9 +251,9 @@ internal sealed class TohLiveRoleReader
 
 internal class TohDictionaryLayout
 {
-    public uint DictionarySlot { get; set; }
-    public uint DictionaryType { get; set; }
-    public uint EntriesType { get; set; }
+    public ulong DictionarySlot { get; set; }
+    public ulong DictionaryType { get; set; }
+    public ulong EntriesType { get; set; }
     public int EntriesOffset { get; set; }
     public int CountOffset { get; set; }
     public int VersionOffset { get; set; }
@@ -263,10 +266,12 @@ internal class TohDictionaryLayout
     protected void ValidateDictionary()
     {
         if (!TohLayout.ValidPointer(DictionarySlot) || !TohLayout.ValidPointer(DictionaryType) ||
-            !TohLayout.ValidPointer(EntriesType) || EntriesOffset is < 4 or > 1024 ||
-            CountOffset is < 4 or > 1024 || VersionOffset is < 4 or > 1024 ||
-            DataOffset != 8 || Stride is < 12 or > 64 ||
-            new[] { NextOffset, KeyOffset, ValueOffset }.Any(offset => offset < 0 || offset + 4 > Stride))
+            !TohLayout.ValidPointer(EntriesType) || EntriesOffset is < 8 or > 1024 ||
+            CountOffset is < 8 or > 1024 || VersionOffset is < 8 or > 1024 ||
+            DataOffset != 16 || Stride is < 16 or > 64 ||
+            NextOffset < 0 || NextOffset + 4 > Stride ||
+            KeyOffset < 0 || KeyOffset + 1 > Stride ||
+            ValueOffset < 0 || ValueOffset + 8 > Stride)
             throw new InvalidDataException("Invalid TOH4E dictionary layout");
     }
 }
@@ -275,22 +280,23 @@ internal sealed class TohLayout : TohDictionaryLayout
 {
     public int Pid { get; set; }
     public int PointerSize { get; set; }
-    public uint PlayerType { get; set; }
+    public ulong PlayerType { get; set; }
     public int IdOffset { get; set; }
     public int RoleOffset { get; set; }
-    public uint OpportunistCanKillSlot { get; set; }
+    public ulong OpportunistCanKillSlot { get; set; }
     public Dictionary<string, string> Names { get; set; } = [];
     public TohKillerLayout? KillerLayout { get; set; }
 
-    public static bool ValidPointer(uint pointer) =>
-        pointer is >= 0x10000 and <= 0xfffffffc && pointer % 4 == 0;
+    public static bool ValidPointer(ulong pointer) =>
+        pointer >= 0x10000 && pointer <= long.MaxValue && pointer % 8 == 0;
 
     public void Validate(int expectedPid)
     {
         ValidateDictionary();
-        if (Pid != expectedPid || PointerSize != 4 || !ValidPointer(PlayerType) ||
-            IdOffset is < 4 or > 1024 || RoleOffset is < 4 or > 1024 ||
-            OpportunistCanKillSlot is not 0 and < 0x10000)
+        if (Pid != expectedPid || PointerSize != 8 || !ValidPointer(PlayerType) ||
+            IdOffset is < 8 or > 1024 || RoleOffset is < 8 or > 1024 ||
+            OpportunistCanKillSlot != 0 &&
+            (OpportunistCanKillSlot < 0x10000 || OpportunistCanKillSlot > long.MaxValue))
             throw new InvalidDataException("Invalid TOH4E live layout");
         KillerLayout?.Validate();
     }
@@ -305,8 +311,8 @@ internal sealed class TohKillerLayout : TohDictionaryLayout
         ValidateDictionary();
         foreach (var (key, type) in Types)
         {
-            if (!uint.TryParse(key, out var pointer) || !TohLayout.ValidPointer(pointer) ||
-                type.StateOffset is < 4 or > 1024)
+            if (!ulong.TryParse(key, out var pointer) || !TohLayout.ValidPointer(pointer) ||
+                type.StateOffset is < 8 or > 1024)
                 throw new InvalidDataException("Invalid TOH4E killer layout");
         }
     }

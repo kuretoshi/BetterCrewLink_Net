@@ -4,63 +4,67 @@ internal static class TohLiveRoleReaderSelfTest
 {
     public static (bool Role, bool Killer, bool TornSampleRejected) Verify()
     {
-        const uint dictionarySlot = 0x10000, dictionary = 0x20000, dictionaryType = 0x30000;
-        const uint entries = 0x40000, entriesType = 0x50000;
-        const uint player = 0x60000, playerType = 0x70000;
-        const uint killerSlot = 0x80000, killerDictionary = 0x90000;
-        const uint killerDictionaryType = 0xA0000, killerEntries = 0xB0000;
-        const uint killerEntriesType = 0xC0000, killerRole = 0xD0000;
-        const uint killerRoleType = 0xE0000, canKillSlot = 0xF0000;
-        var memory = new Dictionary<uint, byte[]>
+        const ulong baseAddress = 0x1_0000_0000;
+        const ulong dictionarySlot = baseAddress + 0x10000, dictionary = baseAddress + 0x20000,
+            dictionaryType = baseAddress + 0x30000;
+        const ulong entries = baseAddress + 0x40000, entriesType = baseAddress + 0x50000;
+        const ulong player = baseAddress + 0x60000, playerType = baseAddress + 0x70000;
+        const ulong killerSlot = baseAddress + 0x80000, killerDictionary = baseAddress + 0x90000;
+        const ulong killerDictionaryType = baseAddress + 0xA0000, killerEntries = baseAddress + 0xB0000;
+        const ulong killerEntriesType = baseAddress + 0xC0000, killerRole = baseAddress + 0xD0000;
+        const ulong killerRoleType = baseAddress + 0xE0000, canKillSlot = baseAddress + 0xF0000;
+        var memory = new Dictionary<ulong, byte[]>
         {
-            [dictionarySlot] = new byte[4], [dictionary] = new byte[20],
-            [entries] = new byte[24], [player] = new byte[12],
-            [killerSlot] = new byte[4], [killerDictionary] = new byte[20],
-            [killerEntries] = new byte[24], [killerRole] = new byte[8],
+            [dictionarySlot] = new byte[8], [dictionary] = new byte[32],
+            [entries] = new byte[40], [player] = new byte[16],
+            [killerSlot] = new byte[8], [killerDictionary] = new byte[32],
+            [killerEntries] = new byte[40], [killerRole] = new byte[16],
             [canKillSlot] = [1]
         };
-        void Put(uint block, int offset, uint value) =>
+        void Put(ulong block, int offset, ulong value) =>
             BitConverter.GetBytes(value).CopyTo(memory[block], offset);
-        void InitializeDictionary(uint slot, uint dictionary, uint dictionaryType,
-            uint entries, uint entriesType, uint value)
+        void PutInt(ulong block, int offset, int value) =>
+            BitConverter.GetBytes(value).CopyTo(memory[block], offset);
+        void InitializeDictionary(ulong slot, ulong dictionary, ulong dictionaryType,
+            ulong entries, ulong entriesType, ulong value)
         {
             Put(slot, 0, dictionary);
             Put(dictionary, 0, dictionaryType);
             Put(dictionary, 8, entries);
-            Put(dictionary, 12, 1);
-            Put(dictionary, 16, 1);
+            PutInt(dictionary, 16, 1);
+            PutInt(dictionary, 20, 1);
             Put(entries, 0, entriesType);
-            Put(entries, 4, 1);
-            Put(entries, 12, 0xffffffff);
-            memory[entries][16] = 5;
-            Put(entries, 20, value);
+            PutInt(entries, 8, 1);
+            PutInt(entries, 20, -1);
+            memory[entries][24] = 5;
+            Put(entries, 32, value);
         }
         InitializeDictionary(dictionarySlot, dictionary, dictionaryType, entries, entriesType, player);
         InitializeDictionary(killerSlot, killerDictionary, killerDictionaryType,
             killerEntries, killerEntriesType, killerRole);
         Put(player, 0, playerType);
-        memory[player][4] = 5;
-        Put(player, 8, 19);
+        memory[player][8] = 5;
+        PutInt(player, 12, 19);
         Put(killerRole, 0, killerRoleType);
-        Put(killerRole, 4, player);
+        Put(killerRole, 8, player);
         var layout = new TohLayout
         {
-            Pid = 123, PointerSize = 4, DictionarySlot = dictionarySlot,
+            Pid = 123, PointerSize = 8, DictionarySlot = dictionarySlot,
             DictionaryType = dictionaryType, PlayerType = playerType,
-            EntriesType = entriesType, EntriesOffset = 8, CountOffset = 12,
-            VersionOffset = 16, DataOffset = 8, Stride = 16,
-            NextOffset = 4, KeyOffset = 8, ValueOffset = 12,
-            IdOffset = 4, RoleOffset = 8, OpportunistCanKillSlot = canKillSlot,
+            EntriesType = entriesType, EntriesOffset = 8, CountOffset = 16,
+            VersionOffset = 20, DataOffset = 16, Stride = 24,
+            NextOffset = 4, KeyOffset = 8, ValueOffset = 16,
+            IdOffset = 8, RoleOffset = 12, OpportunistCanKillSlot = canKillSlot,
             Names = new Dictionary<string, string> { ["19"] = "Opportunist", ["20"] = "Jackal" },
             KillerLayout = new TohKillerLayout
             {
                 DictionarySlot = killerSlot, DictionaryType = killerDictionaryType,
-                EntriesType = killerEntriesType, EntriesOffset = 8, CountOffset = 12,
-                VersionOffset = 16, DataOffset = 8, Stride = 16,
-                NextOffset = 4, KeyOffset = 8, ValueOffset = 12,
+                EntriesType = killerEntriesType, EntriesOffset = 8, CountOffset = 16,
+                VersionOffset = 20, DataOffset = 16, Stride = 24,
+                NextOffset = 4, KeyOffset = 8, ValueOffset = 16,
                 Types = new Dictionary<string, TohKillerType>
                 {
-                    [killerRoleType.ToString()] = new() { IsKiller = true, StateOffset = 4 }
+                    [killerRoleType.ToString()] = new() { IsKiller = true, StateOffset = 8 }
                 }
             }
         };
@@ -69,8 +73,8 @@ internal static class TohLiveRoleReaderSelfTest
         {
             foreach (var (start, bytes) in memory)
             {
-                if (address < start || address + size > start + bytes.Length) continue;
-                return bytes.AsSpan(checked((int)(address - start)), size).ToArray();
+                if (address < checked((long)start) || address + size > checked((long)start) + bytes.Length) continue;
+                return bytes.AsSpan(checked((int)(address - checked((long)start))), size).ToArray();
             }
             throw new InvalidDataException($"Unmapped TOH fixture address 0x{address:X}");
         }
@@ -84,8 +88,8 @@ internal static class TohLiveRoleReaderSelfTest
         byte[] TornRead(long address, int size)
         {
             var bytes = Read(address, size);
-            if (address == entries + 8 && size == 16 && ++entriesReads == 2)
-                Put(player, 8, 20);
+            if (address == checked((long)(entries + 16)) && size == 24 && ++entriesReads == 2)
+                PutInt(player, 12, 20);
             return bytes;
         }
         var rejected = false;
