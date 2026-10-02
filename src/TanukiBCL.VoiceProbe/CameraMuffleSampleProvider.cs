@@ -3,11 +3,11 @@ using NAudio.Wave;
 
 namespace TanukiBCL.VoiceProbe;
 
-// TanukiBCL v3.2.7 radio muffle: Web Audio high-pass at 1 kHz, Q=10 dB.
-internal sealed class RadioHighPassSampleProvider(ISampleProvider source) : ISampleProvider
+// TanukiBCL v3.2.7 camera reception: 2.3 kHz low-pass, Web Audio Q=-15 dB.
+internal sealed class CameraMuffleSampleProvider(ISampleProvider source) : ISampleProvider
 {
-    private readonly BiQuadFilter filter = BiQuadFilter.HighPassFilter(48_000, 1_000,
-        WebAudioBiquadQ.ToLinear(10f));
+    private readonly BiQuadFilter filter = BiQuadFilter.LowPassFilter(48_000, 2_300,
+        WebAudioBiquadQ.ToLinear(-15f));
     public WaveFormat WaveFormat => source.WaveFormat;
     public volatile bool Enabled;
 

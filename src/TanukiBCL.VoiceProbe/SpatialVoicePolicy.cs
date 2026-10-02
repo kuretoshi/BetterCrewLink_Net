@@ -10,6 +10,7 @@ internal sealed record SpatialVoiceSettings(
     bool ImpostorRadioEnabled = false,
     bool ImpostorRadioOnlyMode = false,
     bool CommsSabotage = false,
+    bool HearThroughCameras = false,
     bool Haunting = false,
     double GhostVolumeAsImpostor = 0.1d,
     double CrewVolumeAsGhost = 1d,
@@ -23,7 +24,8 @@ internal sealed record PeerVoiceMix(
     string Reason,
     bool Muffled = false,
     bool RadioHighPass = false,
-    bool RadioEcho = false)
+    bool RadioEcho = false,
+    bool CameraMuffled = false)
 {
     public bool Audible => Gain > 0.0001d;
 }
@@ -42,9 +44,7 @@ internal static class SpatialVoicePolicy
         var deltaX = other.X - me.X;
         var deltaY = other.Y - me.Y;
         var distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
-        var pan = settings.SpatialAudio && settings.MaxDistance > 0
-            ? Math.Clamp(deltaX / settings.MaxDistance, -1d, 1d)
-            : 0d;
+        var pan = CalculatePan(deltaX, settings);
 
         if (other.Disconnected)
         {
@@ -121,12 +121,31 @@ internal static class SpatialVoicePolicy
             baseGain *= settings.GhostVolumeAsImpostor;
         }
 
-        // v3.2.7 applies a 2 kHz low-pass to living vent audio. Its separate
-        // gain node is halved only when the otherwise-unmodified gain is 1.
-        var ventMuffle = (me.InVent && !me.IsDead) || (other.InVent && !other.IsDead);
-        if (ventMuffle && Math.Abs(baseGain - 1d) < 0.0001d)
+        // When the speaker is outside proximity, v3.2.7 can hear them from the
+        // selected camera instead. Camera reception uses that camera's position
+        // for both attenuation and panning.
+        var cameraMuffle = false;
+        if (distance > settings.MaxDistance && settings.HearThroughCameras &&
+            state.CurrentCamera != CameraLocation.None &&
+            CameraGeometry.TryRelativePosition(state.Map, state.CurrentCamera, other,
+                out var cameraDeltaX, out var cameraDeltaY))
         {
-            baseGain = 0.5d;
+            var cameraDistance = Math.Sqrt(cameraDeltaX * cameraDeltaX + cameraDeltaY * cameraDeltaY);
+            if (cameraDistance <= settings.MaxDistance)
+            {
+                deltaX = cameraDeltaX;
+                distance = cameraDistance;
+                pan = CalculatePan(deltaX, settings);
+                cameraMuffle = true;
+            }
+        }
+
+        // v3.2.7 applies a 2 kHz low-pass to living vent audio, or a 2.3 kHz
+        // low-pass to camera audio. Only an otherwise-unmodified gain is reduced.
+        var ventMuffle = (me.InVent && !me.IsDead) || (other.InVent && !other.IsDead);
+        if ((ventMuffle || cameraMuffle) && Math.Abs(baseGain - 1d) < 0.0001d)
+        {
+            baseGain = cameraMuffle ? 0.8d : 0.5d;
         }
 
         var distanceGain = LinearDistanceGain(distance, settings.MaxDistance);
@@ -135,7 +154,9 @@ internal static class SpatialVoicePolicy
             return Muted(pan, distance, "out-of-range");
         }
 
-        return ApplyListenerVolume(new PeerVoiceMix(baseGain * distanceGain, pan, distance, "proximity", ventMuffle), me, other, settings);
+        return ApplyListenerVolume(new PeerVoiceMix(baseGain * distanceGain, pan, distance,
+            cameraMuffle ? "camera" : "proximity", Muffled: ventMuffle && !cameraMuffle,
+            CameraMuffled: cameraMuffle), me, other, settings);
     }
 
     private static PeerVoiceMix ApplyListenerVolume(PeerVoiceMix mix, Player me, Player other,
@@ -159,6 +180,11 @@ internal static class SpatialVoicePolicy
         // Web Audio PannerNode: distanceModel=linear, refDistance=0.1, rolloffFactor=1.
         return Math.Clamp(1d - (distance - ReferenceDistance) / (maxDistance - ReferenceDistance), 0d, 1d);
     }
+
+    private static double CalculatePan(double deltaX, SpatialVoiceSettings settings) =>
+        settings.SpatialAudio && settings.MaxDistance > 0
+            ? Math.Clamp(deltaX / settings.MaxDistance, -1d, 1d)
+            : 0d;
 
     private static bool CanHearImpostorRadio(Player me, Player other, SpatialVoiceSettings settings) =>
         (settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&

@@ -105,6 +105,9 @@ internal static class SpatialVoicePolicySelfTest
         var radioHighTone = MeasureRadioFilteredRms(4_000d);
         Check("radio DSP: low frequency attenuated", true, radioLowTone < radioHighTone * 0.25d);
         Check("radio DSP: high frequency remains audible", true, radioHighTone > 0.1d);
+        CheckGain("Web Audio Q: vent 20 dB", 10d, WebAudioBiquadQ.ToLinear(20f));
+        CheckGain("Web Audio Q: radio 10 dB", Math.Sqrt(10d), WebAudioBiquadQ.ToLinear(10f));
+        CheckGain("Web Audio Q: camera -15 dB", Math.Pow(10d, -0.75d), WebAudioBiquadQ.ToLinear(-15f));
         var echo = new RadioEchoSampleProvider(new TestImpulseStereoSource()) { Enabled = true };
         var echoSamples = new float[17_282];
         echo.Read(echoSamples, 0, echoSamples.Length);
@@ -112,6 +115,37 @@ internal static class SpatialVoicePolicySelfTest
         CheckGain("radio echo DSP: first 90 ms reflection", 0.2d, echoSamples[8_640]);
         CheckGain("radio echo DSP: second reflection", 0.024d, echoSamples[17_280]);
         CheckGain("radio echo DSP: channels remain separate", 0d, echoSamples[8_641]);
+
+        var cameraPolicy = new SpatialVoiceSettings(HearThroughCameras: true);
+        var airshipCamera = new AmongUsState
+        {
+            GameState = GameState.Tasks, Map = MapType.Airship, CurrentCamera = CameraLocation.East
+        };
+        var cameraSpeaker = new Player { X = -8.2872d, Y = 0.0527d };
+        var cameraMix = SpatialVoicePolicy.Calculate(airshipCamera, new Player(), cameraSpeaker, cameraPolicy);
+        Check("camera: distant speaker at selected camera is audible", true, cameraMix.Audible);
+        Check("camera: 2.3 kHz muffle selected", true, cameraMix.CameraMuffled && !cameraMix.Muffled);
+        CheckGain("camera: unmodified gain becomes 0.8", 0.8d, cameraMix.Gain);
+        Check("camera: disabled lobby option keeps speaker out of range", false,
+            SpatialVoicePolicy.Calculate(airshipCamera, new Player(), cameraSpeaker,
+                cameraPolicy with { HearThroughCameras = false }).Audible);
+        Check("camera: nearby speaker uses proximity audio", false,
+            SpatialVoicePolicy.Calculate(airshipCamera, new Player(), new Player { X = 1d },
+                cameraPolicy).CameraMuffled);
+        Check("camera: invalid map does not create a phantom camera", false,
+            SpatialVoicePolicy.Calculate(new AmongUsState
+                { GameState = GameState.Tasks, Map = MapType.Fungle, CurrentCamera = CameraLocation.East }, new Player(),
+                cameraSpeaker, cameraPolicy).Audible);
+        var skeldCamera = new AmongUsState
+        {
+            GameState = GameState.Tasks, Map = MapType.TheSkeld, CurrentCamera = CameraLocation.Skeld
+        };
+        Check("camera: Skeld surveillance uses closest camera", true,
+            SpatialVoicePolicy.Calculate(skeldCamera, new Player(),
+                new Player { X = 13.2417d, Y = -4.348d }, cameraPolicy).CameraMuffled);
+        var cameraLowTone = MeasureCameraFilteredRms(500d);
+        var cameraHighTone = MeasureCameraFilteredRms(8_000d);
+        Check("camera DSP: high frequency attenuated", true, cameraHighTone < cameraLowTone * 0.25d);
 
         var lobbySettings = new LobbySettings
         {
@@ -155,8 +189,8 @@ internal static class SpatialVoicePolicySelfTest
             (beforeRadioOnly with { Haunting = true }));
 
         Console.WriteLine(failures == 0
-            ? "[PASS] 3.2.7 radio, listener-volume, and vent-muffle policy"
-            : $"[FAIL] 3.2.7 radio, listener-volume, and vent-muffle policy: {failures} cases failed");
+            ? "[PASS] 3.2.7 radio, listener-volume, vent and camera audio policy"
+            : $"[FAIL] 3.2.7 radio, listener-volume, vent and camera audio policy: {failures} cases failed");
         return failures == 0 ? 0 : 1;
 
         void Check(string name, bool expected, bool actual)
@@ -196,6 +230,17 @@ internal static class SpatialVoicePolicySelfTest
     private static double MeasureRadioFilteredRms(double frequency)
     {
         var filter = new RadioHighPassSampleProvider(new TestSineSource(frequency)) { Enabled = true };
+        var samples = new float[4_800];
+        filter.Read(samples, 0, samples.Length);
+        var steadySamples = samples.AsSpan(2_400);
+        var energy = 0d;
+        foreach (var sample in steadySamples) energy += sample * sample;
+        return Math.Sqrt(energy / steadySamples.Length);
+    }
+
+    private static double MeasureCameraFilteredRms(double frequency)
+    {
+        var filter = new CameraMuffleSampleProvider(new TestSineSource(frequency)) { Enabled = true };
         var samples = new float[4_800];
         filter.Read(samples, 0, samples.Length);
         var steadySamples = samples.AsSpan(2_400);
