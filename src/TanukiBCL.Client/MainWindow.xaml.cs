@@ -36,13 +36,15 @@ public partial class MainWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        var window = new SettingsWindow(settings) { Owner = this };
+        var hostInGame = currentState is { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
+        var window = new SettingsWindow(settings, !hostInGame) { Owner = this };
         if (window.ShowDialog() != true) return;
 
         Topmost = settings.AlwaysOnTop;
         SelectConfiguredDevices();
         probe?.SetMasterVolume(settings.MasterVolume);
         probe?.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
+        probe?.SetOwnLobbySettings(settings.MyLobbySettings);
     }
 
     private void SelectConfiguredDevices()
@@ -105,6 +107,7 @@ public partial class MainWindow : Window
         probe = new VoiceServerProbe(options, "client");
         probe.SetMasterVolume(settings.MasterVolume);
         probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
+        probe.SetOwnLobbySettings(settings.MyLobbySettings);
         probe.ConnectionStatusChanged += status => Dispatch(() => StatusText.Text = status);
         probe.GameStateApplied += state => Dispatch(() => ShowGameState(state));
         probe.PeerMixChanged += (clientId, mix) => Dispatch(() => UpdatePeerMix(clientId, mix));

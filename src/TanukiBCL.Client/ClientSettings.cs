@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using TanukiBCL.VoiceProbe;
 
 namespace TanukiBCL.Client;
 
@@ -14,6 +15,7 @@ internal sealed class ClientSettings
     public bool MicrophoneGainEnabled { get; set; }
     public double MicSensitivity { get; set; } = 0.15d;
     public bool MicSensitivityEnabled { get; set; }
+    public LobbySettings MyLobbySettings { get; set; } = new();
 
     public void Normalize()
     {
@@ -26,6 +28,7 @@ internal sealed class ClientSettings
         MasterVolume = Math.Clamp(MasterVolume, 0, 200);
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);
         MicSensitivity = Math.Clamp(MicSensitivity, 0d, 1d);
+        MyLobbySettings = (MyLobbySettings ?? new LobbySettings()).Normalize();
     }
 }
 

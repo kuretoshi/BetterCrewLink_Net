@@ -35,6 +35,23 @@ internal static class SelfTestRunner
         using var cancellation = new CancellationTokenSource(timeout);
         await using var first = new VoiceServerProbe(firstOptions, "A");
         await using var second = new VoiceServerProbe(secondOptions, "B");
+        var hostSettings = new LobbySettings { MaxDistance = 7.4d, ImpostorRadioEnabled = true };
+        var settingsVerified = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var updatedSettings = hostSettings with { MaxDistance = 3.6d, Haunting = true };
+        var updateVerified = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        first.SetOwnLobbySettings(hostSettings);
+        second.SetExpectedHostClientId(seed);
+        second.LobbySettingsChanged += settings =>
+        {
+            if (settings == hostSettings)
+            {
+                settingsVerified.TrySetResult();
+            }
+            if (settings == updatedSettings)
+            {
+                updateVerified.TrySetResult();
+            }
+        };
 
         try
         {
@@ -48,9 +65,13 @@ internal static class SelfTestRunner
             await Task.WhenAll(
                 first.PeerVerified.WaitAsync(timeout, cancellation.Token),
                 second.PeerVerified.WaitAsync(timeout, cancellation.Token),
-                second.AudioVerified.WaitAsync(timeout, cancellation.Token));
+                second.AudioVerified.WaitAsync(timeout, cancellation.Token),
+                settingsVerified.Task.WaitAsync(timeout, cancellation.Token));
 
-            Console.WriteLine("[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラックの検証に成功しました。");
+            first.SetOwnLobbySettings(updatedSettings);
+            await updateVerified.Task.WaitAsync(timeout, cancellation.Token);
+
+            Console.WriteLine("[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラック、ホストの3.2.7ロビー設定配信と変更反映を検証しました。");
             cancellation.Cancel();
             await IgnoreCancellationAsync(firstRun);
             await IgnoreCancellationAsync(secondRun);

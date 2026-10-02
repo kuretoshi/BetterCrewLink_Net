@@ -26,6 +26,7 @@
                 <ListBox x:Name="CategoryList" Background="Transparent" Foreground="White"
                          BorderThickness="0" SelectionChanged="CategoryList_SelectionChanged">
                     <ListBoxItem Content="一般" Padding="12,9" />
+                    <ListBoxItem Content="ロビー設定" Padding="12,9" />
                     <ListBoxItem Content="オーディオ" Padding="12,9" />
                     <ListBoxItem Content="詳細設定" Padding="12,9" />
                 </ListBox>
@@ -43,6 +44,25 @@
                         <Border Background="#29252F" Padding="16" CornerRadius="6">
                             <CheckBox x:Name="AlwaysOnTopCheck" Content="常に手前に表示" />
                         </Border>
+                    </StackPanel>
+                    <StackPanel x:Name="LobbyPanel" Visibility="Collapsed">
+                        <TextBlock Text="自分のロビー設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,8" />
+                        <TextBlock Text="ホスト時に参加者へ送信する設定です。"
+                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,20" />
+                        <TextBlock Text="音声が届く距離" />
+                        <DockPanel Margin="0,5,0,18">
+                            <TextBlock x:Name="DistanceValue" DockPanel.Dock="Right" Width="45" TextAlignment="Right" />
+                            <Slider x:Name="DistanceSlider" Minimum="1" Maximum="10" TickFrequency="0.1"
+                                    IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                        <CheckBox x:Name="HauntingCheck" Content="インポスターは幽霊の声を聞ける" Margin="0,0,0,14" />
+                        <CheckBox x:Name="HearVentsCheck" Content="ベント内のインポスターの声を聞ける" Margin="0,0,0,14" />
+                        <CheckBox x:Name="ImpostorVentCheck" Content="ベント内のインポスター同士で会話できる" Margin="0,0,0,14" />
+                        <CheckBox x:Name="ImpostorRadioCheck" Content="インポスターラジオを有効化" Margin="0,0,0,14" />
+                        <CheckBox x:Name="DeadOnlyCheck" Content="幽霊同士のみ会話できる" Margin="0,0,0,14"
+                                  Checked="DeadOnlyCheck_Checked" />
+                        <CheckBox x:Name="MeetingGhostOnlyCheck" Content="会議中のみ幽霊以外も会話できる" Margin="0,0,0,14"
+                                  Checked="MeetingGhostOnlyCheck_Checked" />
                     </StackPanel>
                     <StackPanel x:Name="AudioPanel" Visibility="Collapsed">
                         <TextBlock Text="オーディオ" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />

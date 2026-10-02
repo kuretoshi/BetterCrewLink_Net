@@ -9,10 +9,11 @@ public partial class SettingsWindow : Window
 {
     private readonly ClientSettings settings;
 
-    internal SettingsWindow(ClientSettings settings)
+    internal SettingsWindow(ClientSettings settings, bool lobbySettingsEditable)
     {
         InitializeComponent();
         this.settings = settings;
+        LobbyPanel.IsEnabled = lobbySettingsEditable;
         MicrophoneCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
         SpeakerCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
         MicrophoneCombo.SelectedItem = ((IEnumerable<AudioDeviceInfo>)MicrophoneCombo.ItemsSource)
@@ -24,6 +25,13 @@ public partial class SettingsWindow : Window
         MicrophoneGainSlider.Value = settings.MicrophoneGain;
         MicrophoneGainCheck.IsChecked = settings.MicrophoneGainEnabled;
         ServerUrlBox.Text = settings.ServerUrl;
+        DistanceSlider.Value = settings.MyLobbySettings.MaxDistance;
+        HauntingCheck.IsChecked = settings.MyLobbySettings.Haunting;
+        HearVentsCheck.IsChecked = settings.MyLobbySettings.HearImpostorsInVents;
+        ImpostorVentCheck.IsChecked = settings.MyLobbySettings.ImpostersHearImpostersInvent;
+        ImpostorRadioCheck.IsChecked = settings.MyLobbySettings.ImpostorRadioEnabled;
+        DeadOnlyCheck.IsChecked = settings.MyLobbySettings.DeadOnly;
+        MeetingGhostOnlyCheck.IsChecked = settings.MyLobbySettings.MeetingGhostOnly;
         CategoryList.SelectedIndex = 0;
         UpdateVolumeLabels();
     }
@@ -32,17 +40,29 @@ public partial class SettingsWindow : Window
     {
         if (GeneralPanel is null) return;
         GeneralPanel.Visibility = CategoryList.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
-        AudioPanel.Visibility = CategoryList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
+        LobbyPanel.Visibility = CategoryList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        AudioPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
+        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateVolumeLabels();
 
+    private void DeadOnlyCheck_Checked(object sender, RoutedEventArgs e)
+    {
+        if (MeetingGhostOnlyCheck is not null) MeetingGhostOnlyCheck.IsChecked = false;
+    }
+
+    private void MeetingGhostOnlyCheck_Checked(object sender, RoutedEventArgs e)
+    {
+        if (DeadOnlyCheck is not null) DeadOnlyCheck.IsChecked = false;
+    }
+
     private void UpdateVolumeLabels()
     {
-        if (MasterVolumeValue is null || MicrophoneGainValue is null) return;
+        if (MasterVolumeValue is null || MicrophoneGainValue is null || DistanceValue is null) return;
         MasterVolumeValue.Text = $"{MasterVolumeSlider.Value:0}%";
         MicrophoneGainValue.Text = $"{MicrophoneGainSlider.Value:0}%";
+        DistanceValue.Text = $"{DistanceSlider.Value:0.0}";
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -65,7 +85,17 @@ public partial class SettingsWindow : Window
             MicrophoneGain = (int)MicrophoneGainSlider.Value,
             MicrophoneGainEnabled = MicrophoneGainCheck.IsChecked == true,
             MicSensitivity = settings.MicSensitivity,
-            MicSensitivityEnabled = settings.MicSensitivityEnabled
+            MicSensitivityEnabled = settings.MicSensitivityEnabled,
+            MyLobbySettings = settings.MyLobbySettings with
+            {
+                MaxDistance = DistanceSlider.Value,
+                Haunting = HauntingCheck.IsChecked == true,
+                HearImpostorsInVents = HearVentsCheck.IsChecked == true,
+                ImpostersHearImpostersInvent = ImpostorVentCheck.IsChecked == true,
+                ImpostorRadioEnabled = ImpostorRadioCheck.IsChecked == true,
+                DeadOnly = DeadOnlyCheck.IsChecked == true,
+                MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true
+            }
         };
         try
         {
@@ -83,6 +113,7 @@ public partial class SettingsWindow : Window
         settings.MasterVolume = candidate.MasterVolume;
         settings.MicrophoneGain = candidate.MicrophoneGain;
         settings.MicrophoneGainEnabled = candidate.MicrophoneGainEnabled;
+        settings.MyLobbySettings = candidate.MyLobbySettings;
         DialogResult = true;
     }
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
@@ -33,6 +34,29 @@ internal static class SpatialVoicePolicySelfTest
         Check("meeting: normal ghost voice remains private", false,
             SpatialVoicePolicy.Calculate(discussion, new Player(), new Player { IsDead = true },
                 new SpatialVoiceSettings()).Audible);
+
+        var lobbySettings = new LobbySettings
+        {
+            MaxDistance = 7.4d,
+            JackalRadioEnabled = true,
+            NosSizeVoiceEffect = false,
+            NosFixerJammingVoiceBlock = false,
+            ImpostorRadioEnabled = true,
+            PublicLobbyOn = true,
+            PublicLobbyTitle = "互換テスト"
+        };
+        var wire = lobbySettings.ToWireJson();
+        using (var document = JsonDocument.Parse(wire))
+        {
+            Check("lobby wire: publicLobby_on", true,
+                document.RootElement.TryGetProperty("publicLobby_on", out _));
+            Check("lobby wire: jackalRadioEnabled", true,
+                document.RootElement.TryGetProperty("jackalRadioEnabled", out _));
+            Check("lobby wire: nosFixerJammingVoiceBlock", true,
+                document.RootElement.TryGetProperty("nosFixerJammingVoiceBlock", out _));
+        }
+        Check("lobby wire: round trip", true,
+            JsonSerializer.Deserialize<LobbySettings>(wire, LobbySettings.WireJsonOptions) == lobbySettings);
 
         Console.WriteLine(failures == 0
             ? "[PASS] 3.2.7 radio policy: Tasks/Discussion, impostor/crew/ghost"
