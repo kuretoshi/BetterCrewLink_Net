@@ -1,14 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <AssemblyName>TanukiBCL.Net</AssemblyName>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\TanukiBCL.VoiceProbe\TanukiBCL.VoiceProbe.csproj" />
-    <Resource Include="Assets\Avatar\*.png" />
+    <ProjectReference Include="..\..\src\TanukiBCL.Client\TanukiBCL.Client.csproj" />
   </ItemGroup>
 </Project>

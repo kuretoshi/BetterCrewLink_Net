@@ -1,0 +1,29 @@
+<UserControl x:Class="TanukiBCL.Client.PlayerAvatar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="67" Height="67" Background="Transparent">
+    <Grid>
+        <Ellipse x:Name="AvatarBody" Margin="2" />
+        <Ellipse x:Name="SpeechRing" Margin="1" StrokeThickness="2.5" Stroke="Transparent" />
+        <Border x:Name="RadioBadge" Width="20" Height="20" CornerRadius="3"
+                Background="#202428" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,2,2" Visibility="Collapsed">
+            <TextBlock Text="📻" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+        <Border x:Name="StateBadge" Width="28" Height="28" CornerRadius="14"
+                Background="#EA3C2A" BorderBrush="#690A00" BorderThickness="2"
+                HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+            <Viewbox Width="19" Height="19" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Path x:Name="StateIcon" Fill="White" Stretch="Uniform" Width="24" Height="24" />
+            </Viewbox>
+        </Border>
+        <Border x:Name="QualityBadge" Padding="3" CornerRadius="4" Background="#202428"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,-2">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                <Border x:Name="QualityBar1" Width="3" Height="6" CornerRadius="1" Background="#72777D" Margin="0,0,2,0" VerticalAlignment="Bottom" />
+                <Border x:Name="QualityBar2" Width="3" Height="9" CornerRadius="1" Background="#72777D" Margin="0,0,2,0" VerticalAlignment="Bottom" />
+                <Border x:Name="QualityBar3" Width="3" Height="12" CornerRadius="1" Background="#72777D" VerticalAlignment="Bottom" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
