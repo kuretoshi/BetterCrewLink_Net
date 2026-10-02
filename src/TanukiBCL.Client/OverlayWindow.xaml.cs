@@ -25,6 +25,7 @@ public partial class OverlayWindow : Window
     private IReadOnlyDictionary<int, OverlayPeerStatus> peers =
         new Dictionary<int, OverlayPeerStatus>();
     private bool localTalking;
+    private bool localUsingRadio;
     private bool microphoneMuted;
     private bool deafened;
     private List<int> meetingOrder = [];
@@ -49,11 +50,12 @@ public partial class OverlayWindow : Window
 
     internal void Update(AmongUsState? gameState,
         IReadOnlyDictionary<int, OverlayPeerStatus> peerStatuses,
-        bool isLocalTalking, bool isMicrophoneMuted, bool isDeafened)
+        bool isLocalTalking, bool isMicrophoneMuted, bool isDeafened, bool isLocalUsingRadio = false)
     {
         game = gameState;
         peers = peerStatuses;
         localTalking = isLocalTalking;
+        localUsingRadio = isLocalUsingRadio;
         microphoneMuted = isMicrophoneMuted;
         deafened = isDeafened;
         if (gameState?.GameState == GameState.Discussion &&
@@ -155,7 +157,7 @@ public partial class OverlayWindow : Window
         AvatarPanel.Children.Clear();
         var position = settings.OverlayPosition;
         var selected = OverlaySelection.Select(state, peers, localTalking,
-            microphoneMuted, settings.CompactOverlay);
+            microphoneMuted, settings.CompactOverlay, localUsingRadio);
         if (position == "hidden" || selected.Count == 0)
         {
             AvatarBackground.Visibility = Visibility.Collapsed;
@@ -348,6 +350,17 @@ public partial class OverlayWindow : Window
             local.AppearanceColorId = local.ColorId;
             if (state.MixupSabotaged) throw new InvalidOperationException("Unchanged outfit triggered mixup detection");
             Console.WriteLine("[PASS] Overlay disguise names, gray local ring, visible outfit, discussion restore and invalid-player filtering");
+            state.GameState = GameState.Discussion;
+            foreach (var radio in new[] { true, false })
+            {
+                window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, true, true) },
+                    true, false, false, radio);
+                var localAvatar = (PlayerAvatar)((StackPanel)window.AvatarPanel.Children[0]).Children[0];
+                var remoteAvatar = (PlayerAvatar)((StackPanel)window.AvatarPanel.Children[1]).Children[0];
+                if (localAvatar.IsRadioBadgeVisible != radio || !remoteAvatar.IsRadioBadgeVisible)
+                    throw new InvalidOperationException("Local radio toggle was lost or changed remote radio badge");
+            }
+            Console.WriteLine("[PASS] Overlay local radio on/off reaches rendered badge independently of remote radio");
         }
         finally
         {

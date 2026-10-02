@@ -78,3 +78,9 @@ Releaseビルド警告/エラー0。コスメティック・NoS色・名前・�
 原版OverlayはhideWhenAppearanceChangedを渡していないため、.NETのオーバーレイも変装後のアバター自体は表示するよう訂正した。メイン音声画面の非表示指定は維持。ローカルのshiftedColorが有効かつDiscussion以外では発話枠をgrayへ変更。リモート発話非表示とベントの枠非表示は既存OverlaySelectionを継続する。
 
 Airshipの会議服判定も原版の有効プレイヤーフィルターに合わせ、buggedを除外した。Releaseビルド警告/エラー0、クライアント描画自動テストと`--policy-self-test`は終了0。Tasksでの名前非表示・変装アバター表示・ローカル灰色枠・Discussion復帰・無効プレイヤー除外、Airship会議服の最低人数とbugged除外を検証した。実ゲームでの変装／キノコサボタージュ中の見た目比較は未検証。起動中のアプリは更新していない。
+
+## ローカルのラジオ表示
+
+OverlaySelectionがローカルUsingRadioを常にfalseとしていたため、MainWindowのradioTransmitting→OverlayWindow→OverlaySelection→PlayerAvatarの経路を接続。状態の源は既存のImpostorRadioTransmitChangedで、音声送信条件は変更していない。イベント受信時には既存UpdateCompactViewからオーバーレイも更新される。
+
+Releaseビルド警告/エラー0、描画テストと`--policy-self-test`終了0。ローカルON/OFF、リモートとの同時ラジオ表示、ラジオ単独ではVADやcompact表示の選択を強制しないこと、WPFの最終バッジ表示までの伝達を検証。実ゲーム上でのラジオ表示切替は未検証で、起動中のアプリは未更新。

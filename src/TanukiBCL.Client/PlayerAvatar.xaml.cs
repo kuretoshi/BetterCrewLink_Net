@@ -65,6 +65,8 @@ public partial class PlayerAvatar : UserControl
             throw new InvalidOperationException("Disguised local overlay must retain its outfit, gray ring and clipped equipment");
     }
 
+    internal bool IsRadioBadgeVisible => RadioBadge.Visibility == Visibility.Visible;
+
     public void SetPlayer(Player player, IReadOnlyList<PlayerColorPair>? colors,
         bool hideWhenAppearanceChanged = false, AmongUsModType mod = AmongUsModType.None, string gameExecutable = "")
     {

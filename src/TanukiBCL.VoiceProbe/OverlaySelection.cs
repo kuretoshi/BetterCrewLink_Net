@@ -14,7 +14,7 @@ internal static class OverlaySelection
     // activity before the vent-specific speaking ring is suppressed.
     public static IReadOnlyList<OverlayPlayer> Select(AmongUsState state,
         IReadOnlyDictionary<int, OverlayPeerStatus> peers, bool localTalking,
-        bool microphoneMuted, bool compact)
+        bool microphoneMuted, bool compact, bool localUsingRadio = false)
     {
         var localAlive = state.Players.FirstOrDefault(player => player.IsLocal)?.IsDead == false;
         var result = new List<OverlayPlayer>();
@@ -30,7 +30,7 @@ internal static class OverlaySelection
                 (player.IsLocal ? localTalking && !microphoneMuted : peer?.VoiceActive == true);
             if (compact && !active) continue;
             result.Add(new OverlayPlayer(player, active, active && !player.InVent,
-                player.IsLocal ? false : peer?.UsingRadio == true));
+                player.IsLocal ? localUsingRadio : peer?.UsingRadio == true));
         }
         return result;
     }

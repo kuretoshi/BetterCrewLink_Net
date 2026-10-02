@@ -20,6 +20,20 @@ internal static class SpatialVoicePolicySelfTest
             [2] = new(true, true, false), [3] = new(true, true, false)
         };
         var overlayPlayers = OverlaySelection.Select(overlayState, overlayPeers, false, false, true);
+        Check("overlay: local radio enabled without forcing VAD", true,
+            OverlaySelection.Select(overlayState, overlayPeers, false, false, false, true)
+                .Single(entry => entry.Player.IsLocal) is { UsingRadio: true, VoiceActive: false });
+        Check("overlay: local radio release clears badge", false,
+            OverlaySelection.Select(overlayState, overlayPeers, true, false, false, false)
+                .Single(entry => entry.Player.IsLocal).UsingRadio);
+        Check("overlay: radio alone does not bypass compact VAD filter", false,
+            OverlaySelection.Select(overlayState, overlayPeers, false, false, true, true)
+                .Any(entry => entry.Player.IsLocal));
+        overlayPeers[2] = new(true, true, true);
+        Check("overlay: simultaneous radio users retain independent state", true,
+            OverlaySelection.Select(overlayState, overlayPeers, true, false, false, true)
+                .Count(entry => entry.UsingRadio) == 2);
+        overlayPeers[2] = new(true, true, false);
         Check("overlay: compact selects active vent voice without speaking ring", true,
             overlayPlayers.Count == 1 && overlayPlayers[0] is { VoiceActive: true, Talking: false } &&
             overlayPlayers[0].Player.ClientId == 2);

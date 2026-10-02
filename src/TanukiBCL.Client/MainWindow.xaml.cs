@@ -685,7 +685,7 @@ public partial class MainWindow : Window
         var peerStatuses = peers.ToDictionary(row => row.ClientId, row => new OverlayPeerStatus(
             row.Connection is "data-ready" or "接続済み",
             row.VadActive, row.Radio == "送信中"));
-        overlayWindow.Update(currentState, peerStatuses, localTalking, microphoneMuted, deafened);
+        overlayWindow.Update(currentState, peerStatuses, localTalking, microphoneMuted, deafened, radioTransmitting);
     }
 
     private void ShowDiagnostics()
