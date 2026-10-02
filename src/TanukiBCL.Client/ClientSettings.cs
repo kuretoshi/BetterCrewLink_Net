@@ -10,6 +10,7 @@ internal sealed class ClientSettings
     public string? MicrophoneName { get; set; }
     public string? SpeakerName { get; set; }
     public bool AlwaysOnTop { get; set; }
+    public bool NatFix { get; set; }
     public int MasterVolume { get; set; } = 100;
     public int CrewVolumeAsGhost { get; set; } = 100;
     public int GhostVolumeAsImpostor { get; set; } = 10;

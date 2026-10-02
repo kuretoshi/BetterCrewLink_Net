@@ -28,7 +28,8 @@ internal sealed record ProbeOptions(
     bool AutoRadioTone,
     bool PolicySelfTest,
     int? ExpectedPeerClientId,
-    bool VadSelfTest)
+    bool VadSelfTest,
+    bool NatFix)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -38,7 +39,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--policy-self-test" or "--vad-self-test")
+            if (argument is "--host" or "--self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--policy-self-test" or "--vad-self-test" or "--nat-fix")
             {
                 switches.Add(argument);
                 continue;
@@ -99,7 +100,8 @@ internal sealed record ProbeOptions(
             values.TryGetValue("--expected-peer-client-id", out var peerClientIdText)
                 ? ParsePositiveInt(peerClientIdText, "--expected-peer-client-id")
                 : null,
-            switches.Contains("--vad-self-test"));
+            switches.Contains("--vad-self-test"),
+            switches.Contains("--nat-fix"));
     }
 
     private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)

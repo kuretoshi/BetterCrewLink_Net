@@ -164,7 +164,10 @@
                     <StackPanel x:Name="AdvancedPanel" Visibility="Collapsed">
                         <TextBlock Text="詳細設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
                         <TextBlock Text="ボイスサーバー URL" Margin="0,0,0,6" />
-                        <TextBox x:Name="ServerUrlBox" />
+                        <TextBox x:Name="ServerUrlBox" Margin="0,0,0,22" />
+                        <CheckBox x:Name="NatFixCheck" Content="NATの修正" Margin="0,0,0,6" />
+                        <TextBlock Text="P2Pの代わりにTURNサーバーを経由します。接続の問題を解決できますが、遅延が増える場合があります。"
+                                   TextWrapping="Wrap" Foreground="#A8A4B0" />
                     </StackPanel>
                 </Grid>
             </ScrollViewer>

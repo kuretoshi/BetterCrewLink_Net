@@ -87,6 +87,7 @@ public partial class MainWindow : Window
         probe?.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         probe?.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe?.SetMicrophoneSensitivity(settings.MicSensitivityEnabled, settings.MicSensitivity);
+        probe?.SetNatFix(settings.NatFix);
         probe?.SetMicrophoneActivationMode(settings.PushToTalkMode);
         hotkeys?.UpdateBindings(settings);
         probe?.SetOwnLobbySettings(settings.MyLobbySettings);
@@ -159,13 +160,16 @@ public partial class MainWindow : Window
         SetRunning(true);
         ShowCompactView();
         runCancellation = new CancellationTokenSource();
-        var options = ProbeOptions.Parse([
+        var optionArgs = new List<string>
+        {
             "--server", settings.ServerUrl,
             "--game-process-id", process.Id.ToString(),
             "--live-audio",
             "--input-device", input.Id.ToString(),
             "--output-device", output.Id.ToString()
-        ]);
+        };
+        if (settings.NatFix) optionArgs.Add("--nat-fix");
+        var options = ProbeOptions.Parse([.. optionArgs]);
         probe = new VoiceServerProbe(options, "client");
         probe.SetMasterVolume(settings.MasterVolume);
         probe.SetPlayerConfigs(settings.PlayerConfigMap);

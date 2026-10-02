@@ -62,7 +62,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ReconnectionDelayMax = 2_000,
             ConnectionTimeout = TimeSpan.FromSeconds(10)
         });
-        peerManager = new WebRtcPeerManager(label, SendSignalAsync, sendTestTone: !options.LiveAudio && !options.AutoRadioTone);
+        peerManager = new WebRtcPeerManager(label, SendSignalAsync, sendTestTone: !options.LiveAudio && !options.AutoRadioTone, natFix: options.NatFix);
         peerManager.PeerVerified += socketId =>
         {
             Log("OK", $"P2P双方向通信成功 peer={socketId}");
@@ -296,6 +296,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         microphoneSensitivity = Math.Clamp(minimumNoiseLevel, 0d, 1d);
         audioSession?.SetMicrophoneSensitivity(enabled, microphoneSensitivity);
     }
+
+    public void SetNatFix(bool enabled) => peerManager.SetNatFix(enabled);
 
     public void SetMicrophoneActivationMode(MicrophoneActivationMode mode)
     {
@@ -1075,13 +1077,18 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var typeIndex = Array.IndexOf(parts, "typ");
         var candidateType = typeIndex >= 0 && typeIndex + 1 < parts.Length ? parts[typeIndex + 1] : "unknown";
+        var protocol = parts.Length > 2 && parts[2].Equals("udp", StringComparison.OrdinalIgnoreCase)
+            ? "udp"
+            : parts.Length > 2 && parts[2].Equals("tcp", StringComparison.OrdinalIgnoreCase) ? "tcp" : "other";
+        var component = parts.Length > 1 && ushort.TryParse(parts[1], out var parsedComponent)
+            ? parsedComponent.ToString() : "?";
         var addressKind = parts.Length > 4 && parts[4].EndsWith(".local", StringComparison.OrdinalIgnoreCase)
             ? "mdns"
             : "ip";
         var lineIndex = candidate.ValueKind == JsonValueKind.Object &&
             candidate.TryGetProperty("sdpMLineIndex", out var line) && line.TryGetInt32(out var index)
                 ? index.ToString() : "?";
-        return $"({candidateType}/{addressKind}/mline={lineIndex})";
+        return $"({candidateType}/{protocol}/component={component}/{addressKind}/mline={lineIndex})";
     }
 
     private void Observe(string eventName)

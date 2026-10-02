@@ -61,6 +61,7 @@ public partial class SettingsWindow : Window
         MuteShortcutBox.Text = settings.MuteShortcut;
         DeafenShortcutBox.Text = settings.DeafenShortcut;
         ServerUrlBox.Text = settings.ServerUrl;
+        NatFixCheck.IsChecked = settings.NatFix;
         LoadLobbyControls(lobbyDraft);
         if (currentLobbySettings is not null && preferCurrentLobby)
         {
@@ -352,6 +353,7 @@ public partial class SettingsWindow : Window
         var candidate = new ClientSettings
         {
             ServerUrl = serverUrl,
+            NatFix = NatFixCheck.IsChecked == true,
             MicrophoneName = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Name,
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,
             AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
@@ -385,6 +387,7 @@ public partial class SettingsWindow : Window
             return;
         }
         settings.ServerUrl = candidate.ServerUrl;
+        settings.NatFix = candidate.NatFix;
         settings.MicrophoneName = candidate.MicrophoneName;
         settings.SpeakerName = candidate.SpeakerName;
         settings.AlwaysOnTop = candidate.AlwaysOnTop;

@@ -12,10 +12,15 @@ internal sealed record IceServer(string Url, string? Username, string? Credentia
 internal sealed class WebRtcPeerManager : IDisposable
 {
     private static readonly AudioFormat OpusFormat = new(AudioCodecsEnum.OPUS, 111, 48_000, 2, "useinbandfec=1");
+    private static readonly IReadOnlyList<IceServer> NatFixIceServers =
+    [
+        new("turn:turn.bettercrewl.ink:3478", "M9DRVaByiujoXeuYAAAG", "TpHR9HQNZ8taxjb3")
+    ];
     private const int SamplesPerChannel = 960;
     private const int PlaybackChannels = 2;
     private readonly string owner;
     private readonly bool sendTestTone;
+    private bool natFix;
     private readonly Func<string, object, Task> sendSignal;
     private readonly ConcurrentDictionary<string, Peer> peers = new();
     private readonly AudioEncoder audioEncoder = new(true, true);
@@ -23,11 +28,12 @@ internal sealed class WebRtcPeerManager : IDisposable
     private IReadOnlyList<IceServer> iceServers = [new("stun:stun.l.google.com:19302", null, null)];
     private bool forceRelayOnly;
 
-    public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal, bool sendTestTone)
+    public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal, bool sendTestTone, bool natFix = false)
     {
         this.owner = owner;
         this.sendSignal = sendSignal;
         this.sendTestTone = sendTestTone;
+        this.natFix = natFix;
     }
 
     public event Action<string>? PeerVerified;
@@ -125,8 +131,10 @@ internal sealed class WebRtcPeerManager : IDisposable
         // v3.2.7 ConnectionController uses relay only when the server explicitly
         // requests it. Merely advertising a TURN server must not disable direct ICE.
         forceRelayOnly = serverRequiresRelay;
-        Log($"ICE設定受信: servers={iceServers.Count} relayOnly={forceRelayOnly}");
+        Log($"ICE設定受信: servers={iceServers.Count} relayOnly={forceRelayOnly} natFix={natFix}");
     }
+
+    public void SetNatFix(bool enabled) => Volatile.Write(ref natFix, enabled);
 
     public async Task InitiateAsync(string remoteSocketId)
     {
@@ -311,10 +319,13 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     private Peer CreatePeer(string remoteSocketId, bool initiator, string? connectionId = null)
     {
+        // Match v3.2.7: NAT fix selects its static TURN config at peer creation.
+        // Existing peers keep their ICE configuration until they reconnect.
+        var useNatFix = Volatile.Read(ref natFix);
         var configuration = new RTCConfiguration
         {
-            iceTransportPolicy = forceRelayOnly ? RTCIceTransportPolicy.relay : RTCIceTransportPolicy.all,
-            iceServers = iceServers.Select(server => new RTCIceServer
+            iceTransportPolicy = useNatFix || forceRelayOnly ? RTCIceTransportPolicy.relay : RTCIceTransportPolicy.all,
+            iceServers = (useNatFix ? NatFixIceServers : iceServers).Select(server => new RTCIceServer
             {
                 urls = server.Url,
                 username = server.Username,
