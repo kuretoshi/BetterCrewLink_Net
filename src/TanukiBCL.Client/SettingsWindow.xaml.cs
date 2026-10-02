@@ -8,17 +8,22 @@ namespace TanukiBCL.Client;
 public partial class SettingsWindow : Window
 {
     private readonly ClientSettings settings;
+    private readonly bool lobbySettingsEditable;
+    private LobbySettings? currentLobbySettings;
     private LobbySettings lobbyDraft;
     private LobbySettings? radioOnlyBackup;
     private bool loadingLobbyControls;
+    private bool showingCurrentLobby;
 
-    internal SettingsWindow(ClientSettings settings, bool lobbySettingsEditable)
+    internal SettingsWindow(ClientSettings settings, bool lobbySettingsEditable,
+        LobbySettings? currentLobbySettings, bool preferCurrentLobby)
     {
         InitializeComponent();
         this.settings = settings;
+        this.lobbySettingsEditable = lobbySettingsEditable;
+        this.currentLobbySettings = currentLobbySettings;
         lobbyDraft = settings.MyLobbySettings;
         radioOnlyBackup = settings.RadioOnlyBackup;
-        LobbyPanel.IsEnabled = lobbySettingsEditable;
         MicrophoneCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
         SpeakerCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
         MicrophoneCombo.SelectedItem = ((IEnumerable<AudioDeviceInfo>)MicrophoneCombo.ItemsSource)
@@ -31,8 +36,23 @@ public partial class SettingsWindow : Window
         MicrophoneGainCheck.IsChecked = settings.MicrophoneGainEnabled;
         ServerUrlBox.Text = settings.ServerUrl;
         LoadLobbyControls(lobbyDraft);
+        if (currentLobbySettings is not null && preferCurrentLobby)
+        {
+            CurrentLobbyTab.IsChecked = true;
+        }
+        else
+        {
+            MyLobbyTab.IsChecked = true;
+        }
+        ShowSelectedLobbySettings();
         CategoryList.SelectedIndex = 0;
         UpdateVolumeLabels();
+    }
+
+    internal void UpdateCurrentLobbySettings(LobbySettings? settings)
+    {
+        currentLobbySettings = settings;
+        if (showingCurrentLobby) ShowSelectedLobbySettings();
     }
 
     private void CategoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -45,6 +65,33 @@ public partial class SettingsWindow : Window
     }
 
     private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => UpdateVolumeLabels();
+
+    private void LobbyTab_Changed(object sender, RoutedEventArgs e)
+    {
+        if (LobbyControlsPanel is null || loadingLobbyControls) return;
+        var nextCurrent = CurrentLobbyTab.IsChecked == true;
+        if (nextCurrent == showingCurrentLobby) return;
+        if (!showingCurrentLobby)
+        {
+            lobbyDraft = ReadLobbyControls();
+        }
+        showingCurrentLobby = nextCurrent;
+        ShowSelectedLobbySettings();
+    }
+
+    private void ShowSelectedLobbySettings()
+    {
+        var value = showingCurrentLobby ? currentLobbySettings : lobbyDraft;
+        LobbyNotice.Text = showingCurrentLobby
+            ? "ホストから受け取った設定です。ここでは変更できません。"
+            : lobbySettingsEditable
+                ? "ホスト時に参加者へ送信する設定です。"
+                : "ゲーム進行中のホストは自分のロビー設定を変更できません。";
+        NoLobbyText.Visibility = value is null ? Visibility.Visible : Visibility.Collapsed;
+        LobbyControlsPanel.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
+        LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
+        if (value is not null) LoadLobbyControls(value);
+    }
 
     private LobbySettings ReadLobbyControls() => lobbyDraft with
     {
@@ -82,7 +129,7 @@ public partial class SettingsWindow : Window
 
     private void RadioOnlyCheck_Changed(object sender, RoutedEventArgs e)
     {
-        if (loadingLobbyControls || DistanceSlider is null) return;
+        if (loadingLobbyControls || showingCurrentLobby || DistanceSlider is null) return;
 
         var current = ReadLobbyControls();
         if (RadioOnlyCheck.IsChecked == true)
@@ -137,7 +184,7 @@ public partial class SettingsWindow : Window
             MicrophoneGainEnabled = MicrophoneGainCheck.IsChecked == true,
             MicSensitivity = settings.MicSensitivity,
             MicSensitivityEnabled = settings.MicSensitivityEnabled,
-            MyLobbySettings = ReadLobbyControls(),
+            MyLobbySettings = showingCurrentLobby ? lobbyDraft : ReadLobbyControls(),
             RadioOnlyBackup = radioOnlyBackup
         };
         try

@@ -26,6 +26,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private SpatialVoiceSettings spatialVoiceSettings = new();
     private LobbySettings ownLobbySettings = new();
     private LobbySettings activeLobbySettings = new();
+    private volatile bool hasActiveLobbySettings;
     private int? hostClientId;
     private AudioDeviceSession? audioSession;
     private bool microphoneMuted;
@@ -113,7 +114,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public event Action<AmongUsState>? GameStateApplied;
 
-    public event Action<LobbySettings>? LobbySettingsChanged;
+    public event Action<LobbySettings?>? LobbySettingsChanged;
 
     public event Action<int, PeerVoiceMix>? PeerMixChanged;
 
@@ -139,6 +140,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         currentGameState is { GameState: GameState.Tasks or GameState.Discussion } state &&
         state.Players.Any(player => player.IsLocal && player.IsImpostor && !player.IsDead) &&
         (spatialVoiceSettings.ImpostorRadioEnabled || spatialVoiceSettings.ImpostorRadioOnlyMode);
+
+    public LobbySettings? CurrentLobbySettings =>
+        hasActiveLobbySettings && currentJoinedLobby != "MENU" ? activeLobbySettings : null;
 
     private bool IsCurrentHost => currentGameState?.IsHost ?? options.IsHost;
 
@@ -553,12 +557,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private void ApplyLobbySettings(LobbySettings settings)
     {
         var next = settings.Normalize();
-        if (next == activeLobbySettings)
+        if (hasActiveLobbySettings && next == activeLobbySettings)
         {
             return;
         }
 
         activeLobbySettings = next;
+        hasActiveLobbySettings = true;
         spatialVoiceSettings = spatialVoiceSettings with
         {
             MaxDistance = next.MaxDistance,
@@ -785,6 +790,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             currentJoinedLobby = "MENU";
             spatialVoiceSettings = new SpatialVoiceSettings();
             activeLobbySettings = new LobbySettings();
+            hasActiveLobbySettings = false;
+            LobbySettingsChanged?.Invoke(null);
             hostClientId = state.HostId > 0 ? state.HostId : null;
             impostorRadioStates.Clear();
             if (targetLobby == "MENU")
@@ -802,6 +809,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 ApplyLobbySettings(ownLobbySettings);
                 BroadcastLobbySettings();
             }
+            LobbySettingsChanged?.Invoke(CurrentLobbySettings);
         }
         catch (Exception exception)
         {

@@ -13,6 +13,7 @@ public partial class MainWindow : Window
 {
     private CancellationTokenSource? runCancellation;
     private VoiceServerProbe? probe;
+    private SettingsWindow? settingsWindow;
     private readonly ObservableCollection<PeerRow> peers = [];
     private readonly ClientSettings settings;
     private AmongUsState? currentState;
@@ -37,8 +38,19 @@ public partial class MainWindow : Window
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         var hostInGame = currentState is { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
-        var window = new SettingsWindow(settings, !hostInGame) { Owner = this };
-        if (window.ShowDialog() != true) return;
+        var window = new SettingsWindow(settings, !hostInGame,
+            probe?.CurrentLobbySettings, currentState?.IsHost != true) { Owner = this };
+        settingsWindow = window;
+        bool? saved;
+        try
+        {
+            saved = window.ShowDialog();
+        }
+        finally
+        {
+            settingsWindow = null;
+        }
+        if (saved != true) return;
 
         Topmost = settings.AlwaysOnTop;
         SelectConfiguredDevices();
@@ -108,6 +120,8 @@ public partial class MainWindow : Window
         probe.SetMasterVolume(settings.MasterVolume);
         probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe.SetOwnLobbySettings(settings.MyLobbySettings);
+        probe.LobbySettingsChanged += _ => Dispatch(() =>
+            settingsWindow?.UpdateCurrentLobbySettings(probe?.CurrentLobbySettings));
         probe.ConnectionStatusChanged += status => Dispatch(() => StatusText.Text = status);
         probe.GameStateApplied += state => Dispatch(() => ShowGameState(state));
         probe.PeerMixChanged += (clientId, mix) => Dispatch(() => UpdatePeerMix(clientId, mix));

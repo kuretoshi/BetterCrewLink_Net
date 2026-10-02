@@ -70,6 +70,10 @@ internal static class SelfTestRunner
 
             first.SetOwnLobbySettings(updatedSettings);
             await updateVerified.Task.WaitAsync(timeout, cancellation.Token);
+            if (second.CurrentLobbySettings != updatedSettings)
+            {
+                throw new InvalidOperationException("The guest's current-lobby settings do not match the host update.");
+            }
 
             Console.WriteLine("[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラック、ホストの3.2.7ロビー設定配信と変更反映を検証しました。");
             cancellation.Cancel();
