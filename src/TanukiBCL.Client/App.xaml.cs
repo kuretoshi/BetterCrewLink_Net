@@ -24,7 +24,7 @@ public partial class App : Application
         base.OnStartup(e);
         System.Windows.Media.RenderOptions.ProcessRenderMode = ClientSettingsStore.Load().HardwareAcceleration
             ? System.Windows.Interop.RenderMode.Default : System.Windows.Interop.RenderMode.SoftwareOnly;
-        if (e.Args.Contains("--nos-avatar-self-test") || e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
+        if (e.Args.Contains("--voice-view-self-test") || e.Args.Contains("--nos-avatar-self-test") || e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
             e.Args.Contains("--session-lifecycle-self-test") ||
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
@@ -34,6 +34,7 @@ public partial class App : Application
             try
             {
                 if (e.Args.Contains("--nos-avatar-self-test")) AvatarImageFactory.VerifyNosColors();
+                if (e.Args.Contains("--voice-view-self-test")) VoiceView.VerifyNameLayout();
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
                 if (e.Args.Contains("--settings-self-test"))
                 {

@@ -46,6 +46,19 @@ public partial class VoiceView : UserControl
     }
 
     public event EventHandler? SettingsRequested;
+    internal static void VerifyNameLayout()
+    {
+        var view = new VoiceView();
+        view.LocalName.Text = "開発者くれとし 3";
+        view.Measure(new Size(280, 390));
+        view.Arrange(new Rect(0, 0, 280, 390));
+        view.UpdateLayout();
+        if (view.LocalName.TextTrimming != TextTrimming.None || view.LocalName.ActualWidth <= 115 ||
+            view.LocalName.FontSize != 20 || view.LocalName.TextWrapping != TextWrapping.NoWrap)
+            throw new InvalidOperationException("Long player name was clipped, shrunk or ellipsized");
+        view.popupCloseTimer.Stop();
+        Console.WriteLine("[PASS] VoiceView long name retains 20px nowrap text beyond 115px box");
+    }
     public event EventHandler? ReloadRequested;
     public event EventHandler? CloseRequested;
     public event EventHandler? MuteRequested;
