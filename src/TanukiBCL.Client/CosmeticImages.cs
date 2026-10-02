@@ -10,6 +10,7 @@ internal static class CosmeticImages
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20),
         MaxResponseContentBufferSize = 8 * 1024 * 1024 };
     private static Task<CosmeticCatalog>? catalog;
+    private static Task<SnrCosmeticCatalog>? snrCatalog;
     private static readonly Dictionary<Uri, Task<BitmapSource>> Images = [];
 
     public static async Task<CosmeticCatalog> GetCatalogAsync()
@@ -34,6 +35,14 @@ internal static class CosmeticImages
         }
         try { return await request.ConfigureAwait(false); }
         catch { lock (Gate) { if (Images.TryGetValue(uri, out var current) && current == request) Images.Remove(uri); } throw; }
+    }
+
+    internal static async Task<SnrCosmeticCatalog> GetSnrCatalogAsync()
+    {
+        Task<SnrCosmeticCatalog> request;
+        lock (Gate) request = snrCatalog ??= SnrCosmeticCatalog.DownloadAsync();
+        try { return await request.ConfigureAwait(false); }
+        catch { lock (Gate) { if (snrCatalog == request) snrCatalog = null; } throw; }
     }
 
     private static async Task<BitmapSource> LoadAsync(Uri uri)

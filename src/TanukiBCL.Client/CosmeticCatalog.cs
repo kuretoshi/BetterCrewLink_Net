@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace TanukiBCL.Client;
 
 internal enum CosmeticPart { Hat, HatBack, Skin, Visor }
-internal sealed record CosmeticAsset(Uri Url, bool Adaptive, string Top, string Left, string Width);
+internal sealed record CosmeticAsset(Uri Url, bool Adaptive, string Top, string Left, string Width, bool SnrVisorLayout = false);
 
 // Port of the shared hats.json branch of v3.2.7 renderer/lib/cosmetics.ts.
 // SNR remote/local full-player canvases are a separate resolver, not this catalog.
@@ -59,6 +59,14 @@ internal sealed class CosmeticCatalog
             return new CosmeticAsset(url, item.Adaptive, item.Top ?? group.Top,
                 item.Left ?? group.Left, item.Width ?? group.Width);
         }
+        return null;
+    }
+
+    internal (string Top, string Left, string Width)? Dimensions(string id, string mod)
+    {
+        foreach (var key in new[] { "NONE", mod })
+            if (groups.TryGetValue(key, out var group) && group.Entries.TryGetValue(id, out var item))
+                return (item.Top ?? group.Top, item.Left ?? group.Left, item.Width ?? group.Width);
         return null;
     }
 

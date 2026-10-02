@@ -38,10 +38,14 @@ public partial class App : Application
                 if (e.Args.Contains("--cosmetics-self-test"))
                 {
                     CosmeticCatalog.Verify();
+                    SnrCosmeticCatalog.Verify();
                     PlayerAvatar.VerifyCosmeticLayers();
                 }
                 if (e.Args.Contains("--cosmetics-self-test") && e.Args.Contains("--download-cosmetics-catalog"))
+                {
                     Task.Run(CosmeticCatalog.VerifyDownloadAsync).GetAwaiter().GetResult();
+                    Task.Run(SnrCosmeticCatalog.VerifyDownloadAsync).GetAwaiter().GetResult();
+                }
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
                 if (e.Args.Contains("--settings-self-test"))
                 {

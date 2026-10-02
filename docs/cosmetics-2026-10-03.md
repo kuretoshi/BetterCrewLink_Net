@@ -34,3 +34,13 @@
 3.2.7 `common/NosSnapshot.ts` の `findNosColorIndex` と `Avatar.tsx` に合わせ、NoS公開スナップショットRGBをバイト丸めした後、各成分差が1以内の**最初**のパレット色を使用する。最近傍探索ではない。該当色がなければ変装色（outfit 1〜10かつ有効色ID）、次に通常色へフォールバック。ロビー専用RGBは体画像用であり、この装備色検索には用いない。他MODではNoS値を参照しない。体画像のNoS分岐もMOD識別で制限した。
 
 Releaseビルドは警告/エラー0。`--nos-avatar-self-test --cosmetics-self-test --overlay-self-test --voice-view-self-test` は終了0。許容差・先頭優先・MOD分離・不正RGB・変装範囲・ロビーのみのフォールバックと、SetPlayerからadaptive画像への実ピクセル変換、公開色変更後の再着色を確認した。これらは合成マスクによる自動テストであり、ゲーム内でadaptive装備を着替えて公式と比較する実機確認は未実施。起動中の配布フォルダは前のコミットのまま。
+
+## SNRリモート装備
+
+3.2.7 `renderer/lib/cosmetics.ts` のSNR公開定義読込とID解決を移植。タグ除去後のpackage/name完全一致を優先し、その後に画像名の連続suffix除去・英数字正規化・末尾一致を使う。前後画像は別に選択し、adaptiveフラグまたは各画像名のadaptive表記で着色する。バイザー以外の種別は原版同様に帽子定義を参照する。
+
+フルキャンバス既定配置と、IsSNR/isSNRの原版と同じ型条件を適用した自然画像サイズによるバイザー配置を接続。共有カタログに同じIDがある場合は画像指定の有無にかかわらずそちらの配置を優先する。共通画像キャッシュ、世代番号による古い応答の破棄、失敗時再試行経路を利用する。
+
+Releaseビルド警告/エラー0。`--cosmetics-self-test --download-cosmetics-catalog --nos-avatar-self-test --overlay-self-test --voice-view-self-test` は終了0。SNR ID・suffix・前後選択・adaptive条件・小／大キャンバスの配置、PlayerAvatarまでの描画接続を合成画像で検証。実配信元から帽子388定義・バイザー48定義を取得し、それぞれ先頭の画像1件（300×375、397×88）を取得してデコードできた。全画像取得やSNR実機との見た目比較は未実施。
+
+未対応のローカルfallback（SuperNewRolesNext/CustomCosmetics）、追加帽子／バイザーと読取、SNR実機の比較は引き続き必要。定義にないModded_装備は現時点では非表示。起動中のアプリは更新していない。

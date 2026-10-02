@@ -11,6 +11,7 @@ public partial class PlayerAvatar
     private long cosmeticGeneration;
     private DateTimeOffset cosmeticRetryAt;
     private Func<Task<CosmeticCatalog>> catalogLoader = CosmeticImages.GetCatalogAsync;
+    private Func<Task<SnrCosmeticCatalog>> snrCatalogLoader = CosmeticImages.GetSnrCatalogAsync;
     private Func<Uri, Task<System.Windows.Media.Imaging.BitmapSource>> imageLoader = CosmeticImages.GetImageAsync;
 
     private void UpdateCosmetics(Player player, IReadOnlyList<PlayerColorPair>? palette, AmongUsModType mod, int colorId)
@@ -38,6 +39,8 @@ public partial class PlayerAvatar
         try
         {
             var catalog = await catalogLoader();
+            var snr = mod == AmongUsModType.SuperNewRoles && new[] { hat, skin, visor }.Any(id => id.StartsWith("Modded_", StringComparison.Ordinal))
+                ? await snrCatalogLoader() : null;
             var modName = mod switch
             {
                 AmongUsModType.NebulaOnTheShip => "NoS",
@@ -53,12 +56,18 @@ public partial class PlayerAvatar
                 (hat, CosmeticPart.Hat, CosmeticFront), (visor, CosmeticPart.Visor, CosmeticFront) })
             {
                 if (generation != cosmeticGeneration) return;
-                var asset = catalog.Resolve(id, modName, part);
+                var customSnr = snr is not null && id.StartsWith("Modded_", StringComparison.Ordinal);
+                var asset = customSnr ? snr!.Resolve(id, part) : catalog.Resolve(id, modName, part);
+                // Image selection prioritizes SNR remote definitions, but dimensions
+                // still use a shared catalog entry when one exists in 3.2.7.
+                if (customSnr && asset is not null && catalog.Dimensions(id, modName) is { } shared)
+                    asset = asset with { Top = shared.Top, Left = shared.Left, Width = shared.Width, SnrVisorLayout = false };
                 if (asset is null) continue;
                 try
                 {
                     var bitmap = await imageLoader(asset.Url);
                     if (generation != cosmeticGeneration) return;
+                    asset = SnrCosmeticCatalog.WithImageSize(asset, bitmap.PixelWidth, bitmap.PixelHeight);
                     CosmeticCatalog.ResolveLength(asset.Top, 80);
                     CosmeticCatalog.ResolveLength(asset.Left, 80);
                     CosmeticCatalog.ResolveLength(asset.Width, 80);
@@ -163,7 +172,23 @@ public partial class PlayerAvatar
         ((System.Windows.Media.Imaging.BitmapSource)((Image)avatar.CosmeticFront.Children[0]).Source)
             .CopyPixels(painted, 4, 0);
         Require(painted.SequenceEqual(new byte[] { 0, 0, 255, 255 }), "Published color change did not refresh cosmetic");
+        avatar.catalogLoader = () => Task.FromResult(CosmeticCatalog.Parse("{}"));
+        avatar.snrCatalogLoader = () => Task.FromResult(SnrCosmeticCatalog.Parse("""
+            {"hats":[{"name":"H","resource":"h.png","backresource":"back.png"}]}
+            """, """
+            {"Visors":[{"name":"V","resource":"v.png","IsSNR":true}]}
+            """));
+        avatar.SetPlayer(new Player { HatId = "Modded_NONE_PACKAGE_H", VisorId = "Modded_NONE_PACKAGE_V" },
+            null, mod: AmongUsModType.SuperNewRoles);
+        Require(avatar.CosmeticBack.Children.Count == 1 && avatar.CosmeticFront.Children.Count == 2,
+            "SNR remote layers did not reach rendered avatar");
+        var snrVisor = (Image)avatar.CosmeticFront.Children[1];
+        var expectedVisor = SnrCosmeticCatalog.WithImageSize(new CosmeticAsset(new Uri("https://example.com/v.png"),
+            false, "-52%", "-18px", "140%", true), 1, 1);
+        Require(Math.Abs(snrVisor.Width - CosmeticCatalog.ResolveLength(expectedVisor.Width, 80)) < 0.0001,
+            "SNR natural image size was not applied to rendering");
         Console.WriteLine("[PASS] Cosmetic layers, placement, base clip, death and stale asynchronous results");
         Console.WriteLine("[PASS] NoS adaptive cosmetic rendered pixels and published color changes");
+        Console.WriteLine("[PASS] SNR remote layers and visor image-size layout in PlayerAvatar");
     }
 }
