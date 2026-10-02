@@ -86,6 +86,7 @@ public partial class SettingsWindow : Window
     internal void UpdateCurrentGameState(AmongUsState? state)
     {
         currentGameState = state;
+        UpdateModSettingsVisibility();
         var signature = string.Join(';', (state?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
             .OrderBy(player => player.ClientId)
             .Select(player => $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{player.Disconnected}"));
@@ -251,6 +252,7 @@ public partial class SettingsWindow : Window
 
     private void ShowSelectedLobbySettings()
     {
+        UpdateModSettingsVisibility();
         var value = showingCurrentLobby ? currentLobbySettings : lobbyDraft;
         LobbyNotice.Text = showingCurrentLobby
             ? "ホストから受け取った設定です。ここでは変更できません。"
@@ -263,41 +265,64 @@ public partial class SettingsWindow : Window
         if (value is not null) LoadLobbyControls(value);
     }
 
+    private void UpdateModSettingsVisibility()
+    {
+        if (NosControlsPanel is null) return;
+        NosControlsPanel.Visibility = currentGameState?.Mod == AmongUsModType.NebulaOnTheShip
+            ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private LobbySettings ReadLobbyControls() => lobbyDraft with
     {
         MaxDistance = DistanceSlider.Value,
+        WallsBlockAudio = WallsBlockAudioCheck.IsChecked == true,
         Haunting = HauntingCheck.IsChecked == true,
         HearImpostorsInVents = HearVentsCheck.IsChecked == true,
         ImpostersHearImpostersInvent = ImpostorVentCheck.IsChecked == true,
         ImpostorRadioEnabled = ImpostorRadioCheck.IsChecked == true,
         CommsSabotage = CommsSabotageCheck.IsChecked == true,
+        HearThroughCameras = HearThroughCamerasCheck.IsChecked == true,
         ImpostorRadioOnlyMode = RadioOnlyCheck.IsChecked == true,
         DeadOnly = DeadOnlyCheck.IsChecked == true,
-        MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true
+        MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true,
+        JackalRadioEnabled = JackalRadioCheck.IsChecked == true,
+        NosVoicePositions = NosVoicePositionsCheck.IsChecked == true,
+        NosSizeVoiceEffect = NosSizeVoiceEffectCheck.IsChecked == true,
+        NosFixerJammingVoiceBlock = NosFixerJammingVoiceBlockCheck.IsChecked == true
     };
 
     private void LoadLobbyControls(LobbySettings value)
     {
         loadingLobbyControls = true;
         DistanceSlider.Value = value.MaxDistance;
+        WallsBlockAudioCheck.IsChecked = value.WallsBlockAudio;
         HauntingCheck.IsChecked = value.Haunting;
         HearVentsCheck.IsChecked = value.HearImpostorsInVents;
         ImpostorVentCheck.IsChecked = value.ImpostersHearImpostersInvent;
         ImpostorRadioCheck.IsChecked = value.ImpostorRadioEnabled;
         CommsSabotageCheck.IsChecked = value.CommsSabotage;
+        HearThroughCamerasCheck.IsChecked = value.HearThroughCameras;
         DeadOnlyCheck.IsChecked = value.DeadOnly;
         MeetingGhostOnlyCheck.IsChecked = value.MeetingGhostOnly;
+        JackalRadioCheck.IsChecked = value.JackalRadioEnabled;
+        NosVoicePositionsCheck.IsChecked = value.NosVoicePositions;
+        NosSizeVoiceEffectCheck.IsChecked = value.NosSizeVoiceEffect;
+        NosFixerJammingVoiceBlockCheck.IsChecked = value.NosFixerJammingVoiceBlock;
         RadioOnlyCheck.IsChecked = value.ImpostorRadioOnlyMode;
         loadingLobbyControls = false;
 
         var regularSettingsEnabled = !value.ImpostorRadioOnlyMode;
         DistanceSlider.IsEnabled = regularSettingsEnabled;
+        WallsBlockAudioCheck.IsEnabled = regularSettingsEnabled;
         HearVentsCheck.IsEnabled = regularSettingsEnabled;
         ImpostorVentCheck.IsEnabled = regularSettingsEnabled;
         ImpostorRadioCheck.IsEnabled = regularSettingsEnabled;
         CommsSabotageCheck.IsEnabled = regularSettingsEnabled;
+        HearThroughCamerasCheck.IsEnabled = regularSettingsEnabled;
         DeadOnlyCheck.IsEnabled = regularSettingsEnabled;
         MeetingGhostOnlyCheck.IsEnabled = regularSettingsEnabled;
+        JackalRadioCheck.IsEnabled = regularSettingsEnabled;
+        NosVoicePositionsCheck.IsEnabled = regularSettingsEnabled;
     }
 
     private void RadioOnlyCheck_Changed(object sender, RoutedEventArgs e)

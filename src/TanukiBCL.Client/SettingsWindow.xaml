@@ -75,15 +75,29 @@
                             <Slider x:Name="DistanceSlider" Minimum="1" Maximum="10" TickFrequency="0.1"
                                     IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" />
                         </DockPanel>
+                        <CheckBox x:Name="WallsBlockAudioCheck" Content="壁越しで音声をブロック" Margin="0,0,0,14" />
                         <CheckBox x:Name="HauntingCheck" Content="インポスターは幽霊の声を聞ける" Margin="0,0,0,14" />
                         <CheckBox x:Name="HearVentsCheck" Content="ベント内のインポスターの声を聞ける" Margin="0,0,0,14" />
                         <CheckBox x:Name="ImpostorVentCheck" Content="ベント内のインポスター同士で会話できる" Margin="0,0,0,14" />
                         <CheckBox x:Name="ImpostorRadioCheck" Content="インポスターラジオを有効化" Margin="0,0,0,14" />
                         <CheckBox x:Name="CommsSabotageCheck" Content="通信妨害中はクルーメイトの受信を遮断" Margin="0,0,0,14" />
+                        <CheckBox x:Name="HearThroughCamerasCheck" Content="カメラ越しに声が聞こえる" Margin="0,0,0,14" />
                         <CheckBox x:Name="DeadOnlyCheck" Content="幽霊同士のみ会話できる" Margin="0,0,0,14"
                                   Checked="DeadOnlyCheck_Checked" />
                         <CheckBox x:Name="MeetingGhostOnlyCheck" Content="会議中のみ幽霊以外も会話できる" Margin="0,0,0,14"
                                   Checked="MeetingGhostOnlyCheck_Checked" />
+                        <StackPanel x:Name="NosControlsPanel" Visibility="Collapsed" Margin="0,14,0,0">
+                            <TextBlock Text="【MOD】NoS設定" FontWeight="SemiBold" Foreground="#C779D7"
+                                       Margin="0,0,0,14" />
+                            <CheckBox x:Name="JackalRadioCheck" Content="ジャッカルラジオ" Margin="0,0,0,14" />
+                            <CheckBox x:Name="NosVoicePositionsCheck" Margin="0,0,0,14">
+                                <TextBlock Text="話す位置と聞く位置をNoSの座標に変更" TextWrapping="Wrap" />
+                            </CheckBox>
+                            <CheckBox x:Name="NosSizeVoiceEffectCheck" Content="大きさが変化した場合にエフェクトをかける"
+                                      Margin="0,0,0,14" />
+                            <CheckBox x:Name="NosFixerJammingVoiceBlockCheck" Content="フィクサーの妨害を受けた際に音声を遮断する"
+                                      Margin="0,0,0,14" />
+                        </StackPanel>
                         </StackPanel>
                     </StackPanel>
                     <StackPanel x:Name="PlayersPanel" Visibility="Collapsed">
