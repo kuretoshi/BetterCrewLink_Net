@@ -9,6 +9,7 @@ internal sealed record SpatialVoiceSettings(
     bool ImpostorsHearImpostorsInVents = false,
     bool ImpostorRadioEnabled = false,
     bool ImpostorRadioOnlyMode = false,
+    bool CommsSabotage = false,
     bool Haunting = false,
     double GhostVolumeAsImpostor = 1d,
     double CrewVolumeAsGhost = 1d,
@@ -91,6 +92,11 @@ internal static class SpatialVoicePolicy
         if (settings.ImpostorRadioOnlyMode && !me.IsDead)
         {
             return Muted(pan, distance, "radio-only");
+        }
+
+        if (settings.CommsSabotage && state.CommsSabotaged && !me.IsDead && !me.IsImpostor)
+        {
+            return Muted(pan, distance, "comms-sabotage");
         }
 
         if (other.InVent &&

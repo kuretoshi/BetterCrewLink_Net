@@ -100,6 +100,7 @@ public partial class SettingsWindow : Window
         HearImpostorsInVents = HearVentsCheck.IsChecked == true,
         ImpostersHearImpostersInvent = ImpostorVentCheck.IsChecked == true,
         ImpostorRadioEnabled = ImpostorRadioCheck.IsChecked == true,
+        CommsSabotage = CommsSabotageCheck.IsChecked == true,
         ImpostorRadioOnlyMode = RadioOnlyCheck.IsChecked == true,
         DeadOnly = DeadOnlyCheck.IsChecked == true,
         MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true
@@ -113,6 +114,7 @@ public partial class SettingsWindow : Window
         HearVentsCheck.IsChecked = value.HearImpostorsInVents;
         ImpostorVentCheck.IsChecked = value.ImpostersHearImpostersInvent;
         ImpostorRadioCheck.IsChecked = value.ImpostorRadioEnabled;
+        CommsSabotageCheck.IsChecked = value.CommsSabotage;
         DeadOnlyCheck.IsChecked = value.DeadOnly;
         MeetingGhostOnlyCheck.IsChecked = value.MeetingGhostOnly;
         RadioOnlyCheck.IsChecked = value.ImpostorRadioOnlyMode;
@@ -123,6 +125,7 @@ public partial class SettingsWindow : Window
         HearVentsCheck.IsEnabled = regularSettingsEnabled;
         ImpostorVentCheck.IsEnabled = regularSettingsEnabled;
         ImpostorRadioCheck.IsEnabled = regularSettingsEnabled;
+        CommsSabotageCheck.IsEnabled = regularSettingsEnabled;
         DeadOnlyCheck.IsEnabled = regularSettingsEnabled;
         MeetingGhostOnlyCheck.IsEnabled = regularSettingsEnabled;
     }

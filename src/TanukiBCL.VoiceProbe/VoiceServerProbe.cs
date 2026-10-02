@@ -603,6 +603,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ImpostorsHearImpostorsInVents = next.ImpostersHearImpostersInvent,
             ImpostorRadioEnabled = next.ImpostorRadioEnabled,
             ImpostorRadioOnlyMode = next.ImpostorRadioOnlyMode,
+            CommsSabotage = next.CommsSabotage,
             Haunting = next.Haunting,
             DeadOnly = next.DeadOnly,
             MeetingGhostOnly = next.MeetingGhostOnly

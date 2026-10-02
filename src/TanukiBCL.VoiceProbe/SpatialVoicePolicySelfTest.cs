@@ -48,6 +48,23 @@ internal static class SpatialVoicePolicySelfTest
             SpatialVoicePolicy.Calculate(tasks, new Player(),
                 new Player { IsImpostor = true }, radioOnlyPolicy, true).Audible);
 
+        var commsTasks = new AmongUsState { GameState = GameState.Tasks, CommsSabotaged = true };
+        var commsPolicy = new SpatialVoiceSettings(CommsSabotage: true, ImpostorRadioEnabled: true);
+        Check("comms: living crew cannot hear proximity", false,
+            SpatialVoicePolicy.Calculate(commsTasks, new Player(), new Player(), commsPolicy).Audible);
+        Check("comms: impostor still hears proximity", true,
+            SpatialVoicePolicy.Calculate(commsTasks, new Player { IsImpostor = true },
+                new Player(), commsPolicy).Audible);
+        Check("comms: ghost still hears proximity", true,
+            SpatialVoicePolicy.Calculate(commsTasks, new Player { IsDead = true },
+                new Player(), commsPolicy).Audible);
+        Check("comms: radio overrides block for eligible receiver", true,
+            SpatialVoicePolicy.Calculate(commsTasks, new Player { IsImpostor = true },
+                new Player { IsImpostor = true }, commsPolicy, true).Audible);
+        Check("comms: disabled option leaves crew audible", true,
+            SpatialVoicePolicy.Calculate(commsTasks, new Player(), new Player(),
+                commsPolicy with { CommsSabotage = false }).Audible);
+
         var lobbySettings = new LobbySettings
         {
             MaxDistance = 7.4d,

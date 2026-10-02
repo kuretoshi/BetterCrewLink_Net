@@ -71,6 +71,7 @@
                         <CheckBox x:Name="HearVentsCheck" Content="ベント内のインポスターの声を聞ける" Margin="0,0,0,14" />
                         <CheckBox x:Name="ImpostorVentCheck" Content="ベント内のインポスター同士で会話できる" Margin="0,0,0,14" />
                         <CheckBox x:Name="ImpostorRadioCheck" Content="インポスターラジオを有効化" Margin="0,0,0,14" />
+                        <CheckBox x:Name="CommsSabotageCheck" Content="通信妨害中はクルーメイトの受信を遮断" Margin="0,0,0,14" />
                         <CheckBox x:Name="DeadOnlyCheck" Content="幽霊同士のみ会話できる" Margin="0,0,0,14"
                                   Checked="DeadOnlyCheck_Checked" />
                         <CheckBox x:Name="MeetingGhostOnlyCheck" Content="会議中のみ幽霊以外も会話できる" Margin="0,0,0,14"
