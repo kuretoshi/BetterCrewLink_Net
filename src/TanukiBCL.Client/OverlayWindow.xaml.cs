@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
@@ -30,6 +31,75 @@ public partial class OverlayWindow : Window
     private sealed record MeetingParticipant(int Id, int ClientId, int ColorId, bool IsLocal);
     private List<MeetingParticipant> meetingOrder = [];
     private readonly Dictionary<int, MeetingVoiceBorder> meetingSlots = [];
+    private sealed class AvatarRow
+    {
+        internal readonly StackPanel Row = new();
+        internal readonly PlayerAvatar Avatar = new();
+        internal readonly TextBlock Name = new();
+        internal bool? NameVisible;
+        internal AnimationClock? NameFade;
+        private double fadeStart;
+        private double fadeEnd;
+        private double reversingStart;
+        private double shorteningFactor = 1;
+
+        internal AvatarRow()
+        {
+            Row.Children.Add(Avatar);
+            Name.Foreground = Brushes.White;
+            Name.FontWeight = FontWeights.Bold;
+            Name.TextTrimming = TextTrimming.CharacterEllipsis;
+            Name.MaxWidth = 190;
+            Name.VerticalAlignment = VerticalAlignment.Center;
+            Name.Background = new SolidColorBrush(Color.FromArgb(0x52, 0, 0, 0));
+            Name.Margin = new Thickness(5, 0, 5, 0);
+        }
+
+        internal void SetNameVisible(bool visible)
+        {
+            if (NameVisible == visible) return;
+            if (NameVisible is null)
+            {
+                Name.ApplyAnimationClock(UIElement.OpacityProperty, null);
+                Name.Opacity = visible ? 1 : 0;
+                NameVisible = visible;
+                return;
+            }
+            var from = Name.Opacity;
+            var to = visible ? 1d : 0d;
+            NameVisible = visible;
+            if (from == to)
+            {
+                Name.ApplyAnimationClock(UIElement.OpacityProperty, null);
+                NameFade = null;
+                Name.Opacity = to;
+                shorteningFactor = 1;
+                return;
+            }
+            // Match CSS opacity transition's shortening of interrupted reversals.
+            if (NameFade?.CurrentState == ClockState.Active && reversingStart == to && fadeEnd != fadeStart)
+            {
+                var easedProgress = (from - fadeStart) / (fadeEnd - fadeStart);
+                shorteningFactor = Math.Clamp(Math.Abs(easedProgress * shorteningFactor + 1 - shorteningFactor), 0, 1);
+                reversingStart = fadeEnd;
+            }
+            else
+            {
+                shorteningFactor = 1;
+                reversingStart = from;
+            }
+            fadeStart = from;
+            fadeEnd = to;
+            var duration = TimeSpan.FromMilliseconds(400 * shorteningFactor);
+            var animation = new DoubleAnimationUsingKeyFrames { Duration = duration };
+            animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(from, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            animation.KeyFrames.Add(new SplineDoubleKeyFrame(to, KeyTime.FromTimeSpan(duration),
+                new KeySpline(0.25, 0.1, 0.25, 1)));
+            NameFade = (AnimationClock)((Timeline)animation).CreateClock(true);
+            Name.ApplyAnimationClock(UIElement.OpacityProperty, NameFade, HandoffBehavior.SnapshotAndReplace);
+        }
+    }
+    private readonly Dictionary<int, AvatarRow> avatarRows = [];
     private GameState previousGameState = GameState.Unknown;
 
     internal OverlayWindow(int gameProcessId, ClientSettings settings)
@@ -158,14 +228,21 @@ public partial class OverlayWindow : Window
 
     private void RenderAvatars(AmongUsState state)
     {
-        AvatarPanel.Children.Clear();
         var position = settings.OverlayPosition;
         var selected = OverlaySelection.Select(state, peers, localTalking,
             microphoneMuted, settings.CompactOverlay, localUsingRadio);
         if (position == "hidden" || selected.Count == 0)
         {
+            AvatarPanel.Children.Clear();
+            avatarRows.Clear();
             AvatarBackground.Visibility = Visibility.Collapsed;
             return;
+        }
+        var currentIds = selected.Select(entry => entry.Player.Id).ToHashSet();
+        foreach (var oldId in avatarRows.Keys.Where(id => !currentIds.Contains(id)).ToArray())
+        {
+            AvatarPanel.Children.Remove(avatarRows[oldId].Row);
+            avatarRows.Remove(oldId);
         }
         var side = position is "left" or "left1" or "right" or "right1";
         var compact = settings.CompactOverlay || position is "left1" or "right1";
@@ -188,15 +265,18 @@ public partial class OverlayWindow : Window
                 ? new CornerRadius(0, 25, 25, 0) : new CornerRadius(25, 0, 0, 25)
             : new CornerRadius(0);
         AvatarBackground.Padding = compact ? new Thickness(3) : new Thickness(8);
-        foreach (var entry in selected)
+        for (var index = 0; index < selected.Count; index++)
         {
+            var entry = selected[index];
             var player = entry.Player;
-            var row = new StackPanel
-            {
-                Orientation = side ? Orientation.Horizontal : Orientation.Vertical,
-                Margin = new Thickness(side ? 1d : 5d)
-            };
-            var avatar = new PlayerAvatar { Width = avatarSize, Height = avatarSize };
+            if (!avatarRows.TryGetValue(player.Id, out var item))
+                avatarRows.Add(player.Id, item = new AvatarRow());
+            var row = item.Row;
+            row.Orientation = side ? Orientation.Horizontal : Orientation.Vertical;
+            row.Margin = new Thickness(side ? 1d : 5d);
+            var avatar = item.Avatar;
+            avatar.Width = avatarSize;
+            avatar.Height = avatarSize;
             // Overlay.tsx displays the current outfit; only the main voice view
             // opts into hiding visibly changed avatars during Tasks.
             avatar.SetPlayer(player, state.PlayerColors, false, state.Mod, state.GameExecutablePath);
@@ -206,23 +286,25 @@ public partial class OverlayWindow : Window
                 player.IsLocal && microphoneMuted,
                 player.IsLocal && deafened, "connected", entry.UsingRadio,
                 grayTalking: player.IsLocal && player.ShiftedColor != -1 && state.GameState != GameState.Discussion);
-            row.Children.Add(avatar);
-            if (showName && (position is not ("left1" or "right1") || entry.Talking))
+            if (showName)
             {
-                row.Children.Add(new TextBlock
-                {
-                    Text = string.IsNullOrWhiteSpace(player.AppearanceName)
-                        ? player.Name : player.AppearanceName,
-                    Foreground = Brushes.White,
-                    FontWeight = FontWeights.Bold,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxWidth = 190,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Background = new SolidColorBrush(Color.FromArgb(0x52, 0, 0, 0)),
-                    Margin = new Thickness(5, 0, 5, 0)
-                });
+                item.Name.Text = string.IsNullOrWhiteSpace(player.AppearanceName)
+                    ? player.Name : player.AppearanceName;
+                if (!row.Children.Contains(item.Name)) row.Children.Add(item.Name);
+                item.SetNameVisible(position is not ("left1" or "right1") || entry.Talking);
             }
-            AvatarPanel.Children.Add(row);
+            else if (row.Children.Contains(item.Name))
+            {
+                row.Children.Remove(item.Name);
+                item.Name.ApplyAnimationClock(UIElement.OpacityProperty, null);
+                item.NameFade = null;
+                item.NameVisible = null;
+            }
+            if (AvatarPanel.Children.IndexOf(row) != index)
+            {
+                AvatarPanel.Children.Remove(row);
+                AvatarPanel.Children.Insert(index, row);
+            }
         }
         AvatarBackground.Visibility = Visibility.Visible;
         AvatarBackground.Width = double.NaN;
@@ -310,6 +392,7 @@ public partial class OverlayWindow : Window
         MeetingVoiceBorder.Verify();
         VerifyMeetingSnapshot();
         VerifyAvatarSizingAndBackground();
+        VerifyAvatarRowPersistence();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
         var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
         try
@@ -414,6 +497,59 @@ public partial class OverlayWindow : Window
         {
             window.Close();
         }
+    }
+
+    private static void VerifyAvatarRowPersistence()
+    {
+        var row = new AvatarRow();
+        row.SetNameVisible(true);
+        if (row.Name.Opacity != 1) throw new InvalidOperationException("New overlay name must start visible");
+        row.SetNameVisible(false);
+        var first = row.NameFade!;
+        first.Controller!.SeekAlignedToLastTick(TimeSpan.FromMilliseconds(200), TimeSeekOrigin.BeginTime);
+        var midpoint = row.Name.Opacity;
+        if (midpoint <= 0 || midpoint >= 0.5)
+            throw new InvalidOperationException("Overlay name 400ms CSS ease midpoint incorrect");
+        row.SetNameVisible(false);
+        if (!ReferenceEquals(first, row.NameFade))
+            throw new InvalidOperationException("Repeated VAD restarted overlay name fade");
+        row.SetNameVisible(true);
+        if (Math.Abs(row.NameFade!.Timeline.Duration.TimeSpan.TotalMilliseconds - 400 * (1 - midpoint)) > 0.001)
+            throw new InvalidOperationException("Overlay name reversal lost CSS shortening");
+        row.NameFade.Controller!.SeekAlignedToLastTick(TimeSpan.FromSeconds(1), TimeSeekOrigin.BeginTime);
+        if (Math.Abs(row.Name.Opacity - 1) > 0.00001)
+            throw new InvalidOperationException("Overlay name reversal did not end visible");
+
+        var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = false, OverlayPosition = "left1" };
+        var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
+        try
+        {
+            var state = new AmongUsState { GameState = GameState.Tasks,
+                Players = [new Player { Id = 1, ClientId = 11, Name = "local", IsLocal = true },
+                    new Player { Id = 2, ClientId = 22, Name = "peer" }] };
+            var active = new Dictionary<int, OverlayPeerStatus> { [22] = new(true, true, false) };
+            window.Update(state, active, true, false, false);
+            var retainedRow = window.avatarRows[2];
+            var retainedAvatar = retainedRow.Avatar;
+            var retainedName = retainedRow.Name;
+            var inactive = new Dictionary<int, OverlayPeerStatus> { [22] = new(true, false, false) };
+            window.Update(state, inactive, false, false, false);
+            if (window.AvatarPanel.Children.Count != 2 ||
+                !ReferenceEquals(retainedRow, window.avatarRows[2]) ||
+                !ReferenceEquals(retainedAvatar, ((StackPanel)window.AvatarPanel.Children[1]).Children[0]) ||
+                !ReferenceEquals(retainedName, ((StackPanel)window.AvatarPanel.Children[1]).Children[1]) ||
+                retainedRow.NameVisible != false || retainedRow.NameFade is null)
+                throw new InvalidOperationException("Silent alternate side name or avatar was replaced instead of fading");
+            window.Update(state, active, true, false, false);
+            if (!ReferenceEquals(retainedName, window.avatarRows[2].Name) || retainedRow.NameVisible != true)
+                throw new InvalidOperationException("Overlay name was recreated when speaking resumed");
+            settings.OverlayPosition = "top";
+            window.Update(state, active, true, false, false);
+            if (retainedRow.Row.Children.Count != 1 || retainedRow.NameVisible is not null)
+                throw new InvalidOperationException("Horizontal overlay retained a side-only name");
+            Console.WriteLine("[PASS] Overlay alternate side name survives VAD updates with 400ms fade/reversal; avatar is retained");
+        }
+        finally { window.Close(); }
     }
 
     private static void VerifyAvatarSizingAndBackground()
