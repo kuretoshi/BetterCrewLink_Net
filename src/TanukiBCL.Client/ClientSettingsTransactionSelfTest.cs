@@ -5,10 +5,11 @@ namespace TanukiBCL.Client;
 
 internal static class ClientSettingsTransactionSelfTest
 {
-    public static int Run()
+    public static int Run(bool forceFailure = false)
     {
         try
         {
+            if (forceFailure) throw new InvalidOperationException("Deliberate settings transaction failure for exit-code verification.");
             VerifyNoOpAndNormalization();
             VerifyPreviewAndFlush();
             VerifyPropertyScopedPersistence();

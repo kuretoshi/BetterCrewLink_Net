@@ -57,7 +57,9 @@ public partial class App : Application
                 }
                 if (e.Args.Contains("--session-lifecycle-self-test")) ClientSessionLifecycleSelfTest.Run();
                 if (e.Args.Contains("--settings-application-self-test")) ClientSettingsApplicationSelfTest.Run();
-                if (e.Args.Contains("--settings-transaction-self-test")) ClientSettingsTransactionSelfTest.Run();
+                if (e.Args.Contains("--settings-transaction-self-test") &&
+                    ClientSettingsTransactionSelfTest.Run(e.Args.Contains("--settings-transaction-failure-exit")) != 0)
+                    throw new InvalidOperationException("Settings transaction self-test failed.");
                 if (e.Args.Contains("--audio-preview-self-test")) AudioPreviewSelfTest.VerifyDevices();
                 if (e.Args.Contains("--input-processing-self-test") && MicrophoneProcessorSelfTest.Run() != 0)
                     throw new InvalidOperationException("Input processing self-test failed.");
