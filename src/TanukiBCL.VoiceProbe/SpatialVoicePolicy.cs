@@ -26,6 +26,7 @@ internal sealed record SpatialVoiceSettings(
     bool SidekickHaunting = false,
     bool SidekickHearOutsideVents = false,
     bool SidekickTalkInVents = false,
+    bool TohNeutralKillerHaunting = false,
     bool VisionHearing = false);
 
 internal sealed record PeerVoiceMix(
@@ -156,7 +157,9 @@ internal static class SpatialVoicePolicy
                 ? settings.JackalHaunting
                 : meSidekick ? settings.SidekickHaunting
                 : me.SnrRole?.IsNeutralKiller == true && settings.JackalHaunting);
-            if (!snrHearingGhosts && (!me.IsImpostor || !settings.Haunting))
+            var tohHearingGhosts = state.Mod == AmongUsModType.TownOfHostForE &&
+                settings.TohNeutralKillerHaunting && me.TohRole?.IsKiller == true;
+            if (!snrHearingGhosts && !tohHearingGhosts && (!me.IsImpostor || !settings.Haunting))
             {
                 return Muted(pan, distance, "living-cannot-hear-ghost");
             }

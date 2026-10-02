@@ -153,7 +153,7 @@ internal sealed class SnrLiveRoleReader
         }
     }
 
-    private static string? FindHelper()
+    internal static string? FindHelper()
     {
         var packaged = Path.Combine(AppContext.BaseDirectory, "RoleReaders", "SnrRoleReader.exe");
         if (File.Exists(packaged)) return packaged;

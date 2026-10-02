@@ -13,6 +13,23 @@ internal static class SpatialVoicePolicySelfTest
         Check("SNR live reader: role and modifier names", true, snrReader.Role);
         Check("SNR live reader: Jumbo size", true, snrReader.Jumbo);
         Check("SNR live reader: torn role sample rejected", true, snrReader.TornSampleRejected);
+        var tohReader = TohLiveRoleReaderSelfTest.Verify();
+        Check("TOH live reader: Opportunist and CanKill", true, tohReader.Role);
+        Check("TOH live reader: active IKiller", true, tohReader.Killer);
+        Check("TOH live reader: torn role sample rejected", true, tohReader.TornSampleRejected);
+        var tohWirePlayer = new Player { Id = 5, ClientId = 3,
+            TohRole = new TohRoleData(20, "Jackal", true, true) };
+        using (var tohWire = JsonDocument.Parse(TohRoleWire.Serialize("ABCD", tohWirePlayer)))
+        {
+            Check("TOH wire: absent Opportunist flag stays omitted", true,
+                !tohWire.RootElement.GetProperty("role").TryGetProperty("opportunistCanKill", out _));
+            Check("TOH wire: role round-trips", true,
+                TohRoleWire.TryRead(tohWire.RootElement, out var parsed) && parsed == tohWirePlayer.TohRole);
+        }
+        tohWirePlayer.TohRole = null;
+        using (var tohWire = JsonDocument.Parse(TohRoleWire.Serialize("ABCD", tohWirePlayer)))
+            Check("TOH wire: unavailable role is explicit null", true,
+                tohWire.RootElement.GetProperty("role").ValueKind == JsonValueKind.Null);
         foreach (var gameState in new[] { GameState.Tasks, GameState.Discussion })
         {
             var state = new AmongUsState { GameState = gameState };
@@ -135,6 +152,17 @@ internal static class SpatialVoicePolicySelfTest
         Check("SNR haunting: Jackal hears ghost when enabled", true,
             SpatialVoicePolicy.Calculate(snrTasks, snrJackal, new Player { IsDead = true },
                 new SpatialVoiceSettings(JackalHaunting: true)).Audible);
+        var tohTasks = new AmongUsState { Mod = AmongUsModType.TownOfHostForE,
+            GameState = GameState.Tasks };
+        var tohKiller = new Player { TohRole = new TohRoleData(19, "Opportunist", true,
+            true, true) };
+        Check("TOH haunting: active IKiller hears ghost when enabled", true,
+            SpatialVoicePolicy.Calculate(tohTasks, tohKiller, new Player { IsDead = true },
+                new SpatialVoiceSettings(TohNeutralKillerHaunting: true)).Audible);
+        Check("TOH haunting: role name alone does not grant hearing", false,
+            SpatialVoicePolicy.Calculate(tohTasks, new Player { TohRole = tohKiller.TohRole with
+                { IsKiller = null } }, new Player { IsDead = true },
+                new SpatialVoiceSettings(TohNeutralKillerHaunting: true)).Audible);
         var nosJackalChannels = new List<NosRadioData>
         {
             new(0, -1, "impostor"),

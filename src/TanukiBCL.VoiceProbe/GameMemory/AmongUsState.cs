@@ -95,6 +95,8 @@ public sealed class Player
 
     public SnrRoleData? SnrRole { get; set; }
 
+    public TohRoleData? TohRole { get; set; }
+
     public bool HasVisibleAppearanceChanged()
     {
         if (CurrentOutfit is <= 0 or > 10) return false;

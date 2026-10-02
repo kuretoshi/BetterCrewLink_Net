@@ -1,0 +1,319 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Text.Json;
+
+namespace TanukiBCL.VoiceProbe.GameMemory;
+
+public sealed record TohRoleData(int RoleId, string? RoleName, bool? IsNeutralKiller,
+    bool? IsKiller, bool? OpportunistCanKill = null);
+
+internal sealed class TohLiveRoleReader
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private int pid = -1;
+    private string session = string.Empty;
+    private TohLayout? layout;
+    private Task<TohDiscovery>? discoveryTask;
+    private DateTimeOffset retryAt;
+    private bool needsCanKill;
+    private bool needsKiller;
+
+    public string Status { get; private set; } = "TOH4E役職未取得";
+
+    public void Reset()
+    {
+        pid = -1;
+        session = string.Empty;
+        layout = null;
+        discoveryTask = null;
+        retryAt = default;
+        needsCanKill = false;
+        needsKiller = false;
+        Status = "TOH4E役職未取得";
+    }
+
+    public IReadOnlyDictionary<int, TohRoleData> Update(int processId, string round,
+        Func<long, int, byte[]> read)
+    {
+        if (pid != processId)
+        {
+            Reset();
+            pid = processId;
+        }
+        if (session != round)
+        {
+            session = round;
+            retryAt = default;
+        }
+        if (discoveryTask is { IsCompleted: true })
+        {
+            try
+            {
+                var discovery = discoveryTask.GetAwaiter().GetResult();
+                discovery.Layout.Validate(processId);
+                layout = discovery.Layout;
+                retryAt = DateTimeOffset.UtcNow.AddSeconds(3);
+            }
+            catch (Exception error)
+            {
+                retryAt = DateTimeOffset.UtcNow.AddSeconds(30);
+                Status = $"TOH4E未取得: {error.Message}";
+            }
+            discoveryTask = null;
+        }
+        if ((layout is null || needsCanKill || needsKiller) && discoveryTask is null &&
+            DateTimeOffset.UtcNow >= retryAt)
+        {
+            discoveryTask = DiscoverAsync(processId);
+            retryAt = DateTimeOffset.UtcNow.AddSeconds(30);
+            Status = "TOH4Eの役職読み取り位置を確認中…";
+        }
+        if (layout is null) return new Dictionary<int, TohRoleData>();
+        try
+        {
+            var roles = ReadRoles(layout, read);
+            needsCanKill = layout.OpportunistCanKillSlot == 0 &&
+                roles.Values.Any(role => role.RoleName == "Opportunist");
+            needsKiller = layout.KillerLayout is null || roles.Values.Any(role => role.IsKiller is null);
+            Status = $"TOH4E役職を自動更新中（{roles.Count}人）／取得元: ローカルMODのPlayerState";
+            return roles;
+        }
+        catch
+        {
+            needsKiller = true;
+            Status = "TOH4E役職未取得（配列・役職の更新待ち）";
+            return new Dictionary<int, TohRoleData>();
+        }
+    }
+
+    private static async Task<TohDiscovery> DiscoverAsync(int processId)
+    {
+        var helper = SnrLiveRoleReader.FindHelper() ??
+            throw new FileNotFoundException("TOH4E役職読み取りツールが見つかりません");
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo(helper)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }
+        };
+        process.StartInfo.ArgumentList.Add(processId.ToString(CultureInfo.InvariantCulture));
+        process.StartInfo.ArgumentList.Add("--toh");
+        if (!process.Start()) throw new InvalidOperationException("TOH4E読み取りツールを起動できません");
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        try
+        {
+            var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+            await process.WaitForExitAsync(timeout.Token);
+            var response = JsonSerializer.Deserialize<TohDiscovery>(await outputTask, JsonOptions);
+            var error = await errorTask;
+            if (process.ExitCode != 0 || response?.Status != "ok" || response.Pid != processId ||
+                response.Layout is null)
+                throw new InvalidOperationException(response?.Message ?? error.Trim());
+            return response;
+        }
+        catch (OperationCanceledException)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            throw new TimeoutException("TOH4E読み取りツールが時間内に応答しませんでした");
+        }
+    }
+
+    internal static IReadOnlyDictionary<int, TohRoleData> ReadRoles(TohLayout layout,
+        Func<long, int, byte[]> read)
+    {
+        var first = ReadSnapshot(layout, read);
+        var second = ReadSnapshot(layout, read);
+        if (first.Count != second.Count || first.Any(pair =>
+            !second.TryGetValue(pair.Key, out var role) || role != pair.Value))
+            throw new InvalidDataException("TOH4E roles changed during read");
+        return second;
+    }
+
+    private static Dictionary<int, TohRoleData> ReadSnapshot(TohLayout layout,
+        Func<long, int, byte[]> read)
+    {
+        uint U32(long address) => BitConverter.ToUInt32(read(address, 4));
+        var killers = new Dictionary<int, (uint State, bool? IsKiller)>();
+        DictionaryImage? killerImage = null;
+        if (layout.KillerLayout is { } killerLayout)
+        {
+            killerImage = ReadDictionary(killerLayout, read);
+            foreach (var entry in Enumerate(killerImage, killerLayout))
+            {
+                var role = entry.Value;
+                if (!TohLayout.ValidPointer(role) || killers.ContainsKey(entry.Id))
+                    throw new InvalidDataException("Invalid TOH4E active role");
+                var type = killerLayout.Types.GetValueOrDefault(U32(role).ToString(CultureInfo.InvariantCulture));
+                killers.Add(entry.Id, (type is null ? 0 : U32(role + type.StateOffset), type?.IsKiller));
+            }
+        }
+
+        var image = ReadDictionary(layout, read);
+        bool? canKill = null;
+        if (layout.OpportunistCanKillSlot != 0)
+        {
+            var value = read(layout.OpportunistCanKillSlot, 1)[0];
+            if (value > 1) throw new InvalidDataException("Invalid TOH4E CanKill");
+            canKill = value == 1;
+        }
+        var result = new Dictionary<int, TohRoleData>();
+        foreach (var entry in Enumerate(image, layout))
+        {
+            var player = entry.Value;
+            if (!TohLayout.ValidPointer(player) || U32(player) != layout.PlayerType ||
+                read(player + layout.IdOffset, 1)[0] != entry.Id || result.ContainsKey(entry.Id))
+                throw new InvalidDataException("TOH4E player identity changed");
+            var roleId = BitConverter.ToInt32(read(player + layout.RoleOffset, 4));
+            layout.Names.TryGetValue(roleId.ToString(CultureInfo.InvariantCulture), out var name);
+            var neutralKiller = NeutralKiller(name, canKill);
+            var killer = name is not null and not "NotAssigned" &&
+                killers.TryGetValue(entry.Id, out var activeRole) && activeRole.State == player
+                ? activeRole.IsKiller : null;
+            result.Add(entry.Id, new TohRoleData(roleId, name, neutralKiller, killer,
+                name == "Opportunist" ? canKill : null));
+        }
+        ValidateDictionary(image, layout, read);
+        if (killerImage is not null) ValidateDictionary(killerImage, layout.KillerLayout!, read);
+        return result;
+    }
+
+    internal static bool? NeutralKiller(string? name, bool? opportunistCanKill)
+    {
+        if (string.IsNullOrEmpty(name) || name == "NotAssigned") return null;
+        if (name == "Opportunist") return opportunistCanKill;
+        return name is "Egoist" or "Jackal" or "Gizoku" or "Oniichan" or "DarkHide";
+    }
+
+    private static DictionaryImage ReadDictionary(TohDictionaryLayout layout,
+        Func<long, int, byte[]> read)
+    {
+        uint U32(long address) => BitConverter.ToUInt32(read(address, 4));
+        var dictionary = U32(layout.DictionarySlot);
+        if (!TohLayout.ValidPointer(dictionary) || U32(dictionary) != layout.DictionaryType)
+            throw new InvalidDataException("TOH4E dictionary unavailable");
+        var version = U32(dictionary + layout.VersionOffset);
+        var entries = U32(dictionary + layout.EntriesOffset);
+        var count = U32(dictionary + layout.CountOffset);
+        if (!TohLayout.ValidPointer(entries) || U32(entries) != layout.EntriesType ||
+            count > 256 || count > U32(entries + 4))
+            throw new InvalidDataException("Invalid TOH4E entries");
+        var bytes = count == 0 ? [] : read(entries + layout.DataOffset, checked((int)count * layout.Stride));
+        return new DictionaryImage(dictionary, version, entries, count, bytes);
+    }
+
+    private static IEnumerable<(int Id, uint Value)> Enumerate(DictionaryImage image,
+        TohDictionaryLayout layout)
+    {
+        for (var i = 0; i < image.Count; i++)
+        {
+            var start = checked((int)i * layout.Stride);
+            if (BitConverter.ToInt32(image.Bytes, start + layout.NextOffset) < -1) continue;
+            yield return (image.Bytes[start + layout.KeyOffset],
+                BitConverter.ToUInt32(image.Bytes, start + layout.ValueOffset));
+        }
+    }
+
+    private static void ValidateDictionary(DictionaryImage image, TohDictionaryLayout layout,
+        Func<long, int, byte[]> read)
+    {
+        uint U32(long address) => BitConverter.ToUInt32(read(address, 4));
+        if (U32(layout.DictionarySlot) != image.Dictionary ||
+            U32(image.Dictionary) != layout.DictionaryType ||
+            U32(image.Dictionary + layout.VersionOffset) != image.Version ||
+            U32(image.Dictionary + layout.EntriesOffset) != image.Entries ||
+            U32(image.Dictionary + layout.CountOffset) != image.Count ||
+            U32(image.Entries) != layout.EntriesType ||
+            (image.Bytes.Length > 0 && !read(image.Entries + layout.DataOffset, image.Bytes.Length)
+                .AsSpan().SequenceEqual(image.Bytes)))
+            throw new InvalidDataException("TOH4E dictionary changed");
+    }
+
+    private sealed record DictionaryImage(uint Dictionary, uint Version, uint Entries,
+        uint Count, byte[] Bytes);
+
+    private sealed class TohDiscovery
+    {
+        public string Status { get; set; } = string.Empty;
+        public int Pid { get; set; }
+        public string? Message { get; set; }
+        public TohLayout Layout { get; set; } = new();
+    }
+}
+
+internal class TohDictionaryLayout
+{
+    public uint DictionarySlot { get; set; }
+    public uint DictionaryType { get; set; }
+    public uint EntriesType { get; set; }
+    public int EntriesOffset { get; set; }
+    public int CountOffset { get; set; }
+    public int VersionOffset { get; set; }
+    public int DataOffset { get; set; }
+    public int Stride { get; set; }
+    public int NextOffset { get; set; }
+    public int KeyOffset { get; set; }
+    public int ValueOffset { get; set; }
+
+    protected void ValidateDictionary()
+    {
+        if (!TohLayout.ValidPointer(DictionarySlot) || !TohLayout.ValidPointer(DictionaryType) ||
+            !TohLayout.ValidPointer(EntriesType) || EntriesOffset is < 4 or > 1024 ||
+            CountOffset is < 4 or > 1024 || VersionOffset is < 4 or > 1024 ||
+            DataOffset != 8 || Stride is < 12 or > 64 ||
+            new[] { NextOffset, KeyOffset, ValueOffset }.Any(offset => offset < 0 || offset + 4 > Stride))
+            throw new InvalidDataException("Invalid TOH4E dictionary layout");
+    }
+}
+
+internal sealed class TohLayout : TohDictionaryLayout
+{
+    public int Pid { get; set; }
+    public int PointerSize { get; set; }
+    public uint PlayerType { get; set; }
+    public int IdOffset { get; set; }
+    public int RoleOffset { get; set; }
+    public uint OpportunistCanKillSlot { get; set; }
+    public Dictionary<string, string> Names { get; set; } = [];
+    public TohKillerLayout? KillerLayout { get; set; }
+
+    public static bool ValidPointer(uint pointer) =>
+        pointer is >= 0x10000 and <= 0xfffffffc && pointer % 4 == 0;
+
+    public void Validate(int expectedPid)
+    {
+        ValidateDictionary();
+        if (Pid != expectedPid || PointerSize != 4 || !ValidPointer(PlayerType) ||
+            IdOffset is < 4 or > 1024 || RoleOffset is < 4 or > 1024 ||
+            OpportunistCanKillSlot is not 0 and < 0x10000)
+            throw new InvalidDataException("Invalid TOH4E live layout");
+        KillerLayout?.Validate();
+    }
+}
+
+internal sealed class TohKillerLayout : TohDictionaryLayout
+{
+    public Dictionary<string, TohKillerType> Types { get; set; } = [];
+
+    public void Validate()
+    {
+        ValidateDictionary();
+        foreach (var (key, type) in Types)
+        {
+            if (!uint.TryParse(key, out var pointer) || !TohLayout.ValidPointer(pointer) ||
+                type.StateOffset is < 4 or > 1024)
+                throw new InvalidDataException("Invalid TOH4E killer layout");
+        }
+    }
+}
+
+internal sealed class TohKillerType
+{
+    public bool IsKiller { get; set; }
+    public int StateOffset { get; set; }
+}

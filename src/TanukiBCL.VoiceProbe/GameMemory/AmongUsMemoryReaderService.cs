@@ -36,6 +36,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     private int nosRound;
     private readonly SnrLiveRoleReader snrReader = new();
     private int snrRound;
+    private readonly TohLiveRoleReader tohReader = new();
+    private int tohRound;
 
     public event EventHandler<AmongUsState>? StateChanged;
     public event EventHandler<string>? Error;
@@ -60,6 +62,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             nosRound = 0;
             snrReader.Reset();
             snrRound = 0;
+            tohReader.Reset();
+            tohRound = 0;
         }
 
         if (nextProcessInfo is null)
@@ -297,6 +301,20 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             snrReader.Reset();
         }
 
+        if (mod == AmongUsModType.TownOfHostForE &&
+            gameState is GameState.Lobby or GameState.Tasks or GameState.Discussion)
+        {
+            if (gameState is (GameState.Tasks or GameState.Discussion) &&
+                previousGameState is (GameState.Menu or GameState.Lobby or GameState.Unknown))
+                tohRound++;
+            var roles = tohReader.Update(currentProcess.ProcessId,
+                $"{lobbyCode}:{tohRound}", currentContext.ReadBytes);
+            foreach (var player in players)
+                player.TohRole = !player.Disconnected && roles.TryGetValue(player.Id, out var role)
+                    ? role : null;
+        }
+        else tohReader.Reset();
+
         ReportDiagnostic(string.Join(" | ",
             $"raw={rawGameState}",
             $"state={gameState}",
@@ -309,6 +327,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             $"host={hostId}",
             mod == AmongUsModType.NebulaOnTheShip ? $"nos={nosReader.Status}" : string.Empty,
             mod == AmongUsModType.SuperNewRoles ? $"snr={snrReader.Status}" : string.Empty,
+            mod == AmongUsModType.TownOfHostForE ? $"toh={tohReader.Status}" : string.Empty,
             $"inner=0x{innerNetClient:X}",
             $"all=0x{allPlayers:X}"));
 

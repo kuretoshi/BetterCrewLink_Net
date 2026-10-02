@@ -53,6 +53,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private string nosRadioSession = string.Empty;
     private string lastNosRadioSignature = string.Empty;
     private DateTimeOffset lastNosRadioSentAt;
+    private bool tohLobbyEnabled;
+    private string tohLobbyCode = string.Empty;
+    private TohRoleData? tohRoleOverride;
+    private DateTimeOffset tohRoleReceivedAt;
+    private DateTimeOffset lastTohLobbySentAt;
+    private DateTimeOffset lastTohRosterSentAt;
+    private readonly Dictionary<int, string> tohGameStartNames = [];
+    private readonly Dictionary<int, string> tohLobbyNames = [];
+    private readonly ConcurrentDictionary<string, (string Signature, DateTimeOffset SentAt)> tohRoleSent = new();
 
     public VoiceServerProbe(ProbeOptions options, string label = "probe")
     {
@@ -217,8 +226,59 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public void ApplyGameState(AmongUsState state)
     {
+        if (state.LobbyCode != tohLobbyCode || state.GameState == GameState.Menu)
+        {
+            tohLobbyCode = state.LobbyCode;
+            tohLobbyEnabled = false;
+            tohRoleOverride = null;
+            tohRoleReceivedAt = default;
+            lastTohLobbySentAt = default;
+            lastTohRosterSentAt = default;
+            tohGameStartNames.Clear();
+            tohLobbyNames.Clear();
+            tohRoleSent.Clear();
+        }
+        if (state.GameState == GameState.Lobby)
+        {
+            tohGameStartNames.Clear();
+            tohLobbyNames.Clear();
+            if (state.IsHost && state.Mod == AmongUsModType.TownOfHostForE)
+            {
+                foreach (var player in state.Players.Where(player => !player.Disconnected &&
+                    player.ClientId >= 0 && player.Name.Length <= 100))
+                    tohLobbyNames[player.ClientId] = player.Name;
+            }
+        }
+        if (state.IsHost && state.Mod == AmongUsModType.TownOfHostForE &&
+            state.GameState is GameState.Tasks or GameState.Discussion &&
+            tohGameStartNames.Count == 0)
+        {
+            if (tohLobbyNames.Count > 0)
+                foreach (var (id, name) in tohLobbyNames) tohGameStartNames[id] = name;
+            else
+                foreach (var player in state.Players.Where(player => !player.Disconnected &&
+                    player.ClientId >= 0 && player.Name.Length <= 100))
+                    tohGameStartNames[player.ClientId] = player.Name;
+        }
+        if (!state.IsHost && tohLobbyEnabled)
+        {
+            state.Mod = AmongUsModType.TownOfHostForE;
+            if (state.GameState is GameState.Tasks or GameState.Discussion)
+            {
+                foreach (var player in state.Players)
+                {
+                    if (!tohGameStartNames.TryGetValue(player.ClientId, out var name)) continue;
+                    player.Name = name;
+                    player.AppearanceName = name;
+                }
+                var local = state.Players.SingleOrDefault(player => player.IsLocal);
+                if (local is not null && DateTimeOffset.UtcNow - tohRoleReceivedAt < TimeSpan.FromSeconds(5))
+                    local.TohRole = tohRoleOverride;
+            }
+        }
         currentGameState = state;
         SyncNosRadioReports(state);
+        SyncTohReports(state);
         if (state.HostId > 0)
         {
             hostClientId = state.HostId;
@@ -718,6 +778,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 return;
             }
 
+            if (type.ValueKind == JsonValueKind.String &&
+                type.GetString() is "toh4e-lobby" or "toh4e-roster" or "toh4e-role")
+            {
+                ApplyTohReport(clientId, data);
+                return;
+            }
+
             if (data.TryGetProperty("impostorRadio", out var radio) &&
                 radio.ValueKind is JsonValueKind.True or JsonValueKind.False)
             {
@@ -741,6 +808,112 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             // Other peer messages are not necessarily lobby settings.
         }
+    }
+
+    private void SyncTohReports(AmongUsState state)
+    {
+        if (!state.IsHost || state.GameState is GameState.Menu or GameState.Unknown ||
+            state.LobbyCode is "" or "MENU") return;
+        var now = DateTimeOffset.UtcNow;
+        if (now - lastTohLobbySentAt >= TimeSpan.FromSeconds(1))
+        {
+            var lobby = JsonSerializer.Serialize(new
+            {
+                type = "toh4e-lobby", lobbyCode = state.LobbyCode,
+                enabled = state.Mod == AmongUsModType.TownOfHostForE
+            });
+            foreach (var socketId in peerClientIds.Keys)
+                peerManager.TrySendPeerData(socketId, lobby);
+            lastTohLobbySentAt = now;
+        }
+        if (state.Mod != AmongUsModType.TownOfHostForE ||
+            state.GameState is not (GameState.Tasks or GameState.Discussion)) return;
+
+        if (tohGameStartNames.Count > 0 &&
+            now - lastTohRosterSentAt >= TimeSpan.FromSeconds(1))
+        {
+            var roster = JsonSerializer.Serialize(new
+            {
+                type = "toh4e-roster", lobbyCode = state.LobbyCode,
+                players = tohGameStartNames.Select(pair => new
+                {
+                    clientId = pair.Key, name = pair.Value
+                }).ToArray()
+            });
+            foreach (var socketId in peerClientIds.Keys)
+                peerManager.TrySendPeerData(socketId, roster);
+            lastTohRosterSentAt = now;
+        }
+
+        foreach (var (socketId, clientId) in peerClientIds)
+        {
+            var player = state.Players.SingleOrDefault(candidate =>
+                candidate.ClientId == clientId && !candidate.IsLocal && !candidate.Disconnected);
+            if (player is null) continue;
+            var role = player.TohRole;
+            var signature = $"{state.LobbyCode}|{player.Id}|{JsonSerializer.Serialize(role)}";
+            if (tohRoleSent.TryGetValue(socketId, out var sent) && sent.Signature == signature &&
+                now - sent.SentAt < TimeSpan.FromSeconds(1)) continue;
+            var payload = TohRoleWire.Serialize(state.LobbyCode, player);
+            if (peerManager.TrySendPeerData(socketId, payload))
+                tohRoleSent[socketId] = (signature, now);
+        }
+    }
+
+    private void ApplyTohReport(int clientId, JsonElement data)
+    {
+        var state = currentGameState;
+        if (state is null || state.IsHost || clientId != hostClientId ||
+            state.GameState is GameState.Menu or GameState.Unknown ||
+            !data.TryGetProperty("lobbyCode", out var code) ||
+            code.ValueKind != JsonValueKind.String || code.GetString() != state.LobbyCode ||
+            !data.TryGetProperty("type", out var type)) return;
+        if (type.GetString() == "toh4e-lobby")
+        {
+            if (!data.TryGetProperty("enabled", out var enabled) ||
+                enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return;
+            tohLobbyEnabled = enabled.GetBoolean();
+            if (!tohLobbyEnabled)
+            {
+                tohRoleOverride = null;
+                tohRoleReceivedAt = default;
+                tohGameStartNames.Clear();
+            }
+            return;
+        }
+        if (type.GetString() == "toh4e-roster")
+        {
+            if (!data.TryGetProperty("players", out var players) ||
+                players.ValueKind != JsonValueKind.Array || players.GetArrayLength() > 20) return;
+            var names = new Dictionary<int, string>();
+            foreach (var item in players.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object ||
+                    !item.TryGetProperty("clientId", out var id) || !id.TryGetInt32(out var parsedId) ||
+                    !item.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String ||
+                    name.GetString() is not { Length: <= 100 } parsedName) return;
+                names[parsedId] = parsedName;
+            }
+            tohGameStartNames.Clear();
+            foreach (var (id, name) in names) tohGameStartNames[id] = name;
+            tohLobbyEnabled = true;
+            return;
+        }
+        if (type.GetString() != "toh4e-role" ||
+            state.GameState is not (GameState.Tasks or GameState.Discussion) ||
+            !data.TryGetProperty("targetClientId", out var targetClientId) ||
+            !targetClientId.TryGetInt32(out var targetClient) || targetClient != state.ClientId ||
+            !data.TryGetProperty("targetPlayerId", out var targetPlayerId) ||
+            !targetPlayerId.TryGetInt32(out var targetPlayer) ||
+            state.Players.SingleOrDefault(player => player.IsLocal)?.Id != targetPlayer ||
+            !TohRoleWire.TryRead(data, out var parsed)) return;
+        tohRoleOverride = parsed;
+        tohRoleReceivedAt = DateTimeOffset.UtcNow;
+        tohLobbyEnabled = true;
+        state.Mod = AmongUsModType.TownOfHostForE;
+        var local = state.Players.SingleOrDefault(player => player.IsLocal);
+        if (local is not null) local.TohRole = parsed;
+        RefreshPeerMixes();
     }
 
     private void SyncNosRadioReports(AmongUsState state)
@@ -894,7 +1067,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             JackalTalkInVents = next.JackalTalkInVents,
             SidekickHaunting = next.SidekickHaunting,
             SidekickHearOutsideVents = next.SidekickHearOutsideVents,
-            SidekickTalkInVents = next.SidekickTalkInVents
+            SidekickTalkInVents = next.SidekickTalkInVents,
+            TohNeutralKillerHaunting = next.TohNeutralKillerHaunting
         };
         if (options.AutoRadioTone && !impostorRadioTransmitting && CanUseImpostorRadio)
         {
