@@ -47,7 +47,13 @@ internal static class CosmeticImages
 
     private static async Task<BitmapSource> LoadAsync(Uri uri)
     {
-        var bytes = await Http.GetByteArrayAsync(uri).ConfigureAwait(false);
+        byte[] bytes;
+        if (uri.IsFile)
+        {
+            if (new FileInfo(uri.LocalPath).Length > 8 * 1024 * 1024) throw new InvalidDataException("Cosmetic image too large");
+            bytes = await File.ReadAllBytesAsync(uri.LocalPath).ConfigureAwait(false);
+        }
+        else bytes = await Http.GetByteArrayAsync(uri).ConfigureAwait(false);
         using var stream = new MemoryStream(bytes, writable: false);
         var image = new BitmapImage();
         image.BeginInit();

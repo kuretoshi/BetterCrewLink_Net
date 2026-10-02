@@ -99,7 +99,7 @@ public partial class VoiceView : UserControl
         var hideAppearance = game.GameState == GameState.Tasks;
         LocalName.Text = string.IsNullOrWhiteSpace(local.AppearanceName) ? local.Name : local.AppearanceName;
         LobbyCode.Text = hideCode ? "LOBBY" : game.LobbyCode;
-        LocalAvatar.SetPlayer(local, game.PlayerColors, hideAppearance, game.Mod);
+        LocalAvatar.SetPlayer(local, game.PlayerColors, hideAppearance, game.Mod, game.GameExecutablePath);
         LocalAvatar.SetVisualState(localTalking && (local.ShiftedColor < 0 || game.GameState == GameState.Discussion), muted, deafened,
             connected ? "connected" : "disconnected", localUsingRadio, serverQuality);
         MuteIcon.Data = muted || deafened ? MicOff : Mic;
@@ -134,7 +134,7 @@ public partial class VoiceView : UserControl
 
             avatar.Width = avatarSize;
             avatar.Height = avatarSize;
-            avatar.SetPlayer(player, game.PlayerColors, hideAppearance, game.Mod);
+            avatar.SetPlayer(player, game.PlayerColors, hideAppearance, game.Mod, game.GameExecutablePath);
             var status = peers.TryGetValue(player.ClientId, out var snapshot)
                 ? snapshot
                 : VoicePlayerStatus.Disconnected;

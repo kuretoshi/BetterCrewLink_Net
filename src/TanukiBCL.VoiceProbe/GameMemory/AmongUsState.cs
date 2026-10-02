@@ -153,6 +153,9 @@ public sealed record NosRadioData(int Kind, int HearableMask, string Name);
 
 public sealed class AmongUsState
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string GameExecutablePath { get; set; } = string.Empty;
+
     public AmongUsModType Mod { get; set; } = AmongUsModType.None;
 
     public GameState GameState { get; set; } = GameState.Unknown;

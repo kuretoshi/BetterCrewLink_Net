@@ -32,7 +32,7 @@ public partial class PlayerAvatar : UserControl
     public void SetOverlayMode() => QualityBadge.Visibility = Visibility.Collapsed;
 
     public void SetPlayer(Player player, IReadOnlyList<PlayerColorPair>? colors,
-        bool hideWhenAppearanceChanged = false, AmongUsModType mod = AmongUsModType.None)
+        bool hideWhenAppearanceChanged = false, AmongUsModType mod = AmongUsModType.None, string gameExecutable = "")
     {
         hideAvatar = hideWhenAppearanceChanged && player.HasVisibleAppearanceChanged();
         AvatarBody.Visibility = hideAvatar ? Visibility.Hidden : Visibility.Visible;
@@ -47,7 +47,7 @@ public partial class PlayerAvatar : UserControl
             AvatarBody.Source = image;
             currentImage = image;
         }
-        UpdateCosmetics(player, colors, mod, colorId);
+        UpdateCosmetics(player, colors, mod, colorId, gameExecutable);
         LayoutCosmetics();
         var displayName = string.IsNullOrWhiteSpace(player.AppearanceName) ? player.Name : player.AppearanceName;
         if (displayName != currentName)

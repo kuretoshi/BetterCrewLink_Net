@@ -39,6 +39,7 @@ public partial class App : Application
                 {
                     CosmeticCatalog.Verify();
                     SnrCosmeticCatalog.Verify();
+                    SnrLocalCosmetics.Verify();
                     PlayerAvatar.VerifyCosmeticLayers();
                 }
                 if (e.Args.Contains("--cosmetics-self-test") && e.Args.Contains("--download-cosmetics-catalog"))

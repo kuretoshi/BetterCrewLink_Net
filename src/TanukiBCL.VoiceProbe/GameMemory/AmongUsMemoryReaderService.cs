@@ -350,6 +350,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
 
         return new AmongUsState
         {
+            GameExecutablePath = currentProcess.ProcessPath,
             Mod = mod,
             GameState = gameState,
             OldGameState = previousGameState,
