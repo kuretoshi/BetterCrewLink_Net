@@ -276,6 +276,7 @@ public partial class SettingsWindow : Window
     {
         MaxDistance = DistanceSlider.Value,
         WallsBlockAudio = WallsBlockAudioCheck.IsChecked == true,
+        VisionHearing = VisionHearingCheck.IsChecked == true,
         Haunting = HauntingCheck.IsChecked == true,
         HearImpostorsInVents = HearVentsCheck.IsChecked == true,
         ImpostersHearImpostersInvent = ImpostorVentCheck.IsChecked == true,
@@ -296,6 +297,7 @@ public partial class SettingsWindow : Window
         loadingLobbyControls = true;
         DistanceSlider.Value = value.MaxDistance;
         WallsBlockAudioCheck.IsChecked = value.WallsBlockAudio;
+        VisionHearingCheck.IsChecked = value.VisionHearing;
         HauntingCheck.IsChecked = value.Haunting;
         HearVentsCheck.IsChecked = value.HearImpostorsInVents;
         ImpostorVentCheck.IsChecked = value.ImpostersHearImpostersInvent;
@@ -314,6 +316,7 @@ public partial class SettingsWindow : Window
         var regularSettingsEnabled = !value.ImpostorRadioOnlyMode;
         DistanceSlider.IsEnabled = regularSettingsEnabled;
         WallsBlockAudioCheck.IsEnabled = regularSettingsEnabled;
+        VisionHearingCheck.IsEnabled = regularSettingsEnabled;
         HearVentsCheck.IsEnabled = regularSettingsEnabled;
         ImpostorVentCheck.IsEnabled = regularSettingsEnabled;
         ImpostorRadioCheck.IsEnabled = regularSettingsEnabled;
@@ -341,6 +344,13 @@ public partial class SettingsWindow : Window
             radioOnlyBackup = null;
         }
         LoadLobbyControls(lobbyDraft);
+    }
+
+    private void VisionHearingCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (DistanceTitleText is null) return;
+        DistanceTitleText.Text = VisionHearingCheck.IsChecked == true
+            ? "インポスターに届く音声距離" : "音声が届く距離";
     }
 
     private void DeadOnlyCheck_Checked(object sender, RoutedEventArgs e)

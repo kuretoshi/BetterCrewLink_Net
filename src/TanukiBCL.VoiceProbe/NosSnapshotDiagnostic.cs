@@ -38,7 +38,8 @@ internal static class NosSnapshotDiagnostic
             var state = await completion.Task.WaitAsync(timeout.Token);
             Console.WriteLine($"[PASS] NoS snapshot PID={processId} state={state.GameState} " +
                 $"lobby={state.LobbyCode} mic=({state.NosLocalMicPosition!.X:0.000}," +
-                $"{state.NosLocalMicPosition.Y:0.000}) players={state.Players.Count} radios={state.NosRadios.Count}");
+                $"{state.NosLocalMicPosition.Y:0.000}) light={state.LightRadius:0.000} " +
+                $"players={state.Players.Count} radios={state.NosRadios.Count}");
             foreach (var player in state.Players.Where(player => player.NosPlayer is not null))
             {
                 var nos = player.NosPlayer!;

@@ -19,7 +19,8 @@ internal sealed record SpatialVoiceSettings(
     bool MeetingGhostOnly = false,
     bool NosVoicePositions = false,
     bool NosFixerJammingVoiceBlock = true,
-    bool JackalRadioEnabled = false);
+    bool JackalRadioEnabled = false,
+    bool VisionHearing = false);
 
 internal sealed record PeerVoiceMix(
     double Gain,
@@ -52,10 +53,11 @@ internal static class SpatialVoicePolicy
         var meY = useNosPositions ? state.NosLocalMicPosition?.Y ?? me.Y : me.Y;
         var otherX = useNosPositions ? other.NosPlayer?.SpeakerPositionX ?? other.X : other.X;
         var otherY = useNosPositions ? other.NosPlayer?.SpeakerPositionY ?? other.Y : other.Y;
+        var maxDistance = ResolveMaxDistance(state, me, settings);
         var deltaX = otherX - meX;
         var deltaY = otherY - meY;
         var distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
-        var pan = CalculatePan(deltaX, settings);
+        var pan = CalculatePan(deltaX, settings.SpatialAudio, maxDistance);
 
         if (other.Disconnected || other.IsDummy)
         {
@@ -144,18 +146,18 @@ internal static class SpatialVoicePolicy
         // selected camera instead. Camera reception uses that camera's position
         // for both attenuation and panning.
         var cameraMuffle = false;
-        if (distance > settings.MaxDistance && settings.HearThroughCameras &&
+        if (distance > maxDistance && settings.HearThroughCameras &&
             state.CurrentCamera != CameraLocation.None &&
             CameraGeometry.TryRelativePosition(state.Map, state.CurrentCamera,
                 new Player { X = otherX, Y = otherY },
                 out var cameraDeltaX, out var cameraDeltaY))
         {
             var cameraDistance = Math.Sqrt(cameraDeltaX * cameraDeltaX + cameraDeltaY * cameraDeltaY);
-            if (cameraDistance <= settings.MaxDistance)
+            if (cameraDistance <= maxDistance)
             {
                 deltaX = cameraDeltaX;
                 distance = cameraDistance;
-                pan = CalculatePan(deltaX, settings);
+                pan = CalculatePan(deltaX, settings.SpatialAudio, maxDistance);
                 cameraMuffle = true;
             }
         }
@@ -168,7 +170,7 @@ internal static class SpatialVoicePolicy
             baseGain = cameraMuffle ? 0.8d : 0.5d;
         }
 
-        var distanceGain = LinearDistanceGain(distance, settings.MaxDistance);
+        var distanceGain = LinearDistanceGain(distance, maxDistance);
         if (distanceGain <= 0)
         {
             return Muted(pan, distance, "out-of-range");
@@ -208,9 +210,17 @@ internal static class SpatialVoicePolicy
         return Math.Clamp(1d - (distance - ReferenceDistance) / (maxDistance - ReferenceDistance), 0d, 1d);
     }
 
-    private static double CalculatePan(double deltaX, SpatialVoiceSettings settings) =>
-        settings.SpatialAudio && settings.MaxDistance > 0
-            ? Math.Clamp(deltaX / settings.MaxDistance, -1d, 1d)
+    private static double ResolveMaxDistance(AmongUsState state, Player me, SpatialVoiceSettings settings)
+    {
+        var maxDistance = settings.VisionHearing && !me.IsImpostor
+            ? state.LightRadius + 0.5d : settings.MaxDistance;
+        if (!double.IsFinite(maxDistance) || maxDistance <= 0.6d) return 1d;
+        return maxDistance;
+    }
+
+    private static double CalculatePan(double deltaX, bool spatialAudio, double maxDistance) =>
+        spatialAudio && maxDistance > 0d
+            ? Math.Clamp(deltaX / maxDistance, -1d, 1d)
             : 0d;
 
     private static bool CanHearImpostorRadio(Player me, Player other, SpatialVoiceSettings settings) =>

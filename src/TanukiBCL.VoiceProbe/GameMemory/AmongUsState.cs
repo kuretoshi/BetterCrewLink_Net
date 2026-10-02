@@ -89,6 +89,8 @@ public sealed class Player
 
     public bool InVent { get; set; }
 
+    public double LightRadius { get; set; } = 1d;
+
     public NosPlayerData? NosPlayer { get; set; }
 
     public bool HasVisibleAppearanceChanged()
@@ -167,6 +169,8 @@ public sealed class AmongUsState
     public string CurrentServer { get; set; } = string.Empty;
 
     public int MaxPlayers { get; set; } = 15;
+
+    public double LightRadius { get; set; } = 1d;
 
     public MapType Map { get; set; } = MapType.Unknown;
 

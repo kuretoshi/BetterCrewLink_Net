@@ -172,6 +172,26 @@ internal static class SpatialVoicePolicySelfTest
         var radioOnlyPolicy = new SpatialVoiceSettings(ImpostorRadioEnabled: true,
             ImpostorRadioOnlyMode: true, MeetingGhostOnly: true);
         var tasks = new AmongUsState { GameState = GameState.Tasks };
+        var visionTasks = new AmongUsState { GameState = GameState.Tasks, LightRadius = 2d };
+        var visionPolicy = new SpatialVoiceSettings(MaxDistance: 5.32d, VisionHearing: true);
+        Check("vision hearing: crew range follows light radius + 0.5", false,
+            SpatialVoicePolicy.Calculate(visionTasks, new Player(), new Player { X = 3d },
+                visionPolicy).Audible);
+        Check("vision hearing: impostor keeps configured range", true,
+            SpatialVoicePolicy.Calculate(visionTasks, new Player { IsImpostor = true },
+                new Player { X = 3d }, visionPolicy).Audible);
+        Check("vision hearing: disabling restores configured range", true,
+            SpatialVoicePolicy.Calculate(visionTasks, new Player(), new Player { X = 3d },
+                visionPolicy with { VisionHearing = false }).Audible);
+        Check("vision hearing: pan uses effective range", true,
+            Math.Abs(SpatialVoicePolicy.Calculate(visionTasks, new Player(),
+                new Player { X = 1d }, visionPolicy).Pan - 0.4d) < 0.001d);
+        Check("vision hearing: invalid short range follows 3.2.7 floor", false,
+            SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks, LightRadius = 0d },
+                new Player(), new Player { X = 1.2d }, visionPolicy).Audible);
+        Check("vision hearing: lobby remains unrestricted", true,
+            SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Lobby, LightRadius = 0d },
+                new Player(), new Player { X = 3d }, visionPolicy).Audible);
         Check("radio-only: proximity silenced", false,
             SpatialVoicePolicy.Calculate(tasks, new Player { IsImpostor = true },
                 new Player { IsImpostor = true }, radioOnlyPolicy).Audible);

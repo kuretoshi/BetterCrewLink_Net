@@ -309,6 +309,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             IsHost = hostId != 0 && hostId == clientId,
             CurrentServer = currentServer,
             MaxPlayers = maxPlayers,
+            LightRadius = localPlayer?.LightRadius ?? 1d,
             Map = map,
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosRadios = nos?.Radios ?? [],
@@ -424,6 +425,19 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         var currentOutfit = context.ReadUInt32(data.ObjectPtr, context.Offsets.PlayerCurrentOutfit);
         var isDummy = context.ReadByte(data.ObjectPtr, context.Offsets.PlayerIsDummy) > 0;
         var inVent = context.ReadByte(data.ObjectPtr, context.Offsets.PlayerInVent) > 0;
+        var lightRadius = 1d;
+        if (isLocal && context.Offsets.LightRadius.Length > 0)
+        {
+            try
+            {
+                var measured = context.ReadFloat(data.ObjectPtr, context.Offsets.LightRadius);
+                if (float.IsFinite(measured)) lightRadius = measured;
+            }
+            catch (InvalidOperationException)
+            {
+                // A transient player object should not make the whole roster unreadable.
+            }
+        }
 
         var name = string.Empty;
         var color = unchecked((int)data.Color);
@@ -519,7 +533,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             IsDummy = isDummy,
             X = Math.Round(x, 4),
             Y = Math.Round(y, 4),
-            InVent = inVent
+            InVent = inVent,
+            LightRadius = lightRadius
         };
     }
 
@@ -711,6 +726,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             PalettePlayerColor = GetIntArray(root.GetProperty("palette_playercolor")),
             PaletteShadowColor = GetIntArray(root.GetProperty("palette_shadowColor")),
             ShipStatus = TryReplaceFirst(root, "shipStatus", shipStatus),
+            LightRadius = TryGetIntArray(root, "lightRadius"),
             ShipStatusSystems = TryGetIntArray(root, "shipStatus_systems"),
             ShipStatusAllDoors = TryGetIntArray(root, "shipstatus_allDoors"),
             DoorIsOpen = root.TryGetProperty("door_isOpen", out var doorIsOpen) ? doorIsOpen.GetInt32() : 0,
@@ -891,6 +907,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         public int[] PalettePlayerColor { get; init; } = [];
         public int[] PaletteShadowColor { get; init; } = [];
         public int[] ShipStatus { get; init; } = [];
+        public int[] LightRadius { get; init; } = [];
         public int[] ShipStatusSystems { get; init; } = [];
         public int[] ShipStatusAllDoors { get; init; } = [];
         public int DoorIsOpen { get; init; }

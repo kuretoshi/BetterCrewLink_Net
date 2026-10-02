@@ -69,13 +69,16 @@
                                   Checked="RadioOnlyCheck_Changed" Unchecked="RadioOnlyCheck_Changed" Margin="0,0,0,5" />
                         <TextBlock Text="有効時は通常の近距離会話を停止し、関連設定を3.2.7と同じ値に固定します。解除すると元の設定に戻ります。"
                                    TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,20" />
-                        <TextBlock Text="音声が届く距離" />
+                        <TextBlock x:Name="DistanceTitleText" Text="音声が届く距離" />
                         <DockPanel Margin="0,5,0,18">
                             <TextBlock x:Name="DistanceValue" DockPanel.Dock="Right" Width="45" TextAlignment="Right" />
                             <Slider x:Name="DistanceSlider" Minimum="1" Maximum="10" TickFrequency="0.1"
                                     IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" />
                         </DockPanel>
                         <CheckBox x:Name="WallsBlockAudioCheck" Content="壁越しで音声をブロック" Margin="0,0,0,14" />
+                        <CheckBox x:Name="VisionHearingCheck" Content="視界内のプレイヤーの声だけが聞こえる"
+                                  Checked="VisionHearingCheck_Changed" Unchecked="VisionHearingCheck_Changed"
+                                  Margin="0,0,0,14" />
                         <CheckBox x:Name="HauntingCheck" Content="インポスターは幽霊の声を聞ける" Margin="0,0,0,14" />
                         <CheckBox x:Name="HearVentsCheck" Content="ベント内のインポスターの声を聞ける" Margin="0,0,0,14" />
                         <CheckBox x:Name="ImpostorVentCheck" Content="ベント内のインポスター同士で会話できる" Margin="0,0,0,14" />

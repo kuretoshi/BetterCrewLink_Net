@@ -866,6 +866,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         spatialVoiceSettings = spatialVoiceSettings with
         {
             MaxDistance = next.MaxDistance,
+            VisionHearing = next.VisionHearing,
             HearImpostorsInVents = next.HearImpostorsInVents,
             ImpostorsHearImpostorsInVents = next.ImpostersHearImpostersInvent,
             ImpostorRadioEnabled = next.ImpostorRadioEnabled,
