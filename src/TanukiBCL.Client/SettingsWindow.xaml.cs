@@ -1,4 +1,6 @@
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -19,6 +21,7 @@ public partial class SettingsWindow : Window
     private LobbySettings? radioOnlyBackup;
     private bool loadingLobbyControls;
     private bool showingCurrentLobby;
+    private string? obsSecretDraft;
     private VoiceEffectPreviewSession? voiceEffectPreview;
     private AmongUsState? currentGameState;
     private readonly Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged;
@@ -70,6 +73,10 @@ public partial class SettingsWindow : Window
         DeafenShortcutBox.Text = settings.DeafenShortcut;
         ServerUrlBox.Text = settings.ServerUrl;
         NatFixCheck.IsChecked = settings.NatFix;
+        ShowLobbyCodeCheck.IsChecked = !settings.HideCode;
+        obsSecretDraft = settings.ObsSecret;
+        ObsOverlayCheck.IsChecked = settings.ObsOverlay;
+        UpdateObsUrl();
         LoadLobbyControls(lobbyDraft);
         if (currentLobbySettings is not null && preferCurrentLobby)
         {
@@ -224,6 +231,39 @@ public partial class SettingsWindow : Window
         KeybindsPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
         OverlayPanel.Visibility = CategoryList.SelectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
         AdvancedPanel.Visibility = CategoryList.SelectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
+        StreamingPanel.Visibility = CategoryList.SelectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
+        if (CategoryList.SelectedIndex == 7) UpdateObsUrl();
+    }
+
+    private void ObsOverlayCheck_Changed(object sender, RoutedEventArgs e) => UpdateObsUrl();
+
+    private void UpdateObsUrl()
+    {
+        if (ObsUrlPanel is null || ObsOverlayCheck is null || ObsUrlBox is null ||
+            ServerUrlBox is null || OverlayPositionCombo is null) return;
+        var enabled = ObsOverlayCheck.IsChecked == true;
+        ObsUrlPanel.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        if (!enabled) return;
+        if (!StreamingSettings.IsValidSecret(obsSecretDraft))
+            obsSecretDraft = StreamingSettings.CreateSecret();
+        ObsUrlBox.Text = StreamingSettings.BuildObsUrl(new ClientSettings
+        {
+            ServerUrl = ServerUrlBox.Text.Trim(),
+            CompactOverlay = CompactOverlayCheck.IsChecked == true,
+            MeetingOverlay = MeetingOverlayCheck.IsChecked == true,
+            OverlayPosition = (OverlayPositionCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "right",
+            ObsSecret = obsSecretDraft
+        });
+    }
+
+    private void CopyObsUrlButton_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateObsUrl();
+        try { Clipboard.SetText(ObsUrlBox.Text); }
+        catch (ExternalException exception)
+        {
+            MessageBox.Show(this, $"URLをコピーできませんでした: {exception.Message}", "配信設定");
+        }
     }
 
     private void ShortcutBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -494,6 +534,9 @@ public partial class SettingsWindow : Window
             CompactOverlay = CompactOverlayCheck.IsChecked == true,
             MeetingOverlay = MeetingOverlayCheck.IsChecked == true,
             OverlayPosition = (OverlayPositionCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "right",
+            HideCode = ShowLobbyCodeCheck.IsChecked != true,
+            ObsOverlay = ObsOverlayCheck.IsChecked == true,
+            ObsSecret = obsSecretDraft,
             MasterVolume = (int)MasterVolumeSlider.Value,
             VoiceEffectStrength = (int)VoiceEffectStrengthSlider.Value,
             CrewVolumeAsGhost = (int)CrewVolumeAsGhostSlider.Value,
@@ -533,6 +576,9 @@ public partial class SettingsWindow : Window
         settings.CompactOverlay = candidate.CompactOverlay;
         settings.MeetingOverlay = candidate.MeetingOverlay;
         settings.OverlayPosition = candidate.OverlayPosition;
+        settings.HideCode = candidate.HideCode;
+        settings.ObsOverlay = candidate.ObsOverlay;
+        settings.ObsSecret = candidate.ObsSecret;
         settings.MasterVolume = candidate.MasterVolume;
         settings.VoiceEffectStrength = candidate.VoiceEffectStrength;
         settings.CrewVolumeAsGhost = candidate.CrewVolumeAsGhost;
@@ -588,6 +634,22 @@ public partial class SettingsWindow : Window
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.SuperNewRoles });
             if (window.ReadLobbyControls().JackalRadioEnabled || window.SnrJackalRadioCheck.IsChecked != false)
                 throw new InvalidOperationException("Shared Jackal radio setting did not follow MOD switch");
+            window.CategoryList.SelectedIndex = 7;
+            window.ObsOverlayCheck.IsChecked = true;
+            if (window.StreamingPanel.Visibility != Visibility.Visible ||
+                !StreamingSettings.IsValidSecret(window.obsSecretDraft) ||
+                window.ObsUrlPanel.Visibility != Visibility.Visible ||
+                !window.ObsUrlBox.Text.Contains("version=3.2.7&compact=0&position=right&meeting=1&secret=") ||
+                !window.ObsUrlBox.Text.Contains("&server=https%3A%2F%2Fbettercrewl.ink"))
+                throw new InvalidOperationException("OBS streaming settings did not initialize");
+            var streamSettings = new ClientSettings
+            {
+                HideCode = true, ObsOverlay = true, ObsSecret = window.obsSecretDraft
+            };
+            var restored = JsonSerializer.Deserialize<ClientSettings>(JsonSerializer.Serialize(streamSettings));
+            if (restored is null || !restored.HideCode || !restored.ObsOverlay ||
+                restored.ObsSecret != window.obsSecretDraft)
+                throw new InvalidOperationException("Streaming settings did not persist");
         }
         finally { window.Close(); }
     }

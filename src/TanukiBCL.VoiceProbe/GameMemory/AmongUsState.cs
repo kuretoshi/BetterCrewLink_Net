@@ -63,6 +63,8 @@ public sealed class Player
 
     public string HatId { get; set; } = string.Empty;
 
+    public int PetId { get; set; }
+
     public string SkinId { get; set; } = string.Empty;
 
     public string NormalSkinId { get; set; } = string.Empty;
@@ -82,6 +84,8 @@ public sealed class Player
     public bool IsLocal { get; set; }
 
     public bool IsDummy { get; set; }
+
+    public bool Bugged { get; set; }
 
     public double X { get; set; }
 
@@ -179,6 +183,8 @@ public sealed class AmongUsState
     public MapType Map { get; set; } = MapType.Unknown;
 
     public bool AirshipMeetingByOutfit { get; set; }
+
+    public bool OldMeetingHud { get; set; }
 
     public CameraLocation CurrentCamera { get; set; } = CameraLocation.None;
 

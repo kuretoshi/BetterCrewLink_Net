@@ -95,7 +95,7 @@ public partial class MainWindow : Window
         probe?.SetMicrophoneActivationMode(settings.PushToTalkMode);
         hotkeys?.UpdateBindings(settings);
         probe?.SetOwnLobbySettings(settings.MyLobbySettings);
-        UpdateOverlayWindow();
+        UpdateCompactView();
     }
 
     private void SelectConfiguredDevices()
@@ -500,7 +500,7 @@ public partial class MainWindow : Window
                 : "disconnected",
             row.Talking, row.Radio == "送信中"));
         CompactVoiceView.Update(currentState, voiceServerConnected, localTalking && !microphoneMuted,
-            microphoneMuted, deafened, statuses, localUsingRadio: radioTransmitting,
+            microphoneMuted, deafened, statuses, hideCode: settings.HideCode, localUsingRadio: radioTransmitting,
             playerConfigs: settings.PlayerConfigMap, serverQuality: serverQuality);
         var mod = currentState?.Mod ?? AmongUsModType.None;
         CompactVoiceView.SetDetectedMod(mod == AmongUsModType.None ? null : AmongUsMod.For(mod).Label);
@@ -510,6 +510,13 @@ public partial class MainWindow : Window
             : active?.MeetingGhostOnly == true
                 ? "会議中は幽霊のみ会話できます"
                 : null);
+        if (settings.ObsOverlay && currentState is { } state && probe is { } activeProbe)
+        {
+            var obsPeers = peers.ToDictionary(row => row.ClientId, row => new ObsPeerState(
+                activeProbe.IsPeerPresent(row.ClientId), row.VadActive, row.Radio == "送信中"));
+            activeProbe.PublishObsOverlay(settings.ObsSecret, state, obsPeers,
+                localTalking && !microphoneMuted, radioTransmitting);
+        }
         UpdateOverlayWindow();
     }
 

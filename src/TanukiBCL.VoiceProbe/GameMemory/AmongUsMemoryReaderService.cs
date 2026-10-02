@@ -357,6 +357,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             LightRadius = localPlayer?.LightRadius ?? 1d,
             Map = map,
             AirshipMeetingByOutfit = airshipMeetingByOutfit,
+            OldMeetingHud = currentContext.Offsets.OldMeetingHud,
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosRadios = nos?.Radios ?? [],
             CommsSabotaged = taskEnvironment.CommsSabotaged,
@@ -567,6 +568,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             AppearanceVisorId = appearanceVisor,
             ShiftedColor = hasCurrentOutfit ? currentColor : -1,
             HatId = hatId,
+            PetId = unchecked((int)data.Pet),
             SkinId = skinId,
             NormalSkinId = normalSkinId,
             VisorId = visorId,
@@ -577,6 +579,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             IsDead = data.Dead == 1,
             IsLocal = isLocal,
             IsDummy = isDummy,
+            Bugged = !float.IsFinite(x) || !float.IsFinite(y) ||
+                data.Disconnected != 0 || color < 0 ||
+                color > Math.Max(context.PlayerColors.Count, 12),
             X = Math.Round(x, 4),
             Y = Math.Round(y, 4),
             InVent = inVent,
@@ -765,6 +770,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             InnerNetClientHostId = root.GetProperty("innerNetClient").GetProperty("hostId").GetInt32(),
             InnerNetClientClientId = root.GetProperty("innerNetClient").GetProperty("clientId").GetInt32(),
             MeetingHud = meetingHud.HasValue ? ReplaceFirst(GetIntArray(root.GetProperty("meetingHud")), meetingHud.Value) : [],
+            OldMeetingHud = root.TryGetProperty("oldMeetingHud", out var oldMeetingHud) && oldMeetingHud.GetBoolean(),
             ObjectCachePtr = GetIntArray(root.GetProperty("objectCachePtr")),
             MeetingHudState = GetIntArray(root.GetProperty("meetingHudState")),
             AllPlayersPtr = ReplaceFirst(GetIntArray(root.GetProperty("allPlayersPtr")), gameData),
@@ -946,6 +952,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         public int InnerNetClientHostId { get; init; }
         public int InnerNetClientClientId { get; init; }
         public int[] MeetingHud { get; init; } = [];
+        public bool OldMeetingHud { get; init; }
         public int[] ObjectCachePtr { get; init; } = [];
         public int[] MeetingHudState { get; init; } = [];
         public int[] AllPlayersPtr { get; init; } = [];
@@ -997,6 +1004,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     {
         public uint Id { get; set; }
         public uint Color { get; set; }
+        public uint Pet { get; set; }
         public uint Disconnected { get; set; }
         public byte Dead { get; set; }
         public long ObjectPtr { get; set; }
@@ -1107,7 +1115,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             var data = new PlayerData();
             foreach (var field in Offsets.PlayerStruct)
             {
-                if (field.Type == "SKIP" || field.Offset >= buffer.Length)
+                if (field.Type == "SKIP" || field.Offset + field.Size > buffer.Length)
                 {
                     continue;
                 }
@@ -1119,6 +1127,14 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                         break;
                     case "color":
                         data.Color = ReadUInt32FromBuffer(buffer, field.Offset);
+                        break;
+                    case "pet":
+                        data.Pet = field.Size switch
+                        {
+                            1 => buffer[field.Offset],
+                            2 => BitConverter.ToUInt16(buffer, field.Offset),
+                            _ => ReadUInt32FromBuffer(buffer, field.Offset)
+                        };
                         break;
                     case "disconnected":
                         data.Disconnected = ReadUInt32FromBuffer(buffer, field.Offset);

@@ -27,6 +27,51 @@ internal static class SpatialVoicePolicySelfTest
         Check("overlay: ghosts see other ghost participants", true,
             OverlaySelection.Select(overlayState, overlayPeers, false, false, true)
                 .Any(player => player.Player.ClientId == 3));
+        var obsState = new AmongUsState
+        {
+            Mod = AmongUsModType.NebulaOnTheShip,
+            GameState = GameState.Tasks,
+            OldMeetingHud = true,
+            PlayerColors = [new PlayerColorPair { Main = 0x00332211, Shadow = 0x00665544 }],
+            Players =
+            [
+                new Player { Id = 0, ClientId = 1, IsLocal = true, ColorId = 0 },
+                new Player { Id = 1, ClientId = 2, Name = "Ghost", IsDead = true, ColorId = 0,
+                    PetId = 42, Bugged = true,
+                    NosPlayer = new NosPlayerData { ColorR = 1, ColorG = 0.5, ColorB = 0 } }
+            ]
+        };
+        var obs = ObsOverlayWire.Build(obsState,
+            new Dictionary<int, ObsPeerState> { [2] = new(true, true, true) }, true, true);
+        Check("OBS: v3.2.7 state and NoS color", true,
+            obs.GetProperty("overlayState").GetProperty("gameState").GetInt32() == (int)GameState.Tasks &&
+            obs.GetProperty("mod").GetString() == "NoS" &&
+            obs.GetProperty("oldMeetingHud").GetBoolean() &&
+            !obs.GetProperty("overlayState").GetProperty("players")[1].TryGetProperty("realColor", out _) &&
+            obs.GetProperty("overlayState").GetProperty("players")[1]
+                .GetProperty("nosColor").GetString() == "#ff8000");
+        Check("OBS: peer activity, death and radio", true,
+            obs.GetProperty("otherTalking").GetProperty("2").GetBoolean() &&
+            obs.GetProperty("otherDead").GetProperty("2").GetBoolean() &&
+            obs.GetProperty("overlayState").GetProperty("players")[1]
+                .GetProperty("connected").GetBoolean() &&
+            obs.GetProperty("overlayState").GetProperty("players")[1]
+                .GetProperty("petId").GetInt32() == 42 &&
+            obs.GetProperty("overlayState").GetProperty("players")[1]
+                .GetProperty("bugged").GetBoolean() &&
+            obs.GetProperty("overlayState").GetProperty("players")[0]
+                .GetProperty("usingRadio").GetBoolean());
+        var vanillaObs = ObsOverlayWire.Build(new AmongUsState
+        {
+            GameState = GameState.Lobby,
+            Players = [new Player { ClientId = 1, ColorId = 0 }]
+        }, new Dictionary<int, ObsPeerState>(), false, false);
+        Check("OBS: vanilla player uses default palette", true,
+            vanillaObs.GetProperty("mod").GetString() == "NONE" &&
+            !vanillaObs.GetProperty("overlayState").GetProperty("players")[0]
+                .TryGetProperty("nosColor", out _) &&
+            vanillaObs.GetProperty("overlayState").GetProperty("players")[0]
+                .GetProperty("realColor")[0].GetString() == "#C51111");
         var snrReader = SnrLiveRoleReaderSelfTest.Verify();
         Check("SNR live reader: role and modifier names", true, snrReader.Role);
         Check("SNR live reader: Jumbo size", true, snrReader.Jumbo);

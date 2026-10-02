@@ -38,6 +38,7 @@
                     <ListBoxItem Content="キー割り当て" Padding="12,9" />
                     <ListBoxItem Content="オーバーレイ" Padding="12,9" />
                     <ListBoxItem Content="詳細設定" Padding="12,9" />
+                    <ListBoxItem Content="配信設定" Padding="12,9" />
                 </ListBox>
             </StackPanel>
         </Border>
@@ -257,6 +258,21 @@
                         <CheckBox x:Name="NatFixCheck" Content="NATの修正" Margin="0,0,0,6" />
                         <TextBlock Text="P2Pの代わりにTURNサーバーを経由します。接続の問題を解決できますが、遅延が増える場合があります。"
                                    TextWrapping="Wrap" Foreground="#A8A4B0" />
+                    </StackPanel>
+                    <StackPanel x:Name="StreamingPanel" Visibility="Collapsed">
+                        <TextBlock Text="配信設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
+                        <CheckBox x:Name="ShowLobbyCodeCheck" Content="ロビーコードの表示" Margin="0,0,0,18" />
+                        <CheckBox x:Name="ObsOverlayCheck" Content="OBS ブラウザーのオーバーレイ"
+                                  Checked="ObsOverlayCheck_Changed" Unchecked="ObsOverlayCheck_Changed"
+                                  Margin="0,0,0,18" />
+                        <StackPanel x:Name="ObsUrlPanel" Visibility="Collapsed">
+                            <TextBlock Text="OBSブラウザソースURL" Margin="0,0,0,7" />
+                            <TextBox x:Name="ObsUrlBox" IsReadOnly="True" Margin="0,0,0,10" />
+                            <Button Content="URLをコピー" Width="130" Height="34" HorizontalAlignment="Left"
+                                    Click="CopyObsUrlButton_Click" />
+                            <TextBlock Text="URLに配信接続用の識別子が含まれます。共有先に注意してください。"
+                                       Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,12,0,0" />
+                        </StackPanel>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
