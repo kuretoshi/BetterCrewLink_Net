@@ -426,6 +426,12 @@ internal static class SpatialVoicePolicySelfTest
             AirshipMeetingRules.IsMeetingByOutfit(GameState.Tasks, MapType.Airship,
                 [meetingOutfit, otherMeetingOutfit]));
         otherMeetingOutfit.AppearanceColorId = 1;
+        Check("Airship outfit fallback: invalid third player is ignored", true,
+            AirshipMeetingRules.IsMeetingByOutfit(GameState.Tasks, MapType.Airship,
+                [meetingOutfit, otherMeetingOutfit, new Player { Bugged = true, CurrentOutfit = 2 }]));
+        Check("Airship outfit fallback: invalid player cannot satisfy minimum", false,
+            AirshipMeetingRules.IsMeetingByOutfit(GameState.Tasks, MapType.Airship,
+                [meetingOutfit, new Player { Bugged = true, CurrentOutfit = 1, AppearanceColorId = 0 }]));
         var airshipOutfitMeeting = new AmongUsState
         {
             GameState = GameState.Tasks, Map = MapType.Airship, AirshipMeetingByOutfit = true

@@ -70,3 +70,11 @@ Releaseビルド警告/エラー0、コスメティック・NoS色・名前・�
 3.2.7 `Overlay.tsx` のlookLeft/overflow/showborder指定を接続。left/left1/bottom_leftは右向き、その他は左右反転し、反転対象は体・装備・発話枠・ラジオ（ミュート等の状態バッジは反転しない）。名前を表示しないサイドのcompact表示では装備も円形クリップする。名前あり・上下配置・メイン画面は従来どおり装備を円外に表示できる。サイドかつCompactOverlayがOFFの場合は原版の半透明待機枠を表示し、発話中は緑へ切り替える。
 
 Releaseビルド警告/エラー0。コスメティック・NoS色・名前・オーバーレイテスト終了0。7配置×CompactOverlay ON/OFFの実OverlayWindow生成経路で、左右反転・装備クリップ・体クリップ維持・ラジオと状態バッジの階層・待機／発話枠を確認した。これはWPF要素構成の自動検証であり、実ゲーム上の表示位置・サイズ・ピクセル一致を証明するものではない。原版のmixup/camouflaged時の名前非表示条件など、ゲーム状態に関わる残差も引き続き照合が必要。起動中のアプリは更新していない。
+
+## 変装時のオーバーレイ
+
+3.2.7 GameReader/Overlayの照合で、mixupSabotagedはTasks中の非切断・非buggedプレイヤーに1人でも見た目変更があればtrue、camouflagedは原版で常にfalseと確認。状態に同じmixup算出を追加し、サイド表示の全員分の名前を隠す（その場合は装備も円形クリップする）。Discussionでは名前が復帰する。
+
+原版OverlayはhideWhenAppearanceChangedを渡していないため、.NETのオーバーレイも変装後のアバター自体は表示するよう訂正した。メイン音声画面の非表示指定は維持。ローカルのshiftedColorが有効かつDiscussion以外では発話枠をgrayへ変更。リモート発話非表示とベントの枠非表示は既存OverlaySelectionを継続する。
+
+Airshipの会議服判定も原版の有効プレイヤーフィルターに合わせ、buggedを除外した。Releaseビルド警告/エラー0、クライアント描画自動テストと`--policy-self-test`は終了0。Tasksでの名前非表示・変装アバター表示・ローカル灰色枠・Discussion復帰・無効プレイヤー除外、Airship会議服の最低人数とbugged除外を検証した。実ゲームでの変装／キノコサボタージュ中の見た目比較は未検証。起動中のアプリは更新していない。

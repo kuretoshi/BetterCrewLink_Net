@@ -188,6 +188,11 @@ public sealed class AmongUsState
 
     public bool AirshipMeetingByOutfit { get; set; }
 
+    // Released GameReader uses one valid visibly disguised player as the
+    // threshold, and resets the flag outside Tasks. Camouflaged is always false there.
+    public bool MixupSabotaged => GameState == GameState.Tasks &&
+        Players.Any(player => !player.Disconnected && !player.Bugged && player.HasVisibleAppearanceChanged());
+
     public bool OldMeetingHud { get; set; }
 
     public CameraLocation CurrentCamera { get; set; } = CameraLocation.None;

@@ -163,7 +163,7 @@ public partial class OverlayWindow : Window
         }
         var side = position is "left" or "left1" or "right" or "right1";
         var compact = settings.CompactOverlay || position is "left1" or "right1";
-        var showName = side && (!settings.CompactOverlay || position is "left1" or "right1");
+        var showName = !state.MixupSabotaged && side && (!settings.CompactOverlay || position is "left1" or "right1");
         var avatarSize = side ? Math.Min(0.075d * Height, 72d) : 60d;
         AvatarPanel.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
         AvatarPanel.MaxHeight = side ? Height : double.PositiveInfinity;
@@ -181,12 +181,15 @@ public partial class OverlayWindow : Window
                 Margin = new Thickness(side ? 1d : 5d)
             };
             var avatar = new PlayerAvatar { Width = avatarSize, Height = avatarSize };
-            avatar.SetPlayer(player, state.PlayerColors, state.GameState == GameState.Tasks, state.Mod, state.GameExecutablePath);
+            // Overlay.tsx displays the current outfit; only the main voice view
+            // opts into hiding visibly changed avatars during Tasks.
+            avatar.SetPlayer(player, state.PlayerColors, false, state.Mod, state.GameExecutablePath);
             avatar.SetOverlayMode(lookLeft: position is not ("left" or "left1" or "bottom_left"),
                 clipEquipment: side && !showName, showBorder: side && !settings.CompactOverlay);
             avatar.SetVisualState(entry.Talking,
                 player.IsLocal && microphoneMuted,
-                player.IsLocal && deafened, "connected", entry.UsingRadio);
+                player.IsLocal && deafened, "connected", entry.UsingRadio,
+                grayTalking: player.IsLocal && player.ShiftedColor != -1 && state.GameState != GameState.Discussion);
             row.Children.Add(avatar);
             if (showName && (position is not ("left1" or "right1") || entry.Talking))
             {
@@ -320,6 +323,31 @@ public partial class OverlayWindow : Window
                     ((PlayerAvatar)row.Children[0]).VerifyOverlayAppearance(mirrored, side && compact && !alternate, side && !compact);
             }
             Console.WriteLine("[PASS] Overlay direction, equipment clipping and idle/active border across seven positions and compact modes");
+            settings.OverlayPosition = "left";
+            settings.CompactOverlay = false;
+            state.GameState = GameState.Tasks;
+            var local = state.Players[0];
+            local.CurrentOutfit = 1;
+            local.AppearanceColorId = local.ColorId + 1;
+            local.ShiftedColor = local.AppearanceColorId;
+            window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, true, false) }, true, false, false);
+            if (!state.MixupSabotaged || window.AvatarPanel.Children.Cast<StackPanel>().Any(row => row.Children.Count != 1))
+                throw new InvalidOperationException("Disguised Tasks state exposed overlay names");
+            ((PlayerAvatar)((StackPanel)window.AvatarPanel.Children[0]).Children[0]).VerifyDisguisedOverlay();
+            state.GameState = GameState.Discussion;
+            window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, true, false) }, true, false, false);
+            if (state.MixupSabotaged || window.AvatarPanel.Children.Cast<StackPanel>().Any(row => row.Children.Count != 2))
+                throw new InvalidOperationException("Discussion did not restore overlay names");
+            state.GameState = GameState.Tasks;
+            local.Bugged = true;
+            if (state.MixupSabotaged) throw new InvalidOperationException("Bugged player triggered mixup detection");
+            local.Bugged = false;
+            local.Disconnected = true;
+            if (state.MixupSabotaged) throw new InvalidOperationException("Disconnected player triggered mixup detection");
+            local.Disconnected = false;
+            local.AppearanceColorId = local.ColorId;
+            if (state.MixupSabotaged) throw new InvalidOperationException("Unchanged outfit triggered mixup detection");
+            Console.WriteLine("[PASS] Overlay disguise names, gray local ring, visible outfit, discussion restore and invalid-player filtering");
         }
         finally
         {

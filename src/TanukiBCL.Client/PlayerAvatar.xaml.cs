@@ -57,6 +57,14 @@ public partial class PlayerAvatar : UserControl
             throw new InvalidOperationException("Overlay active border lost after idle border configuration");
     }
 
+    internal void VerifyDisguisedOverlay()
+    {
+        if (AvatarBody.Visibility != Visibility.Visible || SpeechRing.Visibility != Visibility.Visible ||
+            SpeechRing.Stroke is not SolidColorBrush stroke || stroke.Color != Colors.Gray ||
+            CosmeticFront.Clip is not EllipseGeometry)
+            throw new InvalidOperationException("Disguised local overlay must retain its outfit, gray ring and clipped equipment");
+    }
+
     public void SetPlayer(Player player, IReadOnlyList<PlayerColorPair>? colors,
         bool hideWhenAppearanceChanged = false, AmongUsModType mod = AmongUsModType.None, string gameExecutable = "")
     {
@@ -84,10 +92,10 @@ public partial class PlayerAvatar : UserControl
     }
 
     public void SetVisualState(bool talking, bool muted, bool deafened, string connectionState,
-        bool usingRadio, ConnectionQuality? quality = null)
+        bool usingRadio, ConnectionQuality? quality = null, bool grayTalking = false)
     {
         SpeechRing.Stroke = talking && !hideAvatar ?
-            new SolidColorBrush(Color.FromRgb(0x2e, 0xcc, 0x71)) : idleBorder;
+            grayTalking ? Brushes.Gray : new SolidColorBrush(Color.FromRgb(0x2e, 0xcc, 0x71)) : idleBorder;
         RadioBadge.Visibility = usingRadio && !hideAvatar ? Visibility.Visible : Visibility.Collapsed;
 
         var (geometry, badgeColor, borderColor) = connectionState switch
