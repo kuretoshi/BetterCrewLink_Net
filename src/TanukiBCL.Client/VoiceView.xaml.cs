@@ -56,6 +56,16 @@ public partial class VoiceView : UserControl
         if (view.LocalName.TextTrimming != TextTrimming.None || view.LocalName.ActualWidth <= 115 ||
             view.LocalName.FontSize != 20 || view.LocalName.TextWrapping != TextWrapping.NoWrap)
             throw new InvalidOperationException("Long player name was clipped, shrunk or ellipsized");
+        // A Viewbox can measure its child at full width while applying a layout clip
+        // to its own 115px slot. Check the ancestors, not just the text's width.
+        for (DependencyObject? parent = view.LocalName; parent is not null && parent != view;
+             parent = VisualTreeHelper.GetParent(parent))
+        {
+            if (parent is FrameworkElement element &&
+                System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(element) is { } clip &&
+                !clip.IsEmpty())
+                throw new InvalidOperationException("Long player name has a clipped layout ancestor");
+        }
         view.popupCloseTimer.Stop();
         Console.WriteLine("[PASS] VoiceView long name retains 20px nowrap text beyond 115px box");
     }

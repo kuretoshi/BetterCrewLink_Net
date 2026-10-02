@@ -50,10 +50,10 @@
                     <StackPanel Grid.Column="0" HorizontalAlignment="Center">
                         <!-- 3.2.7 uses nowrap in a 115px box with visible overflow,
                              not ellipsis or font shrinking. Measure unconstrained. -->
-                        <Viewbox Width="115" Height="24" Stretch="None" ClipToBounds="False">
+                        <Canvas Width="115" Height="24" ClipToBounds="False">
                             <TextBlock x:Name="LocalName" FontSize="20" TextAlignment="Center"
                                        TextWrapping="NoWrap" TextTrimming="None" />
-                        </Viewbox>
+                        </Canvas>
                         <Border x:Name="CodeBackground" Background="#3E4346" CornerRadius="5"
                                 Padding="5" Margin="0,5,0,0" HorizontalAlignment="Center">
                             <TextBlock x:Name="LobbyCode" FontSize="28" FontFamily="Consolas"
