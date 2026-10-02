@@ -25,10 +25,14 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel>
-            <TextBlock Text="TanukiBCL" FontSize="30" FontWeight="SemiBold" />
-            <TextBlock Text="Among Us 近距離ボイスクライアント" Foreground="#AEB6C2" Margin="0,3,0,22" />
-        </StackPanel>
+        <DockPanel>
+            <Button x:Name="SettingsButton" DockPanel.Dock="Right" Content="⚙ 設定"
+                    Width="100" Click="SettingsButton_Click" VerticalAlignment="Top" />
+            <StackPanel>
+                <TextBlock Text="TanukiBCL" FontSize="30" FontWeight="SemiBold" />
+                <TextBlock Text="Among Us 近距離ボイスクライアント" Foreground="#AEB6C2" Margin="0,3,0,22" />
+            </StackPanel>
+        </DockPanel>
 
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>

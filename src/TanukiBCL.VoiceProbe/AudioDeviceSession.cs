@@ -11,12 +11,16 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly WaveInEvent capture;
     private readonly WaveOutEvent playback;
     private readonly MixingSampleProvider playbackMixer;
+    private readonly VolumeSampleProvider masterMix;
     private readonly Dictionary<string, PeerPlayback> peerPlayback = [];
     private readonly object playbackGate = new();
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
     private readonly Action<bool> onVadChanged;
     private bool? lastVadState;
     private volatile bool microphoneMuted;
+    private volatile bool deafened;
+    private volatile float masterVolume = 1f;
+    private volatile float microphoneGain = 1f;
     private bool disposed;
 
     [DllImport("winmm.dll")]
@@ -55,13 +59,14 @@ internal sealed class AudioDeviceSession : IDisposable
         {
             ReadFully = true
         };
+        masterMix = new VolumeSampleProvider(playbackMixer);
         playback = new WaveOutEvent
         {
             DeviceNumber = outputDevice,
             DesiredLatency = 100,
             NumberOfBuffers = 3
         };
-        playback.Init(playbackMixer.ToWaveProvider());
+        playback.Init(masterMix.ToWaveProvider());
     }
 
     public void Start()
@@ -83,7 +88,19 @@ internal sealed class AudioDeviceSession : IDisposable
 
     public void SetDeafened(bool value)
     {
-        playback.Volume = value ? 0f : 1f;
+        deafened = value;
+        masterMix.Volume = value ? 0f : masterVolume;
+    }
+
+    public void SetMasterVolume(double volumePercent)
+    {
+        masterVolume = (float)Math.Clamp(volumePercent / 100d, 0d, 2d);
+        masterMix.Volume = deafened ? 0f : masterVolume;
+    }
+
+    public void SetMicrophoneGain(double gainPercent)
+    {
+        microphoneGain = (float)Math.Clamp(gainPercent / 100d, 0d, 3d);
     }
 
     public void SubmitPlayback(string peerId, ReadOnlySpan<short> stereoPcm)
@@ -159,6 +176,16 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         var buffer = args.Buffer.AsMemory(0, args.BytesRecorded).ToArray();
+        var gain = microphoneGain;
+        if (gain != 1f)
+        {
+            for (var index = 0; index + 1 < buffer.Length; index += sizeof(short))
+            {
+                var sample = BitConverter.ToInt16(buffer, index);
+                var adjusted = (short)Math.Clamp((int)Math.Round(sample * gain), short.MinValue, short.MaxValue);
+                BitConverter.TryWriteBytes(buffer.AsSpan(index, sizeof(short)), adjusted);
+            }
+        }
         var talking = CalculateRms(buffer) >= 0.015d;
         if (lastVadState != talking)
         {

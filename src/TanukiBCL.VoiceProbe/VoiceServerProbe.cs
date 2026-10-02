@@ -28,6 +28,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private AudioDeviceSession? audioSession;
     private bool microphoneMuted;
     private bool deafened;
+    private double masterVolume = 100d;
+    private double microphoneGain = 100d;
     private readonly object radioTransmitGate = new();
     private volatile bool impostorRadioTransmitting;
     private volatile bool localVadTalking;
@@ -182,6 +184,18 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         audioSession?.SetMicrophoneMuted(muted);
     }
 
+    public void SetMasterVolume(double volumePercent)
+    {
+        masterVolume = Math.Clamp(volumePercent, 0d, 200d);
+        audioSession?.SetMasterVolume(masterVolume);
+    }
+
+    public void SetMicrophoneGain(double gainPercent)
+    {
+        microphoneGain = Math.Clamp(gainPercent, 0d, 300d);
+        audioSession?.SetMicrophoneGain(microphoneGain);
+    }
+
     public void SetDeafened(bool value)
     {
         deafened = value;
@@ -313,6 +327,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             audioSession.Start();
             audioSession.SetMicrophoneMuted(microphoneMuted);
             audioSession.SetDeafened(deafened);
+            audioSession.SetMasterVolume(masterVolume);
+            audioSession.SetMicrophoneGain(microphoneGain);
         }
 
         if (options.AutoRadioTone)

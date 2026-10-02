@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -13,6 +14,7 @@ public partial class MainWindow : Window
     private CancellationTokenSource? runCancellation;
     private VoiceServerProbe? probe;
     private readonly ObservableCollection<PeerRow> peers = [];
+    private readonly ClientSettings settings;
     private AmongUsState? currentState;
     private bool microphoneMuted;
     private bool deafened;
@@ -21,14 +23,36 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        settings = ClientSettingsStore.Load();
         InitializeComponent();
+        Topmost = settings.AlwaysOnTop;
         PeerGrid.ItemsSource = peers;
         InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
         OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
-        InputCombo.SelectedIndex = InputCombo.Items.Count > 0 ? 0 : -1;
-        OutputCombo.SelectedIndex = OutputCombo.Items.Count > 0 ? 0 : -1;
+        SelectConfiguredDevices();
         RefreshProcesses();
         SelectProcessFromCommandLine();
+    }
+
+    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new SettingsWindow(settings) { Owner = this };
+        if (window.ShowDialog() != true) return;
+
+        Topmost = settings.AlwaysOnTop;
+        SelectConfiguredDevices();
+        probe?.SetMasterVolume(settings.MasterVolume);
+        probe?.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
+    }
+
+    private void SelectConfiguredDevices()
+    {
+        InputCombo.SelectedItem = InputCombo.Items.Cast<AudioDeviceInfo>()
+            .FirstOrDefault(device => device.Name == settings.MicrophoneName)
+            ?? InputCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
+        OutputCombo.SelectedItem = OutputCombo.Items.Cast<AudioDeviceInfo>()
+            .FirstOrDefault(device => device.Name == settings.SpeakerName)
+            ?? OutputCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e) => RefreshProcesses();
@@ -59,16 +83,28 @@ public partial class MainWindow : Window
             return;
         }
 
+        settings.MicrophoneName = input.Name;
+        settings.SpeakerName = output.Name;
+        try
+        {
+            ClientSettingsStore.Save(settings);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"デバイス設定を保存できませんでした: {exception.Message}", "TanukiBCL");
+        }
         SetRunning(true);
         runCancellation = new CancellationTokenSource();
         var options = ProbeOptions.Parse([
-            "--server", "https://bettercrewl.ink",
+            "--server", settings.ServerUrl,
             "--game-process-id", process.Id.ToString(),
             "--live-audio",
             "--input-device", input.Id.ToString(),
             "--output-device", output.Id.ToString()
         ]);
         probe = new VoiceServerProbe(options, "client");
+        probe.SetMasterVolume(settings.MasterVolume);
+        probe.SetMicrophoneGain(settings.MicrophoneGainEnabled ? settings.MicrophoneGain : 100d);
         probe.ConnectionStatusChanged += status => Dispatch(() => StatusText.Text = status);
         probe.GameStateApplied += state => Dispatch(() => ShowGameState(state));
         probe.PeerMixChanged += (clientId, mix) => Dispatch(() => UpdatePeerMix(clientId, mix));

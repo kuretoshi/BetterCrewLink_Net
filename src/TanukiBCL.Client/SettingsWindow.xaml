@@ -1,0 +1,86 @@
+<Window x:Class="TanukiBCL.Client.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="設定" Width="760" Height="620" MinWidth="650" MinHeight="500"
+        Background="#1D1B22" Foreground="#F5F1F7" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Height" Value="32" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="8,4" />
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Background="#19171D" BorderBrush="#403146" BorderThickness="0,0,1,0">
+            <StackPanel Margin="12,22">
+                <TextBlock Text="⚙ 設定" FontWeight="SemiBold" Foreground="#C779D7" Margin="8,0,0,18" />
+                <ListBox x:Name="CategoryList" Background="Transparent" Foreground="White"
+                         BorderThickness="0" SelectionChanged="CategoryList_SelectionChanged">
+                    <ListBoxItem Content="一般" Padding="12,9" />
+                    <ListBoxItem Content="オーディオ" Padding="12,9" />
+                    <ListBoxItem Content="詳細設定" Padding="12,9" />
+                </ListBox>
+            </StackPanel>
+        </Border>
+        <Grid Grid.Column="1" Margin="28,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <Grid>
+                    <StackPanel x:Name="GeneralPanel">
+                        <TextBlock Text="一般" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
+                        <Border Background="#29252F" Padding="16" CornerRadius="6">
+                            <CheckBox x:Name="AlwaysOnTopCheck" Content="常に手前に表示" />
+                        </Border>
+                    </StackPanel>
+                    <StackPanel x:Name="AudioPanel" Visibility="Collapsed">
+                        <TextBlock Text="オーディオ" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
+                        <TextBlock Text="マイク" Margin="0,0,0,6" />
+                        <ComboBox x:Name="MicrophoneCombo" Margin="0,0,0,16" />
+                        <TextBlock Text="スピーカー" Margin="0,0,0,6" />
+                        <ComboBox x:Name="SpeakerCombo" Margin="0,0,0,10" />
+                        <TextBlock Text="デバイスの変更は再接続後に反映されます。"
+                                   Foreground="#B7AABD" Margin="0,0,0,20" />
+                        <TextBlock Text="マスター音量" />
+                        <DockPanel Margin="0,5,0,20">
+                            <TextBlock x:Name="MasterVolumeValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
+                            <Slider x:Name="MasterVolumeSlider" Minimum="0" Maximum="200"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                        <CheckBox x:Name="MicrophoneGainCheck" Content="マイク入力ゲインを調整する" Margin="0,0,0,8" />
+                        <DockPanel Margin="0,0,0,18">
+                            <TextBlock x:Name="MicrophoneGainValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
+                            <Slider x:Name="MicrophoneGainSlider" Minimum="0" Maximum="300"
+                                    TickFrequency="2" IsSnapToTickEnabled="True"
+                                    IsEnabled="{Binding IsChecked, ElementName=MicrophoneGainCheck}"
+                                    ValueChanged="VolumeSlider_ValueChanged" />
+                        </DockPanel>
+                    </StackPanel>
+                    <StackPanel x:Name="AdvancedPanel" Visibility="Collapsed">
+                        <TextBlock Text="詳細設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
+                        <TextBlock Text="ボイスサーバー URL" Margin="0,0,0,6" />
+                        <TextBox x:Name="ServerUrlBox" />
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                <Button Content="キャンセル" Width="100" Height="36" Margin="0,0,10,0"
+                        Click="CancelButton_Click" />
+                <Button Content="保存" Width="100" Height="36" Background="#8B4D99" Foreground="White"
+                        Click="SaveButton_Click" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
