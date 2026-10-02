@@ -24,7 +24,9 @@ internal sealed record ProbeOptions(
     int? ExpectedImpostors,
     bool ExpectNearby,
     int InputDevice,
-    int OutputDevice)
+    int OutputDevice,
+    bool AutoRadioTone,
+    bool PolicySelfTest)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -34,7 +36,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby")
+            if (argument is "--host" or "--self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--live-game-audio-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--policy-self-test")
             {
                 switches.Add(argument);
                 continue;
@@ -89,7 +91,9 @@ internal sealed record ProbeOptions(
             ParseOptionalInt(values, "--expected-impostors"),
             switches.Contains("--expect-nearby"),
             ParseInt(values, "--input-device", 0),
-            ParseInt(values, "--output-device", 0));
+            ParseInt(values, "--output-device", 0),
+            switches.Contains("--auto-radio-tone"),
+            switches.Contains("--policy-self-test"));
     }
 
     private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)

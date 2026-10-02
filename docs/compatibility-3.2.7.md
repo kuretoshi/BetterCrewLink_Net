@@ -1,0 +1,45 @@
+# TanukiBCL v3.2.7 互換チェックリスト
+
+基準は upstream [`v3.2.7`](https://github.com/kuretoshi/TanukiBCL/tree/v3.2.7) のコミット `9861ccc8137bb63a7d3834f493be0b784a288544`。比較開始点は `v3.2.5` の `33f8d252400d74756ce3bfd7e59b8011bf76d798`。この文書は完了宣言ではなく、実装と実機確認の抜け漏れを防ぐための記録である。
+
+## 完了判定
+
+- 3.2.7の画面、操作、設定保存、状態表示、オーバーレイをGUI上で同等に利用できる。
+- ゲーム状態・MOD固有役職・距離・ベント・会議・死亡・ラジオに対する送受信音声と表示が一致する。
+- 3.2.7のElectron版と.NET版を同一ロビーで接続し、双方向音声、状態遷移、再接続を実機確認する。
+- Windows配布物を作成し、新規環境で起動・設定保存・更新を確認する。
+
+## 現在の差分
+
+| 領域 | 3.2.7基準 | .NET版の現状 | 判定 |
+| --- | --- | --- | --- |
+| Socket.IO / WebRTC / Opus | `ConnectionController.ts`、`AudioController.ts` | 実機で基本疎通と双方向音声を確認 | 一部確認 |
+| ゲームメモリ | `GameReader.ts`、MOD別リーダー | バニラ相当のゲーム状態・位置・役職を読取 | 未完 |
+| 距離・会議・死亡・ベント | `spatialAudio.ts` | 基本ルールを実装、一部を実機確認 | 未完 |
+| インポスターラジオ | 3.2.7で複数送信者、会議中、幽霊受信、専用モードを拡張 | 通常時の送受信・秘匿を実機確認。会議・死亡遷移は未確認 | 未完 |
+| Jackal / Sidekick / NoSラジオ | `VoiceController.ts`、`spatialAudio.ts` | 未実装 | 未着手 |
+| NoS / SNR / TOH固有仕様 | `nosSnapshot*`、`snrLive*`、`tohLive*` | MOD検出のみ。役職・能力・音声効果は不足 | 未着手 |
+| 音声処理 | 3.2.7のゲイン、VAD、音声効果、ラジオ音質 | 基本のマイク・再生・VAD・Opusあり | 未完 |
+| メイン音声画面 | `VoiceView.tsx`、`Avatar.tsx` | 診断用の表形式GUI。アバター表示・接続品質等が不足 | 未着手 |
+| 設定画面 | `SettingsPanel.tsx` と9カテゴリ | マイク・スピーカー選択のみ | 未着手 |
+| オーバーレイ | `Overlay.tsx` | 未実装 | 未着手 |
+| 配布・更新 | `electron-builder*.yml`、更新画面 | 未実装 | 未着手 |
+
+## GUIカテゴリ（3.2.7ソースとローカルvDEV画面で確認）
+
+一般、ロビー設定、プレイヤー、オーディオ、キーボードショートカット、オーバーレイ、詳細設定、アップデート、配信設定。メイン音声画面はプレイヤーのアバター、発話・ミュート・接続状態、ロビーコード、MOD表示、設定導線を含む。現行WPF画面はこの構成とまだ異なる。
+
+## 3.2.5 → 3.2.7で特に追加・変更された事項
+
+- `ILobbySettings`: `jackalRadioEnabled`、`nosSizeVoiceEffect`、`nosFixerJammingVoiceBlock`、`impostorRadioOnlyMode`。
+- `ISettings`: `autoGainControl`。
+- `spatialAudio.ts`: 複数ラジオ送信者、会議中ラジオの限定受信、幽霊による受信、NoS Fixerの通信遮断、ラジオ音声効果。
+- `VoiceController.ts`: 送信・受信対象をMOD役職とプレイヤー状態から再判定。
+- `Avatar.tsx`、`cosmetics.ts`: アバター・コスメティック表示を拡張。
+
+## 次の検証順序
+
+1. 会議中と死亡遷移のインポスターラジオを、Airship実機4プロセスで検証する。
+2. 3.2.7の設定モデルと音声ポリシーを移植し、ソースと突き合わせた自動テストを増やす。
+3. WPFのメイン画面、設定9カテゴリ、オーバーレイを順に実装する。
+4. MOD固有の役職・音声効果・アバターを移植し、Electron版とのシナリオ別実機試験を行う。

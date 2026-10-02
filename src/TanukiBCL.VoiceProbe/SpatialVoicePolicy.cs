@@ -62,6 +62,12 @@ internal static class SpatialVoicePolicy
                 return new PeerVoiceMix(1d, 0d, distance, "lobby");
 
             case GameState.Discussion:
+                if (otherUsingImpostorRadio)
+                {
+                    return CanHearImpostorRadio(me, other, settings)
+                        ? new PeerVoiceMix(1d, 0d, distance, "impostor-radio")
+                        : Muted(0, distance, "radio-private");
+                }
                 return !me.IsDead && other.IsDead
                     ? Muted(0, distance, "living-cannot-hear-ghost")
                     : new PeerVoiceMix(1d, 0d, distance, "meeting");
@@ -70,11 +76,11 @@ internal static class SpatialVoicePolicy
                 break;
         }
 
-        if ((settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&
-            otherUsingImpostorRadio && me.IsImpostor && other.IsImpostor &&
-            !me.IsDead && !other.IsDead)
+        if (otherUsingImpostorRadio)
         {
-            return new PeerVoiceMix(1d, 0d, distance, "impostor-radio");
+            return CanHearImpostorRadio(me, other, settings)
+                ? new PeerVoiceMix(1d, 0d, distance, "impostor-radio")
+                : Muted(0, distance, "radio-private");
         }
 
         if (settings.MeetingGhostOnly)
@@ -133,6 +139,11 @@ internal static class SpatialVoicePolicy
         // Web Audio PannerNode: distanceModel=linear, refDistance=0.1, rolloffFactor=1.
         return Math.Clamp(1d - (distance - ReferenceDistance) / (maxDistance - ReferenceDistance), 0d, 1d);
     }
+
+    private static bool CanHearImpostorRadio(Player me, Player other, SpatialVoiceSettings settings) =>
+        (settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&
+        other.IsImpostor && !other.IsDead &&
+        ((me.IsImpostor && !me.IsDead) || me.IsDead);
 
     private static PeerVoiceMix Muted(double pan, double distance, string reason) => new(0d, pan, distance, reason);
 }

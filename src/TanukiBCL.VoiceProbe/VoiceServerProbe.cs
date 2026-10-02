@@ -47,7 +47,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ReconnectionDelayMax = 2_000,
             ConnectionTimeout = TimeSpan.FromSeconds(10)
         });
-        peerManager = new WebRtcPeerManager(label, SendSignalAsync, sendTestTone: !options.LiveAudio);
+        peerManager = new WebRtcPeerManager(label, SendSignalAsync, sendTestTone: !options.LiveAudio && !options.AutoRadioTone);
         peerManager.PeerVerified += socketId =>
         {
             Log("OK", $"P2P双方向通信成功 peer={socketId}");
@@ -159,6 +159,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public void ApplyGameState(AmongUsState state)
     {
         currentGameState = state;
+        if (options.AutoRadioTone && !impostorRadioTransmitting && CanUseImpostorRadio)
+        {
+            SetImpostorRadioTransmitting(true);
+        }
         if (impostorRadioTransmitting && !CanUseImpostorRadio)
         {
             SetImpostorRadioTransmitting(false);
@@ -309,6 +313,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             audioSession.Start();
             audioSession.SetMicrophoneMuted(microphoneMuted);
             audioSession.SetDeafened(deafened);
+        }
+
+        if (options.AutoRadioTone)
+        {
+            _ = SendAutoRadioToneAsync(cancellationToken);
         }
 
         if (options.LobbyCode is not null)
@@ -497,6 +506,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
 
             spatialVoiceSettings = next;
+            if (options.AutoRadioTone && !impostorRadioTransmitting && CanUseImpostorRadio)
+            {
+                SetImpostorRadioTransmitting(true);
+            }
             if (impostorRadioTransmitting && !CanUseImpostorRadio)
             {
                 SetImpostorRadioTransmitting(false);
@@ -557,6 +570,39 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
         var player = currentGameState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
         return player is { IsImpostor: true, IsDead: false } or { IsDead: true };
+    }
+
+    private async Task SendAutoRadioToneAsync(CancellationToken cancellationToken)
+    {
+        const int samplesPerFrame = 960;
+        var frame = new byte[samplesPerFrame * sizeof(short)];
+        long frameNumber = 0;
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (impostorRadioTransmitting)
+                {
+                    for (var sample = 0; sample < samplesPerFrame; sample++)
+                    {
+                        var value = (short)(Math.Sin(2d * Math.PI * 440d *
+                            (frameNumber * samplesPerFrame + sample) / 48_000d) * 6000d);
+                        BitConverter.TryWriteBytes(frame.AsSpan(sample * sizeof(short), sizeof(short)), value);
+                    }
+
+                    var sent = peerManager.BroadcastMonoPcm48k(frame, CanReceiveImpostorRadioAudio);
+                    if (frameNumber % 50 == 0)
+                    {
+                        Log("RADIO-TEST", $"state={currentGameState?.GameState} recipients={sent} frame={frameNumber}");
+                    }
+                    frameNumber++;
+                }
+                await Task.Delay(20, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
     }
 
     private void ApplyImpostorRadioStatus(int clientId, JsonElement data, bool active)

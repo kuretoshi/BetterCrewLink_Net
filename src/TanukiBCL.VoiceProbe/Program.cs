@@ -13,6 +13,10 @@ internal static class Program
         try
         {
             var options = ProbeOptions.Parse(args);
+            if (options.PolicySelfTest)
+            {
+                return SpatialVoicePolicySelfTest.Run();
+            }
             if (options.ListAudioDevices)
             {
                 AudioDeviceSession.PrintDevices();
@@ -105,7 +109,7 @@ internal static class Program
     private static void PrintHelp()
     {
         Console.WriteLine("""
-            TanukiBCL v3.2.5 ボイスサーバー疎通確認
+            TanukiBCL v3.2.7 互換性・ボイスサーバー疎通確認
 
             dotnet run --project src/TanukiBCL.VoiceProbe -- [options]
 
@@ -116,6 +120,7 @@ internal static class Program
               --host               ホストとして参加
               --seconds <number>   指定秒数後に自動終了
               --self-test         2クライアントでP2Pデータチャネルを自動検証
+              --policy-self-test  3.2.7の音声ポリシーをローカルで検証
               --tanuki-interop-test 起動中のTanukiBCLとのWebRTC・Opus相互接続を検証
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
@@ -131,6 +136,7 @@ internal static class Program
               --expected-impostors <n> 期待するインポスター数
               --expect-nearby     生存者同士が距離内であることも検証
               --game-process-id <pid> ゲーム状態を追跡してロビー・音量を自動更新
+              --auto-radio-tone   ラジオON時に440Hzの検証音を送信（実マイク不要）
               --input-device <n>  マイク番号（既定: 0）
               --output-device <n> スピーカー番号（既定: 0）
               --help, -h           このヘルプを表示
