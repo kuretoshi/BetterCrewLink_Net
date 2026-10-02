@@ -12,6 +12,7 @@ namespace TanukiBCL.Client;
 public partial class MainWindow : Window
 {
     private CancellationTokenSource? runCancellation;
+    private TaskCompletionSource? sessionStopped;
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
     private OverlayWindow? overlayWindow;
@@ -63,9 +64,12 @@ public partial class MainWindow : Window
         };
     }
 
-    private void SettingsButton_Click(object sender, RoutedEventArgs e)
+    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         CompactVoiceView.DismissPlayerConfigPopup();
+        var previousServerUrl = settings.ServerUrl;
+        var previousMicrophone = settings.MicrophoneName;
+        var previousSpeaker = settings.SpeakerName;
         var hostInGame = currentState is { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         var window = new SettingsWindow(settings, !hostInGame,
             probe?.CurrentLobbySettings, currentState?.IsHost != true, currentState,
@@ -85,7 +89,35 @@ public partial class MainWindow : Window
         if (saved != true) return;
 
         Topmost = settings.AlwaysOnTop;
+        var requiresRestart = !string.Equals(previousServerUrl, settings.ServerUrl, StringComparison.Ordinal) ||
+            !string.Equals(previousMicrophone, settings.MicrophoneName, StringComparison.Ordinal) ||
+            !string.Equals(previousSpeaker, settings.SpeakerName, StringComparison.Ordinal);
+        if (requiresRestart)
+        {
+            InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
+            OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
+        }
         SelectConfiguredDevices();
+        if (requiresRestart && runCancellation is { IsCancellationRequested: false } cancellation &&
+            sessionStopped is { } stopped)
+        {
+            // The server URL and audio device IDs are fixed when the probe starts.
+            // Keep the user's mute/deafen choice across the controlled restart.
+            var wasMuted = microphoneMuted;
+            var wasDeafened = deafened;
+            cancellation.Cancel();
+            await stopped.Task;
+            if (!IsVisible || Dispatcher.HasShutdownStarted) return;
+            if (runCancellation is not null)
+            {
+                ShowDiagnostics();
+                return;
+            }
+            if (wasMuted) ToggleMicrophoneMute();
+            if (wasDeafened) ToggleDeafen();
+            StartButton_Click(this, new RoutedEventArgs());
+            return;
+        }
         probe?.SetMasterVolume(settings.MasterVolume);
         probe?.SetVoiceEffectStrength(settings.VoiceEffectStrength);
         probe?.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
@@ -263,6 +295,8 @@ public partial class MainWindow : Window
         var runningHotkeys = hotkeys;
         var hotkeyCancellationToken = runCancellation.Token;
         hotkeyTask = Task.Run(() => runningHotkeys.RunAsync(hotkeyCancellationToken));
+        var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        sessionStopped = stopped;
 
         try
         {
@@ -278,25 +312,33 @@ public partial class MainWindow : Window
         }
         finally
         {
-            var wasStopped = runCancellation?.IsCancellationRequested == true;
-            runCancellation?.Cancel();
-            if (hotkeyTask is not null) await hotkeyTask;
-            hotkeyTask = null;
-            hotkeys = null;
-            if (probe is not null)
+            try
             {
-                await probe.DisposeAsync();
-                probe = null;
+                var wasStopped = runCancellation?.IsCancellationRequested == true;
+                runCancellation?.Cancel();
+                if (hotkeyTask is not null) await hotkeyTask;
+                hotkeyTask = null;
+                hotkeys = null;
+                if (probe is not null)
+                {
+                    await probe.DisposeAsync();
+                    probe = null;
+                }
+                runCancellation?.Dispose();
+                runCancellation = null;
+                overlayWindow?.Close();
+                overlayWindow = null;
+                activeGamePid = null;
+                SetRunning(false);
+                if (wasStopped)
+                {
+                    StatusText.Text = "停止しました";
+                }
             }
-            runCancellation?.Dispose();
-            runCancellation = null;
-            overlayWindow?.Close();
-            overlayWindow = null;
-            activeGamePid = null;
-            SetRunning(false);
-            if (wasStopped)
+            finally
             {
-                StatusText.Text = "停止しました";
+                if (ReferenceEquals(sessionStopped, stopped)) sessionStopped = null;
+                stopped.TrySetResult();
             }
         }
     }
