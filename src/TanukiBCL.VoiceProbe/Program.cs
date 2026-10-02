@@ -122,6 +122,7 @@ internal static class Program
               --self-test         2クライアントでP2Pデータチャネルを自動検証
               --policy-self-test  3.2.7の音声ポリシーをローカルで検証
               --tanuki-interop-test 起動中のTanukiBCLとのWebRTC・Opus相互接続を検証
+              --expected-peer-client-id <id> 相互接続テストの対象client IDを固定
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
               --scan-game         起動中の全Among Usプロセスを読み取り検証

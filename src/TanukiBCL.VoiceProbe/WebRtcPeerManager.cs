@@ -71,11 +71,21 @@ internal sealed class WebRtcPeerManager : IDisposable
         var sentPeers = 0;
         foreach (var peer in peers.Values.ToArray())
         {
-            if (peer.Connection.connectionState == RTCPeerConnectionState.connected &&
+            if (CanSendAudio(peer) &&
                 (canSendToPeer is null || canSendToPeer(peer.RemoteSocketId)))
             {
-                peer.Connection.SendAudio(SamplesPerChannel, encoded);
-                sentPeers++;
+                try
+                {
+                    peer.Connection.SendAudio(SamplesPerChannel, encoded);
+                    sentPeers++;
+                }
+                catch (Exception exception)
+                {
+                    if (Interlocked.Exchange(ref peer.AudioSendFailureLogged, 1) == 0)
+                    {
+                        Log($"Opus send failed peer={Short(peer.RemoteSocketId)}: {exception.Message}");
+                    }
+                }
             }
         }
         return sentPeers;
@@ -112,11 +122,9 @@ internal sealed class WebRtcPeerManager : IDisposable
             iceServers = parsed;
         }
 
-        // The TanukiBCL desktop client can use TURN-only NAT mode. With mixed
-        // relay/direct ICE in this interop path, peers may repeatedly time out.
-        // Prefer the server-provided TURN when available; keep STUN-only servers usable.
-        forceRelayOnly = serverRequiresRelay || iceServers.Any(server => server.Url.StartsWith("turn:", StringComparison.OrdinalIgnoreCase) ||
-                                                                          server.Url.StartsWith("turns:", StringComparison.OrdinalIgnoreCase));
+        // v3.2.7 ConnectionController uses relay only when the server explicitly
+        // requests it. Merely advertising a TURN server must not disable direct ICE.
+        forceRelayOnly = serverRequiresRelay;
         Log($"ICE設定受信: servers={iceServers.Count} relayOnly={forceRelayOnly}");
     }
 
@@ -141,8 +149,24 @@ internal sealed class WebRtcPeerManager : IDisposable
     public bool IsInitiating(string remoteSocketId) =>
         peers.TryGetValue(remoteSocketId, out var peer) && peer.Initiator;
 
+    public bool ShouldDeferIncomingOffer(string remoteSocketId)
+    {
+        if (!peers.TryGetValue(remoteSocketId, out var peer))
+        {
+            // setClients may have scheduled our offer but not created the peer yet.
+            return true;
+        }
+
+        return peer.Initiator &&
+            peer.Connection.connectionState is RTCPeerConnectionState.@new or RTCPeerConnectionState.connecting;
+    }
+
     public bool HasOpenDataChannel(string remoteSocketId) =>
         peers.TryGetValue(remoteSocketId, out var peer) && Volatile.Read(ref peer.DataChannelOpen) == 1;
+
+    private static bool CanSendAudio(Peer peer) =>
+        peer.Connection.connectionState == RTCPeerConnectionState.connected ||
+        Volatile.Read(ref peer.DataChannelOpen) == 1;
 
     public bool TrySendPeerData(string remoteSocketId, string message)
     {
@@ -208,6 +232,12 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         if (!peers.TryGetValue(remoteSocketId, out var peer))
         {
+            // A candidate (or answer) arriving before its offer must not create
+            // a competing connection that prevents our own offer from starting.
+            if (type != "offer")
+            {
+                return;
+            }
             peer = CreatePeer(remoteSocketId, initiator: false, incomingConnectionId);
         }
 
@@ -363,9 +393,9 @@ internal sealed class WebRtcPeerManager : IDisposable
             {
                 return;
             }
-            Interlocked.Exchange(ref peer.DataChannelOpen, 1);
+            var wasOpen = Interlocked.Exchange(ref peer.DataChannelOpen, 1) == 1;
             Log($"data channel open: {Short(peer.RemoteSocketId)}");
-            PeerDataChannelOpened?.Invoke(peer.RemoteSocketId);
+            if (!wasOpen) OnDataChannelReady(peer);
             if (sendTestTone)
             {
                 channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
@@ -373,6 +403,17 @@ internal sealed class WebRtcPeerManager : IDisposable
         };
         channel.onmessage += (_, _, data) =>
         {
+            var isCurrent = peers.TryGetValue(peer.RemoteSocketId, out var current) &&
+                ReferenceEquals(current, peer);
+            if (isCurrent && Interlocked.Exchange(ref peer.DataChannelOpen, 1) == 0)
+            {
+                Log($"data channel ready via message: {Short(peer.RemoteSocketId)}");
+                OnDataChannelReady(peer);
+            }
+            else if (!isCurrent)
+            {
+                Log($"data from superseded peer: {Short(peer.RemoteSocketId)} connection={peer.ConnectionId}");
+            }
             var message = Encoding.UTF8.GetString(data);
             Log($"data < {Short(peer.RemoteSocketId)} {message}");
             PeerDataReceived?.Invoke(peer.RemoteSocketId, message);
@@ -392,6 +433,15 @@ internal sealed class WebRtcPeerManager : IDisposable
             Interlocked.Exchange(ref peer.DataChannelOpen, 0);
             Log($"data channel closed: {Short(peer.RemoteSocketId)}");
         };
+    }
+
+    private void OnDataChannelReady(Peer peer)
+    {
+        PeerDataChannelOpened?.Invoke(peer.RemoteSocketId);
+        if (sendTestTone && Interlocked.Exchange(ref peer.TestToneStarted, 1) == 0)
+        {
+            _ = SendTestToneAsync(peer);
+        }
     }
 
     private async Task WatchDataChannelAsync(Peer peer)
@@ -416,7 +466,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         const double amplitude = short.MaxValue * 0.25d;
         for (var frameIndex = 0; frameIndex < 30; frameIndex++)
         {
-            if (peer.Connection.connectionState != RTCPeerConnectionState.connected)
+            if (!CanSendAudio(peer))
             {
                 return;
             }
@@ -434,7 +484,15 @@ internal sealed class WebRtcPeerManager : IDisposable
                 encoded = audioEncoder.EncodeAudio(pcm, OpusFormat);
             }
 
-            peer.Connection.SendAudio(SamplesPerChannel, encoded);
+            try
+            {
+                peer.Connection.SendAudio(SamplesPerChannel, encoded);
+            }
+            catch (Exception exception)
+            {
+                Log($"Opus test tone failed peer={Short(peer.RemoteSocketId)}: {exception.Message}");
+                return;
+            }
             await Task.Delay(20);
         }
 
@@ -616,6 +674,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int TestToneStarted;
         public int DataChannelWatchdogStarted;
         public int DataChannelOpen;
+        public int AudioSendFailureLogged;
     }
 }
 

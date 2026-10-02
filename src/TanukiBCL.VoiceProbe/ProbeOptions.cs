@@ -26,7 +26,8 @@ internal sealed record ProbeOptions(
     int InputDevice,
     int OutputDevice,
     bool AutoRadioTone,
-    bool PolicySelfTest)
+    bool PolicySelfTest,
+    int? ExpectedPeerClientId)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -93,7 +94,10 @@ internal sealed record ProbeOptions(
             ParseInt(values, "--input-device", 0),
             ParseInt(values, "--output-device", 0),
             switches.Contains("--auto-radio-tone"),
-            switches.Contains("--policy-self-test"));
+            switches.Contains("--policy-self-test"),
+            values.TryGetValue("--expected-peer-client-id", out var peerClientIdText)
+                ? ParsePositiveInt(peerClientIdText, "--expected-peer-client-id")
+                : null);
     }
 
     private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)

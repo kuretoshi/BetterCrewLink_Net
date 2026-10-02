@@ -82,7 +82,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         };
         peerManager.PeerDataReceived += ApplyPeerData;
         peerManager.PeerDataChannelOpened += remoteSocketId =>
+        {
             stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
+            if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
+            {
+                PeerConnectionStatusChanged?.Invoke(clientId, "data-ready");
+            }
+        };
         peerManager.PeerDataChannelStalled += remoteSocketId =>
         {
             _ = RunPeerOperationAsync(async () =>
@@ -480,7 +486,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             var remoteSocketId = response.GetValue<string>(0);
             RegisterPeerClient(remoteSocketId, response.GetValue<JsonElement>(1));
             Log("EVENT", $"join peer={remoteSocketId}");
-            _ = RunPeerOperationAsync(() => peerManager.InitiateAsync(remoteSocketId));
+            if (string.CompareOrdinal(socket.Id, remoteSocketId) < 0)
+            {
+                _ = RunPeerOperationAsync(() => peerManager.InitiateAsync(remoteSocketId));
+            }
         });
         socket.On("leave", response =>
         {
@@ -511,9 +520,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 ApplyPeerData(remoteSocketId, payload.GetString() ?? string.Empty);
                 return;
             }
-            if (type == "offer" &&
-                string.CompareOrdinal(socket.Id, remoteSocketId) < 0 &&
-                peerManager.IsInitiating(remoteSocketId))
+            if (type == "offer" && string.CompareOrdinal(socket.Id, remoteSocketId) < 0 &&
+                peerManager.ShouldDeferIncomingOffer(remoteSocketId))
             {
                 Log("EVENT", $"signal offer ignored by glare rule < {remoteSocketId}");
                 return;
