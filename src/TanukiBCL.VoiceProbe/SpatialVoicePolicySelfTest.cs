@@ -79,6 +79,47 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS: non-NoS game ignores fixer flags", true,
             SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks },
                 new Player(), jammedSpeaker, nosPolicy).Audible);
+        var nosRadioPolicy = new SpatialVoiceSettings(JackalRadioEnabled: true);
+        var distantNosSender = new Player { X = 20d };
+        Check("NoS radio: masked recipient hears distant sender", true,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), distantNosSender,
+                nosRadioPolicy, true, true).Audible);
+        Check("NoS radio: unmasked recipient cannot hear sender", false,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), distantNosSender,
+                nosRadioPolicy, true, false).Audible);
+        Check("NoS radio: meeting recipient hears sender", true,
+            SpatialVoicePolicy.Calculate(new AmongUsState
+                { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Discussion },
+                new Player(), distantNosSender, nosRadioPolicy, true, true).Audible);
+        Check("NoS radio: ghost in mask hears sender", true,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player { IsDead = true }, distantNosSender,
+                nosRadioPolicy, true, true).Audible);
+        Check("NoS radio: disabled Jackal option blocks channel", false,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), distantNosSender,
+                nosRadioPolicy with { JackalRadioEnabled = false }, true, true).Audible);
+        Check("NoS radio: impostor-radio-only blocks Jackal channel", false,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), distantNosSender,
+                nosRadioPolicy with { ImpostorRadioOnlyMode = true }, true, true).Audible);
+        Check("NoS radio: non-NoS game ignores recipient mask", false,
+            SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks },
+                new Player(), distantNosSender, nosRadioPolicy, true, true).Audible);
+        var nosJackalChannels = new List<NosRadioData>
+        {
+            new(0, -1, "impostor"),
+            new(1, unchecked((int)0x80000005), "jackal")
+        };
+        Check("NoS radio mask: kind 1 channel is present", true,
+            NosRadioRules.HasJackalChannel(nosJackalChannels));
+        Check("NoS radio mask: player 0 included", true,
+            NosRadioRules.CanHearJackalChannel(nosJackalChannels, 0));
+        Check("NoS radio mask: player 1 excluded", false,
+            NosRadioRules.CanHearJackalChannel(nosJackalChannels, 1));
+        Check("NoS radio mask: signed high bit includes player 31", true,
+            NosRadioRules.CanHearJackalChannel(nosJackalChannels, 31));
+        Check("NoS radio mask: player 32 invalid", false,
+            NosRadioRules.CanHearJackalChannel(nosJackalChannels, 32));
+        Check("NoS radio mask: impostor channel cannot impersonate Jackal", false,
+            NosRadioRules.CanHearJackalChannel([new NosRadioData(0, -1, "impostor")], 1));
         Check("dummy speaker: never audible", false,
             SpatialVoicePolicy.Calculate(discussion, new Player(), new Player { IsDummy = true },
                 new SpatialVoiceSettings()).Audible);

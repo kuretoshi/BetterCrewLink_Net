@@ -18,7 +18,8 @@ internal sealed record SpatialVoiceSettings(
     bool DeadOnly = false,
     bool MeetingGhostOnly = false,
     bool NosVoicePositions = false,
-    bool NosFixerJammingVoiceBlock = true);
+    bool NosFixerJammingVoiceBlock = true,
+    bool JackalRadioEnabled = false);
 
 internal sealed record PeerVoiceMix(
     double Gain,
@@ -42,7 +43,8 @@ internal static class SpatialVoicePolicy
         Player me,
         Player other,
         SpatialVoiceSettings settings,
-        bool otherUsingImpostorRadio = false)
+        bool otherUsingImpostorRadio = false,
+        bool nosJackalRadioHearable = false)
     {
         var isNos = state.Mod == AmongUsModType.NebulaOnTheShip;
         var useNosPositions = isNos && settings.NosVoicePositions;
@@ -81,11 +83,12 @@ internal static class SpatialVoicePolicy
                 return ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "lobby"), me, other, settings);
 
             case GameState.Discussion:
-                if (otherUsingImpostorRadio)
-                {
-                    return CanHearImpostorRadio(me, other, settings)
-                        ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio",
-                            RadioHighPass: true, RadioEcho: true), me, other, settings)
+        if (otherUsingImpostorRadio)
+        {
+            return CanHearImpostorRadio(me, other, settings) ||
+                   CanHearNosJackalRadio(state, settings, nosJackalRadioHearable)
+                ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio",
+                    RadioHighPass: true, RadioEcho: true), me, other, settings)
                         : Muted(0, distance, "radio-private");
                 }
                 return !me.IsDead && other.IsDead
@@ -98,7 +101,8 @@ internal static class SpatialVoicePolicy
 
         if (otherUsingImpostorRadio)
         {
-            return CanHearImpostorRadio(me, other, settings)
+            return CanHearImpostorRadio(me, other, settings) ||
+                   CanHearNosJackalRadio(state, settings, nosJackalRadioHearable)
                 ? ApplyListenerVolume(CreateTaskRadioMix(me, other, distance), me, other, settings)
                 : Muted(0, distance, "radio-private");
         }
@@ -213,6 +217,11 @@ internal static class SpatialVoicePolicy
         (settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&
         other.IsImpostor && !other.IsDead &&
         ((me.IsImpostor && !me.IsDead) || me.IsDead);
+
+    private static bool CanHearNosJackalRadio(AmongUsState state, SpatialVoiceSettings settings,
+        bool hearable) =>
+        state.Mod == AmongUsModType.NebulaOnTheShip && settings.JackalRadioEnabled &&
+        !settings.ImpostorRadioOnlyMode && hearable;
 
     private static PeerVoiceMix CreateTaskRadioMix(Player me, Player other, double distance)
     {

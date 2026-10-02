@@ -46,6 +46,8 @@ internal static class NosSnapshotDiagnostic
                     $"impostor={nos.IsImpostor} neutral={nos.IsNeutral} jammed={nos.IsJammed} " +
                     $"speaker=({nos.SpeakerPositionX:0.000},{nos.SpeakerPositionY:0.000})");
             }
+            foreach (var radio in state.NosRadios)
+                Console.WriteLine($"  radio kind={radio.Kind} mask=0x{radio.HearableMask:X8} name={radio.Name}");
             return 0;
         }
         catch (OperationCanceledException)
