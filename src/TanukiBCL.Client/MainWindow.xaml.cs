@@ -14,6 +14,8 @@ public partial class MainWindow : Window
     private CancellationTokenSource? runCancellation;
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
+    private OverlayWindow? overlayWindow;
+    private int? activeGamePid;
     private GlobalHotkeyMonitor? hotkeys;
     private Task? hotkeyTask;
     private volatile bool hotkeysSuspended;
@@ -93,6 +95,7 @@ public partial class MainWindow : Window
         probe?.SetMicrophoneActivationMode(settings.PushToTalkMode);
         hotkeys?.UpdateBindings(settings);
         probe?.SetOwnLobbySettings(settings.MyLobbySettings);
+        UpdateOverlayWindow();
     }
 
     private void SelectConfiguredDevices()
@@ -159,6 +162,7 @@ public partial class MainWindow : Window
         {
             MessageBox.Show(this, $"デバイス設定を保存できませんでした: {exception.Message}", "TanukiBCL");
         }
+        activeGamePid = process.Id;
         SetRunning(true);
         ShowCompactView();
         runCancellation = new CancellationTokenSource();
@@ -284,6 +288,9 @@ public partial class MainWindow : Window
             }
             runCancellation?.Dispose();
             runCancellation = null;
+            overlayWindow?.Close();
+            overlayWindow = null;
+            activeGamePid = null;
             SetRunning(false);
             if (wasStopped)
             {
@@ -503,6 +510,22 @@ public partial class MainWindow : Window
             : active?.MeetingGhostOnly == true
                 ? "会議中は幽霊のみ会話できます"
                 : null);
+        UpdateOverlayWindow();
+    }
+
+    private void UpdateOverlayWindow()
+    {
+        if (!settings.EnableOverlay || activeGamePid is not { } pid || probe is null)
+        {
+            overlayWindow?.Close();
+            overlayWindow = null;
+            return;
+        }
+        overlayWindow ??= new OverlayWindow(pid, settings);
+        var peerStatuses = peers.ToDictionary(row => row.ClientId, row => new OverlayPeerStatus(
+            row.Connection is "data-ready" or "接続済み",
+            row.VadActive, row.Radio == "送信中"));
+        overlayWindow.Update(currentState, peerStatuses, localTalking, microphoneMuted, deafened);
     }
 
     private void ShowDiagnostics()
@@ -533,6 +556,8 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         runCancellation?.Cancel();
+        overlayWindow?.Close();
+        overlayWindow = null;
         base.OnClosed(e);
     }
 

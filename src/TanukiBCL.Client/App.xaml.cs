@@ -20,6 +20,21 @@ public partial class App : Application
         {
             Trace.TraceWarning($"Could not set TanukiBCL AppUserModelID: 0x{result:X8}");
         }
+        if (e.Args.Contains("--overlay-self-test"))
+        {
+            StartupUri = null;
+            try
+            {
+                OverlayWindow.VerifyRender();
+                Shutdown(0);
+            }
+            catch (Exception error)
+            {
+                Trace.TraceError($"Overlay self-test failed: {error}");
+                Shutdown(1);
+            }
+            return;
+        }
         base.OnStartup(e);
     }
 }

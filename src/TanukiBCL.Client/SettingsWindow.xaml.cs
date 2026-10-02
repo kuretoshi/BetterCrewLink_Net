@@ -47,6 +47,12 @@ public partial class SettingsWindow : Window
         SpeakerCombo.SelectedItem = ((IEnumerable<AudioDeviceInfo>)SpeakerCombo.ItemsSource)
             .FirstOrDefault(device => device.Name == settings.SpeakerName) ?? SpeakerCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
         AlwaysOnTopCheck.IsChecked = settings.AlwaysOnTop;
+        EnableOverlayCheck.IsChecked = settings.EnableOverlay;
+        CompactOverlayCheck.IsChecked = settings.CompactOverlay;
+        MeetingOverlayCheck.IsChecked = settings.MeetingOverlay;
+        OverlayPositionCombo.SelectedItem = OverlayPositionCombo.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(item => (string?)item.Tag == settings.OverlayPosition)
+            ?? OverlayPositionCombo.Items[3];
         MasterVolumeSlider.Value = settings.MasterVolume;
         VoiceEffectStrengthSlider.Value = settings.VoiceEffectStrength;
         CrewVolumeAsGhostSlider.Value = settings.CrewVolumeAsGhost;
@@ -216,7 +222,8 @@ public partial class SettingsWindow : Window
         PlayersPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
         AudioPanel.Visibility = CategoryList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
         KeybindsPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
-        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
+        OverlayPanel.Visibility = CategoryList.SelectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
+        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ShortcutBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -445,6 +452,10 @@ public partial class SettingsWindow : Window
             MicrophoneName = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Name,
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,
             AlwaysOnTop = AlwaysOnTopCheck.IsChecked == true,
+            EnableOverlay = EnableOverlayCheck.IsChecked == true,
+            CompactOverlay = CompactOverlayCheck.IsChecked == true,
+            MeetingOverlay = MeetingOverlayCheck.IsChecked == true,
+            OverlayPosition = (OverlayPositionCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "right",
             MasterVolume = (int)MasterVolumeSlider.Value,
             VoiceEffectStrength = (int)VoiceEffectStrengthSlider.Value,
             CrewVolumeAsGhost = (int)CrewVolumeAsGhostSlider.Value,
@@ -480,6 +491,10 @@ public partial class SettingsWindow : Window
         settings.MicrophoneName = candidate.MicrophoneName;
         settings.SpeakerName = candidate.SpeakerName;
         settings.AlwaysOnTop = candidate.AlwaysOnTop;
+        settings.EnableOverlay = candidate.EnableOverlay;
+        settings.CompactOverlay = candidate.CompactOverlay;
+        settings.MeetingOverlay = candidate.MeetingOverlay;
+        settings.OverlayPosition = candidate.OverlayPosition;
         settings.MasterVolume = candidate.MasterVolume;
         settings.VoiceEffectStrength = candidate.VoiceEffectStrength;
         settings.CrewVolumeAsGhost = candidate.CrewVolumeAsGhost;

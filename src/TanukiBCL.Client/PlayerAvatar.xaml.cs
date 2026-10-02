@@ -27,6 +27,8 @@ public partial class PlayerAvatar : UserControl
         InitializeComponent();
     }
 
+    public void SetOverlayMode() => QualityBadge.Visibility = Visibility.Collapsed;
+
     public void SetPlayer(Player player, IReadOnlyList<PlayerColorPair>? colors,
         bool hideWhenAppearanceChanged = false)
     {

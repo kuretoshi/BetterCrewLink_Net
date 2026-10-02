@@ -36,6 +36,7 @@
                     <ListBoxItem Content="プレイヤー" Padding="12,9" />
                     <ListBoxItem Content="オーディオ" Padding="12,9" />
                     <ListBoxItem Content="キー割り当て" Padding="12,9" />
+                    <ListBoxItem Content="オーバーレイ" Padding="12,9" />
                     <ListBoxItem Content="詳細設定" Padding="12,9" />
                 </ListBox>
             </StackPanel>
@@ -188,6 +189,31 @@
                         <TextBlock Text="スピーカーミュート切替" />
                         <TextBox x:Name="DeafenShortcutBox" IsReadOnly="True" Margin="0,6,0,16"
                                  PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                    </StackPanel>
+                    <StackPanel x:Name="OverlayPanel" Visibility="Collapsed">
+                        <TextBlock Text="オーバーレイ" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
+                        <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="常に手前に表示"
+                                  IsChecked="{Binding IsChecked, ElementName=AlwaysOnTopCheck, Mode=TwoWay}"
+                                  Margin="0,0,0,16" />
+                        <CheckBox x:Name="EnableOverlayCheck" Content="ゲーム画面にオーバーレイを表示"
+                                  Margin="0,0,0,16" />
+                        <CheckBox x:Name="CompactOverlayCheck" Content="発話中のプレイヤーだけを表示"
+                                  IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" Margin="0,0,0,16" />
+                        <CheckBox x:Name="MeetingOverlayCheck" Content="会議中の発話枠を表示"
+                                  IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" Margin="0,0,0,20" />
+                        <TextBlock Text="アバターの位置" Margin="0,0,0,7" />
+                        <ComboBox x:Name="OverlayPositionCombo" Width="250" HorizontalAlignment="Left"
+                                  IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}">
+                            <ComboBoxItem Content="表示しない" Tag="hidden" />
+                            <ComboBoxItem Content="上" Tag="top" />
+                            <ComboBoxItem Content="左下" Tag="bottom_left" />
+                            <ComboBoxItem Content="右" Tag="right" />
+                            <ComboBoxItem Content="右（発話中に名前表示）" Tag="right1" />
+                            <ComboBoxItem Content="左" Tag="left" />
+                            <ComboBoxItem Content="左（発話中に名前表示）" Tag="left1" />
+                        </ComboBox>
+                        <TextBlock Text="ゲームが最前面で、ウィンドウ表示またはボーダーレス表示のときに重ねます。"
+                                   Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,16,0,0" />
                     </StackPanel>
                     <StackPanel x:Name="AdvancedPanel" Visibility="Collapsed">
                         <TextBlock Text="詳細設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />

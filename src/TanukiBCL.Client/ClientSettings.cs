@@ -10,6 +10,10 @@ internal sealed class ClientSettings
     public string? MicrophoneName { get; set; }
     public string? SpeakerName { get; set; }
     public bool AlwaysOnTop { get; set; }
+    public bool EnableOverlay { get; set; }
+    public bool CompactOverlay { get; set; }
+    public bool MeetingOverlay { get; set; } = true;
+    public string OverlayPosition { get; set; } = "right";
     public bool NatFix { get; set; }
     public int MasterVolume { get; set; } = 100;
     public int VoiceEffectStrength { get; set; } = 100;
@@ -43,6 +47,8 @@ internal sealed class ClientSettings
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);
         MicSensitivity = Math.Clamp(MicSensitivity, 0d, 1d);
         if (!Enum.IsDefined(PushToTalkMode)) PushToTalkMode = MicrophoneActivationMode.Voice;
+        if (OverlayPosition is not ("hidden" or "top" or "bottom_left" or "right" or
+            "right1" or "left" or "left1")) OverlayPosition = "right";
         PushToTalkShortcut = GlobalHotkeyMonitor.NormalizeShortcut(PushToTalkShortcut, "V");
         ImpostorRadioShortcut = GlobalHotkeyMonitor.NormalizeShortcut(ImpostorRadioShortcut, "F");
         MuteShortcut = GlobalHotkeyMonitor.NormalizeShortcut(MuteShortcut, "RAlt");

@@ -9,6 +9,24 @@ internal static class SpatialVoicePolicySelfTest
     public static int Run()
     {
         var failures = 0;
+        var overlayState = new AmongUsState { GameState = GameState.Tasks, Players =
+        [
+            new Player { Id = 0, ClientId = 1, IsLocal = true },
+            new Player { Id = 1, ClientId = 2, InVent = true },
+            new Player { Id = 2, ClientId = 3, IsDead = true }
+        ] };
+        var overlayPeers = new Dictionary<int, OverlayPeerStatus>
+        {
+            [2] = new(true, true, false), [3] = new(true, true, false)
+        };
+        var overlayPlayers = OverlaySelection.Select(overlayState, overlayPeers, false, false, true);
+        Check("overlay: compact selects active vent voice without speaking ring", true,
+            overlayPlayers.Count == 1 && overlayPlayers[0] is { VoiceActive: true, Talking: false } &&
+            overlayPlayers[0].Player.ClientId == 2);
+        overlayState.Players[0].IsDead = true;
+        Check("overlay: ghosts see other ghost participants", true,
+            OverlaySelection.Select(overlayState, overlayPeers, false, false, true)
+                .Any(player => player.Player.ClientId == 3));
         var snrReader = SnrLiveRoleReaderSelfTest.Verify();
         Check("SNR live reader: role and modifier names", true, snrReader.Role);
         Check("SNR live reader: Jumbo size", true, snrReader.Jumbo);

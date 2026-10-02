@@ -1,0 +1,20 @@
+<Window x:Class="TanukiBCL.Client.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+        Background="Transparent" ShowInTaskbar="False" Topmost="True"
+        Focusable="False" ShowActivated="False" IsHitTestVisible="False">
+    <Canvas x:Name="OverlayCanvas" Background="Transparent" IsHitTestVisible="False">
+        <StackPanel x:Name="Watermark" Canvas.ZIndex="3" IsHitTestVisible="False">
+            <TextBlock x:Name="WatermarkTitle" Foreground="#BA68C8" FontWeight="Bold"
+                       FontSize="16" TextAlignment="Center" />
+            <TextBlock x:Name="WatermarkServer" Foreground="#997BA4" FontWeight="SemiBold"
+                       FontSize="11" TextAlignment="Center" />
+        </StackPanel>
+        <Border x:Name="AvatarBackground" Canvas.ZIndex="2" CornerRadius="8"
+                Background="#8025232A" Padding="8" Visibility="Collapsed">
+            <WrapPanel x:Name="AvatarPanel" />
+        </Border>
+        <Canvas x:Name="MeetingCanvas" Canvas.ZIndex="1" Visibility="Collapsed" />
+    </Canvas>
+</Window>
