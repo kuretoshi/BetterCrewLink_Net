@@ -161,7 +161,7 @@ internal sealed class SnrLiveRoleReader
              directory = directory.Parent)
         {
             var development = Path.Combine(directory.FullName, "tools", "SnrRoleReader", "bin",
-                "Release", "net8.0", "win-x86", "SnrRoleReader.exe");
+                "Release", "net8.0", "win-x64", "SnrRoleReader.exe");
             if (File.Exists(development)) return development;
         }
         return null;
@@ -182,24 +182,24 @@ internal sealed class SnrLiveRoleReader
     private static Dictionary<int, SnrRoleData> ReadSnapshot(SnrLiveLayout layout,
         Func<long, int, byte[]> read)
     {
-        static bool Valid(uint pointer) => pointer is >= 0x10000 and <= 0xfffffffc && pointer % 4 == 0;
-        uint Pointer(long address) => BitConverter.ToUInt32(read(address, 4));
+        static bool Valid(ulong pointer) => pointer >= 0x10000 && pointer <= long.MaxValue && pointer % 8 == 0;
+        ulong Pointer(ulong address) => BitConverter.ToUInt64(read(checked((long)address), 8));
         var array = Pointer(layout.ArraySlot);
         if (!Valid(array) || Pointer(array) != layout.ArrayType ||
-            Pointer(array + layout.ArrayLengthOffset) != 256)
+            BitConverter.ToInt32(read(checked((long)(array + (ulong)layout.ArrayLengthOffset)), 4)) != 256)
             throw new InvalidDataException("SNR player array changed or is unavailable");
-        var entries = read(array + layout.ArrayDataOffset, 1024);
+        var entries = read(checked((long)(array + (ulong)layout.ArrayDataOffset)), 256 * 8);
         var fields = new[] { layout.Fields.PlayerId, layout.Fields.Role,
             layout.Fields.Modifier, layout.Fields.GhostRole }.Where(field => field is not null).ToArray();
         var size = fields.Max(field => field!.Offset + field.Size);
         var result = new Dictionary<int, SnrRoleData>();
         for (var id = 0; id < 256; id++)
         {
-            var player = BitConverter.ToUInt32(entries, id * 4);
+            var player = BitConverter.ToUInt64(entries, id * 8);
             if (player == 0) continue;
             if (!Valid(player)) throw new InvalidDataException("Invalid SNR player pointer");
-            var bytes = read(player, size);
-            if (BitConverter.ToUInt32(bytes) != layout.PlayerType ||
+            var bytes = read(checked((long)player), size);
+            if (BitConverter.ToUInt64(bytes) != layout.PlayerType ||
                 ReadNumber(bytes, layout.Fields.PlayerId!) != id)
                 throw new InvalidDataException("SNR player changed during read");
             var role = Describe(bytes, layout.Fields.Role!);
@@ -215,40 +215,41 @@ internal sealed class SnrLiveRoleReader
             result.Add(id, value);
         }
         if (Pointer(layout.ArraySlot) != array ||
-            !read(array + layout.ArrayDataOffset, 1024).AsSpan().SequenceEqual(entries))
+            !read(checked((long)(array + (ulong)layout.ArrayDataOffset)), entries.Length).AsSpan().SequenceEqual(entries))
             throw new InvalidDataException("SNR player array changed during read");
         return result;
     }
 
-    private static (double Current, double Max)? ReadJumbo(uint player, SnrJumboLayout jumbo,
-        uint playerType, Func<long, int, byte[]> read)
+    private static (double Current, double Max)? ReadJumbo(ulong player, SnrJumboLayout jumbo,
+        ulong playerType, Func<long, int, byte[]> read)
     {
-        static bool Valid(uint pointer) => pointer is >= 0x10000 and <= 0xfffffffc && pointer % 4 == 0;
-        uint Pointer(long address) => BitConverter.ToUInt32(read(address, 4));
+        static bool Valid(ulong pointer) => pointer >= 0x10000 && pointer <= long.MaxValue && pointer % 8 == 0;
+        ulong Pointer(ulong address) => BitConverter.ToUInt64(read(checked((long)address), 8));
+        int Count(ulong address) => BitConverter.ToInt32(read(checked((long)address), 4));
         try
         {
-            var list = Pointer(player + jumbo.AbilitiesOffset);
+            var list = Pointer(player + (ulong)jumbo.AbilitiesOffset);
             if (!Valid(list) || Pointer(list) != jumbo.ListType) return null;
-            var items = Pointer(list + jumbo.ItemsOffset);
-            var count = Pointer(list + jumbo.CountOffset);
-            if (!Valid(items) || Pointer(items) != jumbo.ItemsType || count > 512 ||
-                count > Pointer(items + 4)) return null;
-            var entries = read(items + 8, checked((int)count * 4));
+            var items = Pointer(list + (ulong)jumbo.ItemsOffset);
+            var count = Count(list + (ulong)jumbo.CountOffset);
+            if (!Valid(items) || Pointer(items) != jumbo.ItemsType || count is < 0 or > 512 ||
+                count > Count(items + 8)) return null;
+            var entries = read(checked((long)(items + 16)), count * 8);
             for (var i = 0; i < count; i++)
             {
-                var ability = BitConverter.ToUInt32(entries, i * 4);
+                var ability = BitConverter.ToUInt64(entries, i * 8);
                 if (!Valid(ability) || Pointer(ability) != jumbo.AbilityType) continue;
-                var data = Pointer(ability + jumbo.DataOffset);
+                var data = Pointer(ability + (ulong)jumbo.DataOffset);
                 if (!Valid(data) || Pointer(data) != jumbo.DataType) return null;
-                var current = BitConverter.ToSingle(read(ability + jumbo.CurrentOffset, 4));
-                var max = BitConverter.ToSingle(read(data + jumbo.MaxOffset, 4));
+                var current = BitConverter.ToSingle(read(checked((long)(ability + (ulong)jumbo.CurrentOffset)), 4));
+                var max = BitConverter.ToSingle(read(checked((long)(data + (ulong)jumbo.MaxOffset)), 4));
                 if (!float.IsFinite(current) || current < 0 || !float.IsFinite(max) || max <= 0)
                     return null;
-                if (Pointer(player) != playerType || Pointer(player + jumbo.AbilitiesOffset) != list ||
-                    Pointer(list) != jumbo.ListType || Pointer(list + jumbo.ItemsOffset) != items ||
-                    Pointer(list + jumbo.CountOffset) != count || Pointer(items) != jumbo.ItemsType ||
-                    !read(items + 8, entries.Length).AsSpan().SequenceEqual(entries) ||
-                    Pointer(ability) != jumbo.AbilityType || Pointer(ability + jumbo.DataOffset) != data ||
+                if (Pointer(player) != playerType || Pointer(player + (ulong)jumbo.AbilitiesOffset) != list ||
+                    Pointer(list) != jumbo.ListType || Pointer(list + (ulong)jumbo.ItemsOffset) != items ||
+                    Count(list + (ulong)jumbo.CountOffset) != count || Pointer(items) != jumbo.ItemsType ||
+                    !read(checked((long)(items + 16)), entries.Length).AsSpan().SequenceEqual(entries) ||
+                    Pointer(ability) != jumbo.AbilityType || Pointer(ability + (ulong)jumbo.DataOffset) != data ||
                     Pointer(data) != jumbo.DataType) return null;
                 return (current, max);
             }
@@ -323,9 +324,9 @@ internal sealed class SnrLiveLayout
 {
     public int Pid { get; set; }
     public int PointerSize { get; set; }
-    public uint ArraySlot { get; set; }
-    public uint ArrayType { get; set; }
-    public uint PlayerType { get; set; }
+    public ulong ArraySlot { get; set; }
+    public ulong ArrayType { get; set; }
+    public ulong PlayerType { get; set; }
     public int ArrayLengthOffset { get; set; }
     public int ArrayDataOffset { get; set; }
     public SnrJumboLayout? Jumbo { get; set; }
@@ -333,22 +334,22 @@ internal sealed class SnrLiveLayout
 
     public void Validate(int expectedPid)
     {
-        static bool Pointer(uint value) => value is >= 0x10000 and <= 0xfffffffc && value % 4 == 0;
-        if (Pid != expectedPid || PointerSize != 4 || !Pointer(ArraySlot) || !Pointer(ArrayType) ||
-            !Pointer(PlayerType) || ArrayLengthOffset != 4 || ArrayDataOffset != 8 ||
+        static bool Pointer(ulong value) => value >= 0x10000 && value <= long.MaxValue && value % 8 == 0;
+        if (Pid != expectedPid || PointerSize != 8 || !Pointer(ArraySlot) || !Pointer(ArrayType) ||
+            !Pointer(PlayerType) || ArrayLengthOffset != 8 || ArrayDataOffset != 16 ||
             Fields.PlayerId is null || Fields.Role is null)
             throw new InvalidDataException("Invalid SNR live layout");
         foreach (var field in new[] { Fields.PlayerId, Fields.Role, Fields.Modifier, Fields.GhostRole })
         {
             if (field is null) continue;
-            if (field.Offset < 4 || field.Offset > 1024 || field.Size is not (1 or 2 or 4) ||
-                field.Offset + field.Size > 1028)
+            if (field.Offset < 8 || field.Offset > 1024 || field.Size is not (1 or 2 or 4) ||
+                field.Offset + field.Size > 1032)
                 throw new InvalidDataException("Invalid SNR role field");
         }
         if (Jumbo is { } jumbo && (!Pointer(jumbo.AbilityType) || !Pointer(jumbo.DataType) ||
             !Pointer(jumbo.ListType) || !Pointer(jumbo.ItemsType) ||
             new[] { jumbo.AbilitiesOffset, jumbo.ItemsOffset, jumbo.CountOffset, jumbo.CurrentOffset,
-                jumbo.DataOffset, jumbo.MaxOffset }.Any(offset => offset is < 4 or > 4096 || offset % 4 != 0)))
+                jumbo.DataOffset, jumbo.MaxOffset }.Any(offset => offset is < 8 or > 4096 || offset % 4 != 0)))
             throw new InvalidDataException("Invalid SNR Jumbo layout");
     }
 }
@@ -371,10 +372,10 @@ internal sealed class SnrNumberField
 
 internal sealed class SnrJumboLayout
 {
-    public uint AbilityType { get; set; }
-    public uint DataType { get; set; }
-    public uint ListType { get; set; }
-    public uint ItemsType { get; set; }
+    public ulong AbilityType { get; set; }
+    public ulong DataType { get; set; }
+    public ulong ListType { get; set; }
+    public ulong ItemsType { get; set; }
     public int AbilitiesOffset { get; set; }
     public int ItemsOffset { get; set; }
     public int CountOffset { get; set; }

@@ -6,7 +6,7 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>3.2.7-netdev.0</Version>
+    <Version>3.2.8-netdev.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TanukiBCL.VoiceProbe\TanukiBCL.VoiceProbe.csproj" />
@@ -24,7 +24,7 @@
 
   <Target Name="BundleNosSnapshotReader" BeforeTargets="ComputeFilesToPublish">
     <MSBuild Projects="..\..\tools\TbclSnapshotReader\TbclSnapshotReader.csproj"
-             Targets="Publish"
+             Targets="Restore;Publish"
              Properties="Configuration=Release;RuntimeIdentifier=win-x64;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;DebugType=None;PublishDir=$(MSBuildProjectDirectory)\obj\nos-reader-publish\" />
     <ItemGroup>
       <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)\obj\nos-reader-publish\TbclSnapshotReader.exe">
@@ -36,8 +36,8 @@
 
   <Target Name="BundleSnrRoleReader" BeforeTargets="ComputeFilesToPublish">
     <MSBuild Projects="..\..\tools\SnrRoleReader\SnrRoleReader.csproj"
-             Targets="Publish"
-             Properties="Configuration=Release;RuntimeIdentifier=win-x86;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;DebugType=None;PublishDir=$(MSBuildProjectDirectory)\obj\snr-reader-publish\" />
+             Targets="Restore;Publish"
+             Properties="Configuration=Release;RuntimeIdentifier=win-x64;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;DebugType=None;PublishDir=$(MSBuildProjectDirectory)\obj\snr-reader-publish\" />
     <ItemGroup>
       <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)\obj\snr-reader-publish\SnrRoleReader.exe">
         <RelativePath>RoleReaders\SnrRoleReader.exe</RelativePath>
@@ -48,7 +48,7 @@
 
   <Target Name="BundleUpdater" BeforeTargets="ComputeFilesToPublish">
     <MSBuild Projects="..\..\tools\TanukiBCL.Updater\TanukiBCL.Updater.csproj"
-             Targets="Publish"
+             Targets="Restore;Publish"
              Properties="Configuration=Release;RuntimeIdentifier=win-x64;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;DebugType=None;PublishDir=$(MSBuildProjectDirectory)\obj\updater-publish\" />
     <ItemGroup>
       <ResolvedFileToPublish Include="$(MSBuildProjectDirectory)\obj\updater-publish\TanukiBCL.Updater.exe">

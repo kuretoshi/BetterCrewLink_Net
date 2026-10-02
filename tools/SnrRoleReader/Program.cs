@@ -13,6 +13,8 @@ try
     if (process.ProcessName != "Among Us") throw new InvalidOperationException("Among Us process required");
     long started = process.StartTime.ToUniversalTime().Ticks;
     using var target = DataTarget.CreateSnapshotAndAttach(pid);
+    if (target.DataReader.PointerSize != 8)
+        throw new InvalidOperationException("Only 64-bit Among Us is supported");
     var info = target.ClrVersions.FirstOrDefault() ?? throw new InvalidOperationException("CoreCLR not found");
     using var runtime = info.CreateRuntime();
     if (args.Length > 1 && args[1] == "--toh") {
@@ -70,8 +72,8 @@ catch (Exception error)
 
 static object? BuildLiveLayout(int pid, SnrPlayerSource source, int pointerSize, Dictionary<string, Dictionary<long,string>> enums)
 {
-    // The native live reader currently supports the x86 CoreCLR used by SNR.
-    if (pointerSize != 4 || source.PlayerType.IsCollectible) return null;
+    // The .NET port targets the 64-bit Among Us process only.
+    if (pointerSize != 8 || source.PlayerType.IsCollectible) return null;
     object? DescribeField(string name)
     {
         var field = source.PlayerType.Fields.FirstOrDefault(f => f.Name == name || f.Name == $"<{name}>k__BackingField");
