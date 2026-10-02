@@ -16,7 +16,9 @@ internal sealed record SpatialVoiceSettings(
     double GhostVolumeAsImpostor = 0.1d,
     double CrewVolumeAsGhost = 1d,
     bool DeadOnly = false,
-    bool MeetingGhostOnly = false);
+    bool MeetingGhostOnly = false,
+    bool NosVoicePositions = false,
+    bool NosFixerJammingVoiceBlock = true);
 
 internal sealed record PeerVoiceMix(
     double Gain,
@@ -42,14 +44,26 @@ internal static class SpatialVoicePolicy
         SpatialVoiceSettings settings,
         bool otherUsingImpostorRadio = false)
     {
-        var deltaX = other.X - me.X;
-        var deltaY = other.Y - me.Y;
+        var isNos = state.Mod == AmongUsModType.NebulaOnTheShip;
+        var useNosPositions = isNos && settings.NosVoicePositions;
+        var meX = useNosPositions ? state.NosLocalMicPosition?.X ?? me.X : me.X;
+        var meY = useNosPositions ? state.NosLocalMicPosition?.Y ?? me.Y : me.Y;
+        var otherX = useNosPositions ? other.NosPlayer?.SpeakerPositionX ?? other.X : other.X;
+        var otherY = useNosPositions ? other.NosPlayer?.SpeakerPositionY ?? other.Y : other.Y;
+        var deltaX = otherX - meX;
+        var deltaY = otherY - meY;
         var distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
         var pan = CalculatePan(deltaX, settings);
 
-        if (other.Disconnected)
+        if (other.Disconnected || other.IsDummy)
         {
-            return Muted(pan, distance, "disconnected");
+            return Muted(pan, distance, other.IsDummy ? "dummy" : "disconnected");
+        }
+
+        if (isNos && settings.NosFixerJammingVoiceBlock &&
+            (me.NosPlayer?.IsJammed == true || other.NosPlayer?.IsJammed == true))
+        {
+            return Muted(pan, distance, "nos-fixer-jamming");
         }
 
         if (settings.DeadOnly && (!me.IsDead || !other.IsDead))
@@ -128,7 +142,8 @@ internal static class SpatialVoicePolicy
         var cameraMuffle = false;
         if (distance > settings.MaxDistance && settings.HearThroughCameras &&
             state.CurrentCamera != CameraLocation.None &&
-            CameraGeometry.TryRelativePosition(state.Map, state.CurrentCamera, other,
+            CameraGeometry.TryRelativePosition(state.Map, state.CurrentCamera,
+                new Player { X = otherX, Y = otherY },
                 out var cameraDeltaX, out var cameraDeltaY))
         {
             var cameraDistance = Math.Sqrt(cameraDeltaX * cameraDeltaX + cameraDeltaY * cameraDeltaY);
@@ -156,7 +171,8 @@ internal static class SpatialVoicePolicy
         }
 
         if (!cameraMuffle && settings.WallsBlockAudio && !me.IsDead &&
-            WallCollision.Intersects(me, other, state.Map, state.ClosedDoors))
+            WallCollision.Intersects(new Player { X = meX, Y = meY },
+                new Player { X = otherX, Y = otherY }, state.Map, state.ClosedDoors))
         {
             return Muted(pan, distance, "wall-blocked");
         }

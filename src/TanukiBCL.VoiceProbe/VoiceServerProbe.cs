@@ -745,7 +745,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             WallsBlockAudio = next.WallsBlockAudio,
             Haunting = next.Haunting,
             DeadOnly = next.DeadOnly,
-            MeetingGhostOnly = next.MeetingGhostOnly
+            MeetingGhostOnly = next.MeetingGhostOnly,
+            NosVoicePositions = next.NosVoicePositions,
+            NosFixerJammingVoiceBlock = next.NosFixerJammingVoiceBlock
         };
         if (options.AutoRadioTone && !impostorRadioTransmitting && CanUseImpostorRadio)
         {

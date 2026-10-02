@@ -89,6 +89,8 @@ public sealed class Player
 
     public bool InVent { get; set; }
 
+    public NosPlayerData? NosPlayer { get; set; }
+
     public bool HasVisibleAppearanceChanged()
     {
         if (CurrentOutfit is <= 0 or > 10) return false;
@@ -100,6 +102,17 @@ public sealed class Player
 
     private static string Normalize(string id, string emptyId) => id == emptyId ? string.Empty : id;
 }
+
+public sealed class NosPlayerData
+{
+    public bool? IsJammed { get; set; }
+
+    public double SpeakerPositionX { get; set; }
+
+    public double SpeakerPositionY { get; set; }
+}
+
+public sealed record VoicePosition(double X, double Y);
 
 public sealed class AmongUsState
 {
@@ -132,6 +145,8 @@ public sealed class AmongUsState
     public MapType Map { get; set; } = MapType.Unknown;
 
     public CameraLocation CurrentCamera { get; set; } = CameraLocation.None;
+
+    public VoicePosition? NosLocalMicPosition { get; set; }
 
     public List<int> ClosedDoors { get; set; } = [];
 }

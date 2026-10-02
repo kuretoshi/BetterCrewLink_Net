@@ -39,6 +39,50 @@ internal static class SpatialVoicePolicySelfTest
             SpatialVoicePolicy.Calculate(discussion, new Player(), new Player { IsDead = true },
                 new SpatialVoiceSettings()).Audible);
 
+        var nosTasks = new AmongUsState
+        {
+            Mod = AmongUsModType.NebulaOnTheShip,
+            GameState = GameState.Tasks,
+            NosLocalMicPosition = new VoicePosition(20d, 0d)
+        };
+        var nosSpeaker = new Player
+        {
+            X = 50d,
+            NosPlayer = new NosPlayerData { SpeakerPositionX = 21d, SpeakerPositionY = 0d }
+        };
+        var nosPolicy = new SpatialVoiceSettings(NosVoicePositions: true);
+        Check("NoS: published microphone and speaker positions determine proximity", true,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), nosSpeaker, nosPolicy).Audible);
+        Check("NoS: disabled position option uses vanilla coordinates", false,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), nosSpeaker,
+                nosPolicy with { NosVoicePositions = false }).Audible);
+        Check("NoS: published position places speaker out of range", false,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(),
+                new Player { X = 1d, NosPlayer = new NosPlayerData { SpeakerPositionX = 30d } },
+                nosPolicy).Audible);
+        Check("NoS: non-NoS game ignores published positions", false,
+            SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks },
+                new Player(), nosSpeaker, nosPolicy).Audible);
+        var jammedSpeaker = new Player { NosPlayer = new NosPlayerData { IsJammed = true } };
+        var jammedListener = new Player { NosPlayer = new NosPlayerData { IsJammed = true } };
+        Check("NoS: jammed speaker is silent in meeting", false,
+            SpatialVoicePolicy.Calculate(new AmongUsState
+                { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Discussion },
+                new Player(), jammedSpeaker, nosPolicy).Audible);
+        Check("NoS: jammed listener hears nothing in lobby", false,
+            SpatialVoicePolicy.Calculate(new AmongUsState
+                { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Lobby },
+                jammedListener, new Player(), nosPolicy).Audible);
+        Check("NoS: disabled fixer block restores speech", true,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), jammedSpeaker,
+                nosPolicy with { NosVoicePositions = false, NosFixerJammingVoiceBlock = false }).Audible);
+        Check("NoS: non-NoS game ignores fixer flags", true,
+            SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks },
+                new Player(), jammedSpeaker, nosPolicy).Audible);
+        Check("dummy speaker: never audible", false,
+            SpatialVoicePolicy.Calculate(discussion, new Player(), new Player { IsDummy = true },
+                new SpatialVoiceSettings()).Audible);
+
         var radioOnlyPolicy = new SpatialVoiceSettings(ImpostorRadioEnabled: true,
             ImpostorRadioOnlyMode: true, MeetingGhostOnly: true);
         var tasks = new AmongUsState { GameState = GameState.Tasks };
