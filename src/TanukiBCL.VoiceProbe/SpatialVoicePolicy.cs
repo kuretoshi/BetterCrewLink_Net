@@ -20,7 +20,8 @@ internal sealed record PeerVoiceMix(
     double Gain,
     double Pan,
     double Distance,
-    string Reason)
+    string Reason,
+    bool Muffled = false)
 {
     public bool Audible => Gain > 0.0001d;
 }
@@ -117,13 +118,21 @@ internal static class SpatialVoicePolicy
             baseGain *= settings.GhostVolumeAsImpostor;
         }
 
+        // v3.2.7 applies a 2 kHz low-pass to living vent audio. Its separate
+        // gain node is halved only when the otherwise-unmodified gain is 1.
+        var ventMuffle = (me.InVent && !me.IsDead) || (other.InVent && !other.IsDead);
+        if (ventMuffle && Math.Abs(baseGain - 1d) < 0.0001d)
+        {
+            baseGain = 0.5d;
+        }
+
         var distanceGain = LinearDistanceGain(distance, settings.MaxDistance);
         if (distanceGain <= 0)
         {
             return Muted(pan, distance, "out-of-range");
         }
 
-        return ApplyListenerVolume(new PeerVoiceMix(baseGain * distanceGain, pan, distance, "proximity"), me, other, settings);
+        return ApplyListenerVolume(new PeerVoiceMix(baseGain * distanceGain, pan, distance, "proximity", ventMuffle), me, other, settings);
     }
 
     private static PeerVoiceMix ApplyListenerVolume(PeerVoiceMix mix, Player me, Player other,

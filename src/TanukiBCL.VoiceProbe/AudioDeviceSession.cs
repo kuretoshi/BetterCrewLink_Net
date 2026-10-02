@@ -146,6 +146,7 @@ internal sealed class AudioDeviceSession : IDisposable
         var peer = GetOrCreatePeerPlayback(peerId);
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
         peer.Panning.Pan = (float)Math.Clamp(mix.Pan, -1d, 1d);
+        peer.Muffle.Enabled = mix.Muffled;
     }
 
     public void RemovePeer(string peerId)
@@ -179,9 +180,10 @@ internal sealed class AudioDeviceSession : IDisposable
                 LeftVolume = 0.5f,
                 RightVolume = 0.5f
             };
-            var panning = new PanningSampleProvider(mono);
+            var muffle = new VentMuffleSampleProvider(mono);
+            var panning = new PanningSampleProvider(muffle);
             var volume = new VolumeSampleProvider(panning);
-            var created = new PeerPlayback(buffer, panning, volume);
+            var created = new PeerPlayback(buffer, muffle, panning, volume);
             peerPlayback[peerId] = created;
             playbackMixer.AddMixerInput(volume);
             return created;
@@ -310,8 +312,10 @@ internal sealed class AudioDeviceSession : IDisposable
 
     private sealed record PeerPlayback(
         BufferedWaveProvider Buffer,
+        VentMuffleSampleProvider Muffle,
         PanningSampleProvider Panning,
         VolumeSampleProvider Volume);
+
 }
 
 internal sealed record AudioDeviceInfo(int Id, string Name)

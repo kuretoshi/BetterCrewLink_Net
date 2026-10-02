@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NAudio.Wave;
 using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
@@ -80,6 +81,22 @@ internal static class SpatialVoicePolicySelfTest
             SpatialVoicePolicy.Calculate(tasks, new Player { IsImpostor = true },
                 new Player { IsDead = true }, ghostVolumePolicy).Gain);
 
+        var ventPolicy = new SpatialVoiceSettings(HearImpostorsInVents: true,
+            ImpostorsHearImpostorsInVents: true, ImpostorRadioEnabled: true);
+        var ventSpeaker = new Player { IsImpostor = true, InVent = true };
+        var impostorListener = new Player { IsImpostor = true };
+        var ventMix = SpatialVoicePolicy.Calculate(tasks, impostorListener, ventSpeaker, ventPolicy);
+        Check("vent: proximity voice is muffled", true, ventMix.Muffled);
+        CheckGain("vent: unmodified gain is halved", 0.5d, ventMix.Gain);
+        Check("vent: meeting voice is not muffled", false,
+            SpatialVoicePolicy.Calculate(discussion, impostorListener, ventSpeaker, ventPolicy).Muffled);
+        Check("vent: radio voice is not muffled", false,
+            SpatialVoicePolicy.Calculate(tasks, impostorListener, ventSpeaker, ventPolicy, true).Muffled);
+        var lowTone = MeasureFilteredRms(500d);
+        var highTone = MeasureFilteredRms(8_000d);
+        Check("vent DSP: low frequency remains audible", true, lowTone > 0.1d);
+        Check("vent DSP: high frequency attenuated", true, highTone < lowTone * 0.25d);
+
         var lobbySettings = new LobbySettings
         {
             MaxDistance = 7.4d,
@@ -122,8 +139,8 @@ internal static class SpatialVoicePolicySelfTest
             (beforeRadioOnly with { Haunting = true }));
 
         Console.WriteLine(failures == 0
-            ? "[PASS] 3.2.7 radio and listener-volume policy: Tasks/Discussion, impostor/crew/ghost"
-            : $"[FAIL] 3.2.7 radio and listener-volume policy: {failures} cases failed");
+            ? "[PASS] 3.2.7 radio, listener-volume, and vent-muffle policy"
+            : $"[FAIL] 3.2.7 radio, listener-volume, and vent-muffle policy: {failures} cases failed");
         return failures == 0 ? 0 : 1;
 
         void Check(string name, bool expected, bool actual)
@@ -148,4 +165,30 @@ internal static class SpatialVoicePolicySelfTest
         X = source.X,
         Y = source.Y
     };
+
+    private static double MeasureFilteredRms(double frequency)
+    {
+        var filter = new VentMuffleSampleProvider(new TestSineSource(frequency)) { Enabled = true };
+        var samples = new float[4_800];
+        filter.Read(samples, 0, samples.Length);
+        var steadySamples = samples.AsSpan(2_400);
+        var energy = 0d;
+        foreach (var sample in steadySamples) energy += sample * sample;
+        return Math.Sqrt(energy / steadySamples.Length);
+    }
+
+    private sealed class TestSineSource(double frequency) : ISampleProvider
+    {
+        private long position;
+        public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(48_000, 1);
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            for (var index = 0; index < count; index++)
+            {
+                buffer[offset + index] = 0.25f * (float)Math.Sin(2d * Math.PI * frequency * position++ / 48_000d);
+            }
+            return count;
+        }
+    }
 }
