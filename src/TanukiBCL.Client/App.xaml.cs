@@ -31,7 +31,7 @@ public partial class App : Application
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
             e.Args.Contains("--input-processing-self-test") || e.Args.Contains("--inquiry-self-test") ||
-            e.Args.Contains("--support-log-self-test"))
+            e.Args.Contains("--support-log-self-test") || e.Args.Contains("--update-catalog-self-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
@@ -72,6 +72,8 @@ public partial class App : Application
                     Task.Run(InquirySubmission.VerifyAsync).GetAwaiter().GetResult();
                 }
                 if (e.Args.Contains("--support-log-self-test")) SupportLog.Verify();
+                if (e.Args.Contains("--update-catalog-self-test"))
+                    Task.Run(UpdateCatalog.VerifyAsync).GetAwaiter().GetResult();
                 if (e.Args.Contains("--self-test-failure-exit"))
                     throw new InvalidOperationException("Deliberate self-test exit-code verification.");
                 Shutdown(0);
