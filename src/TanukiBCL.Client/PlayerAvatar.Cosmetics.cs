@@ -22,18 +22,21 @@ public partial class PlayerAvatar
         var hat = Select(outfit, player.AppearanceHatId, player.HatId, "hat_NoHat");
         var skin = Select(outfit, player.AppearanceSkinId, player.SkinId, "skin_None");
         var visor = Select(outfit, player.AppearanceVisorId, player.VisorId, "visor_EmptyVisor");
+        var secondary = mod == AmongUsModType.SuperNewRoles && !player.Disconnected ? player.SnrRole : null;
+        var hat2 = secondary?.Hat2Id is { } secondHat && secondHat != "hat_NoHat" ? secondHat : "";
+        var visor2 = secondary?.Visor2Id is { } secondVisor && secondVisor != "visor_EmptyVisor" ? secondVisor : "";
         var colors = AvatarImageFactory.GetSwatchColors(colorId, palette);
-        var key = $"{gameExecutable}|{player.IsDead}|{mod}|{hat}|{skin}|{visor}|{colors}";
+        var key = $"{gameExecutable}|{player.IsDead}|{mod}|{hat}|{skin}|{visor}|{hat2}|{visor2}|{colors}";
         if (key == cosmeticKey && (cosmeticRetryAt == default || DateTimeOffset.UtcNow < cosmeticRetryAt)) return;
         cosmeticKey = key;
         cosmeticRetryAt = default;
         var generation = ++cosmeticGeneration;
         CosmeticBack.Children.Clear(); CosmeticSkin.Children.Clear(); CosmeticFront.Children.Clear();
-        if (player.IsDead || string.IsNullOrEmpty(hat + skin + visor)) return;
-        _ = LoadCosmeticsAsync(generation, hat, skin, visor, mod, colors, gameExecutable);
+        if (player.IsDead || string.IsNullOrEmpty(hat + skin + visor + hat2 + visor2)) return;
+        _ = LoadCosmeticsAsync(generation, hat, skin, visor, hat2, visor2, mod, colors, gameExecutable);
     }
 
-    private async Task LoadCosmeticsAsync(long generation, string hat, string skin, string visor,
+    private async Task LoadCosmeticsAsync(long generation, string hat, string skin, string visor, string hat2, string visor2,
         AmongUsModType mod, (Color Main, Color Shadow) colors, string gameExecutable)
     {
         try
@@ -41,7 +44,7 @@ public partial class PlayerAvatar
             var catalog = await catalogLoader();
             SnrCosmeticCatalog? snr = null;
             var retrySnr = false;
-            if (mod == AmongUsModType.SuperNewRoles && new[] { hat, skin, visor }.Any(id => id.StartsWith("Modded_", StringComparison.Ordinal)))
+            if (mod == AmongUsModType.SuperNewRoles && new[] { hat, skin, visor, hat2, visor2 }.Any(id => id.StartsWith("Modded_", StringComparison.Ordinal)))
             {
                 try { snr = await snrCatalogLoader(); }
                 catch (Exception error) { retrySnr = true; System.Diagnostics.Trace.TraceWarning($"SNR definitions unavailable: {error.Message}"); }
@@ -57,7 +60,11 @@ public partial class PlayerAvatar
                 _ => "NONE"
             };
             foreach (var (id, part, target) in new[] {
-                (hat, CosmeticPart.HatBack, CosmeticBack), (skin, CosmeticPart.Skin, CosmeticSkin),
+                // Upstream z-order: backs 4/5, body 6, skin 7, secondary
+                // hat 10, secondary visor 20, primary hat 30, primary visor 40.
+                (hat, CosmeticPart.HatBack, CosmeticBack), (hat2, CosmeticPart.HatBack, CosmeticBack),
+                (skin, CosmeticPart.Skin, CosmeticSkin),
+                (hat2, CosmeticPart.Hat, CosmeticFront), (visor2, CosmeticPart.Visor, CosmeticFront),
                 (hat, CosmeticPart.Hat, CosmeticFront), (visor, CosmeticPart.Visor, CosmeticFront) })
             {
                 if (generation != cosmeticGeneration) return;
@@ -219,5 +226,67 @@ public partial class PlayerAvatar
         Console.WriteLine("[PASS] Cosmetic layers, placement, base clip, death and stale asynchronous results");
         Console.WriteLine("[PASS] NoS adaptive cosmetic rendered pixels and published color changes");
         Console.WriteLine("[PASS] SNR remote layers and visor image-size layout in PlayerAvatar");
+        VerifySecondaryCosmetics();
+    }
+
+    private static void VerifySecondaryCosmetics()
+    {
+        static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
+        var bitmap = System.Windows.Media.Imaging.BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32,
+            null, new byte[] { 0, 0, 255, 255 }, 4);
+        bitmap.Freeze();
+        var catalog = CosmeticCatalog.Parse("""
+            {"NONE":{"defaultWidth":"100%","hats":{
+            "hat":{"image":"hat.png","back_image":"back.png"},"visor":{"image":"visor.png"},
+            "hat2":{"image":"hat2.png","back_image":"back2.png"},"visor2":{"image":"visor2.png"}}}}
+            """);
+        var avatar = new PlayerAvatar { catalogLoader = () => Task.FromResult(catalog), imageLoader = _ => Task.FromResult(bitmap) };
+        var player = new Player { HatId = "hat", VisorId = "visor",
+            CurrentOutfit = 1, AppearanceHatId = "hat", AppearanceVisorId = "visor",
+            SnrRole = new SnrRoleData(0, null, null, null, null, null, Hat2Id: "hat2", Visor2Id: "visor2") };
+        static string[] Names(Canvas canvas) => canvas.Children.Cast<Image>()
+            .Select(image => System.IO.Path.GetFileName(((CosmeticAsset)image.Tag).Url.AbsolutePath)).ToArray();
+        avatar.SetPlayer(player, null, mod: AmongUsModType.SuperNewRoles);
+        Require(Names(avatar.CosmeticBack).SequenceEqual(new[] { "back.png", "back2.png" }) &&
+            Names(avatar.CosmeticFront).SequenceEqual(new[] { "hat2.png", "visor2.png", "hat.png", "visor.png" }),
+            "SNR secondary layer order or disguise handling differs from 3.2.7");
+        player.SnrRole = player.SnrRole with { Hat2Id = "hat_NoHat", Visor2Id = "visor_EmptyVisor" };
+        avatar.SetPlayer(player, null, mod: AmongUsModType.SuperNewRoles);
+        Require(avatar.CosmeticBack.Children.Count == 1 && avatar.CosmeticFront.Children.Count == 2, "Empty secondary IDs did not remove layers");
+        player.SnrRole = player.SnrRole with { Hat2Id = "hat2", Visor2Id = "visor2" };
+        avatar.SetPlayer(player, null, mod: AmongUsModType.None);
+        Require(avatar.CosmeticFront.Children.Count == 2, "SNR secondary layers leaked into another MOD");
+        player.IsDead = true;
+        avatar.SetPlayer(player, null, mod: AmongUsModType.SuperNewRoles);
+        Require(avatar.CosmeticBack.Children.Count == 0 && avatar.CosmeticFront.Children.Count == 0, "Dead player retained secondary layers");
+        player.IsDead = false;
+        player.Disconnected = true;
+        avatar.SetPlayer(player, null, mod: AmongUsModType.SuperNewRoles);
+        Require(avatar.CosmeticFront.Children.Count == 2, "Disconnected player retained secondary metadata");
+        player.Disconnected = false;
+        var pending = new TaskCompletionSource<System.Windows.Media.Imaging.BitmapSource>();
+        avatar.imageLoader = _ => pending.Task;
+        avatar.SetPlayer(player, null, mod: AmongUsModType.SuperNewRoles);
+        player.SnrRole = null;
+        avatar.imageLoader = _ => Task.FromResult(bitmap);
+        avatar.SetPlayer(player, null, mod: AmongUsModType.SuperNewRoles);
+        pending.SetResult(bitmap);
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+            new Action(() => frame.Continue = false));
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+        Require(Names(avatar.CosmeticFront).SequenceEqual(new[] { "hat.png", "visor.png" }), "Late secondary image survived metadata removal");
+        avatar.snrCatalogLoader = () => Task.FromResult(SnrCosmeticCatalog.Parse("""
+            {"hats":[{"name":"Extra","resource":"extra.png","backresource":"extra_back.png"}]}
+            """, """
+            {"Visors":[{"name":"Extra","resource":"extra_visor.png"}]}
+            """));
+        avatar.SetPlayer(new Player { SnrRole = new SnrRoleData(0, null, null, null, null, null,
+            Hat2Id: "Modded_NONE_PACKAGE_Extra", Visor2Id: "Modded_NONE_PACKAGE_Extra") }, null,
+            mod: AmongUsModType.SuperNewRoles);
+        Require(Names(avatar.CosmeticBack).SequenceEqual(new[] { "extra_back.png" }) &&
+            Names(avatar.CosmeticFront).SequenceEqual(new[] { "extra.png", "extra_visor.png" }),
+            "Secondary-only outfit did not request SNR remote definitions");
+        Console.WriteLine("[PASS] SNR secondary layer order, disguise, empty IDs, MOD isolation, death, disconnect and stale response removal");
     }
 }
