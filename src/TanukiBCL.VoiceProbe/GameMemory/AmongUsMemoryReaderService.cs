@@ -486,6 +486,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             IsThirdParty = roleTeam != 0 && roleTeam != 1,
             IsDead = data.Dead == 1,
             IsLocal = isLocal,
+            IsDummy = isDummy,
             X = Math.Round(x, 4),
             Y = Math.Round(y, 4),
             InVent = inVent

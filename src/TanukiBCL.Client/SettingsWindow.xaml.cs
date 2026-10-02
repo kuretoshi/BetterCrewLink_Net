@@ -1,8 +1,12 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using TanukiBCL.VoiceProbe;
+using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.Client;
 
@@ -15,14 +19,24 @@ public partial class SettingsWindow : Window
     private LobbySettings? radioOnlyBackup;
     private bool loadingLobbyControls;
     private bool showingCurrentLobby;
+    private AmongUsState? currentGameState;
+    private readonly Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged;
+    private string playersSignature = string.Empty;
+    private static readonly Geometry VolumeUp = Geometry.Parse(
+        "M3 9v6h4l5 5V4L7 9zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77");
+    private static readonly Geometry VolumeOff = Geometry.Parse(
+        "M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63m2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71M4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9zM12 4 9.91 6.09 12 8.18z");
 
     internal SettingsWindow(ClientSettings settings, bool lobbySettingsEditable,
-        LobbySettings? currentLobbySettings, bool preferCurrentLobby)
+        LobbySettings? currentLobbySettings, bool preferCurrentLobby, AmongUsState? gameState,
+        Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged)
     {
         InitializeComponent();
         this.settings = settings;
         this.lobbySettingsEditable = lobbySettingsEditable;
         this.currentLobbySettings = currentLobbySettings;
+        currentGameState = gameState;
+        this.onPlayerConfigChanged = onPlayerConfigChanged;
         lobbyDraft = settings.MyLobbySettings;
         radioOnlyBackup = settings.RadioOnlyBackup;
         MicrophoneCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
@@ -57,6 +71,7 @@ public partial class SettingsWindow : Window
             MyLobbyTab.IsChecked = true;
         }
         ShowSelectedLobbySettings();
+        RenderPlayers();
         CategoryList.SelectedIndex = 0;
         UpdateVolumeLabels();
     }
@@ -67,14 +82,137 @@ public partial class SettingsWindow : Window
         if (showingCurrentLobby) ShowSelectedLobbySettings();
     }
 
+    internal void UpdateCurrentGameState(AmongUsState? state)
+    {
+        currentGameState = state;
+        var signature = string.Join(';', (state?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
+            .OrderBy(player => player.ClientId)
+            .Select(player => $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{player.Disconnected}"));
+        if (signature == playersSignature) return;
+        RenderPlayers();
+    }
+
+    private void RenderPlayers()
+    {
+        if (PlayerRows is null) return;
+        PlayerRows.Children.Clear();
+        var players = (currentGameState?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
+            .OrderBy(player => player.ClientId).ToArray();
+        playersSignature = string.Join(';', players.Select(player =>
+            $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{player.Disconnected}"));
+        if (players.Length == 0)
+        {
+            PlayerRows.Children.Add(new TextBlock
+            {
+                Text = "調整できるプレイヤーがいません。",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xb7, 0xaa, 0xbd))
+            });
+            return;
+        }
+
+        foreach (var player in players) PlayerRows.Children.Add(CreatePlayerRow(player));
+    }
+
+    private Border CreatePlayerRow(Player player)
+    {
+        var (main, shadow) = AvatarImageFactory.GetSwatchColors(player.ColorId, currentGameState?.PlayerColors);
+        var swatch = new Ellipse
+        {
+            Width = 12, Height = 12, Stroke = new SolidColorBrush(shadow), StrokeThickness = 1,
+            Fill = player.ColorId == AvatarImageFactory.RainbowColorId
+                ? new LinearGradientBrush([new GradientStop(Colors.Red, 0),
+                    new GradientStop(Colors.Yellow, 0.25), new GradientStop(Colors.Lime, 0.5),
+                    new GradientStop(Colors.DeepSkyBlue, 0.75), new GradientStop(Colors.Purple, 1)], 0)
+                : new SolidColorBrush(main),
+            Margin = new Thickness(0, 0, 7, 0)
+        };
+        var heading = new StackPanel { Orientation = Orientation.Horizontal };
+        heading.Children.Add(swatch);
+        heading.Children.Add(new TextBlock { Text = player.Name, FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 275 });
+        if (player.Disconnected)
+            heading.Children.Add(new TextBlock { Text = "  切断済み", Foreground = Brushes.Gray, FontSize = 11 });
+
+        var muteIcon = new System.Windows.Shapes.Path
+        {
+            Width = 21, Height = 21, Fill = Brushes.White, Stretch = Stretch.Uniform
+        };
+        var mute = new Button
+        {
+            Width = 30, Height = 30, Padding = new Thickness(4), BorderThickness = new Thickness(0),
+            Content = muteIcon, ToolTip = "このプレイヤーをミュート", IsEnabled = !player.Disconnected,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        var slider = new Slider
+        {
+            Minimum = 0, Maximum = 2, TickFrequency = 0.02, IsSnapToTickEnabled = true,
+            SmallChange = 0.02, LargeChange = 0.1, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 8, 0),
+            Value = PlayerAudioConfig.For(player, settings.PlayerConfigMap).Volume
+        };
+        AutomationProperties.SetName(slider, $"{player.Name}の音量");
+        var value = new TextBlock { Width = 62, TextAlignment = TextAlignment.Right };
+        void UpdateControls()
+        {
+            var config = PlayerAudioConfig.For(player, settings.PlayerConfigMap);
+            muteIcon.Data = config.IsMuted ? VolumeOff : VolumeUp;
+            mute.Background = new SolidColorBrush(config.IsMuted
+                ? Color.FromArgb(0x24, 0xf4, 0x43, 0x36) : Color.FromArgb(0x10, 0xff, 0xff, 0xff));
+            mute.ToolTip = config.IsMuted ? "このプレイヤーのミュートを解除" : "このプレイヤーをミュート";
+            AutomationProperties.SetName(mute, $"{player.Name}: {mute.ToolTip}");
+            slider.IsEnabled = !player.Disconnected && !config.IsMuted;
+            value.Text = config.IsMuted ? "ミュート" : $"{Math.Floor(config.Volume * 100d)}%";
+        }
+        UpdateControls();
+        mute.Click += (_, _) =>
+        {
+            var config = PlayerAudioConfig.For(player, settings.PlayerConfigMap);
+            onPlayerConfigChanged(player.PlayerConfigId, config with { IsMuted = !config.IsMuted }, true);
+            UpdateControls();
+        };
+        slider.ValueChanged += (_, _) =>
+        {
+            var config = PlayerAudioConfig.For(player, settings.PlayerConfigMap);
+            onPlayerConfigChanged(player.PlayerConfigId, config with { Volume = slider.Value }, false);
+            UpdateControls();
+        };
+        void PersistVolume()
+        {
+            var config = PlayerAudioConfig.For(player, settings.PlayerConfigMap);
+            onPlayerConfigChanged(player.PlayerConfigId, config with { Volume = slider.Value }, true);
+        }
+        slider.PreviewMouseLeftButtonUp += (_, _) => PersistVolume();
+        slider.KeyUp += (_, _) => PersistVolume();
+
+        var controls = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        controls.Children.Add(mute);
+        Grid.SetColumn(slider, 1);
+        controls.Children.Add(slider);
+        Grid.SetColumn(value, 2);
+        controls.Children.Add(value);
+        var content = new StackPanel();
+        content.Children.Add(heading);
+        content.Children.Add(controls);
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x29, 0x25, 0x2f)),
+            CornerRadius = new CornerRadius(6), Padding = new Thickness(14),
+            Margin = new Thickness(0, 0, 0, 10), Child = content
+        };
+    }
+
     private void CategoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (GeneralPanel is null) return;
         GeneralPanel.Visibility = CategoryList.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
         LobbyPanel.Visibility = CategoryList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-        AudioPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
-        KeybindsPanel.Visibility = CategoryList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
-        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
+        PlayersPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
+        AudioPanel.Visibility = CategoryList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
+        KeybindsPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
+        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ShortcutBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -234,7 +372,8 @@ public partial class SettingsWindow : Window
             MuteShortcut = MuteShortcutBox.Text,
             DeafenShortcut = DeafenShortcutBox.Text,
             MyLobbySettings = showingCurrentLobby ? lobbyDraft : ReadLobbyControls(),
-            RadioOnlyBackup = radioOnlyBackup
+            RadioOnlyBackup = radioOnlyBackup,
+            PlayerConfigMap = settings.PlayerConfigMap.ToDictionary(pair => pair.Key, pair => pair.Value)
         };
         try
         {
@@ -263,6 +402,7 @@ public partial class SettingsWindow : Window
         settings.DeafenShortcut = candidate.DeafenShortcut;
         settings.MyLobbySettings = candidate.MyLobbySettings;
         settings.RadioOnlyBackup = candidate.RadioOnlyBackup;
+        settings.PlayerConfigMap = candidate.PlayerConfigMap;
         DialogResult = true;
     }
 

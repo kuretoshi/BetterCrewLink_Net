@@ -81,6 +81,8 @@ public sealed class Player
 
     public bool IsLocal { get; set; }
 
+    public bool IsDummy { get; set; }
+
     public double X { get; set; }
 
     public double Y { get; set; }

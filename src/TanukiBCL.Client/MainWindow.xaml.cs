@@ -45,21 +45,7 @@ public partial class MainWindow : Window
         CompactVoiceView.MuteRequested += (_, _) => ToggleMicrophoneMute();
         CompactVoiceView.DeafenRequested += (_, _) => ToggleDeafen();
         CompactVoiceView.HelpRequested += (_, _) => ShowDiagnostics();
-        CompactVoiceView.PlayerConfigChanged += (configId, config, persist) =>
-        {
-            settings.PlayerConfigMap[configId] = config.Normalize();
-            probe?.SetPlayerConfig(configId, config);
-            UpdateCompactView();
-            if (!persist) return;
-            try
-            {
-                ClientSettingsStore.Save(settings);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                MessageBox.Show(this, $"プレイヤー別音量を保存できませんでした: {exception.Message}", "TanukiBCL");
-            }
-        };
+        CompactVoiceView.PlayerConfigChanged += ApplyPlayerConfig;
         UpdateCompactView();
         Loaded += (_, _) =>
         {
@@ -79,7 +65,8 @@ public partial class MainWindow : Window
         CompactVoiceView.DismissPlayerConfigPopup();
         var hostInGame = currentState is { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         var window = new SettingsWindow(settings, !hostInGame,
-            probe?.CurrentLobbySettings, currentState?.IsHost != true) { Owner = this };
+            probe?.CurrentLobbySettings, currentState?.IsHost != true, currentState,
+            ApplyPlayerConfig) { Owner = this };
         settingsWindow = window;
         hotkeysSuspended = true;
         bool? saved;
@@ -113,6 +100,22 @@ public partial class MainWindow : Window
         OutputCombo.SelectedItem = OutputCombo.Items.Cast<AudioDeviceInfo>()
             .FirstOrDefault(device => device.Name == settings.SpeakerName)
             ?? OutputCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
+    }
+
+    private void ApplyPlayerConfig(int configId, PlayerAudioConfig config, bool persist)
+    {
+        settings.PlayerConfigMap[configId] = config.Normalize();
+        probe?.SetPlayerConfig(configId, config);
+        UpdateCompactView();
+        if (!persist) return;
+        try
+        {
+            ClientSettingsStore.Save(settings);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"プレイヤー別音量を保存できませんでした: {exception.Message}", "TanukiBCL");
+        }
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e) => RefreshProcesses();
@@ -313,6 +316,7 @@ public partial class MainWindow : Window
     private void ShowGameState(AmongUsState state)
     {
         currentState = state;
+        settingsWindow?.UpdateCurrentGameState(state);
         GameText.Text = $"ゲーム状態: {state.GameState}";
         LobbyText.Text = $"ロビー: {(state.GameState == GameState.Menu ? "—" : state.LobbyCode)}";
         PlayersText.Text = $"参加者: {state.Players.Count(player => !player.Disconnected)}人";

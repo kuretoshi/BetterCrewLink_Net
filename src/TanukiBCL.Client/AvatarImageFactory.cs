@@ -11,7 +11,7 @@ namespace TanukiBCL.Client;
 /// </summary>
 internal static class AvatarImageFactory
 {
-    private const int RainbowColorId = -99234;
+    internal const int RainbowColorId = -99234;
     private static readonly (Color Main, Color Shadow)[] DefaultColors =
     [
         (Rgb(0xC5, 0x11, 0x11), Rgb(0x7A, 0x08, 0x38)),
@@ -45,6 +45,9 @@ internal static class AvatarImageFactory
         return Cache.GetOrAdd((isDead, Pack(main), Pack(shadow)), key =>
             Recolor(key.Dead ? GhostTemplate.Value : PlayerTemplate.Value, main, shadow));
     }
+
+    public static (Color Main, Color Shadow) GetSwatchColors(int colorId,
+        IReadOnlyList<PlayerColorPair>? playerColors) => ResolveColors(colorId, playerColors);
 
     private static (Color Main, Color Shadow) ResolveColors(int colorId, IReadOnlyList<PlayerColorPair>? playerColors)
     {

@@ -7,6 +7,12 @@
         <Style TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#F5F1F7" />
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#F5F1F7" />
+        </Style>
         <Style TargetType="ComboBox">
             <Setter Property="Height" Value="32" />
         </Style>
@@ -27,6 +33,7 @@
                          BorderThickness="0" SelectionChanged="CategoryList_SelectionChanged">
                     <ListBoxItem Content="一般" Padding="12,9" />
                     <ListBoxItem Content="ロビー設定" Padding="12,9" />
+                    <ListBoxItem Content="プレイヤー" Padding="12,9" />
                     <ListBoxItem Content="オーディオ" Padding="12,9" />
                     <ListBoxItem Content="キー割り当て" Padding="12,9" />
                     <ListBoxItem Content="詳細設定" Padding="12,9" />
@@ -78,6 +85,12 @@
                         <CheckBox x:Name="MeetingGhostOnlyCheck" Content="会議中のみ幽霊以外も会話できる" Margin="0,0,0,14"
                                   Checked="MeetingGhostOnlyCheck_Checked" />
                         </StackPanel>
+                    </StackPanel>
+                    <StackPanel x:Name="PlayersPanel" Visibility="Collapsed">
+                        <TextBlock Text="プレイヤー" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,14" />
+                        <TextBlock Text="プレイヤーごとの音量とミュートを調整します。変更はすぐに反映されます。"
+                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,18" />
+                        <StackPanel x:Name="PlayerRows" />
                     </StackPanel>
                     <StackPanel x:Name="AudioPanel" Visibility="Collapsed">
                         <TextBlock Text="オーディオ" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
