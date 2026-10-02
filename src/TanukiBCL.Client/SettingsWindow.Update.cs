@@ -64,6 +64,8 @@ public partial class SettingsWindow
     private async void StartUpdateButton_Click(object sender, RoutedEventArgs e)
     {
         if (updateBusy || updateCandidate is null || !UpdateInstallationAvailable()) return;
+        StagedUpdate? staged = null;
+        var handedOff = false;
         updateBusy = true;
         CheckUpdateButton.IsEnabled = false;
         StartUpdateButton.IsEnabled = false;
@@ -77,13 +79,14 @@ public partial class SettingsWindow
                 UpdateProgress.Value = percent;
                 UpdateStatusText.Text = $"ダウンロード中… {percent:0}%";
             });
-            var staged = await UpdatePackage.StageAsync(updateClient, updateCandidate, progress,
+            staged = await UpdatePackage.StageAsync(updateClient, updateCandidate, progress,
                 updateCancellation.Token);
             if (updateCancellation.IsCancellationRequested) return;
             UpdateStatusText.Text = "アップデートの準備ができました。アプリを終了して更新します。";
             if (UpdateInstallRequested is null)
                 throw new InvalidOperationException("更新処理を開始できません。");
             UpdateInstallRequested.Invoke(staged);
+            handedOff = true;
         }
         catch (OperationCanceledException) when (updateCancellation.IsCancellationRequested) { }
         catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
@@ -96,6 +99,14 @@ public partial class SettingsWindow
         }
         finally
         {
+            // StageAsync owns cleanup until it returns; after that this window owns
+            // the stage unless the updater has accepted it.
+            if (staged is not null && !handedOff)
+            {
+                try { Directory.Delete(staged.Root, recursive: true); }
+                catch (IOException) { /* Leave the stage for inspection if it is in use. */ }
+                catch (UnauthorizedAccessException) { /* Same as above. */ }
+            }
             updateBusy = false;
             if (!updateCancellation.IsCancellationRequested) CheckUpdateButton.IsEnabled = true;
         }
