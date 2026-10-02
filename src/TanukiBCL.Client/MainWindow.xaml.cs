@@ -169,6 +169,7 @@ public partial class MainWindow : Window
         var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
         var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
         row.Voice = mix.Audible ? "聞こえる" : LocalizeReason(mix.Reason);
+        row.Radio = mix.Audible && mix.Reason == "impostor-radio" ? "送信中" : "—";
         row.Gain = mix.Audible ? $"{mix.Gain * 100:0}%" : "0%";
     }
 
@@ -200,7 +201,7 @@ public partial class MainWindow : Window
     private static string LocalizeReason(string reason) => reason switch
     {
         "out-of-range" => "距離外",
-        "living-cannot-hear-ghost" or "peer-in-vent" or "dead-only" or "meeting-ghost-only" => "ルールで遮断",
+        "living-cannot-hear-ghost" or "peer-in-vent" or "dead-only" or "meeting-ghost-only" or "radio-private" => "ルールで遮断",
         "disconnected" => "退出済み",
         "not-in-game" => "ゲーム外",
         _ => "ミュート"
@@ -267,6 +268,7 @@ public partial class MainWindow : Window
         private string currentName = name;
         private string connection = "待機中";
         private string voice = "待機中";
+        private string radio = "—";
         private long receivedFrames;
         private string gain = "—";
 
@@ -274,6 +276,7 @@ public partial class MainWindow : Window
         public string Name { get => currentName; set => Set(ref currentName, value); }
         public string Connection { get => connection; set => Set(ref connection, value); }
         public string Voice { get => voice; set => Set(ref voice, value); }
+        public string Radio { get => radio; set => Set(ref radio, value); }
         public string Received => receivedFrames == 0 ? "待機中" : $"{receivedFrames} frame";
         public string Gain { get => gain; set => Set(ref gain, value); }
         public event PropertyChangedEventHandler? PropertyChanged;

@@ -20,7 +20,7 @@
 | Jackal / Sidekick / NoSラジオ | `VoiceController.ts`、`spatialAudio.ts` | 未実装 | 未着手 |
 | NoS / SNR / TOH固有仕様 | `nosSnapshot*`、`snrLive*`、`tohLive*` | MOD検出のみ。役職・能力・音声効果は不足 | 未着手 |
 | 音声処理 | 3.2.7のゲイン、VAD、音声効果、ラジオ音質 | 基本のマイク・再生・VAD・Opusあり | 未完 |
-| メイン音声画面 | `VoiceView.tsx`、`Avatar.tsx` | 診断用の表形式GUI。アバター表示・接続品質等が不足 | 未着手 |
+| メイン音声画面 | `VoiceView.tsx`、`Avatar.tsx` | 診断用の表形式GUIにラジオ送信表示を追加。アバター表示・接続品質等が不足 | 未完 |
 | 設定画面 | `SettingsPanel.tsx` と9カテゴリ | マイク・スピーカー選択のみ | 未着手 |
 | オーバーレイ | `Overlay.tsx` | 未実装 | 未着手 |
 | 配布・更新 | `electron-builder*.yml`、更新画面 | 未実装 | 未着手 |

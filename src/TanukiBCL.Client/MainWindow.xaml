@@ -81,6 +81,7 @@
                         <DataGridTextColumn Header="プレイヤー" Binding="{Binding Name}" Width="*" />
                         <DataGridTextColumn Header="Peer" Binding="{Binding Connection}" Width="110" />
                         <DataGridTextColumn Header="音声" Binding="{Binding Voice}" Width="150" />
+                        <DataGridTextColumn Header="ラジオ" Binding="{Binding Radio}" Width="80" />
                         <DataGridTextColumn Header="Opus受信" Binding="{Binding Received}" Width="100" />
                         <DataGridTextColumn Header="音量" Binding="{Binding Gain}" Width="70" />
                     </DataGrid.Columns>
