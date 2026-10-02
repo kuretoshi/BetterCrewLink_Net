@@ -55,6 +55,12 @@
                         <Border Background="#29252F" Padding="16" CornerRadius="6">
                             <CheckBox x:Name="AlwaysOnTopCheck" Content="常に手前に表示" />
                         </Border>
+                        <TextBlock Text="トラブルシューティング" FontSize="16" FontWeight="SemiBold" Margin="0,28,0,12" />
+                        <TextBlock Text="すべての設定がリセットされます。" TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,12" />
+                        <Button x:Name="ResetDefaultsButton" Content="デフォルトに戻す" Click="ResetDefaultsButton_Click"
+                                HorizontalAlignment="Left" Padding="14,8" />
+                        <TextBlock x:Name="ResetDisabledReason" Text="ゲーム内ではホストとして利用できません！"
+                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,8,0,0" Visibility="Collapsed" />
                     </StackPanel>
                     <StackPanel x:Name="LobbyPanel" Visibility="Collapsed">
                         <TextBlock Text="ロビー設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />

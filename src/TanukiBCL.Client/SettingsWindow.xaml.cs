@@ -26,6 +26,7 @@ public partial class SettingsWindow : Window
     private bool lobbyPending;
     private Action? pendingConfirmation;
     internal event Action<ClientSettingsChange>? SettingsApplied;
+    internal event Action? SettingsReset;
     private LobbySettings? currentLobbySettings;
     private LobbySettings lobbyDraft;
     private LobbySettings? radioOnlyBackup;
@@ -115,6 +116,7 @@ public partial class SettingsWindow : Window
         CategoryList.SelectedIndex = 0;
         UpdateVolumeLabels();
         InitializeImmediateSettings();
+        UpdateResetAvailability();
         settingsReady = true;
     }
 
@@ -127,6 +129,7 @@ public partial class SettingsWindow : Window
     internal void UpdateCurrentGameState(AmongUsState? state)
     {
         currentGameState = state;
+        UpdateResetAvailability();
         var wasEditable = lobbySettingsEditable;
         lobbySettingsEditable = state is not { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
@@ -761,6 +764,7 @@ public partial class SettingsWindow : Window
         ServerUrlDialog.VerifyBehavior();
         SettingsConfirmDialog.VerifyBehavior();
         VerifyImmediateSettings();
+        VerifyResetDefaults();
         var lobby = new LobbySettings
         {
             SnrJumboVoice = true, JackalHaunting = true, JackalRadioEnabled = true,

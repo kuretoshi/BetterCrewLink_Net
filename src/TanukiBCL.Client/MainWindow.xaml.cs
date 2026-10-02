@@ -77,6 +77,7 @@ public partial class MainWindow : Window
         settingsWindow = window;
         hotkeysSuspended = true;
         window.SettingsApplied += SettingsWindow_SettingsApplied;
+        window.SettingsReset += SettingsWindow_SettingsReset;
         try
         {
             window.ShowDialog();
@@ -84,9 +85,17 @@ public partial class MainWindow : Window
         finally
         {
             window.SettingsApplied -= SettingsWindow_SettingsApplied;
+            window.SettingsReset -= SettingsWindow_SettingsReset;
             settingsWindow = null;
             hotkeysSuspended = false;
         }
+    }
+
+    private void SettingsWindow_SettingsReset()
+    {
+        hotkeys?.UpdateBindings(settings);
+        if (!isClosing && sessions.Current is { AcceptsCallbacks: true } session)
+            RequestSettingsRestart(session);
     }
 
     private void SettingsWindow_SettingsApplied(ClientSettingsChange change)
