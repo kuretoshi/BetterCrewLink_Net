@@ -76,6 +76,8 @@ public sealed class Player
 
 public sealed class AmongUsState
 {
+    public AmongUsModType Mod { get; set; } = AmongUsModType.None;
+
     public GameState GameState { get; set; } = GameState.Unknown;
 
     public GameState OldGameState { get; set; } = GameState.Unknown;

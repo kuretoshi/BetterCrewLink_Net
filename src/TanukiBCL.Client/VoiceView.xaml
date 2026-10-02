@@ -95,8 +95,6 @@
         </Grid>
 
         <Grid Grid.Row="4">
-            <TextBlock x:Name="DetectedMod" FontSize="10" Foreground="#B8B5B9" Visibility="Collapsed"
-                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,0,6,0" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
                 <Button x:Name="GithubButton" Width="72" Height="36" Margin="4,0" ToolTip="GitHubのページはこちら"
                         Background="Transparent" BorderThickness="0" Foreground="#D0D0D0"
@@ -127,6 +125,13 @@
                 </Button>
             </StackPanel>
         </Grid>
+        <Border x:Name="DetectedModBadge" Grid.RowSpan="5" Visibility="Collapsed"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="6,0,6,58"
+                MaxWidth="268" Padding="5,2" CornerRadius="4" Background="#59000000"
+                IsHitTestVisible="False">
+            <TextBlock x:Name="DetectedMod" FontSize="10" Foreground="#B8B8B8"
+                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+        </Border>
         <Popup x:Name="PlayerConfigPopup" Placement="Top" AllowsTransparency="True"
                StaysOpen="True" PopupAnimation="Fade" IsOpen="False">
             <Border x:Name="PlayerConfigPopupContent" Background="#353239" BorderBrush="#68616C"

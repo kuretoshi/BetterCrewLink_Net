@@ -118,6 +118,19 @@ internal static class SpatialVoicePolicySelfTest
         Check("quality: server ping takes precedence over peer RTT", true,
             new ConnectionQuality(RttMs: 400d, ServerPingMs: 25d).Bars == 3);
 
+        Check("mod: Nebula plugin", true,
+            AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], ["NebulaLoader.dll"])
+                .Id == AmongUsModType.NebulaOnTheShip);
+        Check("mod: loaded SNR overrides plugin", true,
+            AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", ["SuperNewRoles.dll"],
+                ["NebulaLoader.dll"]).Id == AmongUsModType.SuperNewRoles);
+        Check("mod: TOH4E path", true,
+            AmongUsModDetector.Detect(@"C:\Games\TOH4E_EM\Among Us.exe", [], ["NebulaLoader.dll"])
+                .Id == AmongUsModType.TownOfHostForE);
+        Check("mod: vanilla", true,
+            AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], [])
+                .Id == AmongUsModType.None);
+
         var ventPolicy = new SpatialVoiceSettings(HearImpostorsInVents: true,
             ImpostorsHearImpostorsInVents: true, ImpostorRadioEnabled: true);
         var ventSpeaker = new Player { IsImpostor = true, InVent = true };

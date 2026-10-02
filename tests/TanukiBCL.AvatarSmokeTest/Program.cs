@@ -91,6 +91,7 @@ internal static class Program
         };
         view.Update(game, connected: true, localTalking: true, muted: false, deafened: false, peers,
             serverQuality: new ConnectionQuality(ServerPingMs: 25d));
+        view.SetDetectedMod("Nebula on the Ship");
         view.Measure(new Size(280, 390));
         view.Arrange(new Rect(0, 0, 280, 390));
         view.UpdateLayout();

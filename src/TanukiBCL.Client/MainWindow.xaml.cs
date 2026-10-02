@@ -453,6 +453,8 @@ public partial class MainWindow : Window
         CompactVoiceView.Update(currentState, voiceServerConnected, localTalking && !microphoneMuted,
             microphoneMuted, deafened, statuses, localUsingRadio: radioTransmitting,
             playerConfigs: settings.PlayerConfigMap, serverQuality: serverQuality);
+        var mod = currentState?.Mod ?? AmongUsModType.None;
+        CompactVoiceView.SetDetectedMod(mod == AmongUsModType.None ? null : AmongUsMod.For(mod).Label);
         var active = probe?.CurrentLobbySettings;
         CompactVoiceView.SetWarning(active?.DeadOnly == true
             ? "幽霊のみのボイス設定です"

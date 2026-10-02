@@ -30,6 +30,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     private long lastPlayerPtr;
     private string gameCode = "MENU";
     private string currentServer = string.Empty;
+    private AmongUsModType currentMod = AmongUsModType.None;
+    private DateTimeOffset nextModCheck = DateTimeOffset.MinValue;
 
     public event EventHandler<AmongUsState>? StateChanged;
     public event EventHandler<string>? Error;
@@ -48,6 +50,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             lastPlayerPtr = 0;
             gameCode = "MENU";
             currentServer = string.Empty;
+            currentMod = nextProcessInfo?.InstalledMod.Id ?? AmongUsModType.None;
+            nextModCheck = DateTimeOffset.UtcNow.AddSeconds(2);
         }
 
         if (nextProcessInfo is null)
@@ -127,6 +131,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             return null;
         }
 
+        var mod = RefreshInstalledMod(currentProcess);
+
         if (currentContext is null)
         {
             try
@@ -155,7 +161,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         if (!currentContext.IsReadableAddress(innerNetClient, 4))
         {
             ReportDiagnostic($"waiting for readable InnerNetClient: 0x{innerNetClient:X}");
-            return new AmongUsState { GameState = GameState.Menu, OldGameState = previousGameState, LobbyCode = "MENU" };
+            return new AmongUsState { Mod = mod, GameState = GameState.Menu,
+                OldGameState = previousGameState, LobbyCode = "MENU" };
         }
 
         var rawGameState = currentContext.ReadInt32(innerNetClient + currentContext.Offsets.InnerNetClientGameState);
@@ -262,6 +269,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
 
         return new AmongUsState
         {
+            Mod = mod,
             GameState = gameState,
             OldGameState = previousGameState,
             LobbyCodeInt = lobbyCodeInt,
@@ -278,6 +286,31 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             CurrentCamera = taskEnvironment.CurrentCamera,
             ClosedDoors = taskEnvironment.ClosedDoors
         };
+    }
+
+    private AmongUsModType RefreshInstalledMod(AmongUsProcessInfo currentProcess)
+    {
+        lock (syncRoot)
+        {
+            if (DateTimeOffset.UtcNow < nextModCheck) return currentMod;
+            nextModCheck = DateTimeOffset.UtcNow.AddSeconds(2);
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(currentProcess.ProcessId);
+            var detected = global::TanukiBCL.VoiceProbe.GameProcessScanner.CreateProcessInfo(process).InstalledMod.Id;
+            lock (syncRoot)
+            {
+                if (processInfo?.ProcessId == currentProcess.ProcessId) currentMod = detected;
+                return currentMod;
+            }
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or
+            System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            lock (syncRoot) return currentMod;
+        }
     }
 
     private static List<Player> ReadPlayers(ReaderContext context, long allPlayers, int playerCount, int localClientId, GameState gameState)

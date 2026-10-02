@@ -92,16 +92,19 @@ internal static class GameProcessScanner
     internal static AmongUsProcessInfo CreateProcessInfo(Process process)
     {
         var processPath = process.MainModule?.FileName ?? string.Empty;
-        var hasGameAssembly = process.Modules.Cast<ProcessModule>()
-            .Any(module => string.Equals(module.ModuleName, "GameAssembly.dll", StringComparison.OrdinalIgnoreCase));
+        var gameDirectory = Path.GetDirectoryName(processPath) ?? string.Empty;
+        var loadedModules = process.Modules.Cast<ProcessModule>()
+            .Select(module => module.ModuleName).ToArray();
+        var hasGameAssembly = loadedModules.Contains("GameAssembly.dll", StringComparer.OrdinalIgnoreCase);
         return new AmongUsProcessInfo
         {
             ProcessId = process.Id,
             ProcessPath = processPath,
-            GameDirectory = Path.GetDirectoryName(processPath) ?? string.Empty,
+            GameDirectory = gameDirectory,
             HasGameAssembly = hasGameAssembly,
             Is64Bit = IsProcess64Bit(process),
-            InstalledMod = AmongUsMod.KnownMods[0]
+            InstalledMod = AmongUsModDetector.Detect(processPath, loadedModules,
+                AmongUsModDetector.ReadPluginFiles(gameDirectory))
         };
     }
 

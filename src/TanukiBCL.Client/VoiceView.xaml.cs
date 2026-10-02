@@ -129,7 +129,7 @@ public partial class VoiceView : UserControl
     public void SetDetectedMod(string? mod)
     {
         DetectedMod.Text = string.IsNullOrWhiteSpace(mod) ? string.Empty : $"MOD: {mod}";
-        DetectedMod.Visibility = string.IsNullOrWhiteSpace(mod) ? Visibility.Collapsed : Visibility.Visible;
+        DetectedModBadge.Visibility = string.IsNullOrWhiteSpace(mod) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
