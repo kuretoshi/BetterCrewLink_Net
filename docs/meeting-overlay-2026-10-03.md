@@ -22,3 +22,9 @@
 Releaseビルド警告/エラー0。オーバーレイ・装備・名前テスト終了0。制御可能なWPFアニメーションクロックを進め、easeの中間値と400ms終点、同じVADでのクロック再利用を検証。OverlayWindowの更新間で同じ枠を保持し、会議間では別の枠になることも検証した。
 
 未検証・残差: 実画面でのChromiumとの比較、フェード途中で反転した場合のCSS reversing-shortening挙動（現在は現在値から400msで再遷移）、CSS box-shadowのspread。完全なフェード互換とはまだ扱わない。起動中のアプリは未更新。
+
+## フェード反転時の時間短縮
+
+[CSS Transitions Level 1 §3](https://www.w3.org/TR/css-transitions-1/#starting)の反転規則を確認し、reversing-adjusted startとshortening factorを保持する処理を追加。進行中の反転では旧イージング出力×旧短縮係数＋(1−旧短縮係数)を0〜1に制限し、400msに乗じる。新しいフェードは反転時点の実透明度から始める。完了済みなら短縮係数1に戻し、到達値と新目標が一致する場合は遷移を解除する。
+
+Releaseビルド警告/エラー0、オーバーレイ自動テスト終了0。WPF制御クロックで初回反転、連続反転、完了後の400ms復帰、進捗0での取消を検証。原版Chromiumとのフレーム単位の比較や実機表示は未検証。CSS box-shadowのspread差分も残る。起動中のアプリは未更新。
