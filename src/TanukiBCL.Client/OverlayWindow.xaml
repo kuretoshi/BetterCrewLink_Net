@@ -13,7 +13,9 @@
         </StackPanel>
         <Border x:Name="AvatarBackground" Canvas.ZIndex="2" CornerRadius="8"
                 Background="#8025232A" Padding="8" Visibility="Collapsed">
-            <WrapPanel x:Name="AvatarPanel" />
+            <Border x:Name="AvatarPanelBackground">
+                <WrapPanel x:Name="AvatarPanel" />
+            </Border>
         </Border>
         <Canvas x:Name="MeetingCanvas" Canvas.ZIndex="1" Visibility="Collapsed" />
     </Canvas>

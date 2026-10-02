@@ -170,13 +170,23 @@ public partial class OverlayWindow : Window
         var side = position is "left" or "left1" or "right" or "right1";
         var compact = settings.CompactOverlay || position is "left1" or "right1";
         var showName = !state.MixupSabotaged && side && (!settings.CompactOverlay || position is "left1" or "right1");
-        var avatarSize = side ? Math.Min(0.075d * Height, 72d) : 60d;
+        // Overlay.tsx sets --size to 7.5 * (10 / rendered avatars) vh;
+        // overlay.css caps only at 7.5vh, not at a fixed pixel dimension.
+        var avatarSize = side ? 0.075d * Height * Math.Min(1d, 10d / selected.Count) : 60d;
         AvatarPanel.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
         AvatarPanel.MaxHeight = side ? Height : double.PositiveInfinity;
         AvatarPanel.MaxWidth = side ? (compact ? avatarSize + 16d : 300d) : 800d;
-        AvatarBackground.Background = compact ? Brushes.Transparent
+        AvatarBackground.Background = compact || side ? Brushes.Transparent
             : new SolidColorBrush(Color.FromArgb(position == "bottom_left" ? (byte)0x59 : (byte)0x80,
-                0x25, 0x23, 0x2a));
+                0, 0, 0));
+        // The compact side background belongs to the inner player container,
+        // not the outer overlay wrapper. The edge against the screen is square.
+        AvatarPanelBackground.Background = side && compact
+            ? new SolidColorBrush(Color.FromArgb(0xc0, 0x25, 0x23, 0x2a)) : Brushes.Transparent;
+        AvatarPanelBackground.CornerRadius = side && compact
+            ? position.StartsWith("left", StringComparison.Ordinal)
+                ? new CornerRadius(0, 25, 25, 0) : new CornerRadius(25, 0, 0, 25)
+            : new CornerRadius(0);
         AvatarBackground.Padding = compact ? new Thickness(3) : new Thickness(8);
         foreach (var entry in selected)
         {
@@ -299,6 +309,7 @@ public partial class OverlayWindow : Window
         MeetingOverlayLayout.Verify();
         MeetingVoiceBorder.Verify();
         VerifyMeetingSnapshot();
+        VerifyAvatarSizingAndBackground();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
         var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
         try
@@ -403,6 +414,67 @@ public partial class OverlayWindow : Window
         {
             window.Close();
         }
+    }
+
+    private static void VerifyAvatarSizingAndBackground()
+    {
+        var settings = new ClientSettings { EnableOverlay = true, OverlayPosition = "left", MeetingOverlay = false };
+        var window = new OverlayWindow(0, settings) { Width = 1920, Height = 1080 };
+        try
+        {
+            foreach (var (height, count, expectedSize) in new[]
+                { (720d, 4, 54d), (1080d, 10, 81d), (1080d, 15, 54d), (2160d, 15, 108d) })
+            {
+                window.Height = height;
+                var state = new AmongUsState { GameState = GameState.Tasks,
+                    Players = Enumerable.Range(0, count).Select(id => new Player
+                        { Id = id, ClientId = id, IsLocal = id == 0, Name = $"player {id}" }).ToList() };
+                var peers = state.Players.ToDictionary(player => player.ClientId,
+                    _ => new OverlayPeerStatus(true, true, false));
+                window.Update(state, peers, true, false, false);
+                if (window.AvatarPanel.Children.Count != count ||
+                    window.AvatarPanel.Children.Cast<StackPanel>().Any(row =>
+                        Math.Abs(((PlayerAvatar)row.Children[0]).Width - expectedSize) > 0.000001))
+                    throw new InvalidOperationException("Side avatar size did not follow viewport height and displayed count");
+            }
+            window.Height = 1080;
+            var all = new AmongUsState { GameState = GameState.Tasks,
+                Players = Enumerable.Range(0, 15).Select(id => new Player
+                    { Id = id, ClientId = id, IsLocal = id == 0 }).ToList() };
+            var statuses = all.Players.ToDictionary(player => player.ClientId,
+                player => new OverlayPeerStatus(true, player.Id < 5, false));
+            settings.CompactOverlay = true;
+            window.Update(all, statuses, true, false, false);
+            if (window.AvatarPanel.Children.Count != 5 ||
+                ((PlayerAvatar)((StackPanel)window.AvatarPanel.Children[0]).Children[0]).Width != 81d)
+                throw new InvalidOperationException("Compact avatar sizing used lobby count instead of rendered VAD count");
+            foreach (var position in new[] { "left", "left1", "right", "right1", "top", "bottom_left" })
+            foreach (var compact in new[] { false, true })
+            {
+                settings.OverlayPosition = position; settings.CompactOverlay = compact;
+                window.Update(all, statuses, true, false, false);
+                var side = position is "left" or "left1" or "right" or "right1";
+                var compactStyle = compact || position.EndsWith('1');
+                var outer = ((SolidColorBrush)window.AvatarBackground.Background).Color;
+                var inner = ((SolidColorBrush)window.AvatarPanelBackground.Background).Color;
+                var expectedOuter = side || compactStyle ? Colors.Transparent
+                    : Color.FromArgb(position == "bottom_left" ? (byte)0x59 : (byte)0x80, 0, 0, 0);
+                if (outer != expectedOuter || inner != (side && compactStyle
+                    ? Color.FromArgb(0xc0, 0x25, 0x23, 0x2a) : Colors.Transparent))
+                    throw new InvalidOperationException("Overlay wrapper and compact player background colors differ from released CSS");
+                var corners = window.AvatarPanelBackground.CornerRadius;
+                var expectedCorners = side && compactStyle
+                    ? position.StartsWith("left", StringComparison.Ordinal)
+                        ? new CornerRadius(0, 25, 25, 0) : new CornerRadius(25, 0, 0, 25)
+                    : new CornerRadius(0);
+                if (corners != expectedCorners)
+                    throw new InvalidOperationException("Compact side background rounded the screen-facing edge");
+                if (!side && ((PlayerAvatar)((StackPanel)window.AvatarPanel.Children[0]).Children[0]).Width != 60)
+                    throw new InvalidOperationException("Horizontal overlay avatar width must remain 60px");
+            }
+            Console.WriteLine("[PASS] Overlay 4/10/15-player viewport sizing, compact VAD count, horizontal size and six-position background layers");
+        }
+        finally { window.Close(); }
     }
 
     private static void VerifyMeetingSnapshot()
