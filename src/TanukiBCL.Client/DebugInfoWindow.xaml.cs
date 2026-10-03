@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using TanukiBCL.VoiceProbe;
@@ -32,6 +33,7 @@ public partial class DebugInfoWindow : Window
         InitializeComponent();
         this.capture = capture;
         this.captureSnrRoles = captureSnrRoles;
+        DebugTitleText.Text = "デバッグ情報 " + VoiceView.FormatVersionLabel(UpdateCatalog.CurrentVersion);
         refreshTimer.Tick += (_, _) => Refresh();
         Loaded += (_, _) =>
         {
@@ -45,6 +47,18 @@ public partial class DebugInfoWindow : Window
     {
         if (ReferenceEquals(e.Source, DebugTabs) && IsLoaded) Refresh();
     }
+
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        else
+            DragMove();
+    }
+
+    private void MinimizeDebugButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void CloseDebugButton_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Refresh()
     {
@@ -268,7 +282,10 @@ public partial class DebugInfoWindow : Window
             () => Task.FromResult(string.Empty));
         try
         {
-            if (window.DebugTabs.Items.Count != 5 || window.SaveLogButton is null)
+            if (window.DebugTabs.Items.Count != 5 || window.SaveLogButton is null ||
+                window.WindowStyle != WindowStyle.None ||
+                window.DebugTitleText.Text != "デバッグ情報 " + VoiceView.FormatVersionLabel(UpdateCatalog.CurrentVersion) ||
+                window.MinimizeDebugButton is null || window.CloseDebugButton is null)
                 throw new InvalidOperationException("Released debug tabs or log save control are missing");
             window.DebugTabs.SelectedIndex = 0;
             window.Refresh();

@@ -1,23 +1,46 @@
 <Window x:Class="TanukiBCL.Client.DebugInfoWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="TanukiBCL Debug" Width="900" Height="680" MinWidth="620" MinHeight="440"
+        WindowStyle="None" ResizeMode="CanResize"
         WindowStartupLocation="CenterOwner" Background="#25232A" Foreground="#F5F1F7">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"
+                            CornerRadius="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="30" />
+            <RowDefinition Height="36" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <DockPanel Margin="16,12,16,8">
+        <Grid Grid.Row="0" Background="#1D1A23" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+            <StackPanel Orientation="Horizontal" Margin="12,0,70,0" VerticalAlignment="Center">
+                <Path Width="16" Height="16" Stretch="Uniform" Fill="#CE93D8" Margin="0,0,8,0"
+                      Data="M20 8h-2.81a5.98 5.98 0 0 0-1.64-1.64L17 4.41 15.59 3l-1.92 1.92A5.79 5.79 0 0 0 12 4c-.6 0-1.16.09-1.69.24L8.41 2.29 7 3.71l1.55 1.55A5.98 5.98 0 0 0 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81A6 6 0 0 0 18 15v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-8 9a2 2 0 0 1-2-2h4a2 2 0 0 1-2 2zm4-5H8v-1c0-.35.06-.69.17-1H16v2zm0-4H8.17A4 4 0 0 1 12 6c1.64 0 3.07.81 3.83 2z" />
+                <TextBlock x:Name="DebugTitleText" FontSize="13" Foreground="#CE93D8"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="MinimizeDebugButton" Width="34" Height="30" Padding="0" BorderThickness="0"
+                        Background="Transparent" Foreground="#B7AABD" FontSize="16" Content="−"
+                        Click="MinimizeDebugButton_Click" ToolTip="最小化" />
+                <Button x:Name="CloseDebugButton" Width="34" Height="30" Padding="0" BorderThickness="0"
+                        Background="Transparent" Foreground="#B7AABD" FontSize="16" Content="×"
+                        Click="CloseDebugButton_Click" ToolTip="閉じる" />
+            </StackPanel>
+        </Grid>
+        <DockPanel Grid.Row="2" Margin="16,8,16,4">
             <Button x:Name="SaveLogButton" DockPanel.Dock="Right" Content="ログを保存"
                     Padding="12,6" Click="SaveLogButton_Click" />
             <TextBlock x:Name="ModNameText" VerticalAlignment="Center" FontSize="13" />
         </DockPanel>
-        <TextBlock x:Name="HelpText" Grid.Row="1" Margin="16,0,16,8"
+        <TextBlock x:Name="HelpText" Grid.Row="3" Margin="16,0,16,8"
                    Foreground="#B7AABD" FontSize="12" Text="ゲーム・音声の状態を自動更新します。" />
-        <TabControl x:Name="DebugTabs" Grid.Row="2" Height="36" Margin="12,0,12,0"
+        <TabControl x:Name="DebugTabs" Grid.Row="1" Height="36" Margin="12,0,12,0"
                     SelectionChanged="DebugTabs_SelectionChanged">
             <TabItem Header="リアルタイム" />
             <TabItem Header="SNR役職" />
@@ -25,7 +48,7 @@
             <TabItem Header="音声接続" />
             <TabItem Header="ログ" />
         </TabControl>
-        <Grid x:Name="LivePanel" Grid.Row="3" Margin="16,0,16,16">
+        <Grid x:Name="LivePanel" Grid.Row="4" Margin="16,0,16,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -83,7 +106,7 @@
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>
-        <Grid x:Name="SnrPanel" Grid.Row="3" Margin="16,0,16,16" Visibility="Collapsed">
+        <Grid x:Name="SnrPanel" Grid.Row="4" Margin="16,0,16,16" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -131,7 +154,7 @@
                      FontFamily="Consolas" FontSize="12" Background="#1D1A23" Foreground="#F5F1F7"
                      BorderThickness="0" />
         </Grid>
-        <TextBox x:Name="DebugText" Grid.Row="3" Margin="16,0,16,16" Padding="10"
+        <TextBox x:Name="DebugText" Grid.Row="4" Margin="16,0,16,16" Padding="10"
                  IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                  FontFamily="Consolas" FontSize="12" Background="#1D1A23" Foreground="#F5F1F7"
