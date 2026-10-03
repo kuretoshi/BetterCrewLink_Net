@@ -355,6 +355,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         {
             GameExecutablePath = currentProcess.ProcessPath,
             Mod = mod,
+            InstalledMod = mod,
             GameState = gameState,
             OldGameState = previousGameState,
             LobbyCodeInt = lobbyCodeInt,

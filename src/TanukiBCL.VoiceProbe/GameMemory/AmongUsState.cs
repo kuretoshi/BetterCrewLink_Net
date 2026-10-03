@@ -160,6 +160,10 @@ public sealed class AmongUsState
 
     public AmongUsModType Mod { get; set; } = AmongUsModType.None;
 
+    // The local installation before a host-only MOD is inferred from peer reports.
+    // The effective Mod above may change for a vanilla client in a TOH4E lobby.
+    public AmongUsModType? InstalledMod { get; set; }
+
     public GameState GameState { get; set; } = GameState.Unknown;
 
     public GameState OldGameState { get; set; } = GameState.Unknown;

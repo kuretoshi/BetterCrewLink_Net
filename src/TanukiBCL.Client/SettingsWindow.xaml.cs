@@ -2,6 +2,7 @@ using System.IO;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
@@ -604,12 +605,34 @@ public partial class SettingsWindow : Window
     private void UpdateModSettingsVisibility()
     {
         if (NosControlsPanel is null || SnrControlsPanel is null || TohControlsPanel is null) return;
-        SnrControlsPanel.Visibility = currentGameState?.Mod == AmongUsModType.SuperNewRoles
+        var mod = showingCurrentLobby
+            ? currentGameState?.Mod ?? AmongUsModType.None
+            : currentGameState?.InstalledMod ?? currentGameState?.Mod ?? AmongUsModType.None;
+        if (showingCurrentLobby && IsToh4eLobbyHost()) mod = AmongUsModType.TownOfHostForE;
+        SnrControlsPanel.Visibility = mod == AmongUsModType.SuperNewRoles
             ? Visibility.Visible : Visibility.Collapsed;
-        TohControlsPanel.Visibility = currentGameState?.Mod == AmongUsModType.TownOfHostForE
+        TohControlsPanel.Visibility = mod == AmongUsModType.TownOfHostForE
             ? Visibility.Visible : Visibility.Collapsed;
-        NosControlsPanel.Visibility = currentGameState?.Mod == AmongUsModType.NebulaOnTheShip
+        NosControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip
             ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private bool IsToh4eLobbyHost()
+    {
+        if (currentGameState is null || currentGameState.GameState is GameState.Menu or GameState.Unknown)
+            return false;
+        var host = currentGameState.Players.FirstOrDefault(player =>
+            player.ClientId == currentGameState.HostId);
+        return host is not null && (HasToh4eHostMarker(host.Name) ||
+            HasToh4eHostMarker(host.AppearanceName));
+    }
+
+    private static bool HasToh4eHostMarker(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+        var plain = Regex.Replace(name, "<[^>]*>|[\\u200B-\\u200D\\uFEFF]", string.Empty);
+        return Regex.IsMatch(plain, @"town\s+of\s+host\s+for\s+e\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     private void JackalRadioCheck_Changed(object sender, RoutedEventArgs e)
@@ -917,6 +940,13 @@ public partial class SettingsWindow : Window
                 !read.NosNeutralKillerHaunting ||
                 window.SnrControlsPanel.Visibility != Visibility.Visible)
                 throw new InvalidOperationException("MOD lobby controls did not round-trip");
+            if (window.SnrControlsPanel.Children.OfType<Border>().Count() != 1 ||
+                window.TohControlsPanel.Children.OfType<Border>().Count() != 1 ||
+                window.NosControlsPanel.Children.OfType<Border>().Count() != 1 ||
+                window.SnrJumboVoiceCheck.Style != window.RadioOnlyCheck.Style ||
+                window.TohNeutralKillerHauntingCheck.Style != window.RadioOnlyCheck.Style ||
+                window.NosVoicePositionsCheck.Style != window.RadioOnlyCheck.Style)
+                throw new InvalidOperationException("MOD lobby cards did not use the released switch layout");
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.TownOfHostForE });
             if (window.TohControlsPanel.Visibility != Visibility.Visible ||
                 window.SnrControlsPanel.Visibility != Visibility.Collapsed)
@@ -924,6 +954,48 @@ public partial class SettingsWindow : Window
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip });
             if (window.NosControlsPanel.Visibility != Visibility.Visible)
                 throw new InvalidOperationException("NoS lobby settings are not visible");
+            window.UpdateCurrentLobbySettings(new LobbySettings());
+            window.UpdateCurrentGameState(new AmongUsState
+            {
+                Mod = AmongUsModType.None, GameState = GameState.Lobby,
+                LobbyCode = "ABCDEF", HostId = 7,
+                Players = [new Player { ClientId = 7, Name = "Host <color=red>Town of Host for E</color>" }]
+            });
+            if (window.TohControlsPanel.Visibility != Visibility.Collapsed)
+                throw new InvalidOperationException("Vanilla own settings copied the remote TOH host marker");
+            window.CurrentLobbyTab.IsChecked = true;
+            if (window.TohControlsPanel.Visibility != Visibility.Visible ||
+                window.SnrControlsPanel.Visibility != Visibility.Collapsed)
+                throw new InvalidOperationException("Current lobby did not detect the TOH host name");
+            window.UpdateCurrentGameState(new AmongUsState
+            {
+                Mod = AmongUsModType.None, GameState = GameState.Lobby,
+                LobbyCode = "ABCDEF", HostId = 7,
+                Players = [new Player { ClientId = 7, Name = "Host", AppearanceName = "Town\u200B of Host for E" }]
+            });
+            if (window.TohControlsPanel.Visibility != Visibility.Visible)
+                throw new InvalidOperationException("Current lobby did not detect the TOH appearance name");
+            window.UpdateCurrentGameState(new AmongUsState
+            {
+                Mod = AmongUsModType.None, GameState = GameState.Lobby,
+                LobbyCode = "ABCDEF", HostId = 7,
+                Players = [new Player { ClientId = 7, Name = "Host" }]
+            });
+            if (window.TohControlsPanel.Visibility != Visibility.Collapsed)
+                throw new InvalidOperationException("Stale TOH host marker kept the MOD section visible");
+            window.MyLobbyTab.IsChecked = true;
+            window.UpdateCurrentGameState(new AmongUsState
+            {
+                Mod = AmongUsModType.TownOfHostForE, InstalledMod = AmongUsModType.None,
+                GameState = GameState.Lobby, LobbyCode = "ABCDEF", HostId = 7,
+                Players = [new Player { ClientId = 7, Name = "Host" }]
+            });
+            if (window.TohControlsPanel.Visibility != Visibility.Collapsed)
+                throw new InvalidOperationException("Vanilla own settings used the remote effective MOD");
+            window.CurrentLobbyTab.IsChecked = true;
+            if (window.TohControlsPanel.Visibility != Visibility.Visible)
+                throw new InvalidOperationException("Current lobby lost the effective TOH MOD");
+            window.MyLobbyTab.IsChecked = true;
             window.JackalRadioCheck.IsChecked = false;
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.SuperNewRoles });
             if (window.ReadLobbyControls().JackalRadioEnabled || window.SnrJackalRadioCheck.IsChecked != false)

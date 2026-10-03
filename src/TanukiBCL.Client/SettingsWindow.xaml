@@ -588,52 +588,67 @@
                                            Margin="16,-7,62,14" />
                             </StackPanel>
                         </Border>
-                        <StackPanel x:Name="SnrControlsPanel" Visibility="Collapsed" Margin="0,14,0,0">
-                            <TextBlock Text="【MOD】SNR設定" FontWeight="SemiBold" Foreground="#C779D7"
-                                       Margin="0,0,0,14" />
+                        <StackPanel x:Name="SnrControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">
+                            <TextBlock Text="【MOD】SNR設定" FontSize="12" Foreground="#B7AABD"
+                                       Margin="4,0,0,8" />
+                            <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                    CornerRadius="8" ClipToBounds="True">
+                                <StackPanel>
                             <CheckBox x:Name="SnrJumboVoiceCheck" Content="ジャンボ役職の時、大きくなるほど声を太くする"
-                                      Margin="0,0,0,14" />
+                                      Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrJackalHauntingCheck" Content="第三陣営のキルできる役職が幽霊の声も聞こえる"
-                                      Margin="0,0,0,14" />
-                            <CheckBox x:Name="SnrJackalRadioCheck" Content="ジャッカルラジオ" Margin="0,0,0,14"
+                                      Style="{StaticResource LobbySwitchStyle}" />
+                            <CheckBox x:Name="SnrJackalRadioCheck" Content="ジャッカルラジオ"
+                                      Style="{StaticResource LobbySwitchStyle}"
                                       Checked="JackalRadioCheck_Changed" Unchecked="JackalRadioCheck_Changed" />
                             <CheckBox x:Name="SnrJackalHearOutsideVentsCheck"
                                       Content="ジャッカル、波動砲ジャッカルはベント内にいても声が聞こえる"
-                                      Margin="0,0,0,14" />
+                                      Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrJackalTalkInVentsCheck"
                                       Content="ジャッカル、波動砲ジャッカル同士でベント内で会話ができる"
-                                      Margin="0,0,0,14" />
+                                      Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrSidekickHauntingCheck" Content="サイドキックが幽霊の声も聞こえる"
-                                      Margin="0,0,0,14" />
+                                      Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrSidekickHearOutsideVentsCheck"
                                       Content="サイドキックはベント内にいても声が聞こえる"
-                                      Margin="0,0,0,14" />
+                                      Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrSidekickTalkInVentsCheck"
                                       Content="サイドキックもジャッカル陣営同士でベント内で会話ができる"
-                                      Margin="0,0,0,14" />
+                                      Style="{StaticResource LobbySwitchStyle}" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
-                        <StackPanel x:Name="TohControlsPanel" Visibility="Collapsed" Margin="0,14,0,0">
-                            <TextBlock Text="【MOD】TOH4E／TOH4E_EM設定" FontWeight="SemiBold"
-                                       Foreground="#C779D7" Margin="0,0,0,14" />
-                            <CheckBox x:Name="TohNeutralKillerHauntingCheck"
-                                      Content="第三陣営・アニマル陣営のキルできる役職が幽霊の声も聞こえる"
-                                      Margin="0,0,0,14" />
+                        <StackPanel x:Name="TohControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">
+                            <TextBlock Text="【MOD】TOH4E／TOH4E_EM設定" FontSize="12"
+                                       Foreground="#B7AABD" Margin="4,0,0,8" />
+                            <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                    CornerRadius="8" ClipToBounds="True">
+                                <CheckBox x:Name="TohNeutralKillerHauntingCheck"
+                                          Content="第三陣営・アニマル陣営のキルできる役職が幽霊の声も聞こえる"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                            </Border>
                         </StackPanel>
-                        <StackPanel x:Name="NosControlsPanel" Visibility="Collapsed" Margin="0,14,0,0">
-                            <TextBlock Text="【MOD】NoS設定" FontWeight="SemiBold" Foreground="#C779D7"
-                                       Margin="0,0,0,14" />
-                            <CheckBox x:Name="JackalRadioCheck" Content="ジャッカルラジオ" Margin="0,0,0,14"
+                        <StackPanel x:Name="NosControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">
+                            <TextBlock Text="【MOD】NoS設定" FontSize="12" Foreground="#B7AABD"
+                                       Margin="4,0,0,8" />
+                            <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                    CornerRadius="8" ClipToBounds="True">
+                                <StackPanel>
+                            <CheckBox x:Name="JackalRadioCheck" Content="ジャッカルラジオ"
+                                      Style="{StaticResource LobbySwitchStyle}"
                                       Checked="JackalRadioCheck_Changed" Unchecked="JackalRadioCheck_Changed" />
                             <CheckBox x:Name="NosNeutralKillerHauntingCheck"
                                       Content="第三陣営のキルできる役職が幽霊の声も聞こえる"
-                                      Margin="0,0,0,14" />
-                            <CheckBox x:Name="NosVoicePositionsCheck" Margin="0,0,0,14">
+                                      Style="{StaticResource LobbySwitchStyle}" />
+                            <CheckBox x:Name="NosVoicePositionsCheck" Style="{StaticResource LobbySwitchStyle}">
                                 <TextBlock Text="プレイヤーらのスピーカー位置(話している位置)と、自身のマイク位置(収音する位置)をNoSのデータに含まれている座標に変更" TextWrapping="Wrap" />
                             </CheckBox>
                             <CheckBox x:Name="NosSizeVoiceEffectCheck" Content="大きさが変化した場合にエフェクトをかける"
-                                      Margin="0,0,0,14" />
+                                      Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="NosFixerJammingVoiceBlockCheck" Content="フィクサーの妨害を受けた際に音声を遮断する"
-                                      Margin="0,0,0,14" />
+                                      Style="{StaticResource LobbySwitchStyle}" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                         <StackPanel Margin="0,24,0,0">
                             <TextBlock Text="公開ロビー" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,8" />
