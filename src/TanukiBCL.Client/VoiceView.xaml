@@ -17,7 +17,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="1" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="52" />
+            <RowDefinition x:Name="FooterRow" Height="52" />
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Background="#1D1A23" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
@@ -168,7 +168,7 @@
         </Grid>
 
         <Grid Grid.Row="4">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
+            <StackPanel x:Name="FooterBar" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
                 <Button x:Name="GithubButton" Width="44" Height="36" Margin="4,0" ToolTip="GitHubのページはこちら"
                         Background="Transparent" BorderThickness="0" Foreground="#D0D0D0"
                         Click="GithubButton_Click">

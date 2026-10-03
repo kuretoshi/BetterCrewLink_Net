@@ -3,9 +3,11 @@ using System.IO;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
 
@@ -13,6 +15,12 @@ namespace TanukiBCL.Client;
 
 public partial class MainWindow : Window
 {
+    private const int DwmwaBorderColor = 34;
+    private const int DwmColorNone = unchecked((int)0xFFFFFFFE);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int valueSize);
+
     private readonly ClientSessionCoordinator sessions = new();
     private readonly CoalescedSessionRestart settingsRestarts = new();
     private VoiceServerProbe? probe;
@@ -45,6 +53,15 @@ public partial class MainWindow : Window
     {
         settings = ClientSettingsStore.Load();
         InitializeComponent();
+        SourceInitialized += (_, _) =>
+        {
+            // Electron's frame:false has no native outline. Windows 11 draws one
+            // around WPF WindowChrome unless its DWM border is explicitly disabled.
+            if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return;
+            var borderColor = DwmColorNone;
+            _ = DwmSetWindowAttribute(new WindowInteropHelper(this).Handle,
+                DwmwaBorderColor, ref borderColor, sizeof(int));
+        };
         PreviewKeyDown += (_, eventArgs) =>
         {
             if (eventArgs.Key != Key.D ||

@@ -303,6 +303,7 @@ public partial class VoiceView : UserControl
         HeaderPanel.Margin = inLobby ? new Thickness(0, -6, 0, 6) : new Thickness(0);
         if (!inLobby || local is null || game is null)
         {
+            SetFooterVisible(true);
             ClosePlayerConfigPopup();
             OtherPlayersPanel.Children.Clear();
             remoteAvatars.Clear();
@@ -323,6 +324,7 @@ public partial class VoiceView : UserControl
         DeafenButton.ToolTip = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
 
         var others = game.Players.Where(player => !player.IsLocal).ToArray();
+        SetFooterVisible(others.Length <= 6);
         if (popupPlayerId is int activePlayerId && others.All(player => player.Id != activePlayerId))
             ClosePlayerConfigPopup();
         displayedPlayers.Clear();
@@ -360,6 +362,12 @@ public partial class VoiceView : UserControl
                 status.UsingRadio && !player.Disconnected && !player.Bugged,
                 ResolvePeerQuality(status.Quality, serverQuality), bugged: player.Bugged);
         }
+    }
+
+    private void SetFooterVisible(bool visible)
+    {
+        FooterBar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        FooterRow.Height = new GridLength(visible ? 52d : 0d);
     }
 
     internal static ConnectionQuality? ResolvePeerQuality(ConnectionQuality? peer, ConnectionQuality? server)
@@ -423,8 +431,23 @@ public partial class VoiceView : UserControl
         view.Update(game, true, false, false, false, peers);
         if (view.OtherPlayersPanel.Children.Count != 1 || !view.remoteAvatars.ContainsKey(0))
             throw new InvalidOperationException("Stale disconnected avatars remained after roster cleanup");
+        for (var id = 4; id <= 9; id++)
+            game.Players.Add(new Player { Id = id, ClientId = id + 10, Name = $"Guest {id}" });
+        view.Update(game, true, false, false, false, peers);
+        if (view.OtherPlayersPanel.Children.Count != 7 ||
+            view.FooterBar.Visibility != Visibility.Collapsed || view.FooterRow.Height.Value != 0d)
+            throw new InvalidOperationException("Footer still uses space with seven remote players");
+        game.Players.RemoveAt(game.Players.Count - 1);
+        view.Update(game, true, false, false, false, peers);
+        if (view.OtherPlayersPanel.Children.Count != 6 ||
+            view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
+            throw new InvalidOperationException("Footer did not return with six remote players");
+        game.GameState = GameState.Menu;
+        view.Update(game, true, false, false, false, peers);
+        if (view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
+            throw new InvalidOperationException("Footer did not return on the game-waiting screen");
         view.popupCloseTimer.Stop();
-        Console.WriteLine("[PASS] VoiceView keeps distinct disconnected avatars with shared client IDs");
+        Console.WriteLine("[PASS] VoiceView keeps duplicate-client avatars distinct and hides the footer above six peers");
     }
 
     public void SetWarning(string? warning)
