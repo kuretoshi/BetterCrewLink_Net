@@ -318,7 +318,7 @@ public partial class SettingsWindow : Window
         ObsUrlPanel.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         ObsToggleBorder.BorderThickness = enabled ? new Thickness(0, 0, 0, 1) : new Thickness(0);
         if (!enabled) return;
-        if (!StreamingSettings.IsValidSecret(obsSecretDraft))
+        if (string.IsNullOrEmpty(obsSecretDraft))
             obsSecretDraft = StreamingSettings.CreateSecret();
         ObsUrlBox.Text = StreamingSettings.BuildObsUrl(new ClientSettings
         {
@@ -1126,6 +1126,11 @@ public partial class SettingsWindow : Window
                 window.ObsToggleBorder.BorderThickness.Bottom != 0)
                 throw new InvalidOperationException("OBS URL row did not hide with its switch");
             window.ObsOverlayCheck.IsChecked = true;
+            window.obsSecretDraft = "legacy-secret!";
+            window.UpdateObsUrl();
+            if (window.obsSecretDraft != "legacy-secret!" ||
+                !window.ObsUrlBox.Text.Contains("&secret=legacy-secret%21", StringComparison.Ordinal))
+                throw new InvalidOperationException("Existing OBS secret was replaced in the streaming URL");
             var streamSettings = new ClientSettings
             {
                 HideCode = true, ObsOverlay = true, ObsSecret = window.obsSecretDraft

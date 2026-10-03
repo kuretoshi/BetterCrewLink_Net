@@ -104,7 +104,9 @@ internal sealed class ClientSettings
         if (!Enum.IsDefined(PushToTalkMode)) PushToTalkMode = MicrophoneActivationMode.Voice;
         if (OverlayPosition is not ("hidden" or "top" or "bottom_left" or "right" or
             "right1" or "left" or "left1")) OverlayPosition = "right";
-        if (!StreamingSettings.IsValidSecret(ObsSecret))
+        // 3.2.8 creates a secret only when it is absent; existing values are
+        // opaque credentials and must survive imported settings unchanged.
+        if (string.IsNullOrEmpty(ObsSecret))
             ObsSecret = ObsOverlay ? StreamingSettings.CreateSecret() : null;
         LaunchPlatform = string.IsNullOrWhiteSpace(LaunchPlatform) ? "STEAM" : LaunchPlatform;
         CustomPlatforms = (CustomPlatforms ?? [])

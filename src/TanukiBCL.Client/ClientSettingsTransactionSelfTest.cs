@@ -15,6 +15,7 @@ internal static class ClientSettingsTransactionSelfTest
             VerifyPropertyScopedPersistence();
             VerifySaveFailureAndRetry();
             VerifySnapshotsAndUnrelatedProperties();
+            VerifyObsSecretPreservation();
             Console.WriteLine("[PASS] settings transactions: no-op, preview/commit, key-scoped persistence, failed-save retry and isolated snapshots");
             return 0;
         }
@@ -167,6 +168,24 @@ internal static class ClientSettingsTransactionSelfTest
         copied.ServerUrls.Clear();
         copied.PlayerConfigMap.Clear();
         Assert(expected.ServerUrls.Count > 0 && expected.PlayerConfigMap.Count == 2, "CopyFrom did not deep-copy nested collections");
+    }
+
+    private static void VerifyObsSecretPreservation()
+    {
+        const string importedSecret = "legacy-secret!";
+        var enabled = new ClientSettings { ObsOverlay = true, ObsSecret = importedSecret };
+        enabled.Normalize();
+        Assert(enabled.ObsSecret == importedSecret &&
+            StreamingSettings.BuildObsUrl(enabled).Contains("secret=legacy-secret%21", StringComparison.Ordinal),
+            "normalization replaced an existing 3.2.8 OBS secret");
+        var disabled = new ClientSettings { ObsOverlay = false, ObsSecret = importedSecret };
+        disabled.Normalize();
+        Assert(disabled.ObsSecret == importedSecret,
+            "disabling OBS removed a credential the released client would retain");
+        var missing = new ClientSettings { ObsOverlay = true, ObsSecret = string.Empty };
+        missing.Normalize();
+        Assert(StreamingSettings.IsValidSecret(missing.ObsSecret),
+            "enabling OBS without an existing secret did not generate one");
     }
 
     private static ClientSettings CreateSettings()
