@@ -159,6 +159,8 @@ public partial class VoiceView : UserControl
             throw new InvalidOperationException("Game launcher has no waiting area");
         if (view.WaitingPanel.ActualHeight + view.WaitingPanel.Margin.Top > waitingArea.ActualHeight)
             throw new InvalidOperationException($"Game launcher overflows the 280×390 voice window: waiting={view.WaitingPanel.ActualHeight:0} available={waitingArea.ActualHeight:0}");
+        if (view.PublicLobbyButton.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("The released waiting view does not show a public-lobby button");
         if (view.LaunchButtonGroup.ActualWidth <= 142 ||
             view.LaunchButtonGroup.ActualWidth > view.ActualWidth)
             throw new InvalidOperationException("Long game platform name is clipped or overflows the voice window");

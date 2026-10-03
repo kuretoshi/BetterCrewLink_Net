@@ -157,7 +157,7 @@
                         <StackPanel x:Name="LaunchDropdownItems" />
                     </ScrollViewer>
                 </Border>
-                <Button x:Name="PublicLobbyButton" Content="公開ロビー" Margin="0,4,0,0"
+                <Button x:Name="PublicLobbyButton" Content="公開ロビー" Visibility="Collapsed" Margin="0,4,0,0"
                         Height="36" Padding="12,0" BorderBrush="#CE93D8" BorderThickness="1"
                         Background="Transparent" Foreground="#CE93D8"
                         Click="PublicLobbyButton_Click" />

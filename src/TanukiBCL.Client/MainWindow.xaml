@@ -116,8 +116,12 @@
             <Button x:Name="DeafenButton" Content="スピーカーをミュート" Width="170" IsEnabled="False"
                     Click="DeafenButton_Click" />
           </StackPanel>
-          <Button x:Name="RadioButton" Content="インポスターラジオ: OFF" Width="210" HorizontalAlignment="Left"
-                  IsEnabled="False" Click="RadioButton_Click" />
+          <StackPanel Orientation="Horizontal">
+            <Button x:Name="RadioButton" Content="インポスターラジオ: OFF" Width="210"
+                    IsEnabled="False" Click="RadioButton_Click" />
+            <Button x:Name="DiagnosticsPublicLobbyButton" Content="公開ロビー" Width="125"
+                    Click="DiagnosticsPublicLobbyButton_Click" />
+          </StackPanel>
         </StackPanel>
       </Grid>
     </Grid>

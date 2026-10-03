@@ -42,6 +42,7 @@ public partial class MainWindow : Window
     private bool localTalking;
     private bool voiceServerConnected;
     private bool reloadInProgress;
+    private bool processSwitchInProgress;
     private bool isClosing;
     private long connectionIntentVersion;
     private ConnectionQuality? serverQuality;
@@ -644,14 +645,41 @@ public partial class MainWindow : Window
 
     private async void CompactVoiceView_ReloadRequested(object? sender, EventArgs e)
     {
-        if (reloadInProgress) return;
+        if (reloadInProgress || processSwitchInProgress) return;
         var activeProbe = probe;
         var session = sessions.Current;
         if (activeProbe is null || session is null || !session.AcceptsCallbacks)
         {
             RefreshProcesses();
-            if (ProcessCombo.SelectedItem is ProcessChoice) StartButton_Click(this, new RoutedEventArgs());
-            else ShowDiagnostics();
+            if (ProcessCombo.Items.Count == 1) StartButton_Click(this, new RoutedEventArgs());
+            else if (ProcessCombo.Items.Count > 1) ShowDiagnostics();
+            else UpdateCompactView();
+            return;
+        }
+
+        // Reload cannot revive a voice session attached to an Among Us PID that
+        // has exited. Release its socket/audio devices before selecting another
+        // process, and do not silently choose one when several games are open.
+        if (activeGamePid is { } gamePid && !IsGameProcessAlive(gamePid))
+        {
+            processSwitchInProgress = true;
+            connectionIntentVersion++;
+            try
+            {
+                session.RequestStop();
+                await session.Completion;
+                if (isClosing || Dispatcher.HasShutdownStarted) return;
+                currentState = null;
+                peers.Clear();
+                RefreshProcesses();
+                if (ProcessCombo.Items.Count == 1)
+                    StartButton_Click(this, new RoutedEventArgs());
+                else if (ProcessCombo.Items.Count > 1)
+                    ShowDiagnostics();
+                else
+                    UpdateCompactView();
+            }
+            finally { processSwitchInProgress = false; }
             return;
         }
 
@@ -685,6 +713,18 @@ public partial class MainWindow : Window
                 reloadInProgress = false;
             }
         }
+    }
+
+    private static bool IsGameProcessAlive(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            return !process.HasExited;
+        }
+        catch (ArgumentException) { return false; }
+        catch (InvalidOperationException) { return false; }
+        catch (System.ComponentModel.Win32Exception) { return false; }
     }
 
     private void MuteButton_Click(object sender, RoutedEventArgs e)
@@ -923,6 +963,8 @@ public partial class MainWindow : Window
     }
 
     private void BackButton_Click(object sender, RoutedEventArgs e) => ShowCompactView();
+
+    private void DiagnosticsPublicLobbyButton_Click(object sender, RoutedEventArgs e) => ShowPublicLobbyBrowser();
 
     private void DiagnosticsCloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
