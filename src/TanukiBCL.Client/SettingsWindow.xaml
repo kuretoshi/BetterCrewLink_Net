@@ -67,6 +67,41 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="UpdateActionButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="214" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#BA68C8" />
+            <Setter Property="BorderBrush" Value="#68466F" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#47434A" />
+                                <Setter TargetName="ButtonSurface" Property="BorderBrush" Value="#47434A" />
+                                <Setter Property="Foreground" Value="#77727B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="UpdateFilledButtonStyle" TargetType="Button"
+               BasedOn="{StaticResource UpdateActionButtonStyle}">
+            <Setter Property="Background" Value="#BA68C8" />
+            <Setter Property="Foreground" Value="#1D1B22" />
+            <Setter Property="BorderBrush" Value="#BA68C8" />
+        </Style>
         <Style TargetType="ComboBox">
             <Setter Property="Height" Value="32" />
         </Style>
@@ -294,7 +329,7 @@
                 </ListBox>
             </StackPanel>
         </Border>
-        <Grid x:Name="SettingsContent" Grid.Column="1" Margin="28,24">
+        <Grid x:Name="SettingsContent" Grid.Column="1" Margin="26,24,24,24">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <StackPanel x:Name="GeneralPanel">
@@ -766,27 +801,25 @@
                     <StackPanel x:Name="UpdatePanel" Visibility="Collapsed">
                         <TextBlock Text="アップデート" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
-                                Padding="20" CornerRadius="8">
+                                Padding="20,22,20,22" CornerRadius="8">
                             <StackPanel>
                                 <TextBlock x:Name="UpdateVersionText" FontSize="15" FontWeight="Medium"
                                            Visibility="Collapsed" Margin="0,0,0,6" />
                                 <TextBlock x:Name="UpdateStatusText" Text="アップデートを確認してください。"
-                                           FontSize="15" FontWeight="Medium" TextWrapping="Wrap" Margin="0,0,0,20" />
+                                           FontSize="15" FontWeight="Medium" TextWrapping="Wrap" Margin="0,0,0,22" />
                                 <ProgressBar x:Name="UpdateProgress" Height="6" Minimum="0" Maximum="100"
                                              Visibility="Collapsed" Margin="0,0,0,20" />
                                 <WrapPanel MaxWidth="440" HorizontalAlignment="Left">
                                     <Button x:Name="CheckUpdateButton" Content="アップデートを確認"
-                                            Width="200" Height="40" Margin="0,0,12,8"
-                                            Background="Transparent" Foreground="#BA68C8"
-                                            BorderBrush="#BA68C8" BorderThickness="1"
+                                            Style="{StaticResource UpdateActionButtonStyle}" Margin="0,0,12,8"
                                             Click="CheckUpdateButton_Click" />
                                     <Button x:Name="StartUpdateButton" Content="アップデート開始"
-                                            Width="200" Height="40" Margin="0,0,0,8" IsEnabled="False"
-                                            Background="#BA68C8" Foreground="#1D1B22"
-                                            BorderThickness="0" Click="StartUpdateButton_Click" />
+                                            Style="{StaticResource UpdateFilledButtonStyle}" Margin="0,0,0,8"
+                                            IsEnabled="False" Click="StartUpdateButton_Click" />
                                 </WrapPanel>
                                 <TextBlock Text="アップデート開始後は、ダウンロード完了時にアプリを終了して更新します。"
-                                           FontSize="12" Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,8,0,0" />
+                                           FontSize="12" FontWeight="SemiBold" Foreground="#E8E1EA"
+                                           TextWrapping="Wrap" Margin="0,11,0,0" />
                                 <Button x:Name="ManualUpdateDownloadButton" Content="手動でダウンロード"
                                         HorizontalAlignment="Left" Padding="14,8" Margin="0,8,0,0"
                                         Visibility="Collapsed" Click="ManualUpdateDownloadButton_Click" />
