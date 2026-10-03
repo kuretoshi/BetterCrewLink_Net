@@ -11,6 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TanukiBCL.VoiceProbe\TanukiBCL.VoiceProbe.csproj" />
     <Resource Include="Assets\Avatar\*.png" />
+    <Resource Include="Assets\Fonts\SourceCodePro-Medium.otf" />
     <Content Include="Assets\Audio\chime.mp3" CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Locales\**\translation.json" Link="Locales\%(RecursiveDir)translation.json"
@@ -19,6 +20,8 @@
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\licenses\SpeexDSPSharp.*.LICENSE.txt"
              Link="Licenses\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Fonts\OFL-LICENSE.md" Link="Licenses\SourceCodePro-OFL.md"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 

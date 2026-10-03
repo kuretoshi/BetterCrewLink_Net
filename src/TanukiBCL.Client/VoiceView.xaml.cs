@@ -73,6 +73,14 @@ public partial class VoiceView : UserControl
     internal static void VerifyNameLayout()
     {
         var view = new VoiceView();
+        var codeTypeface = new Typeface(view.LobbyCode.FontFamily, FontStyles.Normal,
+            FontWeights.Medium, FontStretches.Normal);
+        if (!codeTypeface.TryGetGlyphTypeface(out var codeGlyphs) ||
+            !codeGlyphs.FontUri.ToString().Contains("SourceCodePro-Medium.otf", StringComparison.OrdinalIgnoreCase) ||
+            System.Windows.Application.GetResourceStream(new Uri(
+                "/TanukiBCL.Net;component/Assets/Fonts/SourceCodePro-Medium.otf", UriKind.Relative)) is null)
+            throw new InvalidOperationException(
+                $"Released lobby-code font was not embedded or resolved: {codeGlyphs?.FontUri}");
         if (view.VersionText.Text != FormatVersionLabel(UpdateCatalog.CurrentVersion) ||
             (string?)view.VersionText.ToolTip != $"v{UpdateCatalog.CurrentVersion}" ||
             FormatVersionLabel("3.2.8-netdev.0") != "v3.2.8 DEV" ||

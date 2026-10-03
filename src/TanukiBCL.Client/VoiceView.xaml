@@ -73,7 +73,8 @@
                         </Canvas>
                         <Border x:Name="CodeBackground" Background="#3E4346" CornerRadius="5"
                                 Padding="9,5" Margin="0,5,0,0" HorizontalAlignment="Center">
-                            <TextBlock x:Name="LobbyCode" FontSize="28" FontFamily="Consolas"
+                            <TextBlock x:Name="LobbyCode" FontSize="28"
+                                       FontFamily="./Assets/Fonts/#Source Code Pro"
                                        Text="MENU" TextAlignment="Center" />
                         </Border>
                     </StackPanel>
