@@ -432,7 +432,8 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             if (!peers.TryGetValue(remoteSocketId, out var currentPeer) || !ReferenceEquals(currentPeer, peer))
                 return;
-            Log($"peer {Short(remoteSocketId)} ice={state} dtlsRole={connection.IceRole}");
+            Log($"peer {Short(remoteSocketId)} ice={state} dtlsRole={connection.IceRole} " +
+                $"pair={DescribeNominatedPair(connection)}");
             if (state == RTCIceConnectionState.connected &&
                 Interlocked.Exchange(ref peer.DtlsHandshakeWatchdogStarted, 1) == 0)
                 _ = WatchDtlsHandshakeAsync(peer);
@@ -496,6 +497,14 @@ internal sealed class WebRtcPeerManager : IDisposable
     internal static bool IsDirectHostPair(ChecklistEntry? nominatedEntry) =>
         nominatedEntry?.LocalCandidate.type == RTCIceCandidateType.host &&
         nominatedEntry.RemoteCandidate.type == RTCIceCandidateType.host;
+
+    private static string DescribeNominatedPair(RTCPeerConnection connection)
+    {
+        var nominated = connection.GetRtpChannel().NominatedEntry;
+        return nominated is null
+            ? "none"
+            : $"{nominated.LocalCandidate.type}/{nominated.RemoteCandidate.type}";
+    }
 
     internal static ConnectionQuality FromReceptionReport(
         ReceptionReportSample sample, double? observedJitterMs, bool direct = false, double? rttMs = null) =>
@@ -640,13 +649,9 @@ internal sealed class WebRtcPeerManager : IDisposable
             peer.Connection.connectionState != RTCPeerConnectionState.connecting)
             return;
 
-        var nominated = peer.Connection.GetRtpChannel().NominatedEntry;
-        var pair = nominated is null
-            ? "none"
-            : $"{nominated.LocalCandidate.type}/{nominated.RemoteCandidate.type}";
         Log($"DTLS handshake stalled: {Short(peer.RemoteSocketId)} " +
             $"ice={peer.Connection.iceConnectionState} dtlsRole={peer.Connection.IceRole} " +
-            $"sctp={peer.Connection.sctp.state} pair={pair}");
+            $"sctp={peer.Connection.sctp.state} pair={DescribeNominatedPair(peer.Connection)}");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
 
