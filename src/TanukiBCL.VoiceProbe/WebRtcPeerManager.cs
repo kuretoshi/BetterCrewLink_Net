@@ -300,8 +300,9 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         if (description.type == RTCSdpType.offer)
         {
-            // Create the answerer's local SCTP channel after the remote SDP
-            // establishes the DTLS role, but before generating the answer.
+            // SIPSorcery needs an answerer-side channel for reliable SCTP
+            // establishment with the .NET offerer. Create it after applying
+            // remote SDP so the DTLS role has been established.
             if (HasSctpMedia(description.sdp))
             {
                 var channel = await peer.Connection.createDataChannel("tanuki-probe", null);
@@ -460,20 +461,23 @@ internal sealed class WebRtcPeerManager : IDisposable
             peer.AllChannels.Add(channel);
         }
         Log($"data channel configured: {Short(peer.RemoteSocketId)} origin={origin} label={channel.label} id={channel.id} state={channel.readyState}");
-        channel.onopen += () =>
+        void HandleOpen()
         {
             if (!peers.TryGetValue(peer.RemoteSocketId, out var current) || !ReferenceEquals(current, peer))
             {
                 return;
             }
+            if (channel.readyState != RTCDataChannelState.open) return;
             var wasOpen = MarkDataChannelOpen(peer, channel);
+            if (wasOpen) return;
             Log($"data channel open: {Short(peer.RemoteSocketId)} origin={origin} id={channel.id}");
-            if (!wasOpen) OnDataChannelReady(peer);
+            OnDataChannelReady(peer);
             if (sendTestTone)
             {
                 channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
             }
-        };
+        }
+        channel.onopen += HandleOpen;
         channel.onmessage += (_, _, data) =>
         {
             var isCurrent = peers.TryGetValue(peer.RemoteSocketId, out var current) &&
@@ -512,6 +516,9 @@ internal sealed class WebRtcPeerManager : IDisposable
             }
             Log($"data channel closed: {Short(peer.RemoteSocketId)}");
         };
+        // An incoming channel can already be open when ondatachannel fires.
+        // Its onopen event may have been missed before these handlers existed.
+        if (channel.readyState == RTCDataChannelState.open) HandleOpen();
     }
 
     private static bool MarkDataChannelOpen(Peer peer, RTCDataChannel channel)
