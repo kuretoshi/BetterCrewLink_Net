@@ -56,6 +56,12 @@ public partial class SettingsWindow
             (window.OverlayPositionCombo.SelectedItem as ComboBoxItem)?.Tag as string != "right" ||
             window.ServerUrlBox.SelectedItem as string != settings.ServerUrl)
             throw new InvalidOperationException("Overlay or server selector lost its released dark style or saved selection");
+        if (new[] { window.MobileHostCheck, window.HardwareAccelerationCheck,
+                window.EchoCancellationCheck, window.AutoGainControlCheck,
+                window.SpatialAudioCheck, window.NoiseSuppressionCheck,
+                window.OldSampleDebugCheck }
+            .Any(toggle => toggle.Style != window.EnableOverlayCheck.Style))
+            throw new InvalidOperationException("Advanced beta controls did not use the released right-side switch style");
         if (window.StreamingPanel.Children.OfType<Border>().Count() != 1 ||
             window.ShowLobbyCodeCheck.Style != window.ObsOverlayCheck.Style ||
             window.CopyObsUrlButton.Content is not System.Windows.Shapes.Path ||

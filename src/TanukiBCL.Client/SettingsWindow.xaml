@@ -1008,33 +1008,40 @@
                         <TextBlock Text="ベータ/デバッグ" FontSize="12" Foreground="#B7AABD" Margin="4,24,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <CheckBox x:Name="MobileHostCheck" Content="モバイル ホスト" Margin="16,12" />
+                                <CheckBox x:Name="MobileHostCheck" Content="モバイル ホスト" Margin="16,12"
+                                          Style="{StaticResource OverlaySwitchStyle}" />
                                 <Border Height="1" Background="#403A45" />
                                 <StackPanel Margin="16,12">
-                                    <CheckBox x:Name="HardwareAccelerationCheck" Content="ハードウェア アクセラレーション" />
+                                    <CheckBox x:Name="HardwareAccelerationCheck" Content="ハードウェア アクセラレーション"
+                                              Style="{StaticResource OverlaySwitchStyle}" />
                                     <TextBlock Text="ハードウェアアクセラレーションを無効にします（CPU使用率が上がる可能性があります）"
                                                TextWrapping="Wrap" Foreground="#B7AABD" FontSize="12" Margin="20,4,0,0" />
                                 </StackPanel>
                                 <Border Height="1" Background="#403A45" />
-                                <CheckBox x:Name="EchoCancellationCheck" Content="エコーキャンセラー" Margin="16,12" />
+                                <CheckBox x:Name="EchoCancellationCheck" Content="エコーキャンセラー" Margin="16,12"
+                                          Style="{StaticResource OverlaySwitchStyle}" />
                                 <Border Height="1" Background="#403A45" />
                                 <StackPanel Margin="16,12">
                                     <CheckBox x:Name="AutoGainControlCheck" Content="自動ゲイン調整"
+                                              Style="{StaticResource OverlaySwitchStyle}"
                                               Checked="AutoGainControlCheck_Changed" Unchecked="AutoGainControlCheck_Changed" />
                                     <TextBlock Text="ベータ版：マイク音量を自動調整します。先にテストしてください。"
                                                TextWrapping="Wrap" Foreground="#A8A4B0" FontSize="12" Margin="20,4,0,0" />
                                 </StackPanel>
                                 <Border Height="1" Background="#403A45" />
                                 <StackPanel Margin="16,12">
-                                    <CheckBox x:Name="SpatialAudioCheck" Content="立体音響" />
+                                    <CheckBox x:Name="SpatialAudioCheck" Content="立体音響"
+                                              Style="{StaticResource OverlaySwitchStyle}" />
                                     <TextBlock Text="OFFでも声が届く距離や壁の遮断は有効です。距離内の音量と左右配置を固定します。"
                                                TextWrapping="Wrap" Foreground="#A8A4B0" FontSize="12" Margin="20,4,0,0" />
                                 </StackPanel>
                                 <Border Height="1" Background="#403A45" />
-                                <CheckBox x:Name="NoiseSuppressionCheck" Content="ノイズ防止" Margin="16,12" />
+                                <CheckBox x:Name="NoiseSuppressionCheck" Content="ノイズ防止" Margin="16,12"
+                                          Style="{StaticResource OverlaySwitchStyle}" />
                                 <Border Height="1" Background="#403A45" />
                                 <StackPanel Margin="16,12">
-                                    <CheckBox x:Name="OldSampleDebugCheck" Content="サンプルレートデバッグ" />
+                                    <CheckBox x:Name="OldSampleDebugCheck" Content="サンプルレートデバッグ"
+                                              Style="{StaticResource OverlaySwitchStyle}" />
                                     <TextBlock Text="依頼された場合のみ有効にするテスト機能です。ONではマイク入力を48 kHzで要求します。"
                                                TextWrapping="Wrap" Foreground="#A8A4B0" FontSize="12" Margin="20,4,0,0" />
                                 </StackPanel>
