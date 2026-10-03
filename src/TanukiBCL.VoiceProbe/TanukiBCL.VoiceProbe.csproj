@@ -9,6 +9,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets\ColliderMap.v3.2.7.json" />
     <EmbeddedResource Include="Assets\Audio\reverb.48k.wav" />
+    <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="SIPSorcery" Version="10.0.17" />
     <PackageReference Include="SIPSorceryMedia.Encoders" Version="10.0.4" />

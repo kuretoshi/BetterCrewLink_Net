@@ -57,6 +57,10 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string, int>? EncodedAudioReceived;
 
+    // Synchronous diagnostic tap. The normal client forwards only when a probe
+    // listener is attached; the receive-only test never retains packet bytes.
+    public event Action<string, ReadOnlyMemory<byte>>? EncodedAudioPacketReceived;
+
     public event Action<string, string>? PeerDataReceived;
 
     public event Action<string, Guid>? PeerConnectionFailed;
@@ -814,6 +818,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private void ReceiveAudio(Peer peer, EncodedAudioFrame frame)
     {
         EncodedAudioReceived?.Invoke(peer.RemoteSocketId, frame.EncodedAudio.Length);
+        EncodedAudioPacketReceived?.Invoke(peer.RemoteSocketId, frame.EncodedAudio);
         short[] pcm;
         lock (peer.AudioGate)
         {

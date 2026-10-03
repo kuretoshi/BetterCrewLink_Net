@@ -137,6 +137,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (peerClientIds.TryGetValue(socketId, out var clientId))
                 PeerEncodedAudioReceived?.Invoke(clientId, length);
         };
+        peerManager.EncodedAudioPacketReceived += (socketId, packet) =>
+        {
+            if (PeerEncodedAudioPacketReceived is not null &&
+                peerClientIds.TryGetValue(socketId, out var clientId))
+                PeerEncodedAudioPacketReceived.Invoke(clientId, packet);
+        };
         peerManager.PeerDataReceived += ApplyPeerData;
         peerManager.PeerDataChannelOpened += remoteSocketId =>
         {
@@ -203,6 +209,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public event Action<int, short[]>? PeerPcmReceived;
 
     public event Action<int, int>? PeerEncodedAudioReceived;
+
+    internal event Action<int, ReadOnlyMemory<byte>>? PeerEncodedAudioPacketReceived;
 
     public event Action<bool>? LocalVadChanged;
 
