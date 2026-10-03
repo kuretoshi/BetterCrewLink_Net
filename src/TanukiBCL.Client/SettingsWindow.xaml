@@ -679,10 +679,16 @@
                         </StackPanel>
                     </StackPanel>
                     <StackPanel x:Name="PlayersPanel" Visibility="Collapsed">
-                        <TextBlock Text="プレイヤー" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,14" />
-                        <TextBlock Text="プレイヤーごとの音量とミュートを調整します。変更はすぐに反映されます。"
-                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,18" />
-                        <StackPanel x:Name="PlayerRows" />
+                        <TextBlock x:Name="PlayersSectionTitle" Text="プレイヤー" FontSize="12"
+                                   Foreground="#B7AABD" Margin="4,0,0,14" />
+                        <Border x:Name="PlayersCard" Background="#2A2630" BorderBrush="#3F3944"
+                                BorderThickness="1" CornerRadius="8">
+                            <StackPanel x:Name="PlayerRows" />
+                        </Border>
+                        <Border x:Name="PlayersEmptyAlert" Background="#173943" BorderBrush="#27596A"
+                                BorderThickness="1" CornerRadius="4" Padding="12" Visibility="Collapsed">
+                            <TextBlock x:Name="PlayersEmptyText" Foreground="#B8E6F3" TextWrapping="Wrap" />
+                        </Border>
                     </StackPanel>
                     <StackPanel x:Name="AudioPanel" Visibility="Collapsed">
                         <TextBlock Text="オーディオ" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />

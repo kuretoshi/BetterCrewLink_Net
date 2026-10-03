@@ -12,6 +12,7 @@ public partial class SettingsWindow
     {
         Title = UiLocalization.Translate(language, "settings.title");
         staticText.Apply(this, language, PlayerRows);
+        PlayersSectionTitle.Text = UiLocalization.Translate(language, "settings.players.title");
         UpdateLobbyNotice();
         UpdateDistanceTitle();
         CopyObsUrlButton.ToolTip = UiLocalization.Translate(language, "settings.streaming.copy_url");
@@ -194,7 +195,9 @@ public partial class SettingsWindow
         window.MyLobbyTab.IsChecked = true;
         window.VisionHearingCheck.IsChecked = true;
         VerifyShortcutLabels("en", false);
-        if (window.PlayerRows.Children[0] is not TextBlock { Text: "No other players right now. Join a lobby to adjust their volume." })
+        if (window.PlayersEmptyText.Text != "No other players right now. Join a lobby to adjust their volume." ||
+            window.PlayersEmptyAlert.Visibility != System.Windows.Visibility.Visible ||
+            window.PlayersCard.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Empty player state was not translated");
         settings.PlayerConfigMap[51] = new PlayerAudioConfig(IsMuted: true);
         window.UpdateCurrentGameState(new AmongUsState
@@ -211,6 +214,39 @@ public partial class SettingsWindow
             !Equals(window.CopyObsUrlButton.ToolTip, "URLをコピー"))
             throw new InvalidOperationException("Japanese settings language was not restored");
         VerifyPlayerRow("切断済み", "ミュート解除", "ミュート中");
+        window.UpdateCurrentGameState(new AmongUsState
+        {
+            Mod = AmongUsModType.SuperNewRoles,
+            Players = [
+                new Player { ClientId = 30, Name = "First", PlayerConfigId = 30 },
+                new Player { ClientId = 10, Name = "Second", PlayerConfigId = 10 },
+                new Player { ClientId = 20, Name = "Dummy", IsDummy = true }
+            ]
+        });
+        if (window.PlayerRows.Children.Count != 2 ||
+            window.PlayerRows.Children[0] is not Border { Child: Grid firstRow } ||
+            firstRow.Children[0] is not StackPanel firstLabels ||
+            firstLabels.Children[0] is not StackPanel firstHeading ||
+            firstHeading.Children[1] is not TextBlock { Text: "First" } ||
+            window.PlayerRows.Children[1] is not Border { Child: Grid secondRow } lastRow ||
+            secondRow.Children[0] is not StackPanel secondLabels ||
+            secondLabels.Children[0] is not StackPanel secondHeading ||
+            secondHeading.Children[1] is not TextBlock { Text: "Second" } ||
+            firstRow.ColumnDefinitions[1].MaxWidth != 300 ||
+            !firstRow.ColumnDefinitions[1].Width.IsStar ||
+            lastRow.BorderThickness.Bottom != 0)
+            throw new InvalidOperationException("Player settings rows did not preserve released roster order or card layout");
+        var firstControls = (Grid)firstRow.Children[1];
+        var firstMute = (Button)firstControls.Children[0];
+        var firstSlider = (Slider)firstControls.Children[1];
+        firstMute.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+        if (settings.PlayerConfigMap[30].IsMuted != true || firstSlider.IsEnabled)
+            throw new InvalidOperationException("Player mute control did not apply immediately");
+        firstMute.RaiseEvent(new System.Windows.RoutedEventArgs(Button.ClickEvent));
+        firstSlider.Value = 1.5;
+        if (settings.PlayerConfigMap[30].IsMuted ||
+            Math.Abs(settings.PlayerConfigMap[30].Volume - 1.5) > 0.000001)
+            throw new InvalidOperationException("Player volume control did not apply the preview value");
         VerifyShortcutLabels("ja", true);
         window.Close();
         Console.WriteLine("[PASS] Settings language switches English/Japanese and persists through transaction");
@@ -230,9 +266,11 @@ public partial class SettingsWindow
 
         void VerifyPlayerRow(string disconnected, string unmute, string muted)
         {
-            if (window.PlayerRows.Children[0] is not Border { Child: StackPanel content } ||
-                content.Children[0] is not StackPanel heading ||
-                heading.Children[2] is not TextBlock disconnectedText ||
+            if (window.PlayersCard.Visibility != System.Windows.Visibility.Visible ||
+                window.PlayersSectionTitle.Text != UiLocalization.Translate(settings.Language, "settings.players.title") ||
+                window.PlayerRows.Children[0] is not Border { Child: Grid content } ||
+                content.Children[0] is not StackPanel labels ||
+                labels.Children[1] is not TextBlock disconnectedText ||
                 !disconnectedText.Text.Contains(disconnected, StringComparison.Ordinal) ||
                 content.Children[1] is not Grid controls ||
                 controls.Children[0] is not Button muteButton ||

@@ -151,7 +151,6 @@ public partial class SettingsWindow : Window
         UpdateModSettingsVisibility();
         UpdateShortcutLabels();
         var signature = string.Join(';', (state?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
-            .OrderBy(player => player.ClientId)
             .Select(player => $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{NosColor.For(player)}:{player.Disconnected}"));
         if (signature == playersSignature) return;
         RenderPlayers();
@@ -162,45 +161,49 @@ public partial class SettingsWindow : Window
         if (PlayerRows is null) return;
         PlayerRows.Children.Clear();
         var players = (currentGameState?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
-            .OrderBy(player => player.ClientId).ToArray();
+            .ToArray();
         playersSignature = string.Join(';', players.Select(player =>
             $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{NosColor.For(player)}:{player.Disconnected}"));
+        PlayersSectionTitle.Visibility = PlayersCard.Visibility = players.Length == 0
+            ? Visibility.Collapsed : Visibility.Visible;
+        PlayersEmptyAlert.Visibility = players.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (players.Length == 0)
         {
-            PlayerRows.Children.Add(new TextBlock
-            {
-                Text = PlayerText("empty"),
-                Foreground = new SolidColorBrush(Color.FromRgb(0xb7, 0xaa, 0xbd))
-            });
+            PlayersEmptyText.Text = PlayerText("empty");
             return;
         }
 
-        foreach (var player in players) PlayerRows.Children.Add(CreatePlayerRow(player));
+        for (var index = 0; index < players.Length; index++)
+            PlayerRows.Children.Add(CreatePlayerRow(players[index], index == players.Length - 1));
     }
 
     private string PlayerText(string key) => UiLocalization.Translate(settings.Language, $"settings.players.{key}");
 
-    private Border CreatePlayerRow(Player player)
+    private Border CreatePlayerRow(Player player, bool isLast)
     {
         var (main, shadow) = AvatarImageFactory.GetSwatchColors(player.ColorId, currentGameState?.PlayerColors);
         if (AvatarImageFactory.GetNosColor(player) is { } nosColor) main = shadow = nosColor;
         var swatch = new Ellipse
         {
-            Width = 12, Height = 12, Stroke = new SolidColorBrush(shadow), StrokeThickness = 1,
+            Width = 10, Height = 10, Stroke = new SolidColorBrush(shadow), StrokeThickness = 1,
             Fill = player.ColorId == AvatarImageFactory.RainbowColorId
                 ? new LinearGradientBrush([new GradientStop(Colors.Red, 0),
                     new GradientStop(Colors.Yellow, 0.25), new GradientStop(Colors.Lime, 0.5),
                     new GradientStop(Colors.DeepSkyBlue, 0.75), new GradientStop(Colors.Purple, 1)], 0)
                 : new SolidColorBrush(main),
-            Margin = new Thickness(0, 0, 7, 0)
+            Margin = new Thickness(0, 0, 8, 0)
         };
         var heading = new StackPanel { Orientation = Orientation.Horizontal };
         heading.Children.Add(swatch);
-        heading.Children.Add(new TextBlock { Text = player.Name, FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 275 });
+        heading.Children.Add(new TextBlock { Text = player.Name, FontSize = 14,
+            FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 190 });
+        var labels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        labels.Children.Add(heading);
         if (player.Disconnected)
-            heading.Children.Add(new TextBlock { Text = $"  {PlayerText("disconnected")}",
-                Foreground = Brushes.Gray, FontSize = 11 });
+            labels.Children.Add(new TextBlock { Text = PlayerText("disconnected"),
+                Foreground = new SolidColorBrush(Color.FromRgb(0xb7, 0xaa, 0xbd)),
+                FontSize = 11, Margin = new Thickness(18, 2, 0, 0) });
 
         var muteIcon = new System.Windows.Shapes.Path
         {
@@ -220,7 +223,8 @@ public partial class SettingsWindow : Window
             Value = PlayerAudioConfig.For(player, settings.PlayerConfigMap).Volume
         };
         AutomationProperties.SetName(slider, $"{player.Name} {PlayerText("volume")}");
-        var value = new TextBlock { Width = 62, TextAlignment = TextAlignment.Right };
+        var value = new TextBlock { Width = 46, TextAlignment = TextAlignment.Right,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xb7, 0xaa, 0xbd)) };
         void UpdateControls()
         {
             var config = PlayerAudioConfig.For(player, settings.PlayerConfigMap);
@@ -253,7 +257,7 @@ public partial class SettingsWindow : Window
         slider.PreviewMouseLeftButtonUp += (_, _) => PersistVolume();
         slider.KeyUp += (_, _) => PersistVolume();
 
-        var controls = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        var controls = new Grid { VerticalAlignment = VerticalAlignment.Center };
         controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         controls.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -262,14 +266,19 @@ public partial class SettingsWindow : Window
         controls.Children.Add(slider);
         Grid.SetColumn(value, 2);
         controls.Children.Add(value);
-        var content = new StackPanel();
-        content.Children.Add(heading);
+        var content = new Grid { MinHeight = 38 };
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition
+            { Width = new GridLength(3, GridUnitType.Star), MaxWidth = 300 });
+        content.Children.Add(labels);
+        Grid.SetColumn(controls, 1);
         content.Children.Add(controls);
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0x29, 0x25, 0x2f)),
-            CornerRadius = new CornerRadius(6), Padding = new Thickness(14),
-            Margin = new Thickness(0, 0, 0, 10), Child = content
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x10, 0xff, 0xff, 0xff)),
+            BorderThickness = isLast ? new Thickness(0) : new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(16, 10, 16, 10), Opacity = player.Disconnected ? 0.45 : 1,
+            Child = content
         };
     }
 
