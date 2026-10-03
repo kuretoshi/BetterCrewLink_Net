@@ -62,6 +62,14 @@ public partial class SettingsWindow
             window.PushToTalkShortcutBox.Style != window.MuteShortcutBox.Style ||
             window.PushToTalkShortcutBox.Style != window.DeafenShortcutBox.Style)
             throw new InvalidOperationException("Released keyboard shortcut card layout was not applied");
+        var keyboardHint = window.KeybindsPanel.Children.OfType<Border>().First();
+        if (keyboardHint.MinHeight != 68 ||
+            keyboardHint.Background is not System.Windows.Media.SolidColorBrush hintBackground ||
+            hintBackground.Color != System.Windows.Media.Color.FromRgb(7, 27, 37) ||
+            keyboardHint.Child is not DockPanel hintContent ||
+            hintContent.Children.OfType<Viewbox>().Count() != 1 ||
+            hintContent.Children.OfType<System.Windows.Controls.TextBlock>().Count() != 1)
+            throw new InvalidOperationException("Released keyboard shortcut information banner was not applied");
         window.PushToTalkShortcutBox.ApplyTemplate();
         var prompt = window.PushToTalkShortcutBox.Template.FindName(
             "RecordingPrompt", window.PushToTalkShortcutBox) as StackPanel;
