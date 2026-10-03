@@ -41,6 +41,7 @@ public partial class App : Application
                 if (e.Args.Contains("--nos-avatar-self-test")) AvatarImageFactory.VerifyNosColors();
                 if (e.Args.Contains("--voice-view-self-test"))
                 {
+                    RecentPcmLevelTracker.Verify();
                     VoiceView.VerifyNameLayout();
                     VoiceView.VerifyPeerQualityFallback();
                     VoiceView.VerifyDuplicateClientAvatars();

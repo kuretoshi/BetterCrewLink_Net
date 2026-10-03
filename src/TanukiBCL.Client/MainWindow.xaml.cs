@@ -225,6 +225,7 @@ public partial class MainWindow : Window
                 player.Name, player.Id, player.ClientId, player.SnrRole
             }), jsonOptions)
             : "SuperNewRolesの起動を確認してください。";
+        var decodedAt = DateTimeOffset.UtcNow;
         var voice = JsonSerializer.Serialize(new
         {
             Server = StatusText.Text,
@@ -235,7 +236,8 @@ public partial class MainWindow : Window
             Peers = peers.Select(peer => new
             {
                 peer.ClientId, peer.Name, peer.Connection, peer.Voice, peer.Radio,
-                peer.Received, peer.Gain, peer.VadActive, peer.Audible, peer.Quality
+                peer.Received, peer.Gain, peer.VadActive, peer.Audible, peer.Quality,
+                DecodedPcm5s = peer.RecentDecodedPcm(decodedAt)
             })
         }, jsonOptions);
         return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live, roles,
@@ -578,14 +580,20 @@ public partial class MainWindow : Window
             row.Talking = active && row.Audible && player?.InVent != true;
             UpdateCompactView();
         });
-        activeProbe.PeerPcmReceived += (clientId, _) => Dispatch(session, () =>
+        activeProbe.PeerPcmReceived += (clientId, pcm) =>
         {
-            var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
-            var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
-            var firstFrame = !row.HasReceivedFrames;
-            row.IncrementReceived();
-            if (firstFrame) UpdateCompactView();
-        });
+            var level = RecentPcmLevelTracker.Measure(pcm);
+            var receivedAt = DateTimeOffset.UtcNow;
+            Dispatch(session, () =>
+            {
+                var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
+                var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
+                var firstFrame = !row.HasReceivedFrames;
+                row.IncrementReceived();
+                row.RecordDecodedPcm(level, receivedAt);
+                if (firstFrame) UpdateCompactView();
+            });
+        };
         activeProbe.LocalAudioFrameSent += peerCount => Dispatch(session, () =>
         {
             sentAudioFrames++;
@@ -1084,6 +1092,7 @@ public partial class MainWindow : Window
         private bool vadActive;
         private bool audible;
         private bool talking;
+        private readonly RecentPcmLevelTracker decodedPcm = new();
 
         public int ClientId { get; } = clientId;
         public string Name { get => currentName; set => Set(ref currentName, value); }
@@ -1097,7 +1106,10 @@ public partial class MainWindow : Window
         public bool Audible { get => audible; set => Set(ref audible, value); }
         public bool Talking { get => talking; set => Set(ref talking, value); }
         public ConnectionQuality? Quality { get; set; }
+        public RecentPcmLevelSnapshot RecentDecodedPcm(DateTimeOffset at) => decodedPcm.Snapshot(at);
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        public void RecordDecodedPcm(PcmLevelFrame level, DateTimeOffset at) => decodedPcm.Add(level, at);
 
         public void IncrementReceived()
         {
@@ -1107,6 +1119,7 @@ public partial class MainWindow : Window
 
         public void ResetReceived()
         {
+            decodedPcm.Clear();
             if (receivedFrames == 0) return;
             receivedFrames = 0;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Received)));
