@@ -34,6 +34,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private long joinedConnectionVersion = -1;
     private volatile TaskCompletionSource currentConnectionReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private string currentJoinedLobby = "MENU";
+    private string lastPublishedPublicLobbySignature = string.Empty;
     private string lastMixSignature = string.Empty;
     private SpatialVoiceSettings spatialVoiceSettings = new();
     private bool spatialAudioEnabled = true;
@@ -251,6 +252,36 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
         ApplyLobbySettings(ownLobbySettings);
         BroadcastLobbySettings();
+        _ = RunPeerOperationAsync(PublishPublicLobbyForCurrentStateAsync);
+    }
+
+    private async Task PublishPublicLobbyForCurrentStateAsync()
+    {
+        await gameStateGate.WaitAsync(lifetimeToken);
+        try
+        {
+            if (currentGameState is { } state)
+                await PublishPublicLobbyIfChangedAsync(state);
+        }
+        finally
+        {
+            gameStateGate.Release();
+        }
+    }
+
+    private async Task PublishPublicLobbyIfChangedAsync(AmongUsState state)
+    {
+        if (!state.IsHost || state.GameState is GameState.Menu or GameState.Unknown ||
+            state.LobbyCode is "" or "MENU" || !socket.Connected ||
+            !string.Equals(currentJoinedLobby, state.LobbyCode, StringComparison.Ordinal) ||
+            Volatile.Read(ref joinedConnectionVersion) != Volatile.Read(ref serverConnectionVersion))
+            return;
+
+        var payload = PublicLobbyAnnouncement.Build(state, activeLobbySettings);
+        var signature = $"{Volatile.Read(ref serverConnectionVersion)}|{state.LobbyCode}|{JsonSerializer.Serialize(payload)}";
+        if (signature == lastPublishedPublicLobbySignature) return;
+        await socket.EmitAsync("lobby", state.LobbyCode, payload).WaitAsync(lifetimeToken);
+        lastPublishedPublicLobbySignature = signature;
     }
 
     public bool SetImpostorRadioTransmitting(bool active)
@@ -1495,12 +1526,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 ApplyLobbySettings(ownLobbySettings);
                 BroadcastLobbySettings();
             }
+            await PublishPublicLobbyIfChangedAsync(state);
             return;
         }
 
         if (impostorRadioTransmitting) SetImpostorRadioTransmitting(false);
         await socket.EmitAsync("leave").WaitAsync(lifetimeToken);
         currentJoinedLobby = "MENU";
+        lastPublishedPublicLobbySignature = string.Empty;
         ResetPeerState();
         spatialVoiceSettings = new SpatialVoiceSettings(
             SpatialAudio: spatialAudioEnabled,
@@ -1532,6 +1565,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ApplyLobbySettings(ownLobbySettings);
             BroadcastLobbySettings();
         }
+        await PublishPublicLobbyIfChangedAsync(state);
         LobbySettingsChanged?.Invoke(CurrentLobbySettings);
     }
 

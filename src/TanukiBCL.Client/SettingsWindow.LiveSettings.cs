@@ -79,10 +79,13 @@ public partial class SettingsWindow
 
         foreach (var toggle in LogicalDescendants<CheckBox>(LobbyControlsPanel))
         {
-            if (toggle == DeadOnlyCheck || toggle == MeetingGhostOnlyCheck) continue;
+            if (toggle == DeadOnlyCheck || toggle == MeetingGhostOnlyCheck || toggle == PublicLobbyOnCheck) continue;
             toggle.Click += (_, _) => QueueLobbyCommit();
         }
         DistanceSlider.ValueChanged += (_, _) => QueueLobbyCommit();
+        PublicLobbyTitleBox.TextChanged += (_, _) => QueueLobbyCommit();
+        PublicLobbyLanguageCombo.SelectionChanged += (_, _) => QueueLobbyCommit();
+        PublicLobbyOnCheck.Click += (_, _) => ChangePublicLobbyVisibility();
         DeadOnlyCheck.Click += (_, _) => ChangeExclusiveLobbyMode(true);
         MeetingGhostOnlyCheck.Click += (_, _) => ChangeExclusiveLobbyMode(false);
         NatFixCheck.Click += (_, _) =>
@@ -193,6 +196,22 @@ public partial class SettingsWindow
         }
         if (requested) ConfirmChange(deadOnly ? "生きているプレーヤーのサウンドを無効にする。"
             : "会議以外での生存プレイヤーのサウンドを無効にします", Apply);
+        else Apply();
+    }
+
+    private void ChangePublicLobbyVisibility()
+    {
+        if (showingCurrentLobby || !lobbySettingsEditable) return;
+        var requested = PublicLobbyOnCheck.IsChecked == true;
+        PublicLobbyOnCheck.IsChecked = lobbyDraft.PublicLobbyOn;
+        void Apply()
+        {
+            PublicLobbyOnCheck.IsChecked = requested;
+            QueueLobbyCommit();
+        }
+        if (requested)
+            ConfirmChange(UiLocalization.Translate(settings.Language,
+                "settings.lobbysettings.public_lobby.enable_warning"), Apply);
         else Apply();
     }
 

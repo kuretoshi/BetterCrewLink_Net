@@ -62,6 +62,7 @@ public partial class SettingsWindow : Window
         this.onPlayerConfigChanged = onPlayerConfigChanged;
         LanguageCombo.ItemsSource = UiLocalization.Languages;
         LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == settings.Language);
+        PublicLobbyLanguageCombo.ItemsSource = UiLocalization.Languages;
         lobbyDraft = settings.MyLobbySettings;
         radioOnlyBackup = settings.RadioOnlyBackup;
         MicrophoneCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
@@ -609,7 +610,10 @@ public partial class SettingsWindow : Window
         NosNeutralKillerHaunting = NosNeutralKillerHauntingCheck.IsChecked == true,
         NosVoicePositions = NosVoicePositionsCheck.IsChecked == true,
         NosSizeVoiceEffect = NosSizeVoiceEffectCheck.IsChecked == true,
-        NosFixerJammingVoiceBlock = NosFixerJammingVoiceBlockCheck.IsChecked == true
+        NosFixerJammingVoiceBlock = NosFixerJammingVoiceBlockCheck.IsChecked == true,
+        PublicLobbyOn = PublicLobbyOnCheck.IsChecked == true,
+        PublicLobbyTitle = PublicLobbyTitleBox.Text,
+        PublicLobbyLanguage = (PublicLobbyLanguageCombo.SelectedItem as UiLanguage)?.Code ?? "ja"
     };
 
     private void LoadLobbyControls(LobbySettings value)
@@ -641,6 +645,11 @@ public partial class SettingsWindow : Window
         NosVoicePositionsCheck.IsChecked = value.NosVoicePositions;
         NosSizeVoiceEffectCheck.IsChecked = value.NosSizeVoiceEffect;
         NosFixerJammingVoiceBlockCheck.IsChecked = value.NosFixerJammingVoiceBlock;
+        PublicLobbyOnCheck.IsChecked = value.PublicLobbyOn;
+        PublicLobbyTitleBox.Text = value.PublicLobbyTitle;
+        PublicLobbyLanguageCombo.SelectedItem = UiLocalization.Languages
+            .FirstOrDefault(language => language.Code == value.PublicLobbyLanguage)
+            ?? UiLocalization.Languages.First(language => language.Code == "ja");
         RadioOnlyCheck.IsChecked = value.ImpostorRadioOnlyMode;
         loadingLobbyControls = false;
 

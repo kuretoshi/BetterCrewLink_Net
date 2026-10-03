@@ -61,6 +61,28 @@ public partial class SettingsWindow
             window.CategoryList.SelectedIndex = 6;
             RequireLive(settings.MyLobbySettings.MaxDistance == 7, "Leaving lobby category did not flush its draft");
 
+            window.CategoryList.SelectedIndex = 1;
+            window.PublicLobbyOnCheck.IsChecked = true;
+            Click(window.PublicLobbyOnCheck);
+            RequireLive(!settings.MyLobbySettings.PublicLobbyOn &&
+                window.ConfirmDialogBackdrop.Visibility == Visibility.Visible,
+                "Public lobby was enabled before its release warning");
+            Click(window.ConfirmDialog.CancelButton);
+            RequireLive(!settings.MyLobbySettings.PublicLobbyOn && window.PublicLobbyOnCheck.IsChecked == false,
+                "Canceling the public lobby warning changed its state");
+            window.PublicLobbyOnCheck.IsChecked = true;
+            Click(window.PublicLobbyOnCheck);
+            Click(window.ConfirmDialog.ConfirmButton);
+            window.PublicLobbyTitleBox.Text = "互換テスト";
+            window.PublicLobbyLanguageCombo.SelectedItem = UiLocalization.Languages
+                .First(language => language.Code == "en");
+            window.CategoryList.SelectedIndex = 6;
+            RequireLive(settings.MyLobbySettings.PublicLobbyOn &&
+                settings.MyLobbySettings.PublicLobbyTitle == "互換テスト" &&
+                settings.MyLobbySettings.PublicLobbyLanguage == "en" &&
+                writes.Last().MyLobbySettings.PublicLobbyOn,
+                "Public lobby confirmation, title, or language did not persist");
+
             count = writes.Count;
             window.UpdateCurrentGameState(new AmongUsState { IsHost = true, GameState = GameState.Tasks });
             window.DistanceSlider.Value = 9;

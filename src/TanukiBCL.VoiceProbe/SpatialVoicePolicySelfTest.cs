@@ -9,6 +9,7 @@ internal static class SpatialVoicePolicySelfTest
 {
     public static int Run()
     {
+        PublicLobbyAnnouncement.Verify();
         var failures = 0;
         var overlayState = new AmongUsState { GameState = GameState.Tasks, Players =
         [
