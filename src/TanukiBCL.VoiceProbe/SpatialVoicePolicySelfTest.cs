@@ -11,6 +11,10 @@ internal static class SpatialVoicePolicySelfTest
     {
         PublicLobbyAnnouncement.Verify();
         var failures = 0;
+        var duplicateClientState = new AmongUsState { ClientId = 2 };
+        Check("duplicate voice sessions on one game client stay muted", true,
+            VoiceServerProbe.IsOwnClientPeer(duplicateClientState, 2) &&
+            !VoiceServerProbe.IsOwnClientPeer(duplicateClientState, 3));
         Check("ghost reverb: impulse, tail, bypass, and reset", true,
             GhostReverbSelfTest.Verify());
         var overlayState = new AmongUsState { GameState = GameState.Tasks, Players =

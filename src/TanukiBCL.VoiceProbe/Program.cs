@@ -46,6 +46,9 @@ internal static class Program
             if (args.Contains("--speaker-loopback-self-test"))
                 return SpeakerLoopbackTestRunner.RunSelfTest();
             var options = ProbeOptions.Parse(args);
+            if (args.Contains("--radio-enabled-test") &&
+                (!options.AutoRadioTone || !options.IsHost || options.GameProcessId is null || options.Duration is null))
+                throw new ArgumentException("--radio-enabled-test requires --auto-radio-tone --host --game-process-id and --seconds.");
             if (args.Contains("--play-test-tone"))
                 return await TonePlaybackTestRunner.RunAsync(options, args.Contains("--output-device"), args.Contains("--vad-tone"));
             if (args.Contains("--capture-device-self-test"))
@@ -139,6 +142,8 @@ internal static class Program
             };
 
             await using var probe = new VoiceServerProbe(options);
+            if (args.Contains("--radio-enabled-test"))
+                probe.SetOwnLobbySettings(new LobbySettings { ImpostorRadioEnabled = true });
             try
             {
                 await probe.RunAsync(cancellation.Token);
@@ -211,6 +216,7 @@ internal static class Program
               --expect-nearby     生存者同士が距離内であることも検証
               --game-process-id <pid> ゲーム状態を追跡してロビー・音量を自動更新
               --auto-radio-tone   ラジオON時に440Hzの検証音を送信（実マイク不要）
+              --radio-enabled-test  --auto-radio-toneと併用し、CLIホストのラジオを試験中だけ有効化
               --input-device <n>  マイク番号（既定: 0）
               --output-device <n> スピーカー番号（既定: 0）
               --old-sample-debug マイクに48 kHz入力を要求（既定はデバイスの既定レート）

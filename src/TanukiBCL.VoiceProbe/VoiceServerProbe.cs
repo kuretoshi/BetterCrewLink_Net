@@ -229,6 +229,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public bool IsPeerPresent(int clientId) =>
         peerClientIds.Any(peer => peer.Value == clientId);
 
+    internal static bool IsOwnClientPeer(AmongUsState state, int peerClientId) =>
+        state.ClientId == peerClientId;
+
     internal bool IsPeerSocketPresent(string socketId) => peerClientIds.ContainsKey(socketId);
 
     public void PublishObsOverlay(string? secret, AmongUsState state,
@@ -1330,7 +1333,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
         LobbySettingsChanged?.Invoke(next);
         ImpostorRadioAvailabilityChanged?.Invoke(CanUseImpostorRadio);
-        Log("INFO", $"ロビー音声設定更新: distance={next.MaxDistance:0.##} vent={next.HearImpostorsInVents} impostorVent={next.ImpostersHearImpostersInvent}");
+        Log("INFO", $"ロビー音声設定更新: distance={next.MaxDistance:0.##} vent={next.HearImpostorsInVents} impostorVent={next.ImpostersHearImpostersInvent} impostorRadio={next.ImpostorRadioEnabled}");
         RefreshPeerMixes();
     }
 
@@ -1401,6 +1404,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var sender = state?.Players.FirstOrDefault(candidate => candidate.IsLocal);
         var listener = state?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
         if (state is null || sender is null || listener is null) return false;
+        if (IsOwnClientPeer(state, clientId)) return false;
         if (HasNosJackalRadio(state, sender))
             return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode &&
                 CanHearNosJackalRadio(state, sender, listener);
@@ -1431,7 +1435,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     var sent = peerManager.BroadcastMonoPcm48k(frame, CanReceiveRadioAudio);
                     if (frameNumber % 50 == 0)
                     {
-                        Log("RADIO-TEST", $"state={currentGameState?.GameState} recipients={sent} frame={frameNumber}");
+                        var recipientClients = peerClientIds
+                            .Where(peer => CanReceiveRadioAudio(peer.Key))
+                            .Select(peer => peer.Value)
+                            .Distinct()
+                            .Order()
+                            .ToArray();
+                        Log("RADIO-TEST", $"state={currentGameState?.GameState} recipients={sent} clientIds=[{string.Join(',', recipientClients)}] frame={frameNumber}");
                     }
                     frameNumber++;
                 }
@@ -1487,6 +1497,16 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         if (currentGameState is null)
         {
+            return;
+        }
+
+        // As in the released VoiceController, a second voice socket attached
+        // to our game client is never an audible remote player.
+        if (IsOwnClientPeer(currentGameState, clientId))
+        {
+            var ownClientMix = new PeerVoiceMix(0d, 0d, 0d, "same-client");
+            audioSession?.SetPeerMix(socketId, ownClientMix);
+            PeerMixChanged?.Invoke(clientId, ownClientMix);
             return;
         }
 
@@ -1649,6 +1669,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var mixes = peerClientIds
             .Select(pair =>
             {
+                if (IsOwnClientPeer(currentGameState, pair.Value))
+                    return $"{pair.Value}:0.000:0.00:same-client";
                 var player = currentGameState.Players.FirstOrDefault(candidate => candidate.ClientId == pair.Value);
                 var mix = player is null
                     ? new PeerVoiceMix(0d, 0d, 0d, "unmapped-player")

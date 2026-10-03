@@ -46,7 +46,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--quality-self-test" or "--mixed-nat-self-test" or "--fail-on-recovery" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--play-test-tone" or "--vad-tone" or "--policy-self-test" or "--vad-self-test" or "--nat-fix" or "--nos-snapshot" or "--old-sample-debug" or "--capture-device-self-test" or "--dtls-trace" or "--turn-tcp" or "--active-sctp-answer")
+            if (argument is "--host" or "--self-test" or "--quality-self-test" or "--mixed-nat-self-test" or "--fail-on-recovery" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--radio-enabled-test" or "--play-test-tone" or "--vad-tone" or "--policy-self-test" or "--vad-self-test" or "--nat-fix" or "--nos-snapshot" or "--old-sample-debug" or "--capture-device-self-test" or "--dtls-trace" or "--turn-tcp" or "--active-sctp-answer")
             {
                 switches.Add(argument);
                 continue;
