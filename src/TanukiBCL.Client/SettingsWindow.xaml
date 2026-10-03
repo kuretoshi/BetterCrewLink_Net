@@ -792,20 +792,20 @@
                         <TextBlock Text="配信設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <Border Padding="16,10" BorderBrush="#3F3944" BorderThickness="0,0,0,1">
+                                <Border Padding="16,5" BorderBrush="#3F3944" BorderThickness="0,0,0,1">
                                     <CheckBox x:Name="ShowLobbyCodeCheck" Content="ロビーコードの表示"
-                                              Style="{StaticResource OverlaySwitchStyle}" />
+                                              Style="{StaticResource OverlaySwitchStyle}" FontSize="14" FontWeight="SemiBold" />
                                 </Border>
-                                <Border x:Name="ObsToggleBorder" Padding="16,10" BorderBrush="#3F3944">
+                                <Border x:Name="ObsToggleBorder" Padding="16,5" BorderBrush="#3F3944">
                                     <CheckBox x:Name="ObsOverlayCheck" Content="OBS ブラウザーのオーバーレイ"
-                                              Style="{StaticResource OverlaySwitchStyle}"
+                                              Style="{StaticResource OverlaySwitchStyle}" FontSize="14" FontWeight="SemiBold"
                                               Checked="ObsOverlayCheck_Changed" Unchecked="ObsOverlayCheck_Changed" />
                                 </Border>
                                 <StackPanel x:Name="ObsUrlPanel" Visibility="Collapsed" Margin="16,10,16,16">
-                                    <TextBlock Text="OBSブラウザソースURL" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                    <TextBlock Text="OBSブラウザソースURL" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
                                     <Grid>
                                         <TextBox x:Name="ObsUrlBox" IsReadOnly="True" Height="40"
-                                                 Padding="10,7,44,7" Background="#25232A"
+                                                 Padding="10,7,44,7" Background="#25232A" Foreground="#F5F1F7" FontSize="14"
                                                  BorderBrush="#5A515D" />
                                         <Button x:Name="CopyObsUrlButton" Width="36" Height="36" Padding="8"
                                                 Margin="0,2,2,2" HorizontalAlignment="Right"

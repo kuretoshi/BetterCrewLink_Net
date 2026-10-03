@@ -50,7 +50,10 @@ public partial class SettingsWindow
             throw new InvalidOperationException("Released audio settings card layout was not applied");
         if (window.StreamingPanel.Children.OfType<Border>().Count() != 1 ||
             window.ShowLobbyCodeCheck.Style != window.ObsOverlayCheck.Style ||
-            window.CopyObsUrlButton.Content is not System.Windows.Shapes.Path)
+            window.CopyObsUrlButton.Content is not System.Windows.Shapes.Path ||
+            window.ObsUrlBox.FontSize != 14 ||
+            window.ObsUrlBox.Foreground is not System.Windows.Media.SolidColorBrush urlForeground ||
+            urlForeground.Color != System.Windows.Media.Color.FromRgb(245, 241, 247))
             throw new InvalidOperationException("Released streaming settings card layout was not applied");
         if (window.KeybindsPanel.Children.OfType<Border>().Count() != 2 ||
             window.PushToTalkShortcutBox.Style != window.ImpostorRadioShortcutBox.Style ||
