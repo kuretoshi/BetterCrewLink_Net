@@ -136,7 +136,7 @@ internal static class GameProcessScanner
             var impostors = result.State.Players.Count(player => player.IsImpostor && !player.Disconnected);
             Console.WriteLine(
                 $"PID {result.ProcessId}: state={result.State.GameState} lobby={result.State.LobbyCode} " +
-                $"client={result.State.ClientId} local={local?.Name ?? "?"} " +
+                $"client={result.State.ClientId} host={result.State.IsHost} local={local?.Name ?? "?"} " +
                 $"role={(local?.IsImpostor == true ? "Impostor" : "Crewmate")} " +
                 $"players={result.State.Players.Count} active={alive + dead} " +
                 $"alive={alive} dead={dead} impostors={impostors}");

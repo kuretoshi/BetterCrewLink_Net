@@ -46,6 +46,8 @@ internal static class Program
             if (args.Contains("--speaker-loopback-self-test"))
                 return SpeakerLoopbackTestRunner.RunSelfTest();
             var options = ProbeOptions.Parse(args);
+            if (args.Contains("--play-test-tone"))
+                return await TonePlaybackTestRunner.RunAsync(options, args.Contains("--output-device"), args.Contains("--vad-tone"));
             if (args.Contains("--capture-device-self-test"))
                 return await AudioCaptureDeviceSelfTest.RunAsync(options);
             if (options.PolicySelfTest)
@@ -187,6 +189,7 @@ internal static class Program
               --expected-toh-role <name> TOHホストから届く役職名を相互接続テストで検証
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
+              --play-test-tone --output-device <n> --seconds <1-15> [--vad-tone]  選択した出力先へ440Hz検証音を流す。--vad-toneは150Hz VAD用成分を追加（保存なし）
               --speaker-loopback-test [--speaker-name name] [--seconds n]  出力デバイスの440Hz成分だけを測定（音声は保存しない）
               --speaker-loopback-self-test 440Hz検出と別周波数の除外を合成音で検証
               --scan-game         起動中の全Among Usプロセスを読み取り検証

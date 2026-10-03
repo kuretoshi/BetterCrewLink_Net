@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Input;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
 
@@ -44,6 +45,13 @@ public partial class MainWindow : Window
     {
         settings = ClientSettingsStore.Load();
         InitializeComponent();
+        PreviewKeyDown += (_, eventArgs) =>
+        {
+            if (eventArgs.Key != Key.D ||
+                Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Shift)) return;
+            ShowDiagnostics();
+            eventArgs.Handled = true;
+        };
         Topmost = settings.AlwaysOnTop;
         PeerGrid.ItemsSource = peers;
         InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
