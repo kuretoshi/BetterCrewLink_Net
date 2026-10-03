@@ -97,6 +97,8 @@ Target: released [`v3.2.8`](https://github.com/kuretoshi/TanukiBCL/releases/tag/
 
 ## Remaining proof and work
 
+- In the live TOH4E host (PID `49888`) plus vanilla guest (PID `59028`) Tasks lobby, the released 3.2.8 host displayed all three remote avatars, including two disconnected players marked with red error badges. The previous .NET guest build showed only two because it keyed avatars by `ClientId`; both disconnected records reused the host client ID. The WPF view now keys avatars and popup lookup by unique game player ID, keeps disconnected records unconnected despite a reused client ID, and renders the released red error-outline badge for bugged records. A synthetic same-client-ID regression test passes. After rebuilding/restarting the Release .NET guest on PID `59028`, its compact view visibly showed all three remote avatars with the two error badges, matching the released roster behavior. The official host initially showed its guest peer as disconnected; clicking its existing Reload button restored a green quality indicator on both the official guest avatar and the .NET host avatar. The two active players were far apart, so these GUI observations are not a bidirectional speech test or a TOH voice-rule proof.
+
 - Run the packaged x64 WPF client against the official 3.2.8 client and verify live bidirectional speech, NoS radio/vent/meeting/ghost policies, process switching, localization, and GUI behavior.
 - Finish the existing 3.2.7 compatibility checklist's incomplete feature, audio, settings, and visual parity items; the 3.2.8 additions do not make those complete.
 - Test package contents and update behavior on a clean Windows x64 environment.

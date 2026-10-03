@@ -42,6 +42,7 @@ public partial class App : Application
                 {
                     VoiceView.VerifyNameLayout();
                     VoiceView.VerifyPeerQualityFallback();
+                    VoiceView.VerifyDuplicateClientAvatars();
                     GameLauncher.Verify();
                     VoiceView.VerifyLaunchControls();
                     CustomPlatformWindow.Verify();

@@ -30,7 +30,7 @@ public partial class VoiceView : UserControl
     private readonly Dictionary<int, Player> displayedPlayers = [];
     private readonly DispatcherTimer popupCloseTimer;
     private IReadOnlyDictionary<int, PlayerAudioConfig> playerConfigs = new Dictionary<int, PlayerAudioConfig>();
-    private int? popupClientId;
+    private int? popupPlayerId;
     private bool updatingPopup;
     private bool popupDirty;
     private bool configuringLaunchPlatforms;
@@ -293,13 +293,13 @@ public partial class VoiceView : UserControl
         DeafenButton.ToolTip = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
 
         var others = game.Players.Where(player => !player.IsLocal).ToArray();
-        if (popupClientId is int activeClientId && others.All(player => player.ClientId != activeClientId))
+        if (popupPlayerId is int activePlayerId && others.All(player => player.Id != activePlayerId))
             ClosePlayerConfigPopup();
         displayedPlayers.Clear();
-        foreach (var player in others) displayedPlayers[player.ClientId] = player;
+        foreach (var player in others) displayedPlayers[player.Id] = player;
         var perRow = others.Length <= 9 ? 3 : Math.Min(12, (int)Math.Ceiling(Math.Sqrt(others.Length)));
         var avatarSize = 225d / perRow - 8d;
-        foreach (var stale in remoteAvatars.Keys.Where(id => others.All(player => player.ClientId != id)).ToArray())
+        foreach (var stale in remoteAvatars.Keys.Where(id => others.All(player => player.Id != id)).ToArray())
         {
             OtherPlayersPanel.Children.Remove(remoteAvatars[stale]);
             remoteAvatars.Remove(stale);
@@ -307,27 +307,28 @@ public partial class VoiceView : UserControl
 
         foreach (var player in others)
         {
-            if (!remoteAvatars.TryGetValue(player.ClientId, out var avatar))
+            if (!remoteAvatars.TryGetValue(player.Id, out var avatar))
             {
                 avatar = new PlayerAvatar { Margin = new Thickness(4) };
-                avatar.Tag = player.ClientId;
+                avatar.Tag = player.Id;
                 avatar.MouseEnter += PlayerAvatar_MouseEnter;
                 avatar.MouseLeave += PlayerAvatar_MouseLeave;
-                remoteAvatars.Add(player.ClientId, avatar);
+                remoteAvatars.Add(player.Id, avatar);
                 OtherPlayersPanel.Children.Add(avatar);
             }
 
             avatar.Width = avatarSize;
             avatar.Height = avatarSize;
             avatar.SetPlayer(player, game.PlayerColors, hideAppearance, game.Mod, game.GameExecutablePath);
-            var status = peers.TryGetValue(player.ClientId, out var snapshot)
+            var status = !player.Disconnected && peers.TryGetValue(player.ClientId, out var snapshot)
                 ? snapshot
                 : VoicePlayerStatus.Disconnected;
             var config = PlayerAudioConfig.For(player, this.playerConfigs);
             avatar.SetVisualState(status.Talking && !player.InVent &&
                 (player.ShiftedColor < 0 || game.GameState == GameState.Discussion), false,
-                config.IsMuted || config.Volume == 0d, status.ConnectionState, status.UsingRadio,
-                ResolvePeerQuality(status.Quality, serverQuality));
+                config.IsMuted || config.Volume == 0d, status.ConnectionState,
+                status.UsingRadio && !player.Disconnected && !player.Bugged,
+                ResolvePeerQuality(status.Quality, serverQuality), bugged: player.Bugged);
         }
     }
 
@@ -356,6 +357,46 @@ public partial class VoiceView : UserControl
             throw new InvalidOperationException("Unmeasured quality was fabricated.");
     }
 
+    internal static void VerifyDuplicateClientAvatars()
+    {
+        var view = new VoiceView();
+        var game = new AmongUsState
+        {
+            GameState = GameState.Tasks,
+            LobbyCode = "ABCDEF",
+            Players =
+            [
+                new Player { Id = 1, ClientId = 3, IsLocal = true, Name = "Local" },
+                new Player { Id = 0, ClientId = 2, Name = "Host" },
+                new Player { Id = 2, ClientId = 2, Name = "Left 1", Disconnected = true, Bugged = true },
+                new Player { Id = 3, ClientId = 2, Name = "Left 2", Disconnected = true, Bugged = true }
+            ]
+        };
+        var peers = new Dictionary<int, VoicePlayerStatus>
+        {
+            [2] = new("connected", false, true, new ConnectionQuality(ServerPingMs: 25d))
+        };
+        view.Update(game, true, false, false, false, peers);
+        if (view.OtherPlayersPanel.Children.Count != 3 || view.remoteAvatars.Count != 3 ||
+            view.displayedPlayers.Count != 3 ||
+            view.remoteAvatars[0].HasBuggedBadge || !view.remoteAvatars[0].HasGoodQualityBars ||
+            !view.remoteAvatars[2].HasBuggedBadge || view.remoteAvatars[2].HasGoodQualityBars ||
+            !view.remoteAvatars[3].HasBuggedBadge || view.remoteAvatars[3].HasGoodQualityBars)
+            throw new InvalidOperationException("Disconnected players sharing a host client ID were merged or shown as connected");
+        game.Players[2].Disconnected = false;
+        view.Update(game, true, false, false, false, peers);
+        if (!view.remoteAvatars[2].HasBuggedBadge || !view.remoteAvatars[2].HasGoodQualityBars ||
+            view.remoteAvatars[2].IsRadioBadgeVisible)
+            throw new InvalidOperationException("An active bugged player lost quality or received a radio badge");
+        game.Players[2].Disconnected = true;
+        game.Players.RemoveAll(player => player.Disconnected);
+        view.Update(game, true, false, false, false, peers);
+        if (view.OtherPlayersPanel.Children.Count != 1 || !view.remoteAvatars.ContainsKey(0))
+            throw new InvalidOperationException("Stale disconnected avatars remained after roster cleanup");
+        view.popupCloseTimer.Stop();
+        Console.WriteLine("[PASS] VoiceView keeps distinct disconnected avatars with shared client IDs");
+    }
+
     public void SetWarning(string? warning)
     {
         WarningText.Text = warning ?? string.Empty;
@@ -377,11 +418,11 @@ public partial class VoiceView : UserControl
 
     private void PlayerAvatar_MouseEnter(object sender, MouseEventArgs e)
     {
-        if (sender is not PlayerAvatar { Tag: int clientId } avatar ||
-            !displayedPlayers.TryGetValue(clientId, out var player)) return;
+        if (sender is not PlayerAvatar { Tag: int playerId } avatar ||
+            !displayedPlayers.TryGetValue(playerId, out var player)) return;
         popupCloseTimer.Stop();
-        if (popupDirty && popupClientId != clientId) PersistPlayerVolume();
-        popupClientId = clientId;
+        if (popupDirty && popupPlayerId != playerId) PersistPlayerVolume();
+        popupPlayerId = playerId;
         PlayerConfigPopup.PlacementTarget = avatar;
         PlayerConfigName.Text = string.IsNullOrWhiteSpace(player.AppearanceName) ? player.Name : player.AppearanceName;
         SetPopupVisual(PlayerAudioConfig.For(player, playerConfigs));
@@ -398,7 +439,7 @@ public partial class VoiceView : UserControl
         popupCloseTimer.Stop();
         if (popupDirty) PersistPlayerVolume();
         PlayerConfigPopup.IsOpen = false;
-        popupClientId = null;
+        popupPlayerId = null;
     }
 
     public void DismissPlayerConfigPopup() => ClosePlayerConfigPopup();
@@ -415,7 +456,7 @@ public partial class VoiceView : UserControl
 
     private void PlayerMuteButton_Click(object sender, RoutedEventArgs e)
     {
-        if (popupClientId is not int clientId || !displayedPlayers.TryGetValue(clientId, out var player)) return;
+        if (popupPlayerId is not int playerId || !displayedPlayers.TryGetValue(playerId, out var player)) return;
         var current = PlayerAudioConfig.For(player, playerConfigs);
         var config = current with { IsMuted = !current.IsMuted };
         popupDirty = false;
@@ -425,8 +466,8 @@ public partial class VoiceView : UserControl
 
     private void PlayerVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (updatingPopup || popupClientId is not int clientId ||
-            !displayedPlayers.TryGetValue(clientId, out var player)) return;
+        if (updatingPopup || popupPlayerId is not int playerId ||
+            !displayedPlayers.TryGetValue(playerId, out var player)) return;
         var config = PlayerAudioConfig.For(player, playerConfigs) with { Volume = PlayerVolumeSlider.Value };
         PlayerVolumeText.Text = $"{Math.Floor(config.Volume * 100d)}%";
         PlayerMuteIcon.Data = config.IsMuted || config.Volume == 0d ? VolumeOff : VolumeUp;
@@ -439,7 +480,7 @@ public partial class VoiceView : UserControl
 
     private void PersistPlayerVolume()
     {
-        if (popupClientId is not int clientId || !displayedPlayers.TryGetValue(clientId, out var player)) return;
+        if (popupPlayerId is not int playerId || !displayedPlayers.TryGetValue(playerId, out var player)) return;
         var config = PlayerAudioConfig.For(player, playerConfigs) with { Volume = PlayerVolumeSlider.Value };
         popupDirty = false;
         PlayerConfigChanged?.Invoke(player.PlayerConfigId, config, true);
