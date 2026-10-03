@@ -393,7 +393,18 @@ internal sealed class WebRtcPeerManager : IDisposable
                                 case 1: Interlocked.Increment(ref peer.DtlsClientHelloDatagrams); break;
                                 case 2: Interlocked.Increment(ref peer.DtlsServerHelloDatagrams); break;
                                 case 3: Interlocked.Increment(ref peer.DtlsHelloVerifyDatagrams); break;
+                                case 11: Interlocked.Increment(ref peer.DtlsCertificateDatagrams); break;
+                                case 12: Interlocked.Increment(ref peer.DtlsServerKeyExchangeDatagrams); break;
+                                case 14: Interlocked.Increment(ref peer.DtlsServerHelloDoneDatagrams); break;
                                 default: Interlocked.Increment(ref peer.DtlsOtherPlainHandshakeDatagrams); break;
+                            }
+                            if (packet.Length > 24)
+                            {
+                                var messageLength = packet[14] << 16 | packet[15] << 8 | packet[16];
+                                var fragmentOffset = packet[19] << 16 | packet[20] << 8 | packet[21];
+                                var fragmentLength = packet[22] << 16 | packet[23] << 8 | packet[24];
+                                if (fragmentOffset != 0 || fragmentLength < messageLength)
+                                    Interlocked.Increment(ref peer.DtlsFragmentedHandshakeDatagrams);
                             }
                         }
                         else if (packet.Length > 4)
@@ -693,7 +704,11 @@ internal sealed class WebRtcPeerManager : IDisposable
             $"plainHandshake=clientHello:{Volatile.Read(ref peer.DtlsClientHelloDatagrams)}" +
             $"/serverHello:{Volatile.Read(ref peer.DtlsServerHelloDatagrams)}" +
             $"/helloVerify:{Volatile.Read(ref peer.DtlsHelloVerifyDatagrams)}" +
+            $"/certificate:{Volatile.Read(ref peer.DtlsCertificateDatagrams)}" +
+            $"/keyExchange:{Volatile.Read(ref peer.DtlsServerKeyExchangeDatagrams)}" +
+            $"/helloDone:{Volatile.Read(ref peer.DtlsServerHelloDoneDatagrams)}" +
             $"/other:{Volatile.Read(ref peer.DtlsOtherPlainHandshakeDatagrams)}" +
+            $"/fragmented:{Volatile.Read(ref peer.DtlsFragmentedHandshakeDatagrams)}" +
             $" encryptedHandshake:{Volatile.Read(ref peer.DtlsEncryptedHandshakeDatagrams)}");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
@@ -1106,7 +1121,11 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int DtlsClientHelloDatagrams;
         public int DtlsServerHelloDatagrams;
         public int DtlsHelloVerifyDatagrams;
+        public int DtlsCertificateDatagrams;
+        public int DtlsServerKeyExchangeDatagrams;
+        public int DtlsServerHelloDoneDatagrams;
         public int DtlsOtherPlainHandshakeDatagrams;
+        public int DtlsFragmentedHandshakeDatagrams;
         public int DtlsEncryptedHandshakeDatagrams;
         public int SctpClosedRecoveryStarted;
         public int DataChannelOpen;
