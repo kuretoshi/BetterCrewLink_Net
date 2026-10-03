@@ -121,6 +121,8 @@ internal static class GameProcessScannerSelfTest
         Require(!GameProcessScanner.Validate(results, expectation, GameState.Lobby), "Different lobbies passed");
         Require(ProbeOptions.Parse(["--scan-game"]).ExpectedPlayers == 5, "Default count changed");
         Require(ProbeOptions.Parse(["--scan-game", "--expected-players", "4"]).ExpectedPlayers == 4, "Count not parsed");
+        Require(ProbeOptions.Parse(["--live-game-audio-test"]).LiveGameAudioTest,
+            "Live game audio flag was parsed as a value instead of a switch");
         try
         {
             ProbeOptions.Parse(["--expected-players", "0"]);
