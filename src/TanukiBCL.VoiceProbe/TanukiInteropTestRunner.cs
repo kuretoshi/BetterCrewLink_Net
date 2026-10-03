@@ -18,8 +18,12 @@ internal static class TanukiInteropTestRunner
             LiveAudio = false
         };
         var connected = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dataReady = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var toneSent = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var pcmReceived = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startedAt = System.Diagnostics.Stopwatch.StartNew();
+        long connectedAtMs = -1;
+        long dataReadyAtMs = -1;
         bool IsExpectedPeer(int clientId) => options.ExpectedPeerClientId is not int expected || clientId == expected;
 
         using var cancellation = new CancellationTokenSource(timeout);
@@ -30,7 +34,13 @@ internal static class TanukiInteropTestRunner
                 (state.Equals("connected", StringComparison.OrdinalIgnoreCase) ||
                  state.Equals("data-ready", StringComparison.OrdinalIgnoreCase)))
             {
+                Interlocked.CompareExchange(ref connectedAtMs, startedAt.ElapsedMilliseconds, -1);
                 connected.TrySetResult(clientId);
+            }
+            if (IsExpectedPeer(clientId) && state.Equals("data-ready", StringComparison.OrdinalIgnoreCase))
+            {
+                Interlocked.CompareExchange(ref dataReadyAtMs, startedAt.ElapsedMilliseconds, -1);
+                dataReady.TrySetResult(clientId);
             }
         };
         probe.PeerTestToneSent += clientId =>
@@ -48,9 +58,10 @@ internal static class TanukiInteropTestRunner
         {
             var connectedClient = await connected.Task.WaitAsync(timeout, cancellation.Token);
             var toneClient = await toneSent.Task.WaitAsync(timeout, cancellation.Token);
-            if (connectedClient != toneClient)
+            var dataClient = await dataReady.Task.WaitAsync(timeout, cancellation.Token);
+            if (connectedClient != toneClient || connectedClient != dataClient)
             {
-                Console.Error.WriteLine($"[FAIL] 接続先 {connectedClient} とOpus送信先 {toneClient} が異なります。");
+                Console.Error.WriteLine($"[FAIL] 接続先 {connectedClient}、Opus送信先 {toneClient}、データチャネル {dataClient} が異なります。");
                 return 1;
             }
 
@@ -64,12 +75,15 @@ internal static class TanukiInteropTestRunner
                 // TanukiBCL側が無音時に音声送信を抑止していても、接続と送信確認は有効。
             }
 
-            Console.WriteLine($"[PASS] 起動中のTanukiBCLと接続しました。peerClient={connectedClient} opus送信={toneClient} opus受信={(pcmClient == connectedClient ? connectedClient.ToString() : "無音のため未検出")}");
+            var dataDelayMs = dataReadyAtMs - connectedAtMs;
+            Console.WriteLine($"[PASS] 起動中のTanukiBCLと接続しました。peerClient={connectedClient} " +
+                $"opus送信={toneClient} opus受信={(pcmClient == connectedClient ? connectedClient.ToString() : "無音のため未検出")} " +
+                $"dataReady={dataClient} dataDelay={dataDelayMs}ms");
             return 0;
         }
         catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
         {
-            Console.Error.WriteLine("[FAIL] 起動中のTanukiBCLとのWebRTC接続またはOpus送信を確認できませんでした。");
+            Console.Error.WriteLine("[FAIL] 起動中のTanukiBCLとのWebRTC接続、Opus送信、またはデータチャネル確立を確認できませんでした。");
             return 1;
         }
         finally
