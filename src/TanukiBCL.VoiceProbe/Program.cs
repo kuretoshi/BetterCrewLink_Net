@@ -35,6 +35,10 @@ internal static class Program
             if (args.Contains("--nos-palette"))
                 return await NosSnapshotDiagnostic.RunAsync(
                     ProbeOptions.Parse(args.Where(arg => arg != "--nos-palette").ToArray()).GameProcessId, palette: true);
+            if (args.Contains("--speaker-loopback-test"))
+                return await SpeakerLoopbackTestRunner.RunAsync(args);
+            if (args.Contains("--speaker-loopback-self-test"))
+                return SpeakerLoopbackTestRunner.RunSelfTest();
             var options = ProbeOptions.Parse(args);
             if (args.Contains("--capture-device-self-test"))
                 return await AudioCaptureDeviceSelfTest.RunAsync(options);
@@ -169,6 +173,8 @@ internal static class Program
               --expected-peer-client-id <id> 相互接続テストの対象client IDを固定
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
+              --speaker-loopback-test [--speaker-name name] [--seconds n]  出力デバイスの440Hz成分だけを測定（音声は保存しない）
+              --speaker-loopback-self-test 440Hz検出と別周波数の除外を合成音で検証
               --scan-game         起動中の全Among Usプロセスを読み取り検証
               --expected-players  検証するプロセス数・ロビー人数（既定5）
               --game-scan-self-test ゲーム読取検証コマンドの回帰テスト

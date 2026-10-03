@@ -21,6 +21,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private const int PlaybackChannels = 2;
     private readonly string owner;
     private readonly bool sendTestTone;
+    private readonly Func<string, bool>? testToneTarget;
     private bool natFix;
     private readonly Func<string, object, Task> sendSignal;
     private readonly ConcurrentDictionary<string, Peer> peers = new();
@@ -29,11 +30,13 @@ internal sealed class WebRtcPeerManager : IDisposable
     private IReadOnlyList<IceServer> iceServers = [new("stun:stun.l.google.com:19302", null, null)];
     private bool forceRelayOnly;
 
-    public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal, bool sendTestTone, bool natFix = false)
+    public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal, bool sendTestTone,
+        bool natFix = false, Func<string, bool>? testToneTarget = null)
     {
         this.owner = owner;
         this.sendSignal = sendSignal;
         this.sendTestTone = sendTestTone;
+        this.testToneTarget = testToneTarget;
         this.natFix = natFix;
     }
 
@@ -181,6 +184,9 @@ internal sealed class WebRtcPeerManager : IDisposable
     private static bool CanSendAudio(Peer peer) =>
         peer.Connection.connectionState == RTCPeerConnectionState.connected ||
         Volatile.Read(ref peer.DataChannelOpen) == 1;
+
+    private bool ShouldSendTestTone(Peer peer) =>
+        sendTestTone && (testToneTarget?.Invoke(peer.RemoteSocketId) ?? true);
 
     public bool TrySendPeerData(string remoteSocketId, string message)
     {
@@ -388,7 +394,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             Log($"peer {Short(remoteSocketId)} state={state}");
             PeerConnectionStateChanged?.Invoke(remoteSocketId, state);
             if (state == RTCPeerConnectionState.connected &&
-                sendTestTone &&
+                ShouldSendTestTone(peer) &&
                 Interlocked.Exchange(ref peer.TestToneStarted, 1) == 0)
             {
                 _ = SendTestToneAsync(peer);
@@ -472,7 +478,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             if (wasOpen) return;
             Log($"data channel open: {Short(peer.RemoteSocketId)} origin={origin} id={channel.id}");
             OnDataChannelReady(peer);
-            if (sendTestTone)
+            if (ShouldSendTestTone(peer))
             {
                 channel.send($"tanuki-probe:{owner}:{Guid.NewGuid():N}");
             }
@@ -536,7 +542,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private void OnDataChannelReady(Peer peer)
     {
         PeerDataChannelOpened?.Invoke(peer.RemoteSocketId);
-        if (sendTestTone && Interlocked.Exchange(ref peer.TestToneStarted, 1) == 0)
+        if (ShouldSendTestTone(peer) && Interlocked.Exchange(ref peer.TestToneStarted, 1) == 0)
         {
             _ = SendTestToneAsync(peer);
         }

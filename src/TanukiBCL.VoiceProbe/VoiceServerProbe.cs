@@ -93,7 +93,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ReconnectionDelayMax = 2_000,
             ConnectionTimeout = TimeSpan.FromSeconds(10)
         });
-        peerManager = new WebRtcPeerManager(label, SendSignalAsync, sendTestTone: !options.LiveAudio && !options.AutoRadioTone, natFix: options.NatFix);
+        peerManager = new WebRtcPeerManager(label, SendSignalAsync,
+            sendTestTone: !options.LiveAudio && !options.AutoRadioTone, natFix: options.NatFix,
+            testToneTarget: options.ExpectedPeerClientId is int expectedClientId
+                ? socketId => peerClientIds.TryGetValue(socketId, out var clientId) && clientId == expectedClientId
+                : null);
         peerManager.PeerVerified += socketId =>
         {
             Log("OK", $"P2P双方向通信成功 peer={socketId}");
