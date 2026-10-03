@@ -90,11 +90,11 @@
         <Border Grid.Row="2" Background="#5C565F" />
 
         <Grid Grid.Row="3">
-            <StackPanel x:Name="WaitingPanel" VerticalAlignment="Top" Margin="0,5,0,0"
+            <StackPanel x:Name="WaitingPanel" VerticalAlignment="Top" Margin="0,0,0,0"
                         HorizontalAlignment="Center" Visibility="Collapsed">
                 <TextBlock x:Name="WaitingTitle" Text="Among Usを待っています" FontSize="20"
-                           Margin="0,0,0,26" TextAlignment="Center" />
-                <Grid Width="40" Height="40" HorizontalAlignment="Center" Margin="0,0,0,7">
+                           Margin="0,0,0,8" TextAlignment="Center" />
+                <Grid Width="40" Height="40" HorizontalAlignment="Center" Margin="0,0,0,2">
                     <Path Data="M13,3.4 A18,18 0 0 1 27,3.4" Stroke="#AE70BB" StrokeThickness="3"
                           StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                           RenderTransformOrigin="0.5,0.5">
@@ -112,7 +112,7 @@
                     </Path>
                 </Grid>
                 <TextBlock x:Name="LaunchPresetLabel" Text="プリセット" FontSize="24" FontWeight="SemiBold"
-                           TextAlignment="Center" Margin="0,0,0,6" />
+                           TextAlignment="Center" Margin="0,0,0,2" />
                 <ComboBox x:Name="LaunchPlatformCombo" Visibility="Collapsed" DisplayMemberPath="Name"
                           SelectionChanged="LaunchPlatformCombo_SelectionChanged" />
                 <Border x:Name="LaunchButtonGroup" MinWidth="142" Height="54" HorizontalAlignment="Center" BorderBrush="White"
@@ -141,6 +141,10 @@
                         <StackPanel x:Name="LaunchDropdownItems" />
                     </ScrollViewer>
                 </Border>
+                <Button x:Name="PublicLobbyButton" Content="公開ロビー" Margin="0,4,0,0"
+                        Height="36" Padding="12,0" BorderBrush="#CE93D8" BorderThickness="1"
+                        Background="Transparent" Foreground="#CE93D8"
+                        Click="PublicLobbyButton_Click" />
             </StackPanel>
             <ScrollViewer x:Name="OtherPlayersScroll" Visibility="Collapsed"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"

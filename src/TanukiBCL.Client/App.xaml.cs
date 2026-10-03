@@ -64,6 +64,7 @@ public partial class App : Application
                 {
                     DeveloperDebugAuth.VerifyParity();
                     DebugInfoWindow.VerifyUi();
+                    PublicLobbyBrowserWindow.VerifyUi();
                     SettingsWindow.VerifyModControls();
                     SettingsWindow.VerifyLocalization();
                     var previewIndex = Array.IndexOf(e.Args, "--server-dialog-preview");

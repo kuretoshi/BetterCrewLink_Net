@@ -1,0 +1,89 @@
+<Window x:Class="TanukiBCL.Client.PublicLobbyBrowserWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="TanukiBCL Browser" Width="900" Height="500" MinWidth="250" MinHeight="350"
+        WindowStyle="None" ResizeMode="CanResize" Background="#1D1A23" Foreground="White">
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"
+                            CornerRadius="0" UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="24" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid Background="#1D1A23" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+            <TextBlock Text="LobbyBrowser" Foreground="#CE93D8" HorizontalAlignment="Center"
+                       VerticalAlignment="Center" FontSize="13" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="⟳" Width="24" Background="Transparent" Foreground="#888"
+                        BorderThickness="0" Click="Refresh_Click" ToolTip="再読み込み" />
+                <Button Content="—" Width="24" Background="Transparent" Foreground="#888"
+                        BorderThickness="0" Click="Minimize_Click" ToolTip="最小化" />
+                <Button Content="×" Width="24" Background="Transparent" Foreground="#888"
+                        BorderThickness="0" Click="Close_Click" ToolTip="閉じる" />
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" Margin="20,20,20,15">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="HeaderText" FontWeight="Bold" Margin="0,0,0,12" />
+            <DataGrid x:Name="LobbyGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True"
+                      CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column"
+                      RowBackground="#25232A" AlternatingRowBackground="#1D1A23"
+                      Background="#25232A" Foreground="White" BorderThickness="0"
+                      GridLinesVisibility="None" HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto" ColumnHeaderHeight="38" RowHeight="38">
+                <DataGrid.Resources>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="#1D1A23" />
+                        <Setter Property="Foreground" Value="White" />
+                        <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Foreground" Value="White" />
+                    </Style>
+                </DataGrid.Resources>
+                <DataGrid.Columns>
+                    <DataGridTextColumn x:Name="TitleColumn" Binding="{Binding Lobby.Title}" Width="2*" />
+                    <DataGridTextColumn x:Name="HostColumn" Binding="{Binding Lobby.Host}" Width="1.5*" />
+                    <DataGridTextColumn x:Name="PlayersColumn" Binding="{Binding Players}" Width="*" />
+                    <DataGridTextColumn x:Name="ModsColumn" Binding="{Binding Lobby.ModName}" Width="1.5*" />
+                    <DataGridTextColumn x:Name="LanguageColumn" Binding="{Binding Lobby.LanguageName}" Width="*" />
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*" />
+                    <DataGridTemplateColumn Width="110">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Content="Show code" IsEnabled="{Binding CanShowCode}"
+                                        ToolTip="{Binding DisabledReason}" Tag="{Binding Lobby.Id}"
+                                        ToolTipService.ShowOnDisabled="True"
+                                        Background="#9C27B0" Foreground="White" BorderThickness="0"
+                                        Padding="8,4" Click="ShowCode_Click" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+            <TextBlock x:Name="ConnectionText" Grid.Row="2" Foreground="#B7AABD"
+                       Margin="0,8,0,0" FontSize="12" Visibility="Collapsed" />
+        </Grid>
+        <Grid x:Name="CodeBackdrop" Grid.RowSpan="2" Background="#80000000" Visibility="Collapsed">
+            <Border Background="#25232A" BorderBrush="#55505C" BorderThickness="1"
+                    CornerRadius="4" Padding="20" MinWidth="300" MaxWidth="600"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="Lobby information" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock x:Name="CodeText" TextWrapping="Wrap" Margin="0,15,0,18" />
+                    <Button x:Name="DismissCodeButton" Content="閉じる" HorizontalAlignment="Right"
+                            Width="90" Height="34" Background="#9C27B0" Foreground="White"
+                            BorderThickness="0" Click="DismissCode_Click" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
     private InquiryWindow? inquiryWindow;
+    private PublicLobbyBrowserWindow? publicLobbyBrowserWindow;
     private OverlayWindow? overlayWindow;
     private DebugInfoWindow? debugInfoWindow;
     private int? activeGamePid;
@@ -56,6 +57,7 @@ public partial class MainWindow : Window
         CompactVoiceView.MuteRequested += (_, _) => ToggleMicrophoneMute();
         CompactVoiceView.DeafenRequested += (_, _) => ToggleDeafen();
         CompactVoiceView.HelpRequested += (_, _) => ShowInquiry();
+        CompactVoiceView.PublicLobbyRequested += (_, _) => ShowPublicLobbyBrowser();
         CompactVoiceView.LaunchPlatformChanged += key =>
         {
             settings.LaunchPlatform = key;
@@ -237,6 +239,23 @@ public partial class MainWindow : Window
         inquiryWindow = new InquiryWindow { Owner = this };
         inquiryWindow.Closed += (_, _) => inquiryWindow = null;
         inquiryWindow.Show();
+    }
+
+    private void ShowPublicLobbyBrowser()
+    {
+        if (isClosing) return;
+        if (publicLobbyBrowserWindow is not null)
+        {
+            if (publicLobbyBrowserWindow.WindowState == WindowState.Minimized)
+                publicLobbyBrowserWindow.WindowState = WindowState.Normal;
+            publicLobbyBrowserWindow.Activate();
+            return;
+        }
+        var installedMod = currentState?.InstalledMod ?? currentState?.Mod ?? AmongUsModType.None;
+        var window = new PublicLobbyBrowserWindow(settings, installedMod) { Owner = this };
+        publicLobbyBrowserWindow = window;
+        window.Closed += (_, _) => publicLobbyBrowserWindow = null;
+        window.Show();
     }
 
     private void SettingsWindow_SettingsReset()
@@ -898,6 +917,8 @@ public partial class MainWindow : Window
         sessions.Current?.RequestStop();
         overlayWindow?.Close();
         overlayWindow = null;
+        publicLobbyBrowserWindow?.Close();
+        publicLobbyBrowserWindow = null;
         if (relaunch is not null)
         {
             try { Process.Start(relaunch)?.Dispose(); }

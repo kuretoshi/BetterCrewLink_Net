@@ -110,8 +110,10 @@ public partial class VoiceView : UserControl
         };
         string? selected = null;
         GameLaunchPlatform? requested = null;
+        var browserRequested = false;
         view.LaunchPlatformChanged += key => selected = key;
         view.LaunchGameRequested += platform => requested = platform;
+        view.PublicLobbyRequested += (_, _) => browserRequested = true;
         view.SetLaunchPlatforms(platforms, "custom");
         if (!Equals(view.LaunchPlatformCombo.SelectedItem, platforms[1]) || !view.LaunchGameButton.IsEnabled ||
             !Equals(view.LaunchGameButton.Content, "NoS") || view.LaunchDropdownItems.Children.Count != 4 ||
@@ -133,12 +135,18 @@ public partial class VoiceView : UserControl
             throw new InvalidOperationException("Short game platform name stretches the launch button");
         view.LaunchPlatformCombo.SelectedItem = platforms[2];
         view.UpdateLayout();
-        if (view.WaitingPanel.Parent is not Grid waitingArea ||
-            view.WaitingPanel.ActualHeight + view.WaitingPanel.Margin.Top > waitingArea.ActualHeight)
-            throw new InvalidOperationException("Game launcher overflows the 280×390 voice window");
+        if (view.WaitingPanel.Parent is not Grid waitingArea)
+            throw new InvalidOperationException("Game launcher has no waiting area");
+        if (view.WaitingPanel.ActualHeight + view.WaitingPanel.Margin.Top > waitingArea.ActualHeight)
+            throw new InvalidOperationException($"Game launcher overflows the 280×390 voice window: waiting={view.WaitingPanel.ActualHeight:0} available={waitingArea.ActualHeight:0}");
         if (view.LaunchButtonGroup.ActualWidth <= 142 ||
             view.LaunchButtonGroup.ActualWidth > view.ActualWidth)
             throw new InvalidOperationException("Long game platform name is clipped or overflows the voice window");
+        view.PublicLobbyButton_Click(view.PublicLobbyButton, new RoutedEventArgs());
+        view.SetLanguage("en");
+        if (!browserRequested || !Equals(view.PublicLobbyButton.Content,
+                UiLocalization.Translate("en", "buttons.public_lobby")))
+            throw new InvalidOperationException("Public lobby entry or localized label is missing");
         view.popupCloseTimer.Stop();
         Console.WriteLine("[PASS] VoiceView restores game launcher choice and emits launch request");
     }
@@ -147,6 +155,7 @@ public partial class VoiceView : UserControl
     public event EventHandler? MuteRequested;
     public event EventHandler? DeafenRequested;
     public event EventHandler? HelpRequested;
+    public event EventHandler? PublicLobbyRequested;
     internal event Action<string>? LaunchPlatformChanged;
     internal event Action<GameLaunchPlatform>? LaunchGameRequested;
     internal event EventHandler? AddCustomGameRequested;
@@ -158,6 +167,7 @@ public partial class VoiceView : UserControl
         uiLanguage = language;
         WaitingTitle.Text = UiLocalization.Translate(language, "game.waiting");
         LaunchPresetLabel.Text = UiLocalization.Translate(language, "game.open");
+        PublicLobbyButton.Content = UiLocalization.Translate(language, "buttons.public_lobby");
         RebuildLaunchDropdown();
     }
 
@@ -415,6 +425,7 @@ public partial class VoiceView : UserControl
     private void MuteButton_Click(object sender, RoutedEventArgs e) => MuteRequested?.Invoke(this, EventArgs.Empty);
     private void DeafenButton_Click(object sender, RoutedEventArgs e) => DeafenRequested?.Invoke(this, EventArgs.Empty);
     private void HelpButton_Click(object sender, RoutedEventArgs e) => HelpRequested?.Invoke(this, EventArgs.Empty);
+    private void PublicLobbyButton_Click(object sender, RoutedEventArgs e) => PublicLobbyRequested?.Invoke(this, EventArgs.Empty);
 
     private void PlayerAvatar_MouseEnter(object sender, MouseEventArgs e)
     {

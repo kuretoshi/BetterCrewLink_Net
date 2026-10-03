@@ -35,6 +35,9 @@ internal static class Program
             {
                 return await ServerReconnectSelfTest.RunAsync();
             }
+            if (args.Contains("--public-lobby-live-test"))
+                return await PublicLobbyLiveSelfTest.RunAsync(
+                    ProbeOptions.Parse(args.Where(arg => arg != "--public-lobby-live-test").ToArray()));
             if (args.Contains("--nos-palette"))
                 return await NosSnapshotDiagnostic.RunAsync(
                     ProbeOptions.Parse(args.Where(arg => arg != "--nos-palette").ToArray()).GameProcessId, palette: true);
@@ -168,6 +171,7 @@ internal static class Program
               --self-test         2クライアントでP2Pデータチャネルを自動検証
               --mixed-nat-self-test  片側だけNAT修正ONでP2P接続を検証（--nat-fixでON側を逆転）
               --fail-on-recovery  P2Pセルフテストで自動再接続が発生したら失敗にする
+              --public-lobby-live-test  公開ロビー購読と無効IDのコード照会を実サーバーで検証
               --nat-fix          TURNリレーのみを使用
               --turn-tcp         CLI試験中だけNAT修正TURNへの接続をTCPに変更
               --dtls-trace       CLI試験中のDTLSイベントとヘッダー順序を匿名表示
