@@ -106,7 +106,14 @@ internal static class SpatialVoicePolicy
                 return Muted(pan, distance, "not-in-game");
 
             case GameState.Lobby:
-                return ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "lobby"), me, other, settings);
+                // The released renderer keeps the ordinary PannerNode distance
+                // limit and position in the lobby; only walls/cameras/vent
+                // effects are task-specific.
+                if (distance > maxDistance)
+                    return Muted(pan, distance, "out-of-range");
+                return ApplyListenerVolume(new PeerVoiceMix(
+                    settings.SpatialAudio ? LinearDistanceGain(distance, maxDistance) : 1d,
+                    pan, distance, "lobby"), me, other, settings);
 
             case GameState.Discussion:
         if (otherUsingImpostorRadio)

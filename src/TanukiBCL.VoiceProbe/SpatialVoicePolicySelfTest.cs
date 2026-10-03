@@ -116,6 +116,24 @@ internal static class SpatialVoicePolicySelfTest
         Check("spatial off: outside range is still blocked", false,
             SpatialVoicePolicy.Calculate(spatialState, spatialMe, spatialOther,
                 new SpatialVoiceSettings(MaxDistance: 5d, SpatialAudio: false)).Audible);
+        var lobbyState = new AmongUsState { GameState = GameState.Lobby };
+        spatialOther.X = 2d;
+        var lobbyNear = SpatialVoicePolicy.Calculate(lobbyState, spatialMe, spatialOther,
+            new SpatialVoiceSettings(MaxDistance: 5d));
+        Check("lobby: released panner attenuates and positions nearby players", true,
+            lobbyNear is { Audible: true, Pan: > 0d, Gain: > 0d and < 1d });
+        var lobbyCentered = SpatialVoicePolicy.Calculate(lobbyState, spatialMe, spatialOther,
+            new SpatialVoiceSettings(MaxDistance: 5d, SpatialAudio: false));
+        Check("lobby: disabling spatial audio centers without attenuation", true,
+            lobbyCentered is { Audible: true, Pan: 0d, Gain: 1d });
+        spatialOther.X = 6d;
+        Check("lobby: out-of-range player stays silent even without spatial audio", false,
+            SpatialVoicePolicy.Calculate(lobbyState, spatialMe, spatialOther,
+                new SpatialVoiceSettings(MaxDistance: 5d, SpatialAudio: false,
+                    HearThroughCameras: true)).Audible);
+        Check("lobby: dead-only setting silences living players", false,
+            SpatialVoicePolicy.Calculate(lobbyState, spatialMe, new Player(),
+                new SpatialVoiceSettings(DeadOnly: true)).Audible);
         var snrReader = SnrLiveRoleReaderSelfTest.Verify();
         Check("SNR live reader: role and modifier names", true, snrReader.Role);
         Check("SNR live reader: Jumbo size", true, snrReader.Jumbo);
@@ -463,7 +481,7 @@ internal static class SpatialVoicePolicySelfTest
         Check("vision hearing: invalid short range follows 3.2.7 floor", false,
             SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks, LightRadius = 0d },
                 new Player(), new Player { X = 1.2d }, visionPolicy).Audible);
-        Check("vision hearing: lobby remains unrestricted", true,
+        Check("vision hearing: lobby also uses the effective range", false,
             SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Lobby, LightRadius = 0d },
                 new Player(), new Player { X = 3d }, visionPolicy).Audible);
         Check("radio-only: proximity silenced", false,
