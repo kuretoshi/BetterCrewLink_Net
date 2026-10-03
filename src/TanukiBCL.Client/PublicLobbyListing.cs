@@ -22,11 +22,48 @@ internal sealed record PublicLobbyListing(
         return $"{state} {((int)elapsed.TotalMinutes) % 60:00}:{elapsed.Seconds:00}";
     }
 
-    internal static IReadOnlyList<PublicLobbyListing> Sort(IEnumerable<PublicLobbyListing> lobbies) =>
-        lobbies.OrderBy(lobby => lobby.GameState == 0 ? 0 : 1)
-            .ThenByDescending(lobby => lobby.CurrentPlayers == lobby.MaxPlayers)
-            .ThenByDescending(lobby => lobby.CurrentPlayers)
-            .ToArray();
+    internal static IReadOnlyList<PublicLobbyListing> Sort(IEnumerable<PublicLobbyListing> lobbies)
+    {
+        var sorted = lobbies.ToArray();
+        if (sorted.Length < 2) return sorted;
+
+        // The released comparator is not symmetric for mixed full/non-full
+        // lobbies. Preserve its comparisons and V8's short-array natural-run
+        // plus binary-insertion behavior instead of substituting a new order.
+        var descending = Compare(sorted[1], sorted[0]) < 0;
+        var runLength = 2;
+        while (runLength < sorted.Length)
+        {
+            var comparison = Compare(sorted[runLength], sorted[runLength - 1]);
+            if (descending ? comparison >= 0 : comparison < 0) break;
+            runLength++;
+        }
+        if (descending) Array.Reverse(sorted, 0, runLength);
+
+        for (var index = runLength; index < sorted.Length; index++)
+        {
+            var item = sorted[index];
+            var low = 0;
+            var high = index;
+            while (low < high)
+            {
+                var middle = (low + high) / 2;
+                if (Compare(item, sorted[middle]) < 0) high = middle;
+                else low = middle + 1;
+            }
+            Array.Copy(sorted, low, sorted, low + 1, index - low);
+            sorted[low] = item;
+        }
+        return sorted;
+    }
+
+    private static int Compare(PublicLobbyListing a, PublicLobbyListing b)
+    {
+        if (a.GameState == 0 && b.GameState != 0) return -1;
+        if (b.GameState == 0 && a.GameState != 0) return 1;
+        if (b.CurrentPlayers == b.MaxPlayers && a.CurrentPlayers != a.MaxPlayers) return -1;
+        return a.CurrentPlayers < b.CurrentPlayers ? 1 : a.CurrentPlayers > b.CurrentPlayers ? -1 : 0;
+    }
 
     internal static bool TryParse(JsonElement element, out PublicLobbyListing? lobby)
     {
@@ -95,8 +132,26 @@ internal sealed record PublicLobbyListing(
             lobby with { Id = 3, CurrentPlayers = 2 },
             lobby
         ]);
-        if (string.Join(',', ordered.Select(item => item.Id)) != "2,42,3,1" ||
-            ordered[0].CanShowCode(AmongUsModType.NebulaOnTheShip))
+        if (string.Join(',', ordered.Select(item => item.Id)) != "42,3,2,1" ||
+            ordered.Single(item => item.Id == 2).CanShowCode(AmongUsModType.NebulaOnTheShip))
             throw new InvalidOperationException("Public lobby sorting or full-lobby protection differs from 3.2.8");
+        var alternate = Sort([
+            lobby with { Id = 3, CurrentPlayers = 2 },
+            lobby with { Id = 2, CurrentPlayers = 4 },
+            lobby,
+            lobby with { Id = 1, GameState = 1, CurrentPlayers = 4 }
+        ]);
+        if (string.Join(',', alternate.Select(item => item.Id)) != "42,2,3,1")
+            throw new InvalidOperationException("Public lobby sort lost the released input-order behavior");
+        var longer = Sort(Enumerable.Range(0, 32).Select(id => lobby with
+        {
+            Id = id,
+            GameState = id % 7 == 0 ? 1 : 0,
+            CurrentPlayers = id * 5 % 6 + 1,
+            MaxPlayers = 6
+        }));
+        if (string.Join(',', longer.Select(item => item.Id)) !=
+            "13,19,25,31,2,8,20,26,3,9,15,27,4,10,16,22,5,11,17,23,29,6,12,18,24,30,1,14,21,28,7,0")
+            throw new InvalidOperationException("Public lobby short-array order differs from the released renderer");
     }
 }
