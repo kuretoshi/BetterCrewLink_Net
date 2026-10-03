@@ -32,7 +32,8 @@ internal sealed record ProbeOptions(
     bool NatFix,
     bool NosSnapshot,
     int ExpectedPlayers = 5,
-    bool OldSampleDebug = false)
+    bool OldSampleDebug = false,
+    bool DtlsTrace = false)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -108,7 +109,8 @@ internal sealed record ProbeOptions(
             switches.Contains("--nos-snapshot"),
             values.TryGetValue("--expected-players", out var playersText)
                 ? ParsePositiveInt(playersText, "--expected-players") : 5,
-            switches.Contains("--old-sample-debug"));
+            switches.Contains("--old-sample-debug"),
+            switches.Contains("--dtls-trace"));
     }
 
     private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)

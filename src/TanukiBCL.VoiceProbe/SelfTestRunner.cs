@@ -7,6 +7,7 @@ internal static class SelfTestRunner
     public static async Task<int> RunAsync(ProbeOptions baseOptions, bool expectPeerQuality = false,
         bool mixedNat = false)
     {
+        DtlsRecordHeaderTrace.Verify();
         using (var peerManager = new WebRtcPeerManager("self-test", (_, _) => Task.CompletedTask, false))
         {
             if (peerManager.ShouldDeferIncomingOffer("unseen-peer"))

@@ -22,6 +22,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private readonly string owner;
     private readonly bool sendTestTone;
     private readonly Func<string, bool>? testToneTarget;
+    private readonly bool traceDtlsRecords;
     private bool natFix;
     private readonly Func<string, object, Task> sendSignal;
     private readonly ConcurrentDictionary<string, Peer> peers = new();
@@ -31,12 +32,13 @@ internal sealed class WebRtcPeerManager : IDisposable
     private bool forceRelayOnly;
 
     public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal, bool sendTestTone,
-        bool natFix = false, Func<string, bool>? testToneTarget = null)
+        bool natFix = false, Func<string, bool>? testToneTarget = null, bool traceDtlsRecords = false)
     {
         this.owner = owner;
         this.sendSignal = sendSignal;
         this.sendTestTone = sendTestTone;
         this.testToneTarget = testToneTarget;
+        this.traceDtlsRecords = traceDtlsRecords;
         this.natFix = natFix;
     }
 
@@ -378,6 +380,13 @@ internal sealed class WebRtcPeerManager : IDisposable
             if (packet.Length > 0 && packet[0] is >= 20 and < 64)
             {
                 Interlocked.Increment(ref peer.DtlsPacketsReceived);
+                lock (peer.DtlsHeaderGate)
+                {
+                    if (peer.DtlsHeaderSequence.Count < 32)
+                        peer.DtlsHeaderSequence.Add(DtlsRecordHeaderTrace.Describe(packet));
+                    else
+                        peer.DtlsHeaderSequenceOmitted++;
+                }
                 switch (packet[0])
                 {
                     case 20: Interlocked.Increment(ref peer.DtlsChangeCipherDatagrams); break;
@@ -455,6 +464,8 @@ internal sealed class WebRtcPeerManager : IDisposable
             Log($"peer {Short(remoteSocketId)} state={state}" +
                 (state == RTCPeerConnectionState.connected
                     ? $" dtlsRx={Volatile.Read(ref peer.DtlsPacketsReceived)}" : string.Empty));
+            if (state == RTCPeerConnectionState.connected && traceDtlsRecords)
+                Log($"DTLS handshake completed: {Short(remoteSocketId)} headers=[{SnapshotDtlsHeaders(peer)}]");
             PeerConnectionStateChanged?.Invoke(remoteSocketId, state);
             if (state == RTCPeerConnectionState.connected &&
                 ShouldSendTestTone(peer) &&
@@ -709,8 +720,16 @@ internal sealed class WebRtcPeerManager : IDisposable
             $"/helloDone:{Volatile.Read(ref peer.DtlsServerHelloDoneDatagrams)}" +
             $"/other:{Volatile.Read(ref peer.DtlsOtherPlainHandshakeDatagrams)}" +
             $"/fragmented:{Volatile.Read(ref peer.DtlsFragmentedHandshakeDatagrams)}" +
-            $" encryptedHandshake:{Volatile.Read(ref peer.DtlsEncryptedHandshakeDatagrams)}");
+            $" encryptedHandshake:{Volatile.Read(ref peer.DtlsEncryptedHandshakeDatagrams)} " +
+            $"headers=[{SnapshotDtlsHeaders(peer)}]");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
+    }
+
+    private static string SnapshotDtlsHeaders(Peer peer)
+    {
+        lock (peer.DtlsHeaderGate)
+            return string.Join(",", peer.DtlsHeaderSequence) +
+                (peer.DtlsHeaderSequenceOmitted > 0 ? $",+{peer.DtlsHeaderSequenceOmitted}" : string.Empty);
     }
 
     private async Task WatchHandshakeAsync(Peer peer)
@@ -1127,6 +1146,9 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int DtlsOtherPlainHandshakeDatagrams;
         public int DtlsFragmentedHandshakeDatagrams;
         public int DtlsEncryptedHandshakeDatagrams;
+        public object DtlsHeaderGate { get; } = new();
+        public List<string> DtlsHeaderSequence { get; } = [];
+        public int DtlsHeaderSequenceOmitted;
         public int SctpClosedRecoveryStarted;
         public int DataChannelOpen;
         public int AudioSendFailureLogged;

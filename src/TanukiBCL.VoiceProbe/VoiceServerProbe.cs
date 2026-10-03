@@ -98,7 +98,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             sendTestTone: !options.LiveAudio && !options.AutoRadioTone, natFix: options.NatFix,
             testToneTarget: options.ExpectedPeerClientId is int expectedClientId
                 ? socketId => peerClientIds.TryGetValue(socketId, out var clientId) && clientId == expectedClientId
-                : null);
+                : null,
+            traceDtlsRecords: options.DtlsTrace);
         peerManager.PeerVerified += socketId =>
         {
             Log("OK", $"P2P双方向通信成功 peer={socketId}");
