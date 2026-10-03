@@ -154,7 +154,7 @@ public partial class SettingsWindow
 
     private void ManualUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
     {
-        Process.Start(new ProcessStartInfo("https://github.com/kuretoshi/BetterCrewLink_Net/releases/latest")
+        Process.Start(new ProcessStartInfo(UpdateCatalog.ReleasesPage.AbsoluteUri)
         {
             UseShellExecute = true
         })?.Dispose();

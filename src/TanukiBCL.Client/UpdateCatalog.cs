@@ -15,6 +15,8 @@ internal static partial class UpdateCatalog
 {
     internal static readonly Uri ReleasesApi = new(
         "https://api.github.com/repos/kuretoshi/BetterCrewLink_Net/releases?per_page=20");
+    internal static readonly Uri ReleasesPage = new(
+        "https://github.com/kuretoshi/BetterCrewLink_Net/releases");
     private const string AssetName = "TanukiBCL.Net-win-x64.zip";
     private const string DownloadPrefix =
         "https://github.com/kuretoshi/BetterCrewLink_Net/releases/download/";
@@ -109,7 +111,7 @@ internal static partial class UpdateCatalog
     internal static async Task VerifyAsync()
     {
         var json = """
-            [{"tag_name":"v3.2.7-net.2","draft":false,
+            [{"tag_name":"v3.2.7-net.2","draft":false,"prerelease":true,
               "html_url":"https://github.com/kuretoshi/BetterCrewLink_Net/releases/tag/v3.2.7-net.2",
               "assets":[{"name":"TanukiBCL.Net-win-x64.zip","state":"uploaded","size":123,
                 "digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -120,7 +122,9 @@ internal static partial class UpdateCatalog
         var candidate = await CheckAsync(client, "3.2.7-net.1", new Uri("https://example.invalid/releases"));
         if (candidate?.Version != "v3.2.7-net.2" || candidate.Size != 123 ||
             candidate.Sha256.Length != 64 || handler.Requests != 1 || !handler.HasUserAgent)
-            throw new InvalidOperationException(".NET update release candidate was not recognized");
+            throw new InvalidOperationException(".NET pre-release update candidate was not recognized");
+        if (ReleasesPage.AbsoluteUri != "https://github.com/kuretoshi/BetterCrewLink_Net/releases")
+            throw new InvalidOperationException("Manual update fallback must include pre-releases");
         if (await CheckAsync(client, "3.2.7-net.2", new Uri("https://example.invalid/releases")) is not null)
             throw new InvalidOperationException("Same version was offered as an update");
         if (CompareVersions("v3.2.8-net-beta.1", "3.2.8-netdev.0") <= 0 ||
