@@ -55,6 +55,8 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string, short[]>? PcmReceived;
 
+    public event Action<string, int>? EncodedAudioReceived;
+
     public event Action<string, string>? PeerDataReceived;
 
     public event Action<string, Guid>? PeerConnectionFailed;
@@ -811,6 +813,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     private void ReceiveAudio(Peer peer, EncodedAudioFrame frame)
     {
+        EncodedAudioReceived?.Invoke(peer.RemoteSocketId, frame.EncodedAudio.Length);
         short[] pcm;
         lock (peer.AudioGate)
         {

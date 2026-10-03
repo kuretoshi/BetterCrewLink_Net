@@ -11,6 +11,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 {
     private readonly ProbeOptions options;
     private readonly string label;
+    private readonly bool receiveOnly;
     private readonly SocketIOClient.SocketIO socket;
     private readonly TaskCompletionSource connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource peerVerified = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -83,10 +84,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private string lastObsPayload = string.Empty;
     private string lastObsSecret = string.Empty;
 
-    public VoiceServerProbe(ProbeOptions options, string label = "probe")
+    public VoiceServerProbe(ProbeOptions options, string label = "probe", bool receiveOnly = false)
     {
         this.options = options;
         this.label = label;
+        this.receiveOnly = receiveOnly;
         lifetimeToken = lifetimeCancellation.Token;
         socket = new SocketIOClient.SocketIO(options.Server, new SocketIOOptions
         {
@@ -129,6 +131,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             {
                 PeerPcmReceived?.Invoke(clientId, pcm);
             }
+        };
+        peerManager.EncodedAudioReceived += (socketId, length) =>
+        {
+            if (peerClientIds.TryGetValue(socketId, out var clientId))
+                PeerEncodedAudioReceived?.Invoke(clientId, length);
         };
         peerManager.PeerDataReceived += ApplyPeerData;
         peerManager.PeerDataChannelOpened += remoteSocketId =>
@@ -194,6 +201,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public event Action<int, AudioTestResult>? PeerAudioVerified;
 
     public event Action<int, short[]>? PeerPcmReceived;
+
+    public event Action<int, int>? PeerEncodedAudioReceived;
 
     public event Action<bool>? LocalVadChanged;
 
@@ -638,7 +647,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             StartGameTracking(gameProcessId);
         }
 
-        if (options.LiveAudio)
+        if (options.LiveAudio && !receiveOnly)
         {
             audioSession = new AudioDeviceSession(
                 options.InputDevice,

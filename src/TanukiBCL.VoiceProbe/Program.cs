@@ -47,6 +47,9 @@ internal static class Program
                 return await MicrophoneToneTestRunner.RunAsync(args);
             if (args.Contains("--speaker-loopback-self-test"))
                 return SpeakerLoopbackTestRunner.RunSelfTest();
+            if (args.Contains("--peer-pcm-tone-test"))
+                return await PeerPcmToneTestRunner.RunAsync(ProbeOptions.Parse(
+                    args.Where(argument => argument != "--peer-pcm-tone-test").ToArray()));
             var options = ProbeOptions.Parse(args);
             if (args.Contains("--radio-enabled-test") &&
                 (!options.AutoRadioTone || !options.IsHost || options.GameProcessId is null || options.Duration is null))
@@ -199,6 +202,7 @@ internal static class Program
               --play-test-tone --output-device <n> --seconds <1-15> [--vad-tone]  選択した出力先へ440Hz検証音を流す。--vad-toneは150Hz VAD用成分を追加（保存なし）
               --speaker-loopback-test [--speaker-name name] [--seconds n]  出力デバイスの440Hz成分だけを測定（音声は保存しない）
               --microphone-tone-test [--microphone-name name] [--seconds n]  入力デバイスの440Hz成分だけを測定（音声は保存しない）
+              --peer-pcm-tone-test --game-process-id PID --expected-peer-client-id ID --seconds N  相手から復号したPCMの440Hz成分を測定（保存なし）
               --speaker-loopback-self-test 440Hz検出と別周波数の除外を合成音で検証
               --scan-game         起動中の全Among Usプロセスを読み取り検証
               --expected-players  検証するプロセス数・ロビー人数（既定5）
