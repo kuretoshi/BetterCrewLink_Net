@@ -11,6 +11,20 @@ internal static class GameProcessScannerSelfTest
             if (!condition) throw new InvalidOperationException(message);
         }
 
+        var baseHost = new Player { Name = "開発者くれとし", NameHash = 138444898 };
+        var decoratedHost = new Player
+        {
+            Name = "\n開発者くれとし\n\nTown Of Host For E EM v6190.416\n",
+            NameHash = 1854123896
+        };
+        Require(GameCodeCodec.LocalHostCode(baseHost) == "46282" &&
+            GameCodeCodec.LocalHostCode(decoratedHost) == "46282",
+            "TOH host decoration split the local voice lobby");
+        Require(TohHostName.HasMarker("<color=red>Town\u200B Of Host For E EM</color>") &&
+            TohHostName.ForLocalCode("\n開発者くれとし\n<color=red>Town Of Host For E EM</color>") ==
+            baseHost.Name,
+            "TOH rich-text or zero-width host marker was not normalized");
+
         var expectation = new GameScanExpectation("Lobby", 4, 0, 0, false, 4);
         var results = Enumerable.Range(0, 4).Select(local =>
             new GameProcessScanner.ProcessReadResult(local + 1, false, new AmongUsState

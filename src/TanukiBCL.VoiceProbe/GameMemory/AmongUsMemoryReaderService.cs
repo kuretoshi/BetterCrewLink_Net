@@ -225,7 +225,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             {
                 if (isLocalGameCandidate && player.ClientId == unchecked((int)hostId))
                 {
-                    gameCode = (player.NameHash % 99999).ToString();
+                    gameCode = GameCodeCodec.LocalHostCode(player);
                 }
 
                 if (player.IsLocal)

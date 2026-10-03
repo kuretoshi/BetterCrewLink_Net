@@ -2,7 +2,6 @@ using System.IO;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
@@ -623,16 +622,8 @@ public partial class SettingsWindow : Window
             return false;
         var host = currentGameState.Players.FirstOrDefault(player =>
             player.ClientId == currentGameState.HostId);
-        return host is not null && (HasToh4eHostMarker(host.Name) ||
-            HasToh4eHostMarker(host.AppearanceName));
-    }
-
-    private static bool HasToh4eHostMarker(string? name)
-    {
-        if (string.IsNullOrEmpty(name)) return false;
-        var plain = Regex.Replace(name, "<[^>]*>|[\\u200B-\\u200D\\uFEFF]", string.Empty);
-        return Regex.IsMatch(plain, @"town\s+of\s+host\s+for\s+e\b",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return host is not null && (TohHostName.HasMarker(host.Name) ||
+            TohHostName.HasMarker(host.AppearanceName));
     }
 
     private void JackalRadioCheck_Changed(object sender, RoutedEventArgs e)

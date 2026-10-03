@@ -28,6 +28,20 @@ public static class GameCodeCodec
         return normalized.Length == 4 ? GameCodeToIntV1(normalized) : GameCodeToIntV2(normalized);
     }
 
+    public static string LocalHostCode(Player host)
+    {
+        var canonical = TohHostName.ForLocalCode(host.Name);
+        var hash = canonical == host.Name ? host.NameHash : HashName(canonical);
+        return (hash % 99999).ToString();
+    }
+
+    private static int HashName(string name)
+    {
+        var hash = 0;
+        foreach (var character in name) hash = unchecked((31 * hash) + character);
+        return hash;
+    }
+
     private static string IntToGameCodeV1(int input)
     {
         return Encoding.ASCII.GetString(BitConverter.GetBytes(input)).TrimEnd('\0');
