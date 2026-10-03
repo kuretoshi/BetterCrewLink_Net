@@ -9,7 +9,8 @@ Target: released [`v3.2.8`](https://github.com/kuretoshi/TanukiBCL/releases/tag/
 - Process pickers and the game scanner exclude terminated Among Us processes with zero threads, corresponding to the new upstream process filter.
 - The compact-view footer includes the new Ko-fi and X buttons and their released URLs.
 - Localization assets and settings/window localization work from the earlier 3.2.7 port are included in the same working set; this is partial GUI parity, not a claim of completion.
-- The settings navigation now uses the same nine Material icon paths, selected-row tint, and category ordering as the released renderer. The General page now places language and reset actions in the renderer's two-row card layout; the always-on-top control is only on the Overlay page, where the released settings place it. The settings localization and live-save self-test pass after that control move. This is a source-guided alignment, not a verified whole-window visual match.
+- The settings navigation now uses the same nine Material icon paths, purple selected-row tint, and category ordering as the released renderer. The General page now places language and reset actions in separate cards; the always-on-top control is only on the Overlay page, where the released settings place it. The settings localization and live-save self-test pass after that control move. This is a source-guided alignment, not a verified whole-window visual match.
+- The Overlay settings page now follows the released `OverlaySection` card: four right-aligned switches, row separators, and an avatar-position selector in the final row. The disabled state of compact, meeting, and position controls still follows the overlay-enable switch. Release build and settings localization/live-save tests pass; rendered 3.2.8 visual parity is not yet verified.
 
 ## Verification on 2026-10-03
 

@@ -21,6 +21,10 @@ public partial class SettingsWindow
         if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path
             { Data: not null })
             throw new InvalidOperationException("Settings navigation icon template was not applied");
+        window.OverlayAlwaysOnTopCheck.ApplyTemplate();
+        if (window.OverlayAlwaysOnTopCheck.Template.FindName("SwitchTrack",
+                window.OverlayAlwaysOnTopCheck) is not System.Windows.Controls.Border)
+            throw new InvalidOperationException("Overlay switch template was not applied");
         window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "en");
         if (settings.Language != "en" || window.Title != "Settings" ||
             window.LanguageLabel.Text != "Language" ||

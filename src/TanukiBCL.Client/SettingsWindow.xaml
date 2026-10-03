@@ -21,6 +21,38 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="8,4" />
         </Style>
+        <Style x:Key="OverlaySwitchStyle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ContentPresenter VerticalAlignment="Center" />
+                            <Border x:Name="SwitchTrack" Grid.Column="1" Width="36" Height="20"
+                                    CornerRadius="10" Background="#68646B" VerticalAlignment="Center">
+                                <Ellipse x:Name="SwitchThumb" Width="16" Height="16" Fill="White"
+                                         HorizontalAlignment="Left" Margin="2,0,0,0" />
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="#AE70BB" />
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,2,0" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Geometry x:Key="TuneIcon">M3 17v2h6v-2zM3 5v2h10V5zm10 16v-2h8v-2h-8v-2h-2v6zM7 9v2H3v2h4v2h2V9zm14 4v-2H11v2zm-6-4h2V7h4V5h-4V3h-2z</Geometry>
         <Geometry x:Key="GroupsIcon">M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.61c0-1.18.68-2.26 1.76-2.73 1.17-.52 2.61-.91 4.24-.91M4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m1.13 1.1c-.37-.06-.74-.1-1.13-.1-.99 0-1.93.21-2.78.58C.48 14.9 0 15.62 0 16.43V18h4.5v-1.61c0-.83.23-1.61.63-2.29M20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m4 3.43c0-.81-.48-1.53-1.22-1.85-.85-.37-1.79-.58-2.78-.58-.39 0-.76.04-1.13.1.4.68.63 1.46.63 2.29V18H24zM12 6c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3</Geometry>
         <Geometry x:Key="PersonIcon">M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4m0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4</Geometry>
@@ -304,27 +336,46 @@
                                  PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
                     </StackPanel>
                     <StackPanel x:Name="OverlayPanel" Visibility="Collapsed">
-                        <TextBlock Text="オーバーレイ" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
-                        <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="常に手前に表示" Margin="0,0,0,16" />
-                        <CheckBox x:Name="EnableOverlayCheck" Content="ゲーム画面にオーバーレイを表示"
-                                  Margin="0,0,0,16" />
-                        <CheckBox x:Name="CompactOverlayCheck" Content="発話中のプレイヤーだけを表示"
-                                  IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" Margin="0,0,0,16" />
-                        <CheckBox x:Name="MeetingOverlayCheck" Content="会議中の発話枠を表示"
-                                  IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" Margin="0,0,0,20" />
-                        <TextBlock Text="アバターの位置" Margin="0,0,0,7" />
-                        <ComboBox x:Name="OverlayPositionCombo" Width="250" HorizontalAlignment="Left"
-                                  IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}">
-                            <ComboBoxItem Content="表示しない" Tag="hidden" />
-                            <ComboBoxItem Content="上" Tag="top" />
-                            <ComboBoxItem Content="左下" Tag="bottom_left" />
-                            <ComboBoxItem Content="右" Tag="right" />
-                            <ComboBoxItem Content="右（発話中に名前表示）" Tag="right1" />
-                            <ComboBoxItem Content="左" Tag="left" />
-                            <ComboBoxItem Content="左（発話中に名前表示）" Tag="left1" />
-                        </ComboBox>
-                        <TextBlock Text="ゲームが最前面で、ウィンドウ表示またはボーダーレス表示のときに重ねます。"
-                                   Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,16,0,0" />
+                        <TextBlock Text="オーバーレイ" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,8" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
+                            <StackPanel>
+                                <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
+                                    <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="常に手前に表示"
+                                              Style="{StaticResource OverlaySwitchStyle}" />
+                                </Border>
+                                <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
+                                    <CheckBox x:Name="EnableOverlayCheck" Content="ゲーム画面にオーバーレイを表示"
+                                              Style="{StaticResource OverlaySwitchStyle}" />
+                                </Border>
+                                <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
+                                    <CheckBox x:Name="CompactOverlayCheck" Content="発話中のプレイヤーだけを表示"
+                                              Style="{StaticResource OverlaySwitchStyle}"
+                                              IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" />
+                                </Border>
+                                <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
+                                    <CheckBox x:Name="MeetingOverlayCheck" Content="会議中の発話枠を表示"
+                                              Style="{StaticResource OverlaySwitchStyle}"
+                                              IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" />
+                                </Border>
+                                <Grid Margin="16,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="250" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="アバターの位置" VerticalAlignment="Center" />
+                                    <ComboBox x:Name="OverlayPositionCombo" Grid.Column="1"
+                                              IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}">
+                                        <ComboBoxItem Content="表示しない" Tag="hidden" />
+                                        <ComboBoxItem Content="上" Tag="top" />
+                                        <ComboBoxItem Content="左下" Tag="bottom_left" />
+                                        <ComboBoxItem Content="右" Tag="right" />
+                                        <ComboBoxItem Content="右（発話中に名前表示）" Tag="right1" />
+                                        <ComboBoxItem Content="左" Tag="left" />
+                                        <ComboBoxItem Content="左（発話中に名前表示）" Tag="left1" />
+                                    </ComboBox>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                     <StackPanel x:Name="AdvancedPanel" Visibility="Collapsed">
                         <TextBlock Text="詳細設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
