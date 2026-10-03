@@ -21,9 +21,37 @@ public partial class InquiryWindow : Window
     {
         InitializeComponent();
         AttachmentsList.ItemsSource = attachments;
+        RefreshFieldLabels();
     }
 
-    private void Input_Changed(object sender, TextChangedEventArgs e) => UpdateSendAvailability();
+    private void Input_Changed(object sender, TextChangedEventArgs e)
+    {
+        UpdateSendAvailability();
+        RefreshFieldLabels();
+    }
+
+    private void Field_FocusChanged(object sender, KeyboardFocusChangedEventArgs e) => RefreshFieldLabels();
+
+    private void RefreshFieldLabels()
+    {
+        if (SubjectBox is null || BodyBox is null || SubjectLabel is null || BodyLabel is null) return;
+        PositionFieldLabel(SubjectLabel, SubjectBox, multiline: false);
+        PositionFieldLabel(BodyLabel, BodyBox, multiline: true);
+    }
+
+    private static void PositionFieldLabel(TextBlock label, TextBox box, bool multiline)
+    {
+        var focused = box.IsKeyboardFocusWithin;
+        var floating = focused || !string.IsNullOrEmpty(box.Text);
+        label.FontSize = floating ? 12 : 16;
+        label.Margin = floating ? new Thickness(12, -7, 0, 0) :
+            multiline ? new Thickness(14, 16, 0, 0) : new Thickness(14, 0, 0, 0);
+        label.VerticalAlignment = floating || multiline ? VerticalAlignment.Top : VerticalAlignment.Center;
+        label.Background = floating ? new SolidColorBrush(Color.FromRgb(0x25, 0x23, 0x2A)) : Brushes.Transparent;
+        label.Padding = floating ? new Thickness(4, 0, 4, 0) : new Thickness(0);
+        label.Foreground = focused ? new SolidColorBrush(Color.FromRgb(0xCE, 0x93, 0xD8)) :
+            new SolidColorBrush(Color.FromRgb(0xB7, 0xAA, 0xBD));
+    }
 
     private void UpdateSendAvailability()
     {
@@ -156,8 +184,13 @@ public partial class InquiryWindow : Window
                 throw new InvalidOperationException("Inquiry form retained native-theme controls");
             if (window.SendButton.IsEnabled || window.TagCombo.Items.Count != 3)
                 throw new InvalidOperationException("Inquiry form initial state differs from v3.2.7");
+            if (window.SubjectLabel.FontSize != 16 || window.BodyLabel.FontSize != 16)
+                throw new InvalidOperationException("Empty inquiry field labels did not rest inside their fields");
             window.SubjectBox.Text = "件名";
             window.BodyBox.Text = "本文";
+            if (window.SubjectLabel.FontSize != 12 || window.BodyLabel.FontSize != 12 ||
+                window.SubjectLabel.VerticalAlignment != VerticalAlignment.Top)
+                throw new InvalidOperationException("Filled inquiry field labels did not float above their borders");
             if (!window.SendButton.IsEnabled)
                 throw new InvalidOperationException("Valid inquiry did not enable Send");
             window.BodyBox.Text = " ";

@@ -155,15 +155,23 @@
                     <ComboBoxItem Content="不具合" Tag="bug" />
                     <ComboBoxItem Content="要望" Tag="request" />
                 </ComboBox>
-                <TextBlock Text="件名" Margin="0,0,0,5" />
-                <TextBox x:Name="SubjectBox" Height="56" MaxLength="100" Padding="12,12" Margin="0,0,0,16"
-                         Style="{StaticResource InquiryFieldStyle}"
-                         TextChanged="Input_Changed" />
-                <TextBlock Text="本文" Margin="0,0,0,5" />
-                <TextBox x:Name="BodyBox" MinHeight="170" MaxLength="1800" Padding="12,10" Margin="0,0,0,16"
-                         Style="{StaticResource InquiryFieldStyle}"
-                         AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                         TextChanged="Input_Changed" />
+                <Grid Margin="0,0,0,16" Height="56">
+                    <TextBox x:Name="SubjectBox" Height="56" MaxLength="100" Padding="12,12"
+                             Style="{StaticResource InquiryFieldStyle}"
+                             TextChanged="Input_Changed" GotKeyboardFocus="Field_FocusChanged"
+                             LostKeyboardFocus="Field_FocusChanged" />
+                    <TextBlock x:Name="SubjectLabel" Text="件名" IsHitTestVisible="False"
+                               HorizontalAlignment="Left" Foreground="#B7AABD" />
+                </Grid>
+                <Grid Margin="0,0,0,16" Height="170">
+                    <TextBox x:Name="BodyBox" MinHeight="170" MaxLength="1800" Padding="12,10"
+                             Style="{StaticResource InquiryFieldStyle}"
+                             AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                             TextChanged="Input_Changed" GotKeyboardFocus="Field_FocusChanged"
+                             LostKeyboardFocus="Field_FocusChanged" />
+                    <TextBlock x:Name="BodyLabel" Text="本文" IsHitTestVisible="False"
+                               HorizontalAlignment="Left" Foreground="#B7AABD" />
+                </Grid>
                 <Button x:Name="SelectFilesButton" HorizontalAlignment="Left"
                         Style="{StaticResource InquiryActionStyle}" Click="SelectFilesButton_Click" Margin="0,0,0,10">
                     <StackPanel Orientation="Horizontal">
