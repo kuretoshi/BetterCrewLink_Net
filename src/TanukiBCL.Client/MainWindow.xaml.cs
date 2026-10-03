@@ -173,7 +173,7 @@ public partial class MainWindow : Window
             debugInfoWindow.Activate();
             return;
         }
-        var window = new DebugInfoWindow(CaptureDebugInfo) { Owner = this };
+        var window = new DebugInfoWindow(CaptureDebugInfo, CaptureSnrDebugRolesAsync) { Owner = this };
         debugInfoWindow = window;
         window.Closed += (_, _) =>
         {
@@ -213,6 +213,16 @@ public partial class MainWindow : Window
         return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live, roles,
             state is null ? "情報を待っています…" : JsonSerializer.Serialize(state, jsonOptions), voice,
             state, probe?.GetNosRadioReportsSnapshot());
+    }
+
+    private async Task<string> CaptureSnrDebugRolesAsync()
+    {
+        if (currentState?.Mod != AmongUsModType.SuperNewRoles || activeGamePid is not { } pid)
+            throw new InvalidOperationException("SuperNewRolesの起動を確認してください");
+        var result = await SnrDebugRoleReader.ReadAsync(pid);
+        if (activeGamePid != pid || currentState?.Mod != AmongUsModType.SuperNewRoles)
+            throw new InvalidOperationException("取得中にゲームが終了または切り替わりました");
+        return result;
     }
 
     private void ShowInquiry()

@@ -83,6 +83,54 @@
                 </DataGrid.Columns>
             </DataGrid>
         </Grid>
+        <Grid x:Name="SnrPanel" Grid.Row="3" Margin="16,0,16,16" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="180" />
+            </Grid.RowDefinitions>
+            <Button x:Name="SnrReadButton" Grid.Row="0" Content="SNR役職を取得"
+                    HorizontalAlignment="Left" Padding="12,6" Click="SnrReadButton_Click" />
+            <TextBlock Grid.Row="1" Margin="0,8,0,3" TextWrapping="Wrap"
+                       Text="取得ボタンを押した時点の管理メモリを読み取ります。音声の陣営判定には反映しません。取得後はリアルタイムタブの役職表示も自動更新します。" />
+            <TextBlock x:Name="SnrStatusText" Grid.Row="2" Margin="0,0,0,8"
+                       TextWrapping="Wrap" Foreground="#B7AABD"
+                       Text="スナップショット作成時にゲームが一瞬停止する場合があります。試合中の連続取得は避けてください。" />
+            <DataGrid x:Name="SnrPlayersGrid" Grid.Row="3" AutoGenerateColumns="False"
+                      CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
+                      IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                      Background="#1D1A23" Foreground="#F5F1F7" BorderBrush="#44404A"
+                      RowBackground="#1D1A23" AlternatingRowBackground="#25232A"
+                      HorizontalGridLinesBrush="#44404A" VerticalGridLinesBrush="#44404A">
+                <DataGrid.Resources>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="#25232A" />
+                        <Setter Property="Foreground" Value="#F5F1F7" />
+                        <Setter Property="Padding" Value="8,6" />
+                    </Style>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="Foreground" Value="#F5F1F7" />
+                        <Setter Property="Padding" Value="8,5" />
+                    </Style>
+                </DataGrid.Resources>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Player ID" Binding="{Binding PlayerId}" Width="75" />
+                    <DataGridTextColumn Header="SNR役職" Binding="{Binding Role}" Width="*" />
+                    <DataGridTextColumn Header="割り当て陣営" Binding="{Binding AssignedTeam}" Width="*" />
+                    <DataGridTextColumn Header="勝利陣営" Binding="{Binding WinnerTeam}" Width="*" />
+                    <DataGridTextColumn Header="チーム" Binding="{Binding TeamTag}" Width="*" />
+                    <DataGridTextColumn Header="追加属性" Binding="{Binding Modifier}" Width="*" />
+                    <DataGridTextColumn Header="幽霊役職" Binding="{Binding GhostRole}" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+            <TextBox x:Name="SnrJsonText" Grid.Row="4" Margin="0,8,0,0" Padding="10"
+                     IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                     FontFamily="Consolas" FontSize="12" Background="#1D1A23" Foreground="#F5F1F7"
+                     BorderThickness="0" />
+        </Grid>
         <TextBox x:Name="DebugText" Grid.Row="3" Margin="16,0,16,16" Padding="10"
                  IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"

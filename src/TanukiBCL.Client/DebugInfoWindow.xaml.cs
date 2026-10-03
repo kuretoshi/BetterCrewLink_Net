@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -16,15 +17,21 @@ internal sealed record DebugInfoSnapshot(string ModName, string Live, string Snr
 internal sealed record DebugLiveRow(string NameId, string RoleTeam, string Status,
     string Conversation, string Appearance, string Size, string Position, bool IsLocal);
 
+internal sealed record DebugSnrRow(int PlayerId, string Role, string AssignedTeam,
+    string WinnerTeam, string TeamTag, string Modifier, string GhostRole);
+
 public partial class DebugInfoWindow : Window
 {
     private readonly Func<DebugInfoSnapshot> capture;
+    private readonly Func<Task<string>> captureSnrRoles;
     private readonly DispatcherTimer refreshTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private bool snrBusy;
 
-    internal DebugInfoWindow(Func<DebugInfoSnapshot> capture)
+    internal DebugInfoWindow(Func<DebugInfoSnapshot> capture, Func<Task<string>> captureSnrRoles)
     {
         InitializeComponent();
         this.capture = capture;
+        this.captureSnrRoles = captureSnrRoles;
         refreshTimer.Tick += (_, _) => Refresh();
         Loaded += (_, _) =>
         {
@@ -50,7 +57,9 @@ public partial class DebugInfoWindow : Window
                 ? "最新のログ（最大64KB）を1秒ごとに更新します。"
                 : "ゲーム・音声の状態を自動更新します。";
             LivePanel.Visibility = tab == 0 ? Visibility.Visible : Visibility.Collapsed;
-            DebugText.Visibility = tab == 0 ? Visibility.Collapsed : Visibility.Visible;
+            SnrPanel.Visibility = tab == 1 ? Visibility.Visible : Visibility.Collapsed;
+            SnrReadButton.IsEnabled = !snrBusy && snapshot.State?.Mod == AmongUsModType.SuperNewRoles;
+            DebugText.Visibility = tab is 0 or 1 ? Visibility.Collapsed : Visibility.Visible;
             if (tab == 0)
             {
                 LiveSummaryText.Text = snapshot.Live;
@@ -62,7 +71,6 @@ public partial class DebugInfoWindow : Window
             }
             DebugText.Text = tab switch
             {
-                1 => snapshot.SnrRoles,
                 2 => snapshot.GameState,
                 3 => snapshot.VoiceConnection,
                 4 => ReadLogTail(),
@@ -74,6 +82,67 @@ public partial class DebugInfoWindow : Window
             if (DebugTabs.SelectedIndex == 0) LiveSummaryText.Text = $"診断情報を取得できませんでした: {exception.Message}";
             else DebugText.Text = $"診断情報を取得できませんでした: {exception.Message}";
         }
+    }
+
+    private async void SnrReadButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (snrBusy || capture().State?.Mod != AmongUsModType.SuperNewRoles) return;
+        snrBusy = true;
+        SnrReadButton.IsEnabled = false;
+        SnrReadButton.Content = "取得中…";
+        SnrStatusText.Text = "SNR役職を取得中…";
+        SnrPlayersGrid.ItemsSource = null;
+        SnrJsonText.Clear();
+        try
+        {
+            ApplySnrCapture(await captureSnrRoles());
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+            InvalidOperationException or TimeoutException or JsonException or ArgumentException or
+            System.ComponentModel.Win32Exception)
+        {
+            SnrStatusText.Text = $"取得に失敗しました: {error.Message}";
+        }
+        finally
+        {
+            snrBusy = false;
+            SnrReadButton.Content = "SNR役職を取得";
+            SnrReadButton.IsEnabled = capture().State?.Mod == AmongUsModType.SuperNewRoles;
+        }
+    }
+
+    private void ApplySnrCapture(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        if (!root.TryGetProperty("status", out var status) || status.GetString() != "ok" ||
+            !root.TryGetProperty("players", out var players) || players.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("SNR役職の取得結果が不正です");
+        var rows = players.EnumerateArray().Select(player => new DebugSnrRow(
+            player.GetProperty("playerId").GetInt32(), EnumLabel(player, "role"),
+            EnumLabel(player, "assignedTeam"), EnumLabel(player, "winnerTeam"),
+            EnumLabel(player, "teamTag"), EnumLabel(player, "modifier"),
+            EnumLabel(player, "ghostRole"))).ToArray();
+        SnrPlayersGrid.ItemsSource = rows;
+        SnrJsonText.Text = JsonSerializer.Serialize(players, new JsonSerializerOptions { WriteIndented = true });
+        if (root.TryGetProperty("diagnostics", out var diagnostics) &&
+            diagnostics.ValueKind == JsonValueKind.Array && diagnostics.GetArrayLength() > 0)
+            SnrJsonText.Text += "\n\n取得診断:\n" +
+                JsonSerializer.Serialize(diagnostics, new JsonSerializerOptions { WriteIndented = true });
+        var capturedAt = root.TryGetProperty("capturedAt", out var time) ? time.GetString() : null;
+        var pid = root.TryGetProperty("pid", out var process) ? process.GetInt32().ToString() : "?";
+        var version = root.TryGetProperty("version", out var release) ? release.GetString() : null;
+        SnrStatusText.Text = $"取得時刻: {capturedAt} / PID: {pid} / SNR: {version}";
+        if (rows.Length == 0) SnrStatusText.Text += " / プレイヤー情報はまだ初期化されていません";
+    }
+
+    private static string EnumLabel(JsonElement player, string field)
+    {
+        if (!player.TryGetProperty(field, out var value) || value.ValueKind != JsonValueKind.Object)
+            return "未取得";
+        var name = value.TryGetProperty("name", out var text) ? text.GetString() : null;
+        var number = value.TryGetProperty("value", out var id) ? id.GetInt64().ToString() : "?";
+        return $"{(string.IsNullOrEmpty(name) ? "不明" : name)} ({number})";
     }
 
     private static DebugLiveRow FormatLiveRow(Player player)
@@ -188,14 +257,15 @@ public partial class DebugInfoWindow : Window
 
     internal static void VerifyUi()
     {
-        var state = new AmongUsState { Players = [new Player
+        var state = new AmongUsState { Mod = AmongUsModType.SuperNewRoles, Players = [new Player
         {
             Id = 7, ClientId = 9, Name = "test", IsLocal = true, X = 1.25, Y = -2.5, RoleTeam = 2,
             SnrRole = new SnrRoleData(1, "Jackal", null, null, null, null, true, true)
         }] };
         var radioReports = new Dictionary<int, VoiceServerProbe.NosRadioReport>();
         var window = new DebugInfoWindow(() => new DebugInfoSnapshot(
-            "SuperNewRoles", "live-state", "snr-roles", "game-json", "voice-json", state, radioReports));
+            "SuperNewRoles", "live-state", "snr-roles", "game-json", "voice-json", state, radioReports),
+            () => Task.FromResult(string.Empty));
         try
         {
             if (window.DebugTabs.Items.Count != 5 || window.SaveLogButton is null)
@@ -216,10 +286,31 @@ public partial class DebugInfoWindow : Window
             {
                 window.DebugTabs.SelectedIndex = index;
                 window.Refresh();
-                if (window.DebugText.Text != expected[index - 1] ||
+                if ((index == 1
+                        ? window.SnrPanel.Visibility != Visibility.Visible || !window.SnrReadButton.IsEnabled ||
+                          window.DebugText.Visibility != Visibility.Collapsed
+                        : window.DebugText.Text != expected[index - 1]) ||
                     window.ModNameText.Text != "起動中のMOD: SuperNewRoles")
                     throw new InvalidOperationException("Debug tab did not display its selected snapshot");
             }
+            window.ApplySnrCapture("""
+                {"status":"ok","pid":123,"capturedAt":"2026-10-03T00:00:00Z","version":"3.3.0.0",
+                 "players":[{"playerId":7,"role":{"value":1,"name":"Jackal"},
+                 "assignedTeam":{"value":2,"name":"Neutral"},"winnerTeam":null,
+                 "teamTag":null,"modifier":null,"ghostRole":null}]}
+                """);
+            if (window.SnrPlayersGrid.Items.Count != 1 ||
+                window.SnrPlayersGrid.Items[0] is not DebugSnrRow snrRow ||
+                snrRow.Role != "Jackal (1)" || snrRow.AssignedTeam != "Neutral (2)" ||
+                snrRow.GhostRole != "未取得" ||
+                !window.SnrStatusText.Text.Contains("SNR: 3.3.0.0"))
+                throw new InvalidOperationException("Developer SNR snapshot table did not show helper roles");
+            state.Mod = AmongUsModType.None;
+            window.DebugTabs.SelectedIndex = 1;
+            window.Refresh();
+            if (window.SnrReadButton.IsEnabled)
+                throw new InvalidOperationException("SNR snapshot capture was enabled for another game type");
+            state.Mod = AmongUsModType.SuperNewRoles;
             state.Mod = AmongUsModType.NebulaOnTheShip;
             state.NosLocalMicPosition = new VoicePosition(0, 0);
             state.NosRadios = [new NosRadioData(0, 1 << 8, "Impostor")];
