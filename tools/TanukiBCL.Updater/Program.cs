@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 internal static class Program
@@ -12,6 +13,11 @@ internal static class Program
         try
         {
             if (args.Contains("--self-test")) { Verify(); return 0; }
+            if (args.Length == 2 && args[0] == "--package-self-test")
+            {
+                VerifyPublishedPackage(args[1]);
+                return 0;
+            }
             if (args.Length is not (6 or 8) || args[0] != "--parent-pid" ||
                 !int.TryParse(args[1], out var parentPid) || parentPid <= 0 ||
                 args[2] != "--install-dir" || args[4] != "--stage-root" ||
@@ -170,6 +176,54 @@ internal static class Program
             if (File.ReadAllText(Path.Combine(install, "TanukiBCL.Net.exe")) != "new")
                 throw new InvalidOperationException("Updater did not roll back after launch failure");
             Console.WriteLine("[PASS] Updater stages, swaps, preserves backup and rolls back launch failure");
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    private static void VerifyPublishedPackage(string packageDirectory)
+    {
+        var payload = Path.GetFullPath(packageDirectory);
+        VerifyManifest(payload);
+        var root = Path.Combine(Path.GetTempPath(), $"tanukibcl-real-updater-test-{Guid.NewGuid():N}");
+        var install = Path.Combine(root, "app");
+        Directory.CreateDirectory(install);
+        try
+        {
+            File.WriteAllText(Path.Combine(install, ManifestName),
+                "{\"appId\":\"TanukiBCL.Net\",\"formatVersion\":1}");
+            File.WriteAllText(Path.Combine(install, "TanukiBCL.Net.exe"), "previous-version");
+            var launched = false;
+            var backup = InstallCore(install, payload, executable =>
+            {
+                launched = true;
+                if (executable != Path.Combine(install, "TanukiBCL.Net.exe") ||
+                    !File.Exists(executable) ||
+                    !File.Exists(Path.Combine(install, "Updater", "TanukiBCL.Updater.exe")) ||
+                    !File.Exists(Path.Combine(install, "NoSReader", "TbclSnapshotReader.exe")) ||
+                    !File.Exists(Path.Combine(install, "RoleReaders", "SnrRoleReader.exe")) ||
+                    !File.Exists(Path.Combine(install, "README.md")) ||
+                    !File.Exists(Path.Combine(install, "LICENSE")))
+                    throw new InvalidOperationException("Swapped package is incomplete");
+            });
+            var sourceFiles = Directory.EnumerateFiles(payload, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(payload, path)).Order().ToArray();
+            var installedFiles = Directory.EnumerateFiles(install, "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(install, path)).Order().ToArray();
+            if (!launched || !sourceFiles.SequenceEqual(installedFiles) ||
+                File.ReadAllText(Path.Combine(backup, "TanukiBCL.Net.exe")) != "previous-version")
+                throw new InvalidOperationException("Full package swap or backup verification failed");
+            foreach (var relative in sourceFiles)
+            {
+                var source = Path.Combine(payload, relative);
+                var installed = Path.Combine(install, relative);
+                if (new FileInfo(source).Length != new FileInfo(installed).Length)
+                    throw new InvalidOperationException($"Swapped package file length differs: {relative}");
+            }
+            var sourceDigest = SHA256.HashData(File.ReadAllBytes(Path.Combine(payload, "TanukiBCL.Net.exe")));
+            var installedDigest = SHA256.HashData(File.ReadAllBytes(Path.Combine(install, "TanukiBCL.Net.exe")));
+            if (!CryptographicOperations.FixedTimeEquals(sourceDigest, installedDigest))
+                throw new InvalidOperationException("Swapped application executable digest differs");
+            Console.WriteLine($"[PASS] Full published package swapped with {sourceFiles.Length} files; previous version retained");
         }
         finally { Directory.Delete(root, recursive: true); }
     }
