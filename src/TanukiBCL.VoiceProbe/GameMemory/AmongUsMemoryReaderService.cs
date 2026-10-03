@@ -221,13 +221,14 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         if (gameState != GameState.Menu && playerCount != 0)
         {
             players = ReadPlayers(currentContext, allPlayers, Math.Min(playerCount, 40), unchecked((int)clientId), gameState);
+            if (isLocalGameCandidate &&
+                GameCodeCodec.LocalHostCode(unchecked((int)hostId), players) is { } localHostCode)
+            {
+                gameCode = localHostCode;
+            }
+
             foreach (var player in players)
             {
-                if (isLocalGameCandidate && player.ClientId == unchecked((int)hostId))
-                {
-                    gameCode = GameCodeCodec.LocalHostCode(player);
-                }
-
                 if (player.IsLocal)
                 {
                     localPlayer = player;

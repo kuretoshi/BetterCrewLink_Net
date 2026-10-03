@@ -35,6 +35,15 @@ public static class GameCodeCodec
         return (hash % 99999).ToString();
     }
 
+    public static string? LocalHostCode(int hostClientId, IReadOnlyList<Player> players)
+    {
+        // Among Us can retain disconnected players with their client ID reset to
+        // the host's ID. Never let one of those stale entries replace the host.
+        var host = players.FirstOrDefault(player =>
+            player.ClientId == hostClientId && !player.Disconnected && !player.IsDummy);
+        return host is null ? null : LocalHostCode(host);
+    }
+
     private static int HashName(string name)
     {
         var hash = 0;

@@ -138,7 +138,8 @@ internal static class GameProcessScanner
                 $"PID {result.ProcessId}: state={result.State.GameState} lobby={result.State.LobbyCode} " +
                 $"client={result.State.ClientId} local={local?.Name ?? "?"} " +
                 $"role={(local?.IsImpostor == true ? "Impostor" : "Crewmate")} " +
-                $"players={result.State.Players.Count} alive={alive} dead={dead} impostors={impostors}");
+                $"players={result.State.Players.Count} active={alive + dead} " +
+                $"alive={alive} dead={dead} impostors={impostors}");
 
             foreach (var player in result.State.Players.OrderBy(player => player.ClientId))
             {
@@ -199,7 +200,7 @@ internal static class GameProcessScanner
                      states.Length == expectedPlayers &&
                      states.Select(state => state.LobbyCode).Distinct(StringComparer.Ordinal).Count() == 1 &&
                      states.Select(state => state.GameState).Distinct().Count() == 1 &&
-                     states.All(state => state.Players.Count == expectedPlayers) &&
+                     states.All(state => state.Players.Count(player => !player.Disconnected) == expectedPlayers) &&
                      (expectedGameState is null || states.All(state => state.GameState == expectedGameState)) &&
                      (expectation.Alive is null || states.All(state => CountAlive(state) == expectation.Alive)) &&
                      (expectation.Dead is null || states.All(state => CountDead(state) == expectation.Dead)) &&
@@ -215,7 +216,7 @@ internal static class GameProcessScanner
             if (locals.Length != 1) return false;
             var me = locals[0];
             var mixes = state.Players
-                .Where(player => !player.IsLocal)
+                .Where(player => !player.IsLocal && !player.Disconnected)
                 .Select(player => (Player: player, Mix: SpatialVoicePolicy.Calculate(state, me, player, new SpatialVoiceSettings())))
                 .ToArray();
 

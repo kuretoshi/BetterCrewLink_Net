@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -16,6 +17,7 @@ namespace TanukiBCL.Client;
 /// </summary>
 public partial class VoiceView : UserControl
 {
+    private static readonly Regex HtmlWhitespace = new("[ \\t\\r\\n\\f]+", RegexOptions.Compiled);
     private static readonly Geometry MicOff = Geometry.Parse(
         "M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28m-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18zM4.27 3 3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73z");
     private static readonly Geometry VolumeOff = Geometry.Parse(
@@ -49,11 +51,18 @@ public partial class VoiceView : UserControl
     }
 
     public event EventHandler? SettingsRequested;
+
+    private static string CollapseNoWrapWhitespace(string value) =>
+        HtmlWhitespace.Replace(value, " ").Trim(' ', '\t', '\r', '\n', '\f');
+
     internal static void VerifyNameLayout()
     {
         var view = new VoiceView();
         if (!view.VersionText.Text.StartsWith("v3.2.8", StringComparison.Ordinal))
             throw new InvalidOperationException("Voice window version does not match the 3.2.8 target");
+        if (CollapseNoWrapWhitespace("コヨーテ \r\nさぁ、狩りの時間だ") !=
+            "コヨーテ さぁ、狩りの時間だ")
+            throw new InvalidOperationException("TOH role-name line breaks were not collapsed like HTML nowrap");
         view.LocalName.Text = "開発者くれとし 3";
         view.Measure(new Size(280, 390));
         view.Arrange(new Rect(0, 0, 280, 390));
@@ -256,7 +265,8 @@ public partial class VoiceView : UserControl
         }
 
         var hideAppearance = game.GameState == GameState.Tasks;
-        LocalName.Text = string.IsNullOrWhiteSpace(local.AppearanceName) ? local.Name : local.AppearanceName;
+        LocalName.Text = CollapseNoWrapWhitespace(
+            string.IsNullOrWhiteSpace(local.AppearanceName) ? local.Name : local.AppearanceName);
         LobbyCode.Text = hideCode ? "LOBBY" : game.LobbyCode;
         LocalAvatar.SetPlayer(local, game.PlayerColors, hideAppearance, game.Mod, game.GameExecutablePath);
         LocalAvatar.SetVisualState(localTalking && (local.ShiftedColor < 0 || game.GameState == GameState.Discussion), muted, deafened,

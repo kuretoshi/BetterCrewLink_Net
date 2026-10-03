@@ -11,7 +11,7 @@ internal static class GameProcessScannerSelfTest
             if (!condition) throw new InvalidOperationException(message);
         }
 
-        var baseHost = new Player { Name = "開発者くれとし", NameHash = 138444898 };
+        var baseHost = new Player { ClientId = 2, Name = "開発者くれとし", NameHash = 138444898 };
         var decoratedHost = new Player
         {
             Name = "\n開発者くれとし\n\nTown Of Host For E EM v6190.416\n",
@@ -20,6 +20,14 @@ internal static class GameProcessScannerSelfTest
         Require(GameCodeCodec.LocalHostCode(baseHost) == "46282" &&
             GameCodeCodec.LocalHostCode(decoratedHost) == "46282",
             "TOH host decoration split the local voice lobby");
+        var disconnectedGuests = new[]
+        {
+            baseHost,
+            new Player { Name = "former guest", NameHash = -139038, ClientId = 2, Disconnected = true },
+            new Player { Name = "dummy", NameHash = 7654321, ClientId = 2, IsDummy = true }
+        };
+        Require(GameCodeCodec.LocalHostCode(2, disconnectedGuests) == "46282",
+            "Disconnected players reused the host client ID and replaced the local voice lobby");
         Require(TohHostName.HasMarker("<color=red>Town\u200B Of Host For E EM</color>") &&
             TohHostName.ForLocalCode("\n開発者くれとし\n<color=red>Town Of Host For E EM</color>") ==
             baseHost.Name,
@@ -80,6 +88,23 @@ internal static class GameProcessScannerSelfTest
             new GameScanExpectation("Tasks", 4, 0, 1, false, 4), GameState.Tasks),
             "TOH host-only scan rejected client-specific vanilla self roles");
         Require(GameProcessScanner.Validate(results, expectation, GameState.Lobby), "Four-player lobby failed");
+        var departed = Enumerable.Range(0, 2).Select(local =>
+            new GameProcessScanner.ProcessReadResult(local + 30, true, new AmongUsState
+            {
+                GameState = GameState.Tasks,
+                LobbyCode = "46282",
+                Players = Enumerable.Range(0, 4).Select(id => new Player
+                {
+                    Id = id,
+                    ClientId = id < 2 ? id + 2 : local + 2,
+                    IsLocal = id == local,
+                    Disconnected = id >= 2,
+                    Name = $"Player{id}"
+                }).ToList()
+            }, "", null)).ToArray();
+        Require(GameProcessScanner.Validate(departed,
+            new GameScanExpectation("Tasks", 2, 0, 0, false, 2), GameState.Tasks),
+            "Departed players with reused client IDs invalidated the remaining live game");
         Require(!GameProcessScanner.Validate(results, expectation with { Players = 5 }, GameState.Lobby), "Wrong count accepted");
         Require(!GameProcessScanner.Validate(results, expectation with { Alive = 3 }, GameState.Lobby), "Wrong alive count accepted");
         Require(!GameProcessScanner.Validate([], expectation, GameState.Lobby), "Empty scan passed");
