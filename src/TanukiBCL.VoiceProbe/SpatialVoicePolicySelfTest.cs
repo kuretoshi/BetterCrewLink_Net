@@ -181,6 +181,27 @@ internal static class SpatialVoicePolicySelfTest
         Check("lobby: dead-only setting silences living players", false,
             SpatialVoicePolicy.Calculate(lobbyState, spatialMe, new Player(),
                 new SpatialVoiceSettings(DeadOnly: true)).Audible);
+        var distantGhost = new Player { X = 100d, IsDead = true };
+        var deadOnlySettings = new SpatialVoiceSettings(MaxDistance: 5d, DeadOnly: true);
+        Check("dead-only: lobby ghosts have room-wide centered audio", true,
+            SpatialVoicePolicy.Calculate(lobbyState, new Player { IsDead = true }, distantGhost,
+                deadOnlySettings) is { Gain: 1d, Pan: 0d });
+        Check("dead-only: task ghosts have room-wide centered audio", true,
+            SpatialVoicePolicy.Calculate(spatialState, new Player { IsDead = true }, distantGhost,
+                deadOnlySettings) is { Gain: 1d, Pan: 0d });
+        Check("dead-only: stale radio flag does not silence ghost conversation", true,
+            SpatialVoicePolicy.Calculate(spatialState, new Player { IsDead = true }, distantGhost,
+                deadOnlySettings, otherUsingImpostorRadio: true).Audible);
+        Check("dead-only: meeting radio flag still stays private", false,
+            SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Discussion },
+                new Player { IsDead = true }, distantGhost, deadOnlySettings,
+                otherUsingImpostorRadio: true).Audible);
+        Check("dead-only: meeting-ghost-only still blocks task ghosts", false,
+            SpatialVoicePolicy.Calculate(spatialState, new Player { IsDead = true }, distantGhost,
+                deadOnlySettings with { MeetingGhostOnly = true }).Audible);
+        Check("dead-only: ordinary task ghosts still obey proximity", false,
+            SpatialVoicePolicy.Calculate(spatialState, new Player { IsDead = true }, distantGhost,
+                deadOnlySettings with { DeadOnly = false }).Audible);
         var snrReader = SnrLiveRoleReaderSelfTest.Verify();
         Check("SNR live reader: role and modifier names", true, snrReader.Role);
         Check("SNR live reader: Jumbo size", true, snrReader.Jumbo);

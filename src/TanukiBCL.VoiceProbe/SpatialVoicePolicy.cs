@@ -102,6 +102,9 @@ internal static class SpatialVoicePolicy
         {
             return Muted(0, distance, "dead-only");
         }
+        // Released spatialAudio.ts centers the panner before its range check
+        // in dead-only mode, making eligible ghost-to-ghost speech room-wide.
+        var deadOnlyGhostConversation = settings.DeadOnly && me.IsDead && other.IsDead;
 
         switch (state.GameState)
         {
@@ -113,6 +116,8 @@ internal static class SpatialVoicePolicy
                 // The released renderer keeps the ordinary PannerNode distance
                 // limit and position in the lobby; only walls/cameras/vent
                 // effects are task-specific.
+                if (deadOnlyGhostConversation)
+                    return new PeerVoiceMix(1d, 0d, distance, "dead-only-ghost");
                 if (distance > maxDistance)
                     return Muted(pan, distance, "out-of-range");
                 return ApplyListenerVolume(new PeerVoiceMix(
@@ -149,7 +154,7 @@ internal static class SpatialVoicePolicy
                 new Player { X = otherX, Y = otherY }, state.Map, state.ClosedDoors))
             return Muted(pan, distance, "airship-spawn-wall");
 
-        if (otherUsingImpostorRadio)
+        if (otherUsingImpostorRadio && !deadOnlyGhostConversation)
         {
             return CanHearImpostorRadio(me, other, settings) ||
                    CanHearNosJackalRadio(state, settings, nosJackalRadioHearable) ||
@@ -202,6 +207,9 @@ internal static class SpatialVoicePolicy
         if (meJackalTeam && me.InVent && !other.InVent &&
             !(meJackal ? settings.JackalHearOutsideVents : settings.SidekickHearOutsideVents))
             return Muted(pan, distance, "snr-vent-private");
+
+        if (deadOnlyGhostConversation)
+            return new PeerVoiceMix(1d, 0d, distance, "dead-only-ghost");
 
         // When the speaker is outside proximity, v3.2.7 can hear them from the
         // selected camera instead. Camera reception uses that camera's position
