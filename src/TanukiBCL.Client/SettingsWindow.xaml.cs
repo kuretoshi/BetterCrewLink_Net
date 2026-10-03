@@ -143,6 +143,7 @@ public partial class SettingsWindow : Window
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
         if (wasEditable != lobbySettingsEditable) ShowSelectedLobbySettings();
         UpdateModSettingsVisibility();
+        UpdateShortcutLabels();
         var signature = string.Join(';', (state?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
             .OrderBy(player => player.ClientId)
             .Select(player => $"{player.ClientId}:{player.PlayerConfigId}:{player.Name}:{player.ColorId}:{NosColor.For(player)}:{player.Disconnected}"));
@@ -335,6 +336,7 @@ public partial class SettingsWindow : Window
     private void ShortcutBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (sender is not TextBox box) return;
+        if (e.Key == Key.Tab) return;
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var shortcut = GlobalHotkeyMonitor.FromKey(key);
         if (shortcut is not null) box.Text = shortcut;

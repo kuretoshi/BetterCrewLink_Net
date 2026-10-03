@@ -13,7 +13,21 @@ public partial class SettingsWindow
         Title = UiLocalization.Translate(language, "settings.title");
         staticText.Apply(this, language, PlayerRows);
         CopyObsUrlButton.ToolTip = UiLocalization.Translate(language, "settings.streaming.copy_url");
+        UpdateShortcutLabels();
         RenderPlayers();
+    }
+
+    private void UpdateShortcutLabels()
+    {
+        var language = settings.Language;
+        KeybindHintText.Text = UiLocalization.Translate(language, "settings.keyboard.hint");
+        KeybindsTitleText.Text = UiLocalization.Translate(language, "settings.keyboard.title");
+        PushToTalkShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.push_to_talk");
+        var jackalRadio = currentGameState?.Mod is AmongUsModType.SuperNewRoles or AmongUsModType.NebulaOnTheShip;
+        ImpostorRadioShortcutLabel.Text = UiLocalization.Translate(language,
+            jackalRadio ? "settings.keyboard.impostor_jackal_radio" : "settings.keyboard.impostor_radio");
+        MuteShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.mute");
+        DeafenShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.deafen");
     }
 
     internal static void VerifyLocalization()
@@ -33,6 +47,11 @@ public partial class SettingsWindow
             window.ShowLobbyCodeCheck.Style != window.ObsOverlayCheck.Style ||
             window.CopyObsUrlButton.Content is not System.Windows.Shapes.Path)
             throw new InvalidOperationException("Released streaming settings card layout was not applied");
+        if (window.KeybindsPanel.Children.OfType<Border>().Count() != 2 ||
+            window.PushToTalkShortcutBox.Style != window.ImpostorRadioShortcutBox.Style ||
+            window.PushToTalkShortcutBox.Style != window.MuteShortcutBox.Style ||
+            window.PushToTalkShortcutBox.Style != window.DeafenShortcutBox.Style)
+            throw new InvalidOperationException("Released keyboard shortcut card layout was not applied");
         var generalItem = (System.Windows.Controls.ListBoxItem)window.CategoryList.Items[0];
         generalItem.ApplyTemplate();
         if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path
@@ -52,21 +71,37 @@ public partial class SettingsWindow
             !Equals(window.NatFixCheck.Content, UiLocalization.Translate("en", "settings.advanced.nat_fix")) ||
             !Equals(window.CopyObsUrlButton.ToolTip, "Copy URL"))
             throw new InvalidOperationException("English settings language did not apply");
+        VerifyShortcutLabels("en", false);
         if (window.PlayerRows.Children[0] is not TextBlock { Text: "No other players right now. Join a lobby to adjust their volume." })
             throw new InvalidOperationException("Empty player state was not translated");
         settings.PlayerConfigMap[51] = new PlayerAudioConfig(IsMuted: true);
         window.UpdateCurrentGameState(new AmongUsState
         {
+            Mod = AmongUsModType.SuperNewRoles,
             Players = [new Player { Name = "Remote", PlayerConfigId = 51, Disconnected = true }]
         });
+        VerifyShortcutLabels("en", true);
         VerifyPlayerRow("Disconnected", "Unmute", "Muted");
         window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "ja");
         if (settings.Language != "ja" || window.Title != "設定" || window.LanguageLabel.Text != "言語" ||
             !Equals(window.CopyObsUrlButton.ToolTip, "URLをコピー"))
             throw new InvalidOperationException("Japanese settings language was not restored");
         VerifyPlayerRow("切断済み", "ミュート解除", "ミュート中");
+        VerifyShortcutLabels("ja", true);
         window.Close();
         Console.WriteLine("[PASS] Settings language switches English/Japanese and persists through transaction");
+
+        void VerifyShortcutLabels(string language, bool jackalRadio)
+        {
+            if (window.KeybindHintText.Text != UiLocalization.Translate(language, "settings.keyboard.hint") ||
+                window.KeybindsTitleText.Text != UiLocalization.Translate(language, "settings.keyboard.title") ||
+                window.PushToTalkShortcutLabel.Text != UiLocalization.Translate(language, "settings.keyboard.push_to_talk") ||
+                window.ImpostorRadioShortcutLabel.Text != UiLocalization.Translate(language,
+                    jackalRadio ? "settings.keyboard.impostor_jackal_radio" : "settings.keyboard.impostor_radio") ||
+                window.MuteShortcutLabel.Text != UiLocalization.Translate(language, "settings.keyboard.mute") ||
+                window.DeafenShortcutLabel.Text != UiLocalization.Translate(language, "settings.keyboard.deafen"))
+                throw new InvalidOperationException("Keyboard shortcut labels did not follow game MOD and language");
+        }
 
         void VerifyPlayerRow(string disconnected, string unmute, string muted)
         {
