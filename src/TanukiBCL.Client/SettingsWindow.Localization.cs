@@ -54,6 +54,10 @@ public partial class SettingsWindow
                 setter.Property == System.Windows.FrameworkElement.WidthProperty &&
                 Equals(setter.Value, 8d)))
             throw new InvalidOperationException("Released settings scrollbar width was not applied");
+        if (window.SettingsPageScrollViewer.Margin.Right != -24d ||
+            window.SettingsPageScrollViewer.Content is not Grid scrollContent ||
+            scrollContent.Margin.Right != 24d)
+            throw new InvalidOperationException("Released settings scrollbar did not reach the window edge");
         window.CategoryList.SelectedIndex = 6;
         window.SettingsPageScrollViewer.Measure(new System.Windows.Size(550, 500));
         window.SettingsPageScrollViewer.Arrange(new System.Windows.Rect(0, 0, 550, 500));

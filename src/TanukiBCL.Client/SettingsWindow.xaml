@@ -457,6 +457,7 @@
         </Border>
         <Grid x:Name="SettingsContent" Grid.Column="1" Margin="26,24,24,24">
             <ScrollViewer x:Name="SettingsPageScrollViewer" VerticalScrollBarVisibility="Auto"
+                          Margin="0,0,-24,0"
                           Loaded="SettingsPageScrollViewer_Loaded">
                 <ScrollViewer.Resources>
                     <Style x:Key="ThinSettingsScrollBarStyle" TargetType="ScrollBar">
@@ -494,7 +495,7 @@
                         </Setter>
                     </Style>
                 </ScrollViewer.Resources>
-                <Grid>
+                <Grid Margin="0,0,24,0">
                     <StackPanel x:Name="GeneralPanel">
                         <TextBlock Text="一般" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,15" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
