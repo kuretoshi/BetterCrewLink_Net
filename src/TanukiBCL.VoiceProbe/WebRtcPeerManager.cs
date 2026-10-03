@@ -184,6 +184,10 @@ internal sealed class WebRtcPeerManager : IDisposable
     public bool IsCurrentPeer(string remoteSocketId, Guid peerInstanceId) =>
         peers.TryGetValue(remoteSocketId, out var peer) && peer.InstanceId == peerInstanceId;
 
+    public bool IsFailedPeer(string remoteSocketId, Guid peerInstanceId) =>
+        peers.TryGetValue(remoteSocketId, out var peer) && peer.InstanceId == peerInstanceId &&
+        peer.Connection.connectionState == RTCPeerConnectionState.failed;
+
     private static bool CanSendAudio(Peer peer) =>
         peer.Connection.connectionState == RTCPeerConnectionState.connected ||
         Volatile.Read(ref peer.DataChannelOpen) == 1;
@@ -271,6 +275,11 @@ internal sealed class WebRtcPeerManager : IDisposable
             {
                 return;
             }
+            if (peer.RelayOnly && !IsRelayCandidate(candidate.candidate))
+            {
+                DeferNonRelayCandidate(peer, candidate);
+                return;
+            }
 
             if (peer.Connection.remoteDescription is null)
             {
@@ -292,7 +301,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         var description = new RTCSessionDescriptionInit
         {
             type = type.Equals("offer", StringComparison.OrdinalIgnoreCase) ? RTCSdpType.offer : RTCSdpType.answer,
-            sdp = sdpElement.GetString()!
+            sdp = peer.RelayOnly ? PreferRelayCandidates(peer, sdpElement.GetString()!) : sdpElement.GetString()!
         };
         var result = peer.Connection.setRemoteDescription(description);
         Log($"{type} < {Short(remoteSocketId)} result={result} sctp={HasSctpMedia(description.sdp)}");
@@ -353,7 +362,8 @@ internal sealed class WebRtcPeerManager : IDisposable
             }).ToList()
         };
         var connection = new RTCPeerConnection(configuration);
-        var peer = new Peer(remoteSocketId, connectionId ?? Guid.NewGuid().ToString("N"), connection, initiator);
+        var peer = new Peer(remoteSocketId, connectionId ?? Guid.NewGuid().ToString("N"), connection,
+            initiator, useNatFix || forceRelayOnly);
         peers[remoteSocketId] = peer;
         _ = WatchHandshakeAsync(peer);
         connection.addTrack(new MediaStreamTrack([OpusFormat], MediaStreamStatusEnum.SendRecv));
@@ -786,6 +796,85 @@ internal sealed class WebRtcPeerManager : IDisposable
         return string.IsNullOrWhiteSpace(candidate.candidate) ? null : candidate;
     }
 
+    private static bool IsRelayCandidate(string candidate) =>
+        candidate.Contains(" typ relay", StringComparison.OrdinalIgnoreCase);
+
+    private string PreferRelayCandidates(Peer peer, string sdp)
+    {
+        var result = new StringBuilder(sdp.Length);
+        var mediaIndex = -1;
+        var lines = sdp.Split('\n');
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var rawLine = lines[index];
+            var line = rawLine.TrimEnd('\r');
+            if (line.StartsWith("m=", StringComparison.OrdinalIgnoreCase)) mediaIndex++;
+            if (line.StartsWith("a=candidate:", StringComparison.OrdinalIgnoreCase) &&
+                !IsRelayCandidate(line))
+            {
+                DeferNonRelayCandidate(peer, new RTCIceCandidateInit
+                {
+                    candidate = line[2..],
+                    sdpMLineIndex = (ushort)Math.Max(mediaIndex, 0)
+                });
+            }
+            else
+            {
+                result.Append(rawLine);
+                if (index < lines.Length - 1) result.Append('\n');
+            }
+        }
+        return result.ToString();
+    }
+
+    private void DeferNonRelayCandidate(Peer peer, RTCIceCandidateInit candidate)
+    {
+        lock (peer.DeferredCandidates)
+            peer.DeferredCandidates.Add(candidate);
+        if (Interlocked.CompareExchange(ref peer.DeferredCandidateFallbackStarted, 1, 0) == 0)
+            _ = FlushDeferredCandidatesAsync(peer);
+    }
+
+    private async Task FlushDeferredCandidatesAsync(Peer peer)
+    {
+        // Prefer a relay pair first, but retain host-only interoperability.
+        // A relay-only peer can otherwise fail its initial checklist before
+        // the remote's trickled relay candidate arrives.
+        await Task.Delay(TimeSpan.FromSeconds(4));
+        if (IsCurrentPeer(peer.RemoteSocketId, peer.InstanceId) &&
+            peer.Connection.iceConnectionState == RTCIceConnectionState.checking &&
+            peer.Connection.remoteDescription is not null)
+        {
+            RTCIceCandidateInit[] candidates;
+            lock (peer.DeferredCandidates)
+            {
+                candidates = [.. peer.DeferredCandidates];
+                peer.DeferredCandidates.Clear();
+            }
+            foreach (var candidate in candidates)
+            {
+                try { peer.Connection.addIceCandidate(candidate); }
+                catch (Exception exception)
+                {
+                    if (IsCurrentPeer(peer.RemoteSocketId, peer.InstanceId))
+                        Log($"non-relay ICE fallback failed: {Short(peer.RemoteSocketId)} {exception.GetType().Name}");
+                    continue;
+                }
+            }
+            if (candidates.Length > 0)
+                Log($"peer {Short(peer.RemoteSocketId)} non-relay ICE fallback candidates={candidates.Length}");
+        }
+        Interlocked.Exchange(ref peer.DeferredCandidateFallbackStarted, 0);
+        lock (peer.DeferredCandidates)
+        {
+            if (peer.DeferredCandidates.Count > 0 &&
+                IsCurrentPeer(peer.RemoteSocketId, peer.InstanceId) &&
+                peer.Connection.iceConnectionState == RTCIceConnectionState.checking &&
+                Interlocked.CompareExchange(ref peer.DeferredCandidateFallbackStarted, 1, 0) == 0)
+                _ = FlushDeferredCandidatesAsync(peer);
+        }
+    }
+
     private static IEnumerable<string> ReadUrls(JsonElement urls)
     {
         if (urls.ValueKind == JsonValueKind.String && urls.GetString() is { Length: > 0 } url)
@@ -818,7 +907,8 @@ internal sealed class WebRtcPeerManager : IDisposable
         string RemoteSocketId,
         string ConnectionId,
         RTCPeerConnection Connection,
-        bool Initiator)
+        bool Initiator,
+        bool RelayOnly)
     {
         public Guid InstanceId { get; } = Guid.NewGuid();
         public AudioEncoder Decoder { get; } = new(true, true);
@@ -827,6 +917,8 @@ internal sealed class WebRtcPeerManager : IDisposable
         public HashSet<RTCDataChannel> OpenChannels { get; } = [];
         public List<RTCDataChannel> AllChannels { get; } = [];
         public List<RTCIceCandidateInit> PendingCandidates { get; } = [];
+        public List<RTCIceCandidateInit> DeferredCandidates { get; } = [];
+        public int DeferredCandidateFallbackStarted;
         public object LocalCandidateGate { get; } = new();
         public List<object> PendingLocalCandidates { get; } = [];
         public bool LocalDescriptionSent { get; set; }

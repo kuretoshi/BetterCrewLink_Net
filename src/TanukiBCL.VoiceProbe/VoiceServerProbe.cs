@@ -18,6 +18,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly WebRtcPeerManager peerManager;
     private readonly ConcurrentDictionary<string, int> peerClientIds = new();
     private readonly ConcurrentDictionary<string, int> stalledReconnectAttempts = new();
+    private readonly ConcurrentDictionary<string, int> failedReconnectAttempts = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> peerOperationGates = new();
     private readonly ConcurrentDictionary<string, byte> pendingOfferFallbacks = new();
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
@@ -128,6 +129,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         peerManager.PeerDataChannelOpened += remoteSocketId =>
         {
             stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
+            failedReconnectAttempts.TryRemove(remoteSocketId, out _);
             SendNosRadioReportToPeer(remoteSocketId);
             if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
             {
@@ -142,11 +144,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             if (string.CompareOrdinal(socket.Id, remoteSocketId) < 0)
             {
-                Log("INFO", $"失敗したpeerを自動再接続 peer={remoteSocketId}");
-                _ = RunPeerOperationAsync(remoteSocketId, () =>
-                    peerManager.IsCurrentPeer(remoteSocketId, peerInstanceId)
-                        ? peerManager.ReconnectAsync(remoteSocketId)
-                        : Task.CompletedTask);
+                _ = RunPeerOperationAsync(() => RecoverFailedPeerAsync(remoteSocketId, peerInstanceId));
             }
         };
         peerManager.PeerConnectionStateChanged += (remoteSocketId, state) =>
@@ -564,6 +562,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             PeerConnectionStatusChanged?.Invoke(clientId, "closed");
         }
         stalledReconnectAttempts.Clear();
+        failedReconnectAttempts.Clear();
         pendingOfferFallbacks.Clear();
     }
 
@@ -741,6 +740,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             var clients = response.GetValue<JsonElement>();
             peerClientIds.Clear();
             stalledReconnectAttempts.Clear();
+            failedReconnectAttempts.Clear();
             foreach (var client in clients.EnumerateObject())
             {
                 RegisterPeerClient(client.Name, client.Value);
@@ -765,6 +765,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (peerClientIds.TryRemove(remoteSocketId, out var departedClientId))
             {
                 stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
+                failedReconnectAttempts.TryRemove(remoteSocketId, out _);
                 pendingOfferFallbacks.TryRemove(remoteSocketId, out _);
                 impostorRadioStates.TryRemove(departedClientId, out _);
                 nosRadioReports.TryRemove(departedClientId, out _);
@@ -845,6 +846,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 Log("INFO", $"同一clientの旧peerを除去 client={clientId} peer={staleSocketId}");
                 peerClientIds.TryRemove(staleSocketId, out _);
                 stalledReconnectAttempts.TryRemove(staleSocketId, out _);
+                failedReconnectAttempts.TryRemove(staleSocketId, out _);
                 peerManager.RemovePeer(staleSocketId);
                 audioSession?.RemovePeer(staleSocketId);
             }
@@ -882,6 +884,22 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 !peerManager.IsCurrentPeer(remoteSocketId, peerInstanceId) ||
                 peerManager.HasOpenDataChannel(remoteSocketId)) return;
             Log("INFO", $"データチャネル停滞を再接続 peer={remoteSocketId} attempt={attempt}");
+            await peerManager.ReconnectAsync(remoteSocketId);
+        });
+    }
+
+    private async Task RecoverFailedPeerAsync(string remoteSocketId, Guid peerInstanceId)
+    {
+        // A relay candidate can arrive after the first ICE checks fail. Do not
+        // replace that peer immediately and discard candidates still in flight.
+        if (!peerManager.IsFailedPeer(remoteSocketId, peerInstanceId)) return;
+        var attempt = failedReconnectAttempts.AddOrUpdate(remoteSocketId, 1, (_, count) => count + 1);
+        await Task.Delay(TimeSpan.FromSeconds(Math.Min(2 * (1 << Math.Min(attempt - 1, 3)), 16)), lifetimeToken);
+        await RunPeerOperationAsync(remoteSocketId, async () =>
+        {
+            if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
+                !peerManager.IsFailedPeer(remoteSocketId, peerInstanceId)) return;
+            Log("INFO", $"失敗したpeerを自動再接続 peer={remoteSocketId}");
             await peerManager.ReconnectAsync(remoteSocketId);
         });
     }
