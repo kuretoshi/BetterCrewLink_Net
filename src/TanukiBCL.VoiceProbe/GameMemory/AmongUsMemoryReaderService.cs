@@ -587,6 +587,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             AppearanceId = $"{appearanceColor}|{appearanceHat}|{appearanceSkin}|{appearanceVisor}",
             Disconnected = data.Disconnected != 0,
             IsImpostor = roleTeam == 1,
+            RoleTeam = roleTeam,
             IsThirdParty = roleTeam != 0 && roleTeam != 1,
             IsDead = data.Dead == 1,
             IsLocal = isLocal,

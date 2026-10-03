@@ -189,12 +189,8 @@ public partial class MainWindow : Window
         var live = state is null
             ? "ゲーム情報を待っています…"
             : $"ゲーム状態: {state.GameState} / プレイヤー: {state.Players.Count}人\n" +
-              $"ロビー: {state.LobbyCode} / マップ: {state.Map} / 通信妨害: {state.CommsSabotaged}\n" +
-              string.Join("\n", state.Players.Select(player =>
-                  $"{player.Name} / PlayerId: {player.Id} / ClientId: {player.ClientId} / " +
-                  $"{(player.IsDead ? "死亡" : "生存")} / " +
-                  $"{player.SnrRole?.RoleName ?? player.TohRole?.RoleName ?? (player.IsImpostor ? "Impostor" : "Crewmate")} / " +
-                  $"ベント: {player.InVent} / 座標: {player.X:F2}, {player.Y:F2}"));
+              $"ロビー: {state.LobbyCode} / マップ: {state.Map} / 通信妨害: {(state.CommsSabotaged ? "あり" : "なし")} / " +
+              $"ミックスアップ: {(state.MixupSabotaged ? "あり" : "なし")}";
         var roles = state?.Mod == AmongUsModType.SuperNewRoles
             ? JsonSerializer.Serialize(state.Players.Select(player => new
             {
@@ -215,7 +211,7 @@ public partial class MainWindow : Window
             })
         }, jsonOptions);
         return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live, roles,
-            state is null ? "情報を待っています…" : JsonSerializer.Serialize(state, jsonOptions), voice);
+            state is null ? "情報を待っています…" : JsonSerializer.Serialize(state, jsonOptions), voice, state);
     }
 
     private void ShowInquiry()

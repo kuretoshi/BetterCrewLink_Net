@@ -25,6 +25,52 @@
             <TabItem Header="音声接続" />
             <TabItem Header="ログ" />
         </TabControl>
+        <Grid x:Name="LivePanel" Grid.Row="3" Margin="16,0,16,16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock x:Name="LiveSummaryText" Margin="0,0,0,8" TextWrapping="Wrap" />
+            <DataGrid x:Name="LivePlayersGrid" Grid.Row="1" AutoGenerateColumns="False"
+                      CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
+                      IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                      Background="#1D1A23" Foreground="#F5F1F7" BorderBrush="#44404A"
+                      RowBackground="#1D1A23" AlternatingRowBackground="#25232A"
+                      HorizontalGridLinesBrush="#44404A" VerticalGridLinesBrush="#44404A">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
+                                <Setter Property="Background" Value="#393044" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
+                <DataGrid.Resources>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="#25232A" />
+                        <Setter Property="Foreground" Value="#F5F1F7" />
+                        <Setter Property="Padding" Value="8,6" />
+                    </Style>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="Foreground" Value="#F5F1F7" />
+                        <Setter Property="Padding" Value="8,5" />
+                    </Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="TextWrapping" Value="Wrap" />
+                    </Style>
+                </DataGrid.Resources>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="名前 / ID" Binding="{Binding NameId}" Width="160" />
+                    <DataGridTextColumn Header="役職 / 本体陣営値" Binding="{Binding RoleTeam}" Width="190" />
+                    <DataGridTextColumn Header="状態" Binding="{Binding Status}" Width="100" />
+                    <DataGridTextColumn Header="会話状態" Binding="{Binding Conversation}" Width="160" />
+                    <DataGridTextColumn Header="変身 / 外見" Binding="{Binding Appearance}" Width="250" />
+                    <DataGridTextColumn Header="サイズ" Binding="{Binding Size}" Width="140" />
+                    <DataGridTextColumn Header="座標" Binding="{Binding Position}" Width="105" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
         <TextBox x:Name="DebugText" Grid.Row="3" Margin="16,0,16,16" Padding="10"
                  IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"

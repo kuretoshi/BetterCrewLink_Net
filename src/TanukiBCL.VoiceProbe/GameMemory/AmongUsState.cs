@@ -77,6 +77,8 @@ public sealed class Player
 
     public bool IsImpostor { get; set; }
 
+    public uint RoleTeam { get; set; }
+
     public bool IsThirdParty { get; set; }
 
     public bool IsDead { get; set; }
