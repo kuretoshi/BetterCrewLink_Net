@@ -177,6 +177,7 @@ internal static class Program
               --server-reconnect-self-test  ローカルサーバーの切断・再接続とロビー再参加を検証
               --tanuki-interop-test 起動中のTanukiBCLとのWebRTC・Opus相互接続を検証
               --expected-peer-client-id <id> 相互接続テストの対象client IDを固定
+              --expected-toh-role <name> TOHホストから届く役職名を相互接続テストで検証
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
               --speaker-loopback-test [--speaker-name name] [--seconds n]  出力デバイスの440Hz成分だけを測定（音声は保存しない）

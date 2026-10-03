@@ -8,6 +8,11 @@ internal static class TanukiInteropTestRunner
         {
             throw new ArgumentException("--tanuki-interop-test には --game-process-id が必要です。");
         }
+        if (baseOptions.ExpectedTohRole is { } requestedRole &&
+            string.IsNullOrWhiteSpace(requestedRole))
+        {
+            throw new ArgumentException("--expected-toh-role には役職名が必要です。");
+        }
 
         var timeout = baseOptions.Duration ?? TimeSpan.FromSeconds(30);
         var options = baseOptions with
@@ -21,6 +26,7 @@ internal static class TanukiInteropTestRunner
         var dataReady = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var toneSent = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var pcmReceived = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tohRoleReceived = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var startedAt = System.Diagnostics.Stopwatch.StartNew();
         long connectedAtMs = -1;
         long dataReadyAtMs = -1;
@@ -51,6 +57,11 @@ internal static class TanukiInteropTestRunner
         {
             if (IsExpectedPeer(clientId)) pcmReceived.TrySetResult(clientId);
         };
+        probe.TohRoleReportReceived += (clientId, role) =>
+        {
+            if (IsExpectedPeer(clientId) && role?.RoleName is { } name)
+                tohRoleReceived.TrySetResult(name);
+        };
 
         Console.WriteLine($"TanukiBCL相互接続テスト開始 pid={options.GameProcessId} timeout={timeout.TotalSeconds:0}s");
         var run = probe.RunAsync(cancellation.Token);
@@ -63,6 +74,26 @@ internal static class TanukiInteropTestRunner
             {
                 Console.Error.WriteLine($"[FAIL] 接続先 {connectedClient}、Opus送信先 {toneClient}、データチャネル {dataClient} が異なります。");
                 return 1;
+            }
+
+            if (options.ExpectedTohRole is { } expectedRole)
+            {
+                string receivedRole;
+                try
+                {
+                    receivedRole = await tohRoleReceived.Task.WaitAsync(timeout, cancellation.Token);
+                }
+                catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
+                {
+                    Console.Error.WriteLine($"[FAIL] TOH役職通知を受信できませんでした。期待={expectedRole}");
+                    return 1;
+                }
+                if (!string.Equals(receivedRole, expectedRole, StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.Error.WriteLine($"[FAIL] TOH役職が異なります。期待={expectedRole} 受信={receivedRole}");
+                    return 1;
+                }
+                Console.WriteLine($"[PASS] TOHホストから役職通知を受信しました。role={receivedRole}");
             }
 
             int? pcmClient = null;

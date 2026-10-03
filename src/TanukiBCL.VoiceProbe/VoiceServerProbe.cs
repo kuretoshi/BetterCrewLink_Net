@@ -206,6 +206,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public event Action<int>? PeerTestToneSent;
 
+    public event Action<int, TohRoleData?>? TohRoleReportReceived;
+
     public event Action<bool>? ImpostorRadioTransmitChanged;
 
     public event Action<bool>? ImpostorRadioAvailabilityChanged;
@@ -1138,6 +1140,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         state.Mod = AmongUsModType.TownOfHostForE;
         var local = state.Players.SingleOrDefault(player => player.IsLocal);
         if (local is not null) local.TohRole = parsed;
+        TohRoleReportReceived?.Invoke(clientId, parsed);
         RefreshPeerMixes();
     }
 

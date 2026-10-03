@@ -34,7 +34,8 @@ internal sealed record ProbeOptions(
     int ExpectedPlayers = 5,
     bool OldSampleDebug = false,
     bool DtlsTrace = false,
-    bool TurnTcp = false)
+    bool TurnTcp = false,
+    string? ExpectedTohRole = null)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -112,7 +113,8 @@ internal sealed record ProbeOptions(
                 ? ParsePositiveInt(playersText, "--expected-players") : 5,
             switches.Contains("--old-sample-debug"),
             switches.Contains("--dtls-trace"),
-            switches.Contains("--turn-tcp"));
+            switches.Contains("--turn-tcp"),
+            values.GetValueOrDefault("--expected-toh-role"));
     }
 
     private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)
