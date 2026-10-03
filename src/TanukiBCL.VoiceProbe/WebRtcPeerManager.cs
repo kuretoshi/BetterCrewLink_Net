@@ -640,7 +640,13 @@ internal sealed class WebRtcPeerManager : IDisposable
             peer.Connection.connectionState != RTCPeerConnectionState.connecting)
             return;
 
-        Log($"DTLS handshake stalled: {Short(peer.RemoteSocketId)} ice={peer.Connection.iceConnectionState}");
+        var nominated = peer.Connection.GetRtpChannel().NominatedEntry;
+        var pair = nominated is null
+            ? "none"
+            : $"{nominated.LocalCandidate.type}/{nominated.RemoteCandidate.type}";
+        Log($"DTLS handshake stalled: {Short(peer.RemoteSocketId)} " +
+            $"ice={peer.Connection.iceConnectionState} dtlsRole={peer.Connection.IceRole} " +
+            $"sctp={peer.Connection.sctp.state} pair={pair}");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
 
