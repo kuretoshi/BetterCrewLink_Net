@@ -559,6 +559,20 @@ internal static class SpatialVoicePolicySelfTest
         Check("quality: direct path is included in report", true,
             WebRtcPeerManager.FromReceptionReport(
                 new ReceptionReportSample(1, 0, 0, 0, 0, 0, 0), 1.5d, direct: true).Direct);
+        var roundTrip = new RtcpRoundTripEstimator();
+        var sentAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        const uint lastSenderReport = 123_456;
+        roundTrip.ObserveSent(new RTCPSenderReport(7, (ulong)lastSenderReport << 16, 0, 0, 0, []), sentAt);
+        roundTrip.ObserveReceived(new ReceptionReportSample(8, 0, 0, 0, 0,
+            lastSenderReport, 1_311), sentAt + System.Diagnostics.Stopwatch.Frequency / 10);
+        Check("quality: mismatched sender SSRC does not fabricate RTT", true, roundTrip.RttMs is null);
+        roundTrip.ObserveReceived(new ReceptionReportSample(7, 0, 0, 0, 0,
+            lastSenderReport, 1_311), sentAt + System.Diagnostics.Stopwatch.Frequency / 10);
+        Check("quality: RTCP RTT excludes remote report delay", true,
+            roundTrip.RttMs is >= 79d and <= 81d);
+        CheckGain("quality: RTT survives report merge", roundTrip.RttMs ?? -1d,
+            WebRtcPeerManager.FromReceptionReport(
+                new ReceptionReportSample(1, 0, 0, 0, 0, 0, 0), 1.5d, rttMs: roundTrip.RttMs).RttMs ?? -1d);
 
         Check("mod: Nebula plugin", true,
             AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], ["NebulaLoader.dll"])

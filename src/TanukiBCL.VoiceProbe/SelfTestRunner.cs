@@ -48,6 +48,7 @@ internal static class SelfTestRunner
         var updatedSettings = hostSettings with { MaxDistance = 3.6d, Haunting = true };
         var updateVerified = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var qualityVerified = new TaskCompletionSource<ConnectionQuality>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var roundTripVerified = new TaskCompletionSource<ConnectionQuality>(TaskCreationOptions.RunContinuationsAsynchronously);
         first.SetOwnLobbySettings(hostSettings);
         second.SetExpectedHostClientId(seed);
         second.LobbySettingsChanged += settings =>
@@ -65,6 +66,8 @@ internal static class SelfTestRunner
         {
             if (clientId == seed && quality.JitterMs is not null && quality.LossPercent is not null)
                 qualityVerified.TrySetResult(quality);
+            if (clientId == seed && quality.RttMs is >= 0d and < 1_000d)
+                roundTripVerified.TrySetResult(quality);
         };
 
         try
@@ -98,6 +101,8 @@ internal static class SelfTestRunner
                 if (!quality.Direct)
                     throw new InvalidOperationException("The local peer connection did not report a direct host ICE pair.");
                 Console.WriteLine($"[PASS] RTP/RTCP受信品質を取得: jitter={quality.JitterMs:0.0} ms loss={quality.LossPercent:0.0}% direct={quality.Direct}");
+                var withRoundTrip = await roundTripVerified.Task.WaitAsync(timeout, cancellation.Token);
+                Console.WriteLine($"[PASS] RTCP往復時間を取得: rtt={withRoundTrip.RttMs:0.0} ms");
             }
 
             Console.WriteLine("[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラック、ホストの3.2.7ロビー設定配信と変更反映を検証しました。");

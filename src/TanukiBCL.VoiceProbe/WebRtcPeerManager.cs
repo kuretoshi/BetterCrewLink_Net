@@ -407,13 +407,30 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             if (mediaType != SDPMediaTypesEnum.audio ||
                 !peers.TryGetValue(remoteSocketId, out var current) || !ReferenceEquals(current, peer)) return;
+            peer.RoundTripEstimator.ObserveSent(report.SenderReport, Stopwatch.GetTimestamp());
             // Our outgoing RTCP reception report describes the audio we received
             // from this peer. The remote's report would describe our outbound path.
             var sample = report.ReceiverReport?.ReceptionReports?.FirstOrDefault()
                 ?? report.SenderReport?.ReceptionReports?.FirstOrDefault();
             if (sample is not null)
                 PeerQualityChanged?.Invoke(remoteSocketId, FromReceptionReport(
-                    sample, peer.JitterEstimator.JitterMs, IsDirectHostPair(connection.GetRtpChannel().NominatedEntry)));
+                    sample, peer.JitterEstimator.JitterMs, IsDirectHostPair(connection.GetRtpChannel().NominatedEntry),
+                    peer.RoundTripEstimator.RttMs));
+        };
+        connection.OnReceiveReport += (_, mediaType, report) =>
+        {
+            if (mediaType == SDPMediaTypesEnum.audio &&
+                peers.TryGetValue(remoteSocketId, out var current) && ReferenceEquals(current, peer))
+            {
+                var samples = report.ReceiverReport?.ReceptionReports
+                    ?? report.SenderReport?.ReceptionReports;
+                if (samples is not null)
+                {
+                    var receivedAt = Stopwatch.GetTimestamp();
+                    foreach (var receivedSample in samples)
+                        peer.RoundTripEstimator.ObserveReceived(receivedSample, receivedAt);
+                }
+            }
         };
         connection.OnAudioFrameReceived += frame => ReceiveAudio(peer, frame);
         return peer;
@@ -424,8 +441,9 @@ internal sealed class WebRtcPeerManager : IDisposable
         nominatedEntry.RemoteCandidate.type == RTCIceCandidateType.host;
 
     internal static ConnectionQuality FromReceptionReport(
-        ReceptionReportSample sample, double? observedJitterMs, bool direct = false) =>
-        new(JitterMs: observedJitterMs, LossPercent: sample.FractionLost * 100d / 256d, Direct: direct);
+        ReceptionReportSample sample, double? observedJitterMs, bool direct = false, double? rttMs = null) =>
+        new(RttMs: rttMs, JitterMs: observedJitterMs,
+            LossPercent: sample.FractionLost * 100d / 256d, Direct: direct);
 
     private void ConfigureDataChannel(Peer peer, RTCDataChannel channel)
     {
@@ -735,6 +753,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int DataChannelOpen;
         public int AudioSendFailureLogged;
         public RtpAudioJitterEstimator JitterEstimator { get; } = new();
+        public RtcpRoundTripEstimator RoundTripEstimator { get; } = new();
     }
 }
 
