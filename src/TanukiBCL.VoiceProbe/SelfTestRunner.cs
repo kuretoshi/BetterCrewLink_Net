@@ -104,8 +104,10 @@ internal static class SelfTestRunner
             await Task.WhenAll(
                 first.PeerVerified.WaitAsync(timeout, cancellation.Token),
                 second.PeerVerified.WaitAsync(timeout, cancellation.Token),
+                first.AudioVerified.WaitAsync(timeout, cancellation.Token),
                 second.AudioVerified.WaitAsync(timeout, cancellation.Token),
                 settingsVerified.Task.WaitAsync(timeout, cancellation.Token));
+            Console.WriteLine("[PASS] Both peers decoded the other's Opus test audio");
 
             first.SetOwnLobbySettings(updatedSettings);
             await updateVerified.Task.WaitAsync(timeout, cancellation.Token);
@@ -139,7 +141,7 @@ internal static class SelfTestRunner
                 Console.WriteLine($"[PASS] RTCP往復時間を取得: rtt={withRoundTrip.RttMs:0.0} ms");
             }
 
-            Console.WriteLine("[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラック、ホストの3.2.7ロビー設定配信と変更反映を検証しました。");
+            Console.WriteLine("[PASS] Socket.IO、双方向WebRTCデータチャネル、双方向Opus音声、ホストの3.2.7ロビー設定配信と変更反映を検証しました。");
             cancellation.Cancel();
             await IgnoreCancellationAsync(firstRun);
             await IgnoreCancellationAsync(secondRun);
