@@ -882,12 +882,32 @@ public partial class SettingsWindow : Window
                 window.CheckUpdateButton.Height != 40 || window.StartUpdateButton.Height != 40 ||
                 window.ManualUpdateDownloadButton.Visibility != Visibility.Collapsed)
                 throw new InvalidOperationException("Update settings did not initialize");
+            var updateCandidate = new UpdateCandidate("3.2.8-test",
+                new Uri("https://example.invalid/update.zip"), new string('0', 64), 100,
+                new Uri("https://example.invalid/release"));
+            window.ShowUpdateCheckResult(updateCandidate, installationAvailable: true);
+            if (window.UpdateVersionText.Text != "最新バージョンv3.2.8-test" ||
+                window.UpdateVersionText.Visibility != Visibility.Visible ||
+                window.UpdateStatusText.Visibility != Visibility.Collapsed ||
+                !window.StartUpdateButton.IsEnabled)
+                throw new InvalidOperationException("Available update state did not render");
+            window.ShowUpdateDownloadProgress(null);
+            if (!window.UpdateProgress.IsIndeterminate ||
+                window.UpdateProgress.Visibility != Visibility.Visible ||
+                window.UpdateStatusText.Text != "ダウンロード中…")
+                throw new InvalidOperationException("Unknown update progress did not render");
+            window.ShowUpdateDownloadProgress(42);
+            if (window.UpdateProgress.IsIndeterminate || window.UpdateProgress.Value != 42 ||
+                window.UpdateStatusText.Text != "ダウンロード中…")
+                throw new InvalidOperationException("Known update progress did not render");
             window.ShowUpdateError("Test update failure");
             if (window.ManualUpdateDownloadButton.Visibility != Visibility.Visible ||
-                window.UpdateStatusText.Text != "Test update failure")
+                window.UpdateStatusText.Text != "Test update failure" ||
+                window.UpdateProgress.Visibility != Visibility.Collapsed)
                 throw new InvalidOperationException("Update failure did not offer the manual download fallback");
             window.InitializeUpdatePanel();
-            if (window.ManualUpdateDownloadButton.Visibility != Visibility.Collapsed)
+            if (window.ManualUpdateDownloadButton.Visibility != Visibility.Collapsed ||
+                window.StartUpdateButton.IsEnabled || window.UpdateProgress.IsIndeterminate)
                 throw new InvalidOperationException("Manual download fallback survived update reset");
             window.CategoryList.SelectedIndex = 8;
             window.ObsOverlayCheck.IsChecked = true;

@@ -15,12 +15,16 @@ public partial class SettingsWindow
 
     private void InitializeUpdatePanel()
     {
+        updateCandidate = null;
         UpdateVersionText.Text = string.Empty;
         UpdateVersionText.Visibility = Visibility.Collapsed;
         UpdateStatusText.Text = "アップデートを確認してください。";
         UpdateStatusText.Visibility = Visibility.Visible;
+        UpdateProgress.IsIndeterminate = false;
+        UpdateProgress.Value = 0;
         UpdateProgress.Visibility = Visibility.Collapsed;
         ManualUpdateDownloadButton.Visibility = Visibility.Collapsed;
+        StartUpdateButton.IsEnabled = false;
     }
 
     private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
@@ -40,24 +44,7 @@ public partial class SettingsWindow
             updateCandidate = await UpdateCatalog.CheckAsync(updateClient, UpdateCatalog.CurrentVersion,
                 cancellationToken: updateCancellation.Token);
             if (updateCancellation.IsCancellationRequested) return;
-            if (updateCandidate is null)
-            {
-                UpdateStatusText.Text = "最新バージョンです";
-            }
-            else if (!UpdateInstallationAvailable())
-            {
-                UpdateVersionText.Text = $"最新バージョンv{updateCandidate.Version}";
-                UpdateVersionText.Visibility = Visibility.Visible;
-                UpdateStatusText.Text = $"新しいバージョン {updateCandidate.Version} があります。" +
-                    "この起動場所には更新補助ツールがないため、配布版から起動してください。";
-            }
-            else
-            {
-                UpdateVersionText.Text = $"最新バージョンv{updateCandidate.Version}";
-                UpdateVersionText.Visibility = Visibility.Visible;
-                UpdateStatusText.Visibility = Visibility.Collapsed;
-                StartUpdateButton.IsEnabled = true;
-            }
+            ShowUpdateCheckResult(updateCandidate, UpdateInstallationAvailable());
         }
         catch (OperationCanceledException) when (updateCancellation.IsCancellationRequested) { }
         catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
@@ -80,22 +67,21 @@ public partial class SettingsWindow
         updateBusy = true;
         CheckUpdateButton.IsEnabled = false;
         StartUpdateButton.IsEnabled = false;
-        UpdateProgress.Value = 0;
-        UpdateProgress.Visibility = Visibility.Visible;
-        UpdateStatusText.Visibility = Visibility.Visible;
         ManualUpdateDownloadButton.Visibility = Visibility.Collapsed;
-        UpdateStatusText.Text = "ダウンロード中…";
+        ShowUpdateDownloadProgress(null);
+        var acceptProgress = true;
         try
         {
             var progress = new Progress<double>(percent =>
             {
-                UpdateProgress.Value = percent;
-                UpdateStatusText.Text = $"ダウンロード中… {percent:0}%";
+                if (acceptProgress) ShowUpdateDownloadProgress(percent);
             });
             staged = await UpdatePackage.StageAsync(updateClient, updateCandidate, progress,
                 updateCancellation.Token);
+            acceptProgress = false;
             if (updateCancellation.IsCancellationRequested) return;
-            UpdateStatusText.Text = "アップデートの準備ができました。アプリを終了して更新します。";
+            UpdateProgress.Visibility = Visibility.Collapsed;
+            UpdateStatusText.Text = "アップデートの準備ができました。";
             if (UpdateInstallRequested is null)
                 throw new InvalidOperationException("更新処理を開始できません。");
             UpdateInstallRequested.Invoke(staged);
@@ -107,11 +93,11 @@ public partial class SettingsWindow
             System.Security.Cryptography.CryptographicException)
         {
             ShowUpdateError($"アップデートを取得できませんでした。{error.Message}");
-            UpdateProgress.Visibility = Visibility.Collapsed;
             if (!updateCancellation.IsCancellationRequested) StartUpdateButton.IsEnabled = true;
         }
         finally
         {
+            acceptProgress = false;
             // StageAsync owns cleanup until it returns; after that this window owns
             // the stage unless the updater has accepted it.
             if (staged is not null && !handedOff)
@@ -127,9 +113,41 @@ public partial class SettingsWindow
 
     private void ShowUpdateError(string message)
     {
+        UpdateProgress.IsIndeterminate = false;
+        UpdateProgress.Visibility = Visibility.Collapsed;
         UpdateStatusText.Visibility = Visibility.Visible;
         UpdateStatusText.Text = message;
         ManualUpdateDownloadButton.Visibility = Visibility.Visible;
+    }
+
+    private void ShowUpdateCheckResult(UpdateCandidate? candidate, bool installationAvailable)
+    {
+        if (candidate is null)
+        {
+            UpdateStatusText.Text = "最新バージョンです";
+            return;
+        }
+
+        UpdateVersionText.Text = $"最新バージョンv{candidate.Version}";
+        UpdateVersionText.Visibility = Visibility.Visible;
+        if (!installationAvailable)
+        {
+            UpdateStatusText.Text = $"新しいバージョン {candidate.Version} があります。" +
+                "この起動場所には更新補助ツールがないため、配布版から起動してください。";
+            return;
+        }
+
+        UpdateStatusText.Visibility = Visibility.Collapsed;
+        StartUpdateButton.IsEnabled = true;
+    }
+
+    private void ShowUpdateDownloadProgress(double? percent)
+    {
+        UpdateStatusText.Text = "ダウンロード中…";
+        UpdateStatusText.Visibility = Visibility.Visible;
+        UpdateProgress.IsIndeterminate = percent is null or <= 0;
+        if (percent is > 0) UpdateProgress.Value = Math.Clamp(percent.Value, 0, 100);
+        UpdateProgress.Visibility = Visibility.Visible;
     }
 
     private void ManualUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
