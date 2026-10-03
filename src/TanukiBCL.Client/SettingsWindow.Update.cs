@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
@@ -17,6 +18,7 @@ public partial class SettingsWindow
         UpdateVersionText.Text = $"現在のバージョン v{UpdateCatalog.CurrentVersion}";
         UpdateStatusText.Text = "アップデートを確認してください。";
         UpdateProgress.Visibility = Visibility.Collapsed;
+        ManualUpdateDownloadButton.Visibility = Visibility.Collapsed;
     }
 
     private async void CheckUpdateButton_Click(object sender, RoutedEventArgs e)
@@ -27,6 +29,7 @@ public partial class SettingsWindow
         CheckUpdateButton.IsEnabled = false;
         StartUpdateButton.IsEnabled = false;
         UpdateProgress.Visibility = Visibility.Collapsed;
+        ManualUpdateDownloadButton.Visibility = Visibility.Collapsed;
         UpdateStatusText.Text = "アップデートを確認中…";
         try
         {
@@ -52,7 +55,7 @@ public partial class SettingsWindow
         catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
             System.Text.Json.JsonException or TaskCanceledException or InvalidOperationException)
         {
-            UpdateStatusText.Text = $"アップデートを確認できませんでした。{error.Message}";
+            ShowUpdateError($"アップデートを確認できませんでした。{error.Message}");
         }
         finally
         {
@@ -71,6 +74,7 @@ public partial class SettingsWindow
         StartUpdateButton.IsEnabled = false;
         UpdateProgress.Value = 0;
         UpdateProgress.Visibility = Visibility.Visible;
+        ManualUpdateDownloadButton.Visibility = Visibility.Collapsed;
         UpdateStatusText.Text = "ダウンロード中…";
         try
         {
@@ -93,7 +97,7 @@ public partial class SettingsWindow
             System.Text.Json.JsonException or InvalidOperationException or UnauthorizedAccessException or
             System.Security.Cryptography.CryptographicException)
         {
-            UpdateStatusText.Text = $"アップデートを取得できませんでした。{error.Message}";
+            ShowUpdateError($"アップデートを取得できませんでした。{error.Message}");
             UpdateProgress.Visibility = Visibility.Collapsed;
             if (!updateCancellation.IsCancellationRequested) StartUpdateButton.IsEnabled = true;
         }
@@ -110,6 +114,20 @@ public partial class SettingsWindow
             updateBusy = false;
             if (!updateCancellation.IsCancellationRequested) CheckUpdateButton.IsEnabled = true;
         }
+    }
+
+    private void ShowUpdateError(string message)
+    {
+        UpdateStatusText.Text = message;
+        ManualUpdateDownloadButton.Visibility = Visibility.Visible;
+    }
+
+    private void ManualUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
+    {
+        Process.Start(new ProcessStartInfo("https://github.com/kuretoshi/BetterCrewLink_Net/releases/latest")
+        {
+            UseShellExecute = true
+        })?.Dispose();
     }
 
     private static bool UpdateInstallationAvailable() =>

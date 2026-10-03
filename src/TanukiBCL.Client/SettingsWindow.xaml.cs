@@ -823,8 +823,16 @@ public partial class SettingsWindow : Window
                 throw new InvalidOperationException("Shared Jackal radio setting did not follow MOD switch");
             window.CategoryList.SelectedIndex = 7;
             if (window.UpdatePanel.Visibility != Visibility.Visible || window.StartUpdateButton.IsEnabled ||
-                !window.UpdateVersionText.Text.Contains(UpdateCatalog.CurrentVersion))
+                !window.UpdateVersionText.Text.Contains(UpdateCatalog.CurrentVersion) ||
+                window.ManualUpdateDownloadButton.Visibility != Visibility.Collapsed)
                 throw new InvalidOperationException("Update settings did not initialize");
+            window.ShowUpdateError("Test update failure");
+            if (window.ManualUpdateDownloadButton.Visibility != Visibility.Visible ||
+                window.UpdateStatusText.Text != "Test update failure")
+                throw new InvalidOperationException("Update failure did not offer the manual download fallback");
+            window.InitializeUpdatePanel();
+            if (window.ManualUpdateDownloadButton.Visibility != Visibility.Collapsed)
+                throw new InvalidOperationException("Manual download fallback survived update reset");
             window.CategoryList.SelectedIndex = 8;
             window.ObsOverlayCheck.IsChecked = true;
             if (window.StreamingPanel.Visibility != Visibility.Visible ||
