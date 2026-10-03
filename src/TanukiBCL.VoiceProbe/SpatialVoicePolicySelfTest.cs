@@ -656,6 +656,37 @@ internal static class SpatialVoicePolicySelfTest
         CheckGain("quality: RTT survives report merge", roundTrip.RttMs ?? -1d,
             WebRtcPeerManager.FromReceptionReport(
                 new ReceptionReportSample(1, 0, 0, 0, 0, 0, 0), 1.5d, rttMs: roundTrip.RttMs).RttMs ?? -1d);
+        const string iceTransactionId = "ice-rtt-0001";
+        var icePair = new ChecklistEntry(hostCandidate, hostCandidate, true)
+        {
+            RequestTransactionID = iceTransactionId
+        };
+        var otherIcePair = new ChecklistEntry(hostCandidate, hostCandidate, true)
+        {
+            RequestTransactionID = iceTransactionId
+        };
+        var iceRequest = new STUNMessage(STUNMessageTypesEnum.BindingRequest);
+        iceRequest.Header.TransactionId = System.Text.Encoding.ASCII.GetBytes(iceTransactionId);
+        var iceResponse = new STUNMessage(STUNMessageTypesEnum.BindingSuccessResponse);
+        iceResponse.Header.TransactionId = System.Text.Encoding.ASCII.GetBytes(iceTransactionId);
+        var iceRoundTrip = new IceRoundTripEstimator();
+        iceRoundTrip.ObserveSent(iceRequest, icePair, sentAt);
+        Check("quality: ICE response must match nominated transaction", true,
+            iceRoundTrip.GetRttMs(icePair) is null &&
+            iceRoundTrip.GetRttMs(otherIcePair) is null);
+        icePair.RequestTransactionID = "next-check-id";
+        iceRoundTrip.ObserveReceived(iceResponse, icePair, sentAt + System.Diagnostics.Stopwatch.Frequency / 100);
+        Check("quality: nominated ICE binding round trip", true,
+            iceRoundTrip.GetRttMs(icePair) is >= 9d and <= 11d &&
+            iceRoundTrip.GetRttMs(otherIcePair) is null);
+        icePair.RequestTransactionID = iceTransactionId;
+        var relayedIceRequest = new STUNMessage(STUNMessageTypesEnum.SendIndication);
+        relayedIceRequest.Attributes.Add(new STUNAttribute(STUNAttributeTypesEnum.Data,
+            iceRequest.ToByteBuffer(null, false)));
+        iceRoundTrip.ObserveSent(relayedIceRequest, icePair, sentAt);
+        iceRoundTrip.ObserveReceived(iceResponse, icePair, sentAt + System.Diagnostics.Stopwatch.Frequency / 50);
+        Check("quality: TURN SendIndication carries the same ICE binding request", true,
+            iceRoundTrip.GetRttMs(icePair) is >= 19d and <= 21d);
 
         Check("mod: Nebula plugin", true,
             AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], ["NebulaLoader.dll"])

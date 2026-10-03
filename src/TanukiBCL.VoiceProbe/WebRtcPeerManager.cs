@@ -384,6 +384,11 @@ internal sealed class WebRtcPeerManager : IDisposable
         peers[remoteSocketId] = peer;
         _ = WatchHandshakeAsync(peer);
         connection.addTrack(new MediaStreamTrack([OpusFormat], MediaStreamStatusEnum.SendRecv));
+        var iceChannel = connection.GetRtpChannel();
+        iceChannel.OnStunMessageSent += (message, _, _) =>
+            peer.IceRoundTripEstimator.ObserveSent(message, iceChannel.NominatedEntry, Stopwatch.GetTimestamp());
+        iceChannel.OnStunMessageReceived += (message, _, _) =>
+            peer.IceRoundTripEstimator.ObserveReceived(message, iceChannel.NominatedEntry, Stopwatch.GetTimestamp());
         connection.GetRtpChannel().OnRTPDataReceived += (_, _, packet) =>
         {
             // RFC 5764 DTLS demultiplexing range. Count only, never retain packets.
@@ -538,7 +543,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             if (sample is not null)
                 PeerQualityChanged?.Invoke(remoteSocketId, FromReceptionReport(
                     sample, peer.JitterEstimator.JitterMs, IsDirectHostPair(connection.GetRtpChannel().NominatedEntry),
-                    peer.RoundTripEstimator.RttMs));
+                    peer.IceRoundTripEstimator.GetRttMs(iceChannel.NominatedEntry)));
         };
         connection.OnReceiveReport += (_, mediaType, report) =>
         {
@@ -1168,6 +1173,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int AudioSendFailureLogged;
         public RtpAudioJitterEstimator JitterEstimator { get; } = new();
         public RtcpRoundTripEstimator RoundTripEstimator { get; } = new();
+        public IceRoundTripEstimator IceRoundTripEstimator { get; } = new();
     }
 }
 

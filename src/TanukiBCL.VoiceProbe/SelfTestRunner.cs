@@ -137,11 +137,11 @@ internal static class SelfTestRunner
                 if (!double.IsFinite(quality.JitterMs!.Value) || quality.JitterMs < 0d || quality.JitterMs > 1_000d ||
                     !double.IsFinite(quality.LossPercent!.Value) || quality.LossPercent < 0d || quality.LossPercent > 100d)
                     throw new InvalidOperationException("The reported RTP quality is outside plausible bounds.");
-                if (!quality.Direct)
-                    throw new InvalidOperationException("The local peer connection did not report a direct host ICE pair.");
+                if (quality.Direct == baseOptions.NatFix)
+                    throw new InvalidOperationException("The local peer connection reported the wrong ICE path type.");
                 Console.WriteLine($"[PASS] RTP/RTCP受信品質を取得: jitter={quality.JitterMs:0.0} ms loss={quality.LossPercent:0.0}% direct={quality.Direct}");
                 var withRoundTrip = await roundTripVerified.Task.WaitAsync(timeout, cancellation.Token);
-                Console.WriteLine($"[PASS] RTCP往復時間を取得: rtt={withRoundTrip.RttMs:0.0} ms");
+                Console.WriteLine($"[PASS] 選択中のICE経路の往復時間を取得: rtt={withRoundTrip.RttMs:0.0} ms");
             }
 
             Console.WriteLine("[PASS] Socket.IO、双方向WebRTCデータチャネル、双方向Opus音声、ホストの3.2.7ロビー設定配信と変更反映を検証しました。");
