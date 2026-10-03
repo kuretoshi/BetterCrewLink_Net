@@ -80,13 +80,13 @@ internal static class AvatarImageFactory
         return Rgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
     }
 
-    public static BitmapSource? GetNos(Player player)
+    public static BitmapSource? GetNos(Player player, bool? displayDead = null)
     {
         if (GetNosColor(player) is not { } color) return null;
-        var key = (player.IsDead, Pack(color));
+        var key = (displayDead ?? player.IsDead, Pack(color));
         if (NosCache.TryGetValue(key, out var existing)) return existing;
         if (NosCache.Count >= 128) NosCache.Clear();
-        return NosCache.GetOrAdd(key, _ => Recolor(player.IsDead ? GhostTemplate.Value : PlayerTemplate.Value,
+        return NosCache.GetOrAdd(key, _ => Recolor((displayDead ?? player.IsDead) ? GhostTemplate.Value : PlayerTemplate.Value,
             color, color, nos: true));
     }
 
@@ -190,6 +190,9 @@ internal static class AvatarImageFactory
             throw new InvalidOperationException("NoS avatar cache failed");
         player.IsDead = true;
         if (ReferenceEquals(alive, GetNos(player))) throw new InvalidOperationException("NoS ghost reused alive mask");
+        if (!ReferenceEquals(alive, GetNos(player, displayDead: false)) ||
+            !ReferenceEquals(GetNos(player), GetNos(player, displayDead: true)))
+            throw new InvalidOperationException("NoS display-only death override did not select the matching avatar mask");
         player.NosLobbyColor = "bad";
         if (GetNos(player) is not null) throw new InvalidOperationException("Invalid NoS color accepted");
         PlayerColorPair[] palette = [new() { Main = 0xffcc6414 },

@@ -12,6 +12,7 @@ public partial class PlayerAvatar : UserControl
     private System.Windows.Media.Imaging.BitmapSource? currentImage;
     private string? currentName;
     private bool hideAvatar;
+    private bool renderedDead;
     private bool clipCosmetics;
     private Brush idleBorder = Brushes.Transparent;
     // Material icon paths used by the upstream Avatar.tsx status badges.
@@ -69,6 +70,8 @@ public partial class PlayerAvatar : UserControl
 
     internal bool IsRadioBadgeVisible => RadioBadge.Visibility == Visibility.Visible;
 
+    internal bool IsGhostVisual => renderedDead;
+
     internal bool HasBuggedBadge => StateBadge.Visibility == Visibility.Visible &&
         ReferenceEquals(StateIcon.Data, ErrorOutline);
 
@@ -76,16 +79,18 @@ public partial class PlayerAvatar : UserControl
         brush.Color == Color.FromRgb(0x66, 0xbb, 0x6a);
 
     public void SetPlayer(Player player, IReadOnlyList<PlayerColorPair>? colors,
-        bool hideWhenAppearanceChanged = false, AmongUsModType mod = AmongUsModType.None, string gameExecutable = "")
+        bool hideWhenAppearanceChanged = false, AmongUsModType mod = AmongUsModType.None,
+        string gameExecutable = "", bool? displayDead = null)
     {
+        renderedDead = displayDead ?? player.IsDead;
         hideAvatar = hideWhenAppearanceChanged && player.HasVisibleAppearanceChanged();
         AvatarBody.Visibility = hideAvatar ? Visibility.Hidden : Visibility.Visible;
         CosmeticBack.Visibility = CosmeticSkin.Visibility = CosmeticFront.Visibility =
-            hideAvatar || player.IsDead ? Visibility.Hidden : Visibility.Visible;
+            hideAvatar || renderedDead ? Visibility.Hidden : Visibility.Visible;
         SpeechRing.Visibility = hideAvatar ? Visibility.Hidden : Visibility.Visible;
         var colorId = AvatarImageFactory.GetDisplayColorId(player, colors, mod);
-        var image = (mod == AmongUsModType.NebulaOnTheShip ? AvatarImageFactory.GetNos(player) : null)
-            ?? AvatarImageFactory.Get(colorId, player.IsDead, colors);
+        var image = (mod == AmongUsModType.NebulaOnTheShip ? AvatarImageFactory.GetNos(player, renderedDead) : null)
+            ?? AvatarImageFactory.Get(colorId, renderedDead, colors);
         if (!ReferenceEquals(image, currentImage))
         {
             AvatarBody.Source = image;

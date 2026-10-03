@@ -4,8 +4,9 @@ using NAudio.Wave;
 namespace TanukiBCL.VoiceProbe;
 
 // Observes the selected Windows render endpoint without retaining its audio.
-// Run this before a targeted interop tone to verify that decoded audio reaches
-// the speaker endpoint, not merely the WebRTC receive callback.
+// Detects a tone at one render endpoint. This alone cannot attribute the tone
+// to WebRTC: a local monitor path can feed it even with both voice apps closed.
+// An app-off control and an isolated endpoint are required for interop claims.
 internal static class SpeakerLoopbackTestRunner
 {
     public static int RunSelfTest()
