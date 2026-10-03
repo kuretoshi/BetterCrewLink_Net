@@ -105,6 +105,8 @@ public partial class SettingsWindow
             window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style ||
             window.OpenDebugButton.Style != window.Resources["DebugOutlinedButtonStyle"] ||
             window.OpenDebugButton.Width != 145 || window.OpenDebugButton.Height != 60 ||
+            window.OpenDebugButton.ContentTemplate?.LoadContent() is not TextBlock
+                { MaxWidth: 90, TextWrapping: System.Windows.TextWrapping.Wrap } ||
             window.DebugInfoDescription.Text != "ゲーム状態・音声接続・ログを別ウィンドウで表示します。" ||
             window.OldSampleDebugDescription.Text != "依頼された場合のみ有効にするテスト機能です。")
             throw new InvalidOperationException("Advanced settings section card layout was not applied");

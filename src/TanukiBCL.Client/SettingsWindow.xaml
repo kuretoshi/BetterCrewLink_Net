@@ -110,7 +110,7 @@
                 <Setter.Value>
                     <DataTemplate>
                         <TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center"
-                                   MaxWidth="112" />
+                                   MaxWidth="90" />
                     </DataTemplate>
                 </Setter.Value>
             </Setter>
@@ -973,7 +973,7 @@
                         <TextBlock Text="詳細設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <Grid Margin="16,12">
+                                <Grid Margin="16,10">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="280" /></Grid.ColumnDefinitions>
                                     <TextBlock Text="ボイスサーバー" FontWeight="SemiBold" VerticalAlignment="Center" />
                                     <ComboBox x:Name="ServerUrlBox" Grid.Column="1" IsEditable="False"
@@ -981,7 +981,7 @@
                                               SelectionChanged="ServerUrlBox_SelectionChanged" />
                                 </Grid>
                                 <Border Height="1" Background="#403A45" />
-                                <Grid Margin="16,12">
+                                <Grid Margin="16,14">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                     <StackPanel Margin="0,0,16,0">
                                         <TextBlock x:Name="NatFixLabel" Text="NATの修正" FontWeight="SemiBold" />
@@ -992,7 +992,7 @@
                                               VerticalAlignment="Center" />
                                 </Grid>
                                 <Border Height="1" Background="#403A45" />
-                                <Grid Margin="16,12">
+                                <Grid Margin="16,14">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                     <StackPanel Margin="0,0,16,0">
                                         <TextBlock Text="ボイスサーバー" FontWeight="SemiBold" />
@@ -1005,9 +1005,9 @@
                                 </Grid>
                             </StackPanel>
                         </Border>
-                        <TextBlock Text="デバッグ" FontSize="12" Foreground="#B7AABD" Margin="4,24,0,14" />
+                        <TextBlock Text="デバッグ" FontSize="12" Foreground="#B7AABD" Margin="4,31,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
-                            <Grid Margin="16,12">
+                            <Grid Margin="16,11">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                 <StackPanel Margin="0,0,16,0">
                                     <TextBlock Text="デバッグ情報" FontWeight="SemiBold" />
@@ -1019,7 +1019,7 @@
                                         VerticalAlignment="Center" Click="OpenDebugButton_Click" />
                             </Grid>
                         </Border>
-                        <TextBlock Text="ベータ/デバッグ" FontSize="12" Foreground="#B7AABD" Margin="4,24,0,14" />
+                        <TextBlock Text="ベータ/デバッグ" FontSize="12" Foreground="#B7AABD" Margin="4,31,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
                                 <CheckBox x:Name="MobileHostCheck" Content="モバイル ホスト" Margin="16,12"
