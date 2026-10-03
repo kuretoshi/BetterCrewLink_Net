@@ -102,6 +102,37 @@
             <Setter Property="Foreground" Value="#1D1B22" />
             <Setter Property="BorderBrush" Value="#BA68C8" />
         </Style>
+        <Style x:Key="ResetDangerButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Background" Value="#F44336" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface" Background="{TemplateBinding Background}"
+                                CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#D32F2F" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#C62828" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#49464C" />
+                                <Setter Property="Foreground" Value="#918C95" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="ComboBox">
             <Setter Property="Height" Value="32" />
         </Style>
@@ -257,6 +288,8 @@
         <Style x:Key="CategoryItemStyle" TargetType="ListBoxItem">
             <Setter Property="Foreground" Value="#F5F1F7" />
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -333,7 +366,7 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <StackPanel x:Name="GeneralPanel">
-                        <TextBlock Text="一般" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,8" />
+                        <TextBlock Text="一般" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,15" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                 CornerRadius="8" Padding="16,10">
                             <Grid>
@@ -341,11 +374,18 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="280" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="LanguageLabel" Text="言語" FontWeight="SemiBold" />
-                                <ComboBox x:Name="LanguageCombo" Grid.Column="1" DisplayMemberPath="Name" />
+                                <TextBlock x:Name="LanguageLabel" Text="言語" FontSize="14" FontWeight="SemiBold" />
+                                <ComboBox x:Name="LanguageCombo" Grid.Column="1"
+                                          FontSize="14" Style="{StaticResource DarkAudioComboStyle}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
                             </Grid>
                         </Border>
-                        <TextBlock Text="トラブルシューティング" FontSize="12" Foreground="#B7AABD" Margin="4,28,0,8" />
+                        <TextBlock Text="トラブルシューティング" FontSize="12" Foreground="#B7AABD" Margin="4,28,0,15" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                 CornerRadius="8" Padding="16,10">
                             <Grid>
@@ -354,13 +394,14 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="デフォルトに戻す" FontWeight="SemiBold" />
+                                    <TextBlock Text="デフォルトに戻す" FontSize="14" FontWeight="SemiBold" />
                                     <TextBlock Text="すべての設定がリセットされます。" TextWrapping="Wrap"
                                                Foreground="#B7AABD" FontSize="12" Margin="0,3,0,0" />
                                 </StackPanel>
                                 <Button x:Name="ResetDefaultsButton" Grid.Column="1" Content="デフォルトに戻す"
                                         Click="ResetDefaultsButton_Click" HorizontalAlignment="Right"
-                                        VerticalAlignment="Center" Padding="12,6" Margin="12,0,0,0" />
+                                        VerticalAlignment="Center" Style="{StaticResource ResetDangerButtonStyle}"
+                                        Margin="12,0,0,0" />
                             </Grid>
                         </Border>
                         <TextBlock x:Name="ResetDisabledReason" Text="ゲーム内ではホストとして利用できません！"
