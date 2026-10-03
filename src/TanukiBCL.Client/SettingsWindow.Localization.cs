@@ -103,7 +103,10 @@ public partial class SettingsWindow
             throw new InvalidOperationException("Shortcut recording prompt did not close");
         if (window.AdvancedPanel.Children.OfType<Border>().Count() != 3 ||
             window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style ||
-            window.OpenDebugButton is null)
+            window.OpenDebugButton.Style != window.Resources["DebugOutlinedButtonStyle"] ||
+            window.OpenDebugButton.Width != 145 || window.OpenDebugButton.Height != 60 ||
+            window.DebugInfoDescription.Text != "ゲーム状態・音声接続・ログを別ウィンドウで表示します。" ||
+            window.OldSampleDebugDescription.Text != "依頼された場合のみ有効にするテスト機能です。")
             throw new InvalidOperationException("Advanced settings section card layout was not applied");
         window.OpenDebugButton_Click(window.OpenDebugButton, new System.Windows.RoutedEventArgs());
         if (window.DebugAuthBackdrop.Visibility != System.Windows.Visibility.Visible ||
@@ -142,6 +145,7 @@ public partial class SettingsWindow
                 { Content: "Keyboard Shortcuts" } ||
             !Equals(window.VoiceModeRadio.Content, UiLocalization.Translate("en", "settings.audio.voice_activity")) ||
             window.NatFixLabel.Text != UiLocalization.Translate("en", "settings.advanced.nat_fix") ||
+            window.NatFixDescription.Text != UiLocalization.Translate("en", "settings.advanced.nat_fix_warning") ||
             !Equals(window.HauntingCheck.Content, UiLocalization.Translate("en", "settings.lobbysettings.impostorshearsghost")) ||
             !Equals(window.ImpostorVentCheck.Content, UiLocalization.Translate("en", "settings.lobbysettings.private_talk_invents")) ||
             !Equals(window.PublicLobbyOnCheck.Content, UiLocalization.Translate("en", "settings.lobbysettings.public_lobby.enabled")) ||

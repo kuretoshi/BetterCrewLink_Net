@@ -102,6 +102,19 @@
             <Setter Property="Foreground" Value="#1D1B22" />
             <Setter Property="BorderBrush" Value="#BA68C8" />
         </Style>
+        <Style x:Key="DebugOutlinedButtonStyle" TargetType="Button"
+               BasedOn="{StaticResource UpdateActionButtonStyle}">
+            <Setter Property="Width" Value="145" />
+            <Setter Property="Height" Value="60" />
+            <Setter Property="ContentTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" TextAlignment="Center"
+                                   MaxWidth="112" />
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ResetDangerButtonStyle" TargetType="Button">
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="12,0" />
@@ -972,7 +985,7 @@
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                     <StackPanel Margin="0,0,16,0">
                                         <TextBlock x:Name="NatFixLabel" Text="NATの修正" FontWeight="SemiBold" />
-                                        <TextBlock Text="P2Pの代わりにTURNサーバーを経由します。接続の問題を解決できますが、遅延が増える場合があります。"
+                                        <TextBlock x:Name="NatFixDescription" Text="これによりNATの問題は解決されますが、Peer to Peer（P2P）ではなくサーバーを使用するため、遅延が発生します。"
                                                    TextWrapping="Wrap" Foreground="#A8A4B0" FontSize="12" Margin="0,4,0,0" />
                                     </StackPanel>
                                     <CheckBox x:Name="NatFixCheck" Grid.Column="1" Style="{StaticResource OverlaySwitchStyle}"
@@ -998,11 +1011,12 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                 <StackPanel Margin="0,0,16,0">
                                     <TextBlock Text="デバッグ情報" FontWeight="SemiBold" />
-                                    <TextBlock Text="ゲーム状態や音声接続を診断表示で確認します。"
+                                    <TextBlock x:Name="DebugInfoDescription" Text="ゲーム状態・音声接続・ログを別ウィンドウで表示します。"
                                                Foreground="#B7AABD" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
                                 </StackPanel>
                                 <Button x:Name="OpenDebugButton" Grid.Column="1" Content="デバッグ情報を開く"
-                                        VerticalAlignment="Center" Padding="10,6" Click="OpenDebugButton_Click" />
+                                        Style="{StaticResource DebugOutlinedButtonStyle}"
+                                        VerticalAlignment="Center" Click="OpenDebugButton_Click" />
                             </Grid>
                         </Border>
                         <TextBlock Text="ベータ/デバッグ" FontSize="12" Foreground="#B7AABD" Margin="4,24,0,14" />
@@ -1032,8 +1046,6 @@
                                 <StackPanel Margin="16,12">
                                     <CheckBox x:Name="SpatialAudioCheck" Content="立体音響"
                                               Style="{StaticResource OverlaySwitchStyle}" />
-                                    <TextBlock Text="OFFでも声が届く距離や壁の遮断は有効です。距離内の音量と左右配置を固定します。"
-                                               TextWrapping="Wrap" Foreground="#A8A4B0" FontSize="12" Margin="20,4,0,0" />
                                 </StackPanel>
                                 <Border Height="1" Background="#403A45" />
                                 <CheckBox x:Name="NoiseSuppressionCheck" Content="ノイズ防止" Margin="16,12"
@@ -1042,7 +1054,7 @@
                                 <StackPanel Margin="16,12">
                                     <CheckBox x:Name="OldSampleDebugCheck" Content="サンプルレートデバッグ"
                                               Style="{StaticResource OverlaySwitchStyle}" />
-                                    <TextBlock Text="依頼された場合のみ有効にするテスト機能です。ONではマイク入力を48 kHzで要求します。"
+                                    <TextBlock x:Name="OldSampleDebugDescription" Text="依頼された場合のみ有効にするテスト機能です。"
                                                TextWrapping="Wrap" Foreground="#A8A4B0" FontSize="12" Margin="20,4,0,0" />
                                 </StackPanel>
                             </StackPanel>
