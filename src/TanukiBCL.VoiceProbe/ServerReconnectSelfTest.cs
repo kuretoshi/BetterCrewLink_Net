@@ -26,10 +26,29 @@ internal static class ServerReconnectSelfTest
         };
         var peerKnown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var peerCleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        probe.PeerMixChanged += (id, _) => { if (id == 20) peerKnown.TrySetResult(); };
+        var replacementKnown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var replacementCleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var retainedPeerKnown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var retainedPeerCleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var peer20Registrations = 0;
+        var peer20Closures = 0;
+        probe.PeerMixChanged += (id, _) =>
+        {
+            if (id == 20)
+            {
+                if (Interlocked.Increment(ref peer20Registrations) == 1) peerKnown.TrySetResult();
+                else replacementKnown.TrySetResult();
+            }
+            if (id == 22) retainedPeerKnown.TrySetResult();
+        };
         probe.PeerConnectionStatusChanged += (id, status) =>
         {
-            if (id == 20 && status == "closed") peerCleared.TrySetResult();
+            if (id == 20 && status == "closed")
+            {
+                if (Interlocked.Increment(ref peer20Closures) == 1) peerCleared.TrySetResult();
+                else replacementCleared.TrySetResult();
+            }
+            if (id == 22 && status == "closed") retainedPeerCleared.TrySetResult();
         };
         probe.ApplyGameState(state);
         var run = probe.RunAsync(timeout.Token);
@@ -45,9 +64,24 @@ internal static class ServerReconnectSelfTest
             await server.SendEventAsync(1, "setClient", "old-peer", new { clientId = 20 });
             await peerKnown.Task.WaitAsync(timeout.Token);
             if (!probe.IsPeerPresent(20)) throw new InvalidOperationException("test peer was not registered");
+            await server.SendEventAsync(1, "setClient", "replacement-peer", new { clientId = 20 });
+            await Task.WhenAll(peerCleared.Task, replacementKnown.Task).WaitAsync(timeout.Token);
+            if (probe.IsPeerSocketPresent("old-peer") || !probe.IsPeerSocketPresent("replacement-peer"))
+                throw new InvalidOperationException("a refreshed client kept its stale socket peer");
+            Console.WriteLine("[PASS] a refreshed player retires its previous socket and clears the old status");
+            await server.SendEventAsync(1, "setClient", "retained-peer", new { clientId = 22 });
+            await retainedPeerKnown.Task.WaitAsync(timeout.Token);
+            await server.SendEventAsync(1, "setClients", new Dictionary<string, object>
+            {
+                ["retained-peer"] = new { clientId = 22 }
+            });
+            await replacementCleared.Task.WaitAsync(timeout.Token);
+            if (probe.IsPeerPresent(20) || !probe.IsPeerPresent(22) || retainedPeerCleared.Task.IsCompleted)
+                throw new InvalidOperationException("setClients did not prune only peers omitted by the authoritative roster");
+            Console.WriteLine("[PASS] setClients prunes a departed peer and preserves a retained peer");
             server.DropConnection(1);
-            await peerCleared.Task.WaitAsync(timeout.Token);
-            if (probe.IsPeerPresent(20)) throw new InvalidOperationException("disconnect kept stale peers");
+            await retainedPeerCleared.Task.WaitAsync(timeout.Token);
+            if (probe.IsPeerPresent(22)) throw new InvalidOperationException("disconnect kept stale peers");
 
             // No game-state event is sent here: reconnect must use the retained
             // snapshot even if neither the lobby code nor memory state changes.

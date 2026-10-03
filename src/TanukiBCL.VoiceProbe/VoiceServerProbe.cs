@@ -222,6 +222,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public bool IsPeerPresent(int clientId) =>
         peerClientIds.Any(peer => peer.Value == clientId);
 
+    internal bool IsPeerSocketPresent(string socketId) => peerClientIds.ContainsKey(socketId);
+
     public void PublishObsOverlay(string? secret, AmongUsState state,
         IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
     {
@@ -770,13 +772,29 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         socket.On("setClients", response =>
         {
             var clients = response.GetValue<JsonElement>();
-            peerClientIds.Clear();
+            if (clients.ValueKind != JsonValueKind.Object) return;
             stalledReconnectAttempts.Clear();
             failedReconnectAttempts.Clear();
+            var incomingSocketIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var client in clients.EnumerateObject())
             {
+                incomingSocketIds.Add(client.Name);
                 RegisterPeerClient(client.Name, client.Value);
                 ScheduleOfferFallback(client.Name);
+            }
+            foreach (var staleSocketId in peerClientIds.Keys.Where(id => !incomingSocketIds.Contains(id)).ToArray())
+            {
+                if (!peerClientIds.TryRemove(staleSocketId, out var staleClientId)) continue;
+                pendingOfferFallbacks.TryRemove(staleSocketId, out _);
+                peerManager.RemovePeer(staleSocketId);
+                audioSession?.RemovePeer(staleSocketId);
+                if (!peerClientIds.Values.Contains(staleClientId))
+                {
+                    impostorRadioStates.TryRemove(staleClientId, out _);
+                    nosRadioReports.TryRemove(staleClientId, out _);
+                    PeerVadChanged?.Invoke(staleClientId, false);
+                    PeerConnectionStatusChanged?.Invoke(staleClientId, "closed");
+                }
             }
             Log("EVENT", $"setClients count={peerClientIds.Count}");
         });
@@ -879,8 +897,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 peerClientIds.TryRemove(staleSocketId, out _);
                 stalledReconnectAttempts.TryRemove(staleSocketId, out _);
                 failedReconnectAttempts.TryRemove(staleSocketId, out _);
+                pendingOfferFallbacks.TryRemove(staleSocketId, out _);
                 peerManager.RemovePeer(staleSocketId);
                 audioSession?.RemovePeer(staleSocketId);
+                PeerVadChanged?.Invoke(clientId, false);
+                PeerConnectionStatusChanged?.Invoke(clientId, "closed");
             }
             peerClientIds[socketId] = clientId;
             RefreshPeerMix(socketId, clientId);
