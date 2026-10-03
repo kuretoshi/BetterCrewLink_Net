@@ -211,7 +211,8 @@ public partial class MainWindow : Window
             })
         }, jsonOptions);
         return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live, roles,
-            state is null ? "情報を待っています…" : JsonSerializer.Serialize(state, jsonOptions), voice, state);
+            state is null ? "情報を待っています…" : JsonSerializer.Serialize(state, jsonOptions), voice,
+            state, probe?.GetNosRadioReportsSnapshot());
     }
 
     private void ShowInquiry()

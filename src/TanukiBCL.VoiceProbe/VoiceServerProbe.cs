@@ -1191,6 +1191,17 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         return report.Radios;
     }
 
+    public IReadOnlyDictionary<int, NosRadioReport> GetNosRadioReportsSnapshot()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return nosRadioReports
+            .Where(entry => now - entry.Value.ReceivedAt < TimeSpan.FromSeconds(10))
+            .ToDictionary(entry => entry.Key, entry => entry.Value with
+            {
+                Radios = entry.Value.Radios.ToArray()
+            });
+    }
+
     private bool HasNosJackalRadio(AmongUsState state, Player player) =>
         NosRadioRules.HasJackalChannel(GetNosRadios(state, player));
 
@@ -1762,5 +1773,5 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private sealed record RadioStatus(long Version, bool Active, DateTimeOffset SeenAt);
 
-    private sealed record NosRadioReport(int ClientId, IReadOnlyList<NosRadioData> Radios, DateTimeOffset ReceivedAt);
+    public sealed record NosRadioReport(int ClientId, IReadOnlyList<NosRadioData> Radios, DateTimeOffset ReceivedAt);
 }

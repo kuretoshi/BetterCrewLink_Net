@@ -28,10 +28,22 @@
         <Grid x:Name="LivePanel" Grid.Row="3" Margin="16,0,16,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <TextBlock x:Name="LiveSummaryText" Margin="0,0,0,8" TextWrapping="Wrap" />
-            <DataGrid x:Name="LivePlayersGrid" Grid.Row="1" AutoGenerateColumns="False"
+            <Border x:Name="NosRadioPanel" Grid.Row="1" Visibility="Collapsed"
+                    Background="#1D1A23" CornerRadius="6" Padding="10" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="RadioData（各プレイヤーが話せるチャンネル）" FontWeight="SemiBold" />
+                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="NosRadioText" Margin="0,6,0,0" FontSize="12"
+                                   TextWrapping="Wrap" FontFamily="Consolas" />
+                    </ScrollViewer>
+                </StackPanel>
+            </Border>
+            <DataGrid x:Name="LivePlayersGrid" Grid.Row="2" AutoGenerateColumns="False"
                       CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
                       IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                       Background="#1D1A23" Foreground="#F5F1F7" BorderBrush="#44404A"
