@@ -2,7 +2,7 @@ namespace TanukiBCL.VoiceProbe;
 
 internal static class SelfTestRunner
 {
-    public static async Task<int> RunAsync(ProbeOptions baseOptions)
+    public static async Task<int> RunAsync(ProbeOptions baseOptions, bool expectPeerQuality = false)
     {
         using (var peerManager = new WebRtcPeerManager("self-test", (_, _) => Task.CompletedTask, false))
         {
@@ -47,6 +47,7 @@ internal static class SelfTestRunner
         var settingsVerified = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var updatedSettings = hostSettings with { MaxDistance = 3.6d, Haunting = true };
         var updateVerified = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var qualityVerified = new TaskCompletionSource<ConnectionQuality>(TaskCreationOptions.RunContinuationsAsynchronously);
         first.SetOwnLobbySettings(hostSettings);
         second.SetExpectedHostClientId(seed);
         second.LobbySettingsChanged += settings =>
@@ -59,6 +60,11 @@ internal static class SelfTestRunner
             {
                 updateVerified.TrySetResult();
             }
+        };
+        second.PeerQualityChanged += (clientId, quality) =>
+        {
+            if (clientId == seed && quality.JitterMs is not null && quality.LossPercent is not null)
+                qualityVerified.TrySetResult(quality);
         };
 
         try
@@ -81,6 +87,15 @@ internal static class SelfTestRunner
             if (second.CurrentLobbySettings != updatedSettings)
             {
                 throw new InvalidOperationException("The guest's current-lobby settings do not match the host update.");
+            }
+
+            if (expectPeerQuality)
+            {
+                var quality = await qualityVerified.Task.WaitAsync(timeout, cancellation.Token);
+                if (!double.IsFinite(quality.JitterMs!.Value) || quality.JitterMs < 0d || quality.JitterMs > 1_000d ||
+                    !double.IsFinite(quality.LossPercent!.Value) || quality.LossPercent < 0d || quality.LossPercent > 100d)
+                    throw new InvalidOperationException("The reported RTP quality is outside plausible bounds.");
+                Console.WriteLine($"[PASS] RTP/RTCP受信品質を取得: jitter={quality.JitterMs:0.0} ms loss={quality.LossPercent:0.0}%");
             }
 
             Console.WriteLine("[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラック、ホストの3.2.7ロビー設定配信と変更反映を検証しました。");

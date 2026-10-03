@@ -1,5 +1,6 @@
 using System.Text.Json;
 using NAudio.Wave;
+using SIPSorcery.Net;
 using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
@@ -539,6 +540,12 @@ internal static class SpatialVoicePolicySelfTest
             new ConnectionQuality(JitterMs: 35d, ServerPingMs: 25d).Bars == 2);
         Check("quality: server ping takes precedence over peer RTT", true,
             new ConnectionQuality(RttMs: 400d, ServerPingMs: 25d).Bars == 3);
+        RtpAudioJitterEstimator.Verify();
+        var inboundReport = WebRtcPeerManager.FromReceptionReport(
+            new ReceptionReportSample(1, 64, 8, 1200, 8_925_869, 0, 0), observedJitterMs: 1.5d);
+        CheckGain("quality: observed RTP jitter", 1.5d, inboundReport.JitterMs ?? -1d);
+        CheckGain("quality: RTCP interval loss percent", 25d, inboundReport.LossPercent ?? -1d);
+        Check("quality: RTCP does not fabricate RTT", true, inboundReport.RttMs is null);
 
         Check("mod: Nebula plugin", true,
             AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], ["NebulaLoader.dll"])

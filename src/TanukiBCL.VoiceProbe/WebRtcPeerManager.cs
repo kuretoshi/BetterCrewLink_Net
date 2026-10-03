@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using SIPSorcery.Media;
@@ -51,6 +52,8 @@ internal sealed class WebRtcPeerManager : IDisposable
     public event Action<string>? PeerDataChannelOpened;
 
     public event Action<string, RTCPeerConnectionState>? PeerConnectionStateChanged;
+
+    public event Action<string, ConnectionQuality>? PeerQualityChanged;
 
     public event Action<string>? TestToneSent;
 
@@ -395,9 +398,28 @@ internal sealed class WebRtcPeerManager : IDisposable
         connection.oniceconnectionstatechange += state => Log($"peer {Short(remoteSocketId)} ice={state}");
         connection.onicecandidateerror += (_, error) => Log($"peer {Short(remoteSocketId)} ice-candidate-error={error}");
         connection.ondatachannel += channel => ConfigureDataChannel(peer, channel);
+        connection.OnRtpPacketReceived += (_, mediaType, packet) =>
+        {
+            if (mediaType == SDPMediaTypesEnum.audio)
+                peer.JitterEstimator.Observe(packet.Header.SyncSource, packet.Header.Timestamp, Stopwatch.GetTimestamp());
+        };
+        connection.OnSendReport += (mediaType, report) =>
+        {
+            if (mediaType != SDPMediaTypesEnum.audio ||
+                !peers.TryGetValue(remoteSocketId, out var current) || !ReferenceEquals(current, peer)) return;
+            // Our outgoing RTCP reception report describes the audio we received
+            // from this peer. The remote's report would describe our outbound path.
+            var sample = report.ReceiverReport?.ReceptionReports?.FirstOrDefault()
+                ?? report.SenderReport?.ReceptionReports?.FirstOrDefault();
+            if (sample is not null)
+                PeerQualityChanged?.Invoke(remoteSocketId, FromReceptionReport(sample, peer.JitterEstimator.JitterMs));
+        };
         connection.OnAudioFrameReceived += frame => ReceiveAudio(peer, frame);
         return peer;
     }
+
+    internal static ConnectionQuality FromReceptionReport(ReceptionReportSample sample, double? observedJitterMs) =>
+        new(JitterMs: observedJitterMs, LossPercent: sample.FractionLost * 100d / 256d);
 
     private void ConfigureDataChannel(Peer peer, RTCDataChannel channel)
     {
@@ -706,7 +728,75 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int DataChannelWatchdogStarted;
         public int DataChannelOpen;
         public int AudioSendFailureLogged;
+        public RtpAudioJitterEstimator JitterEstimator { get; } = new();
     }
 }
 
 internal sealed record AudioTestResult(int Frames, double Rms, double FrequencyHz);
+
+// RFC 3550 interarrival jitter for the 48 kHz Opus RTP clock. SIPSorcery's
+// RTCP jitter figure has been observed to be implausible on a healthy call.
+internal sealed class RtpAudioJitterEstimator
+{
+    private const double ClockRate = 48_000d;
+    private readonly object gate = new();
+    private uint? source;
+    private uint previousTimestamp;
+    private long previousArrival;
+    private double jitterTicks;
+    private int samples;
+
+    public void Observe(uint ssrc, uint timestamp, long arrivalTicks)
+    {
+        lock (gate)
+        {
+            if (source != ssrc)
+            {
+                source = ssrc;
+                previousTimestamp = timestamp;
+                previousArrival = arrivalTicks;
+                jitterTicks = 0d;
+                samples = 0;
+                return;
+            }
+
+            var rtpDelta = unchecked(timestamp - previousTimestamp);
+            var arrivalDelta = arrivalTicks - previousArrival;
+            previousTimestamp = timestamp;
+            previousArrival = arrivalTicks;
+            if (rtpDelta == 0 || rtpDelta > 10 * ClockRate || arrivalDelta < 0)
+            {
+                jitterTicks = 0d;
+                samples = 0;
+                return;
+            }
+
+            var arrivalRtpTicks = arrivalDelta * ClockRate / Stopwatch.Frequency;
+            jitterTicks += (Math.Abs(arrivalRtpTicks - rtpDelta) - jitterTicks) / 16d;
+            samples++;
+        }
+    }
+
+    public double? JitterMs
+    {
+        get
+        {
+            lock (gate) return samples == 0 ? null : jitterTicks * 1000d / ClockRate;
+        }
+    }
+
+    internal static void Verify()
+    {
+        var estimator = new RtpAudioJitterEstimator();
+        estimator.Observe(7, uint.MaxValue - 959, 0);
+        estimator.Observe(7, 0, Stopwatch.Frequency / 50);
+        if (estimator.JitterMs is not double wrapped || wrapped > 0.1d)
+            throw new InvalidOperationException("RTP timestamp wrap introduced false jitter.");
+        estimator.Observe(7, 960, Stopwatch.Frequency * 41 / 1000);
+        if (estimator.JitterMs is not double varied || varied <= 0d || varied >= 1d)
+            throw new InvalidOperationException("RTP arrival variation was not sampled.");
+        estimator.Observe(8, 1, Stopwatch.Frequency * 42 / 1000);
+        if (estimator.JitterMs is not null)
+            throw new InvalidOperationException("A new RTP source inherited stale jitter.");
+    }
+}

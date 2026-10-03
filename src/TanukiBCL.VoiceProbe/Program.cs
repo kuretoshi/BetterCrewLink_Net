@@ -96,9 +96,9 @@ internal static class Program
                 return await GameAudioSelfTestRunner.RunServerRecoveryAsync(options);
             }
 
-            if (options.SelfTest)
+            if (options.SelfTest || args.Contains("--quality-self-test"))
             {
-                return await SelfTestRunner.RunAsync(options);
+                return await SelfTestRunner.RunAsync(options, expectPeerQuality: args.Contains("--quality-self-test"));
             }
 
             if (options.TanukiInteropTest)

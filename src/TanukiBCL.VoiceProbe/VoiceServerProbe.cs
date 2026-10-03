@@ -149,6 +149,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 PeerConnectionStatusChanged?.Invoke(clientId, state.ToString());
             }
         };
+        peerManager.PeerQualityChanged += (remoteSocketId, quality) =>
+        {
+            if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
+            {
+                PeerQualityChanged?.Invoke(clientId, quality);
+            }
+        };
         peerManager.TestToneSent += remoteSocketId =>
         {
             if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
@@ -187,6 +194,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public event Action<ConnectionQuality?>? ServerQualityChanged;
 
     public event Action<int, string>? PeerConnectionStatusChanged;
+
+    public event Action<int, ConnectionQuality>? PeerQualityChanged;
 
     public event Action<int>? PeerTestToneSent;
 

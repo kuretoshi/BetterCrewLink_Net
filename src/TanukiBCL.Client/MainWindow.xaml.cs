@@ -451,6 +451,12 @@ public partial class MainWindow : Window
         activeProbe.GameStateApplied += state => Dispatch(session, () => ShowGameState(state));
         activeProbe.PeerMixChanged += (clientId, mix) => Dispatch(session, () => UpdatePeerMix(clientId, mix));
         activeProbe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(session, () => UpdatePeerConnection(clientId, status));
+        activeProbe.PeerQualityChanged += (clientId, quality) => Dispatch(session, () =>
+        {
+            var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+            FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}").Quality = quality;
+            UpdateCompactView();
+        });
         activeProbe.PeerVadChanged += (clientId, active) => Dispatch(session, () =>
         {
             var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
@@ -638,6 +644,7 @@ public partial class MainWindow : Window
             row.ResetReceived();
             row.VadActive = false;
             row.Talking = false;
+            row.Quality = null;
         }
         row.Connection = status switch
         {
@@ -704,6 +711,7 @@ public partial class MainWindow : Window
                 row.VadActive = false;
                 row.Audible = false;
                 row.Talking = false;
+                row.Quality = null;
             }
         }
         UpdateCompactView();
@@ -740,7 +748,7 @@ public partial class MainWindow : Window
             row.Connection is "data-ready" or "接続済み"
                 ? row.HasReceivedFrames ? "connected" : "novoice"
                 : "disconnected",
-            row.Talking, row.Radio == "送信中"));
+            row.Talking, row.Radio == "送信中", row.Quality));
         CompactVoiceView.Update(currentState, voiceServerConnected, localTalking && !microphoneMuted,
             microphoneMuted, deafened, statuses, hideCode: settings.HideCode, localUsingRadio: radioTransmitting,
             playerConfigs: settings.PlayerConfigMap, serverQuality: serverQuality);
@@ -927,6 +935,7 @@ public partial class MainWindow : Window
         public bool VadActive { get => vadActive; set => Set(ref vadActive, value); }
         public bool Audible { get => audible; set => Set(ref audible, value); }
         public bool Talking { get => talking; set => Set(ref talking, value); }
+        public ConnectionQuality? Quality { get; set; }
         public event PropertyChangedEventHandler? PropertyChanged;
 
         public void IncrementReceived()
