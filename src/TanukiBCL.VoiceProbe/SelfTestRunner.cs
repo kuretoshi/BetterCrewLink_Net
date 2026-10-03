@@ -5,7 +5,7 @@ namespace TanukiBCL.VoiceProbe;
 internal static class SelfTestRunner
 {
     public static async Task<int> RunAsync(ProbeOptions baseOptions, bool expectPeerQuality = false,
-        bool mixedNat = false)
+        bool mixedNat = false, bool failOnRecovery = false)
     {
         DtlsRecordHeaderTrace.Verify();
         var tcpOptions = ProbeOptions.Parse(["--self-test", "--nat-fix", "--turn-tcp"]);
@@ -28,6 +28,10 @@ internal static class SelfTestRunner
             WebRtcPeerManager.ShouldRecoverClosedSctp(RTCPeerConnectionState.connected,
                 RTCSctpTransportState.Closed, true))
             throw new InvalidOperationException("SCTP closed-state recovery gate is incorrect.");
+        if (ShouldRejectRecoveredSuccess(false, 1) ||
+            ShouldRejectRecoveredSuccess(true, 0) ||
+            !ShouldRejectRecoveredSuccess(true, 1))
+            throw new InvalidOperationException("First-attempt reliability gate is incorrect.");
 
         var lobby = baseOptions.LobbyCode ?? CreateLobbyCode();
         var timeout = baseOptions.Duration ?? TimeSpan.FromSeconds(30);
@@ -110,6 +114,18 @@ internal static class SelfTestRunner
                 throw new InvalidOperationException("The guest's current-lobby settings do not match the host update.");
             }
 
+            var recoveryCount = first.AutomaticPeerRecoveryCount + second.AutomaticPeerRecoveryCount;
+            if (ShouldRejectRecoveredSuccess(failOnRecovery, recoveryCount))
+            {
+                Console.Error.WriteLine($"[FAIL] P2P接続は回復後に成功しましたが、自動再接続が{recoveryCount}回必要でした。");
+                cancellation.Cancel();
+                await IgnoreCancellationAsync(firstRun);
+                await IgnoreCancellationAsync(secondRun);
+                return 1;
+            }
+            if (recoveryCount > 0)
+                Console.WriteLine($"[WARN] P2P接続の成功前に自動再接続が{recoveryCount}回必要でした。");
+
             if (expectPeerQuality)
             {
                 var quality = await qualityVerified.Task.WaitAsync(timeout, cancellation.Token);
@@ -141,6 +157,9 @@ internal static class SelfTestRunner
         const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         return string.Concat(Enumerable.Range(0, 6).Select(_ => alphabet[Random.Shared.Next(alphabet.Length)]));
     }
+
+    internal static bool ShouldRejectRecoveredSuccess(bool failOnRecovery, int recoveryCount) =>
+        failOnRecovery && recoveryCount > 0;
 
     private static async Task IgnoreCancellationAsync(Task task)
     {

@@ -107,7 +107,8 @@ internal static class Program
             {
                 return await SelfTestRunner.RunAsync(options,
                     expectPeerQuality: args.Contains("--quality-self-test"),
-                    mixedNat: args.Contains("--mixed-nat-self-test"));
+                    mixedNat: args.Contains("--mixed-nat-self-test"),
+                    failOnRecovery: args.Contains("--fail-on-recovery"));
             }
 
             if (options.TanukiInteropTest)
@@ -166,6 +167,7 @@ internal static class Program
               --seconds <number>   指定秒数後に自動終了
               --self-test         2クライアントでP2Pデータチャネルを自動検証
               --mixed-nat-self-test  片側だけNAT修正ONでP2P接続を検証（--nat-fixでON側を逆転）
+              --fail-on-recovery  P2Pセルフテストで自動再接続が発生したら失敗にする
               --nat-fix          TURNリレーのみを使用
               --turn-tcp         CLI試験中だけNAT修正TURNへの接続をTCPに変更
               --dtls-trace       CLI試験中のDTLSイベントとヘッダー順序を匿名表示

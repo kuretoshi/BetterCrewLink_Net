@@ -19,6 +19,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly ConcurrentDictionary<string, int> peerClientIds = new();
     private readonly ConcurrentDictionary<string, int> stalledReconnectAttempts = new();
     private readonly ConcurrentDictionary<string, int> failedReconnectAttempts = new();
+    private int automaticPeerRecoveryCount;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> peerOperationGates = new();
     private readonly ConcurrentDictionary<string, byte> pendingOfferFallbacks = new();
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
@@ -177,6 +178,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public Task Connected => connected.Task;
 
     public Task PeerVerified => peerVerified.Task;
+
+    internal int AutomaticPeerRecoveryCount => Volatile.Read(ref automaticPeerRecoveryCount);
 
     public Task<AudioTestResult> AudioVerified => audioVerified.Task;
 
@@ -940,6 +943,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 !peerManager.IsCurrentPeer(remoteSocketId, peerInstanceId) ||
                 peerManager.HasOpenDataChannel(remoteSocketId)) return;
             Log("INFO", $"データチャネル停滞を再接続 peer={remoteSocketId} attempt={attempt}");
+            Interlocked.Increment(ref automaticPeerRecoveryCount);
             await peerManager.ReconnectAsync(remoteSocketId);
         });
     }
@@ -956,6 +960,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
                 !peerManager.IsFailedPeer(remoteSocketId, peerInstanceId)) return;
             Log("INFO", $"失敗したpeerを自動再接続 peer={remoteSocketId}");
+            Interlocked.Increment(ref automaticPeerRecoveryCount);
             await peerManager.ReconnectAsync(remoteSocketId);
         });
     }
@@ -971,6 +976,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             {
                 if (peerManager.HasPeer(remoteSocketId)) return;
                 Log("INFO", $"offer未着のpeerへ接続を開始 peer={remoteSocketId}");
+                Interlocked.Increment(ref automaticPeerRecoveryCount);
                 await peerManager.InitiateAsync(remoteSocketId);
             });
         }
