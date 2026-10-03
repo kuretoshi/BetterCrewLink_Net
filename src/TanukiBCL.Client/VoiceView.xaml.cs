@@ -29,6 +29,8 @@ public partial class VoiceView : UserControl
     private readonly Dictionary<int, PlayerAvatar> remoteAvatars = [];
     private readonly Dictionary<int, Player> displayedPlayers = [];
     private readonly Dictionary<int, bool> remoteDeadForDisplay = [];
+    internal IReadOnlyDictionary<int, bool> RemoteDeadForDisplay => remoteDeadForDisplay;
+    private GameState previousDeathDisplayState = GameState.Unknown;
     private readonly DispatcherTimer popupCloseTimer;
     private IReadOnlyDictionary<int, PlayerAudioConfig> playerConfigs = new Dictionary<int, PlayerAudioConfig>();
     private int? popupPlayerId;
@@ -307,6 +309,7 @@ public partial class VoiceView : UserControl
         if (!inLobby || local is null || game is null)
         {
             remoteDeadForDisplay.Clear();
+            previousDeathDisplayState = GameState.Unknown;
             SetFooterVisible(true);
             ClosePlayerConfigPopup();
             OtherPlayersPanel.Children.Clear();
@@ -315,14 +318,18 @@ public partial class VoiceView : UserControl
             return;
         }
 
-        // Released VoiceController resets otherDead in the lobby and updates it
-        // from game memory only outside Tasks. Audio policy still uses the live
-        // death bit; this snapshot controls only remote avatar presentation.
-        if (game.GameState == GameState.Lobby)
-            remoteDeadForDisplay.Clear();
-        else if (game.GameState != GameState.Tasks)
-            foreach (var player in game.Players)
-                remoteDeadForDisplay[player.ClientId] = player.IsDead || player.Disconnected;
+        // Released VoiceController changes otherDead only on a game-state
+        // transition: entering Lobby clears it; entering Discussion captures it.
+        // Audio policy continues to use the live death bit.
+        if (game.GameState != previousDeathDisplayState)
+        {
+            previousDeathDisplayState = game.GameState;
+            if (game.GameState == GameState.Lobby)
+                remoteDeadForDisplay.Clear();
+            else if (game.GameState != GameState.Tasks)
+                foreach (var player in game.Players)
+                    remoteDeadForDisplay[player.ClientId] = player.IsDead || player.Disconnected;
+        }
 
         var hideAppearance = game.GameState == GameState.Tasks;
         LocalName.Text = CollapseNoWrapWhitespace(
@@ -513,6 +520,12 @@ public partial class VoiceView : UserControl
         view.Update(game, true, false, false, false, peers);
         if (!view.remoteAvatars[remote.Id].IsGhostVisual)
             throw new InvalidOperationException("Discussion did not reveal the remote ghost avatar");
+
+        remote.IsDead = false;
+        view.Update(game, true, false, false, false, peers);
+        if (!view.remoteAvatars[remote.Id].IsGhostVisual)
+            throw new InvalidOperationException("Remote death snapshot changed without a state transition");
+        remote.IsDead = true;
 
         game.GameState = GameState.Tasks;
         view.Update(game, true, false, false, false, peers);

@@ -9,18 +9,22 @@ internal sealed record OverlayPlayer(Player Player, bool VoiceActive, bool Talki
 
 internal static class OverlaySelection
 {
-    // TanukiBCL 3.2.7 Overlay.tsx: remote ghosts are hidden from living
+    // TanukiBCL 3.2.8 Overlay.tsx: remote ghosts are hidden from living
     // listeners, disconnected peers are omitted, and compact mode selects VAD
     // activity before the vent-specific speaking ring is suppressed.
     public static IReadOnlyList<OverlayPlayer> Select(AmongUsState state,
         IReadOnlyDictionary<int, OverlayPeerStatus> peers, bool localTalking,
-        bool microphoneMuted, bool compact, bool localUsingRadio = false)
+        bool microphoneMuted, bool compact, bool localUsingRadio = false,
+        IReadOnlyDictionary<int, bool>? remoteDeadForDisplay = null)
     {
         var localAlive = state.Players.FirstOrDefault(player => player.IsLocal)?.IsDead == false;
+        bool DisplayDead(Player player) => remoteDeadForDisplay is null
+            ? player.IsDead
+            : remoteDeadForDisplay.TryGetValue(player.ClientId, out var dead) && dead;
         var result = new List<OverlayPlayer>();
         foreach (var player in state.Players
-            .Where(player => !localAlive || player.IsLocal || !player.IsDead)
-            .OrderBy(player => player.Disconnected || player.IsDead)
+            .Where(player => !localAlive || player.IsLocal || !DisplayDead(player))
+            .OrderBy(player => player.Disconnected || DisplayDead(player))
             .ThenBy(player => player.Id))
         {
             peers.TryGetValue(player.ClientId, out var peer);

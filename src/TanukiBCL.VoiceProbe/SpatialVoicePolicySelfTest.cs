@@ -49,6 +49,13 @@ internal static class SpatialVoicePolicySelfTest
         Check("overlay: ghosts see other ghost participants", true,
             OverlaySelection.Select(overlayState, overlayPeers, false, false, true)
                 .Any(player => player.Player.ClientId == 3));
+        overlayState.Players[0].IsDead = false;
+        Check("overlay: unrevealed task death remains visible to living players", true,
+            OverlaySelection.Select(overlayState, overlayPeers, false, false, false, false,
+                new Dictionary<int, bool> { [3] = false }).Any(player => player.Player.ClientId == 3));
+        Check("overlay: discussion-revealed death is hidden from living players", false,
+            OverlaySelection.Select(overlayState, overlayPeers, false, false, false, false,
+                new Dictionary<int, bool> { [3] = true }).Any(player => player.Player.ClientId == 3));
         var obsState = new AmongUsState
         {
             Mod = AmongUsModType.NebulaOnTheShip,

@@ -11,7 +11,7 @@ using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.Client;
 
-/// <summary>Click-through, game-bound counterpart of 3.2.7 Overlay.tsx.</summary>
+/// <summary>Click-through, game-bound counterpart of 3.2.8 Overlay.tsx.</summary>
 public partial class OverlayWindow : Window
 {
     private const int GwlExStyle = -20;
@@ -28,6 +28,7 @@ public partial class OverlayWindow : Window
     private bool localUsingRadio;
     private bool microphoneMuted;
     private bool deafened;
+    private IReadOnlyDictionary<int, bool>? remoteDeadForDisplay;
     private sealed record MeetingParticipant(int Id, int ClientId, int ColorId, bool IsLocal);
     private List<MeetingParticipant> meetingOrder = [];
     private readonly Dictionary<int, MeetingVoiceBorder> meetingSlots = [];
@@ -123,7 +124,8 @@ public partial class OverlayWindow : Window
 
     internal void Update(AmongUsState? gameState,
         IReadOnlyDictionary<int, OverlayPeerStatus> peerStatuses,
-        bool isLocalTalking, bool isMicrophoneMuted, bool isDeafened, bool isLocalUsingRadio = false)
+        bool isLocalTalking, bool isMicrophoneMuted, bool isDeafened, bool isLocalUsingRadio = false,
+        IReadOnlyDictionary<int, bool>? remoteDeathDisplay = null)
     {
         game = gameState;
         peers = peerStatuses;
@@ -131,6 +133,7 @@ public partial class OverlayWindow : Window
         localUsingRadio = isLocalUsingRadio;
         microphoneMuted = isMicrophoneMuted;
         deafened = isDeafened;
+        remoteDeadForDisplay = remoteDeathDisplay;
         if (gameState?.GameState == GameState.Discussion &&
             previousGameState != GameState.Discussion)
         {
@@ -232,7 +235,7 @@ public partial class OverlayWindow : Window
     {
         var position = settings.OverlayPosition;
         var selected = OverlaySelection.Select(state, peers, localTalking,
-            microphoneMuted, settings.CompactOverlay, localUsingRadio);
+            microphoneMuted, settings.CompactOverlay, localUsingRadio, remoteDeadForDisplay);
         if (position == "hidden" || selected.Count == 0)
         {
             AvatarPanel.Children.Clear();
@@ -285,7 +288,10 @@ public partial class OverlayWindow : Window
             avatar.Height = avatarSize;
             // Overlay.tsx displays the current outfit; only the main voice view
             // opts into hiding visibly changed avatars during Tasks.
-            avatar.SetPlayer(player, state.PlayerColors, false, state.Mod, state.GameExecutablePath);
+            var displayDead = player.IsLocal ? player.IsDead
+                : remoteDeadForDisplay is null ? player.IsDead
+                : remoteDeadForDisplay.TryGetValue(player.ClientId, out var dead) && dead;
+            avatar.SetPlayer(player, state.PlayerColors, false, state.Mod, state.GameExecutablePath, displayDead);
             avatar.SetOverlayMode(lookLeft: position is not ("left" or "left1" or "bottom_left"),
                 clipEquipment: side && !showName, showBorder: side && !settings.CompactOverlay);
             avatar.SetVisualState(entry.Talking,
@@ -400,6 +406,7 @@ public partial class OverlayWindow : Window
         VerifyAvatarSizingAndBackground();
         VerifyAvatarRowPersistence();
         VerifySidePlacement();
+        VerifyRemoteDeathDisplay();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
         var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
         try
@@ -535,6 +542,38 @@ public partial class OverlayWindow : Window
                     throw new InvalidOperationException($"{position} failed to anchor the avatar to the screen's left edge");
             }
             Console.WriteLine("[PASS] Left/right side avatars and name placement at both normal and alternate positions");
+        }
+        finally { window.Close(); }
+    }
+
+    private static void VerifyRemoteDeathDisplay()
+    {
+        var settings = new ClientSettings { EnableOverlay = true, OverlayPosition = "left" };
+        var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
+        try
+        {
+            var state = new AmongUsState { GameState = GameState.Tasks,
+                Players = [
+                    new Player { Id = 1, ClientId = 11, IsLocal = true },
+                    new Player { Id = 2, ClientId = 22, IsDead = true }
+                ] };
+            var peers = new Dictionary<int, OverlayPeerStatus> { [22] = new(true, false, false) };
+            var display = new Dictionary<int, bool> { [22] = false };
+            window.Update(state, peers, false, false, false, false, display);
+            if (window.AvatarPanel.Children.Count != 2 ||
+                ((PlayerAvatar)((StackPanel)window.AvatarPanel.Children[1]).Children[0]).IsGhostVisual)
+                throw new InvalidOperationException("Overlay revealed a task death before the official UI snapshot");
+            display[22] = true;
+            state.GameState = GameState.Discussion;
+            window.Update(state, peers, false, false, false, false, display);
+            if (window.AvatarPanel.Children.Count != 1)
+                throw new InvalidOperationException("Overlay kept a discussion-revealed ghost visible to a living player");
+            state.Players[0].IsDead = true;
+            window.Update(state, peers, false, false, false, false, display);
+            if (window.AvatarPanel.Children.Count != 2 ||
+                !((PlayerAvatar)((StackPanel)window.AvatarPanel.Children[1]).Children[0]).IsGhostVisual)
+                throw new InvalidOperationException("Dead listener did not see the revealed ghost in the overlay");
+            Console.WriteLine("[PASS] Overlay uses the released remote death snapshot for filtering and ghost visuals");
         }
         finally { window.Close(); }
     }
