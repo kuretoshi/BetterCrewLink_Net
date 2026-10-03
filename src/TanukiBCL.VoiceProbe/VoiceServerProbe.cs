@@ -238,6 +238,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         currentGameState is { GameState: GameState.Tasks or GameState.Discussion } state &&
         state.Players.Any(player => player.IsLocal && !player.IsDead && CanUseRadio(state, player));
 
+    public bool IsRemoteRadioVisible(int clientId)
+    {
+        var state = currentGameState;
+        return state is not null && RadioVisibilityPolicy.IsVisible(state, activeLobbySettings,
+            clientId, IsImpostorRadioActive(clientId),
+            player => HasNosJackalRadio(state, player),
+            (sender, listener) => CanHearNosJackalRadio(state, sender, listener));
+    }
+
     public LobbySettings? CurrentLobbySettings =>
         hasActiveLobbySettings && currentJoinedLobby != "MENU" &&
         Volatile.Read(ref joinedConnectionVersion) == Volatile.Read(ref serverConnectionVersion)

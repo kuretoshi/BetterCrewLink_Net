@@ -56,6 +56,40 @@ internal static class SpatialVoicePolicySelfTest
         Check("overlay: discussion-revealed death is hidden from living players", false,
             OverlaySelection.Select(overlayState, overlayPeers, false, false, false, false,
                 new Dictionary<int, bool> { [3] = true }).Any(player => player.Player.ClientId == 3));
+        var radioLocal = new Player { Id = 0, ClientId = 1, IsLocal = true, IsImpostor = true };
+        var radioRemote = new Player { Id = 1, ClientId = 2, IsImpostor = true };
+        var radioState = new AmongUsState { GameState = GameState.Tasks,
+            Players = [radioLocal, radioRemote] };
+        var radioSettings = new LobbySettings { ImpostorRadioEnabled = true };
+        bool Visible(bool active) => RadioVisibilityPolicy.IsVisible(radioState, radioSettings, 2,
+            active, _ => false, (_, _) => false);
+        Check("radio badge: visible partner remains marked without audio-mix input", true, Visible(true));
+        Check("radio badge: inactive partner is unmarked", false, Visible(false));
+        radioLocal.IsImpostor = false;
+        Check("radio badge: crewmate cannot see impostor channel", false, Visible(true));
+        radioLocal.IsImpostor = true;
+        radioRemote.Disconnected = true;
+        Check("radio badge: disconnected sender is unmarked", false, Visible(true));
+        radioRemote.Disconnected = false;
+        radioState.Mod = AmongUsModType.SuperNewRoles;
+        radioLocal.IsImpostor = radioRemote.IsImpostor = false;
+        radioLocal.SnrRole = new SnrRoleData(7, "Jackal", null, null, null, null);
+        radioRemote.SnrRole = new SnrRoleData(9, "Sidekick", null, null, null, null);
+        radioSettings = new LobbySettings { JackalRadioEnabled = true };
+        Check("radio badge: SNR jackal partners", true, Visible(true));
+        radioSettings = radioSettings with { ImpostorRadioOnlyMode = true };
+        Check("radio badge: radio-only mode excludes jackal channel", false, Visible(true));
+        radioState.Mod = AmongUsModType.NebulaOnTheShip;
+        radioLocal.SnrRole = radioRemote.SnrRole = null;
+        radioLocal.IsImpostor = true;
+        radioSettings = new LobbySettings { JackalRadioEnabled = true, ImpostorRadioEnabled = true };
+        Check("radio badge: NoS jackal receiver mask", true,
+            RadioVisibilityPolicy.IsVisible(radioState, radioSettings, 2, true,
+                player => player.ClientId == 2,
+                (sender, listener) => sender.ClientId == 2 && listener.ClientId == 1));
+        Check("radio badge: NoS jackal receiver outside mask", false,
+            RadioVisibilityPolicy.IsVisible(radioState, radioSettings, 2, true,
+                player => player.ClientId == 2, (_, _) => false));
         var obsState = new AmongUsState
         {
             Mod = AmongUsModType.NebulaOnTheShip,
