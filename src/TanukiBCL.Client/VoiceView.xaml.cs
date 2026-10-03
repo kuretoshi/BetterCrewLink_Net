@@ -32,10 +32,12 @@ public partial class VoiceView : UserControl
     private bool updatingPopup;
     private bool popupDirty;
     private bool configuringLaunchPlatforms;
+    private string uiLanguage = "ja";
 
     public VoiceView()
     {
         InitializeComponent();
+        VersionText.Text = $"v{typeof(VoiceView).Assembly.GetName().Version?.ToString(3)}";
         popupCloseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         popupCloseTimer.Tick += (_, _) =>
         {
@@ -50,6 +52,8 @@ public partial class VoiceView : UserControl
     internal static void VerifyNameLayout()
     {
         var view = new VoiceView();
+        if (!view.VersionText.Text.StartsWith("v3.2.8", StringComparison.Ordinal))
+            throw new InvalidOperationException("Voice window version does not match the 3.2.8 target");
         view.LocalName.Text = "開発者くれとし 3";
         view.Measure(new Size(280, 390));
         view.Arrange(new Rect(0, 0, 280, 390));
@@ -76,7 +80,8 @@ public partial class VoiceView : UserControl
         var platforms = new[]
         {
             new GameLaunchPlatform("STEAM", "Steam", "URI", "steam://rungameid/945360", [""]),
-            new GameLaunchPlatform("custom", "NoS", "EXE", @"C:\Games\NoS", ["Among Us.exe"])
+            new GameLaunchPlatform("custom", "NoS", "EXE", @"C:\Games\NoS", ["Among Us.exe"]),
+            new GameLaunchPlatform("EPIC", "Epic Games", "URI", "com.epicgames.launcher://apps/test", [""])
         };
         string? selected = null;
         GameLaunchPlatform? requested = null;
@@ -84,19 +89,31 @@ public partial class VoiceView : UserControl
         view.LaunchGameRequested += platform => requested = platform;
         view.SetLaunchPlatforms(platforms, "custom");
         if (!Equals(view.LaunchPlatformCombo.SelectedItem, platforms[1]) || !view.LaunchGameButton.IsEnabled ||
+            !Equals(view.LaunchGameButton.Content, "NoS") || view.LaunchDropdownItems.Children.Count != 4 ||
             selected is not null)
             throw new InvalidOperationException("Launch platform selection was not restored");
         view.LaunchPlatformCombo.SelectedItem = platforms[0];
         view.LaunchGameButton_Click(view.LaunchGameButton, new RoutedEventArgs());
         if (selected != "STEAM" || requested != platforms[0])
             throw new InvalidOperationException("Launch platform change or launch request was not sent");
+        view.LaunchDropdownButton_Click(view.LaunchDropdownButton, new RoutedEventArgs());
+        if (view.LaunchDropdownPanel.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Launcher dropdown did not open");
+        view.LaunchDropdownButton_Click(view.LaunchDropdownButton, new RoutedEventArgs());
         view.WaitingPanel.Visibility = Visibility.Visible;
         view.Measure(new Size(280, 390));
         view.Arrange(new Rect(0, 0, 280, 390));
         view.UpdateLayout();
+        if (view.LaunchButtonGroup.ActualWidth > 150)
+            throw new InvalidOperationException("Short game platform name stretches the launch button");
+        view.LaunchPlatformCombo.SelectedItem = platforms[2];
+        view.UpdateLayout();
         if (view.WaitingPanel.Parent is not Grid waitingArea ||
             view.WaitingPanel.ActualHeight + view.WaitingPanel.Margin.Top > waitingArea.ActualHeight)
             throw new InvalidOperationException("Game launcher overflows the 280×390 voice window");
+        if (view.LaunchButtonGroup.ActualWidth <= 142 ||
+            view.LaunchButtonGroup.ActualWidth > view.ActualWidth)
+            throw new InvalidOperationException("Long game platform name is clipped or overflows the voice window");
         view.popupCloseTimer.Stop();
         Console.WriteLine("[PASS] VoiceView restores game launcher choice and emits launch request");
     }
@@ -111,8 +128,13 @@ public partial class VoiceView : UserControl
     internal event Action<GameLaunchPlatform>? EditCustomGameRequested;
     public event Action<int, PlayerAudioConfig, bool>? PlayerConfigChanged;
 
-    internal void SetLanguage(string language) =>
+    internal void SetLanguage(string language)
+    {
+        uiLanguage = language;
         WaitingTitle.Text = UiLocalization.Translate(language, "game.waiting");
+        LaunchPresetLabel.Text = UiLocalization.Translate(language, "game.open");
+        RebuildLaunchDropdown();
+    }
 
     internal void SetLaunchPlatforms(IReadOnlyList<GameLaunchPlatform> platforms, string selectedKey)
     {
@@ -123,8 +145,8 @@ public partial class VoiceView : UserControl
             LaunchPlatformCombo.SelectedItem = platforms.FirstOrDefault(platform => platform.Key == selectedKey)
                 ?? platforms.FirstOrDefault();
             LaunchGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is not null;
-            EditCustomGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is GameLaunchPlatform
-                { IsDefault: false };
+            LaunchGameButton.Content = (LaunchPlatformCombo.SelectedItem as GameLaunchPlatform)?.Name ?? "?";
+            RebuildLaunchDropdown();
         }
         finally { configuringLaunchPlatforms = false; }
     }
@@ -133,25 +155,82 @@ public partial class VoiceView : UserControl
     {
         if (configuringLaunchPlatforms) return;
         LaunchGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is not null;
-        EditCustomGameButton.IsEnabled = LaunchPlatformCombo.SelectedItem is GameLaunchPlatform
-            { IsDefault: false };
+        LaunchGameButton.Content = (LaunchPlatformCombo.SelectedItem as GameLaunchPlatform)?.Name ?? "?";
         if (LaunchPlatformCombo.SelectedItem is GameLaunchPlatform platform)
             LaunchPlatformChanged?.Invoke(platform.Key);
+    }
+
+    private void RebuildLaunchDropdown()
+    {
+        LaunchDropdownItems.Children.Clear();
+        if (LaunchPlatformCombo.ItemsSource is IEnumerable<GameLaunchPlatform> platforms)
+        {
+            foreach (var platform in platforms)
+            {
+                var item = CreateLaunchMenuItem(platform.Name);
+                item.Tag = platform;
+                item.Click += LaunchMenuItem_Click;
+                if (!platform.IsDefault)
+                {
+                    item.ToolTip = "右クリックで編集／削除";
+                    item.MouseRightButtonUp += LaunchMenuItem_MouseRightButtonUp;
+                }
+                LaunchDropdownItems.Children.Add(item);
+            }
+        }
+        var addItem = CreateLaunchMenuItem(UiLocalization.Translate(uiLanguage, "platform.custom"));
+        addItem.Click += (_, _) =>
+        {
+            LaunchDropdownPanel.Visibility = Visibility.Collapsed;
+            AddCustomGameRequested?.Invoke(this, EventArgs.Empty);
+        };
+        LaunchDropdownItems.Children.Add(addItem);
+    }
+
+    private static Button CreateLaunchMenuItem(string content) => new()
+    {
+        Content = content,
+        Height = 32,
+        MinWidth = 140,
+        Padding = new Thickness(8, 0, 8, 0),
+        BorderThickness = new Thickness(0),
+        Background = new SolidColorBrush(Color.FromRgb(0x27, 0x27, 0x27)),
+        Foreground = Brushes.White,
+        HorizontalContentAlignment = HorizontalAlignment.Left
+    };
+
+    private void LaunchMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: GameLaunchPlatform platform })
+            LaunchPlatformCombo.SelectedItem = platform;
+        LaunchDropdownPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void LaunchMenuItem_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Button { Tag: GameLaunchPlatform { IsDefault: false } platform })
+        {
+            LaunchDropdownPanel.Visibility = Visibility.Collapsed;
+            EditCustomGameRequested?.Invoke(platform);
+            e.Handled = true;
+        }
+    }
+
+    private void LaunchDropdownButton_Click(object sender, RoutedEventArgs e) =>
+        LaunchDropdownPanel.Visibility = LaunchDropdownPanel.Visibility == Visibility.Visible
+            ? Visibility.Collapsed : Visibility.Visible;
+
+    private void VoiceView_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (LaunchDropdownPanel.Visibility == Visibility.Visible &&
+            !LaunchDropdownPanel.IsMouseOver && !LaunchDropdownButton.IsMouseOver)
+            LaunchDropdownPanel.Visibility = Visibility.Collapsed;
     }
 
     private void LaunchGameButton_Click(object sender, RoutedEventArgs e)
     {
         if (LaunchPlatformCombo.SelectedItem is GameLaunchPlatform platform)
             LaunchGameRequested?.Invoke(platform);
-    }
-
-    private void AddCustomGameButton_Click(object sender, RoutedEventArgs e) =>
-        AddCustomGameRequested?.Invoke(this, EventArgs.Empty);
-
-    private void EditCustomGameButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (LaunchPlatformCombo.SelectedItem is GameLaunchPlatform { IsDefault: false } platform)
-            EditCustomGameRequested?.Invoke(platform);
     }
 
     public void Update(AmongUsState? game, bool connected, bool localTalking, bool muted,
@@ -164,7 +243,9 @@ public partial class VoiceView : UserControl
         var inLobby = local is not null && game is not null && !string.IsNullOrWhiteSpace(game.LobbyCode) &&
                       game.GameState is not (GameState.Menu or GameState.Unknown);
         WaitingPanel.Visibility = inLobby ? Visibility.Collapsed : Visibility.Visible;
+        OtherPlayersScroll.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
         LobbyHeader.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
+        HeaderPanel.Margin = inLobby ? new Thickness(0, 10, 0, 8) : new Thickness(0);
         if (!inLobby || local is null || game is null)
         {
             ClosePlayerConfigPopup();
