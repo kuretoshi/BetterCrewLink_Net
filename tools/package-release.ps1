@@ -27,7 +27,8 @@ foreach ($document in @('README.md', 'LICENSE')) {
 $required = @(
     'TanukiBCL.Net.exe', 'TanukiBCL.Net.deps.json', 'update-manifest.json',
     'Updater/TanukiBCL.Updater.exe', 'NoSReader/TbclSnapshotReader.exe',
-    'RoleReaders/SnrRoleReader.exe', 'README.md', 'LICENSE'
+    'RoleReaders/SnrRoleReader.exe', 'README.md', 'LICENSE',
+    'Licenses/SourceCodePro-OFL.md'
 )
 foreach ($item in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory $item))) {
