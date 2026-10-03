@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 
 namespace TanukiBCL.Client;
@@ -33,6 +34,7 @@ public partial class InquiryWindow : Window
 
     private void SelectFilesButton_Click(object sender, RoutedEventArgs e)
     {
+        ResultBanner.Visibility = Visibility.Collapsed;
         var picker = new OpenFileDialog { Multiselect = true, Title = "添付ファイルを選択" };
         if (picker.ShowDialog(this) != true) return;
         foreach (var path in picker.FileNames)
@@ -95,7 +97,7 @@ public partial class InquiryWindow : Window
         UpdateSendAvailability();
         TagCombo.IsEnabled = SubjectBox.IsEnabled = BodyBox.IsEnabled = SelectFilesButton.IsEnabled =
             AttachmentsList.IsEnabled = CancelButton.IsEnabled = false;
-        ResultText.Visibility = Visibility.Collapsed;
+        ResultBanner.Visibility = Visibility.Collapsed;
         try
         {
             var tag = TagCombo.SelectedIndex switch
@@ -128,9 +130,13 @@ public partial class InquiryWindow : Window
     private void ShowResult(string message, bool isError)
     {
         ResultText.Text = message;
-        ResultText.Foreground = new SolidColorBrush(isError ? Color.FromRgb(0xF4, 0x43, 0x36) :
-            Color.FromRgb(0x81, 0xC7, 0x84));
-        ResultText.Visibility = Visibility.Visible;
+        ResultText.Foreground = new SolidColorBrush(isError ? Color.FromRgb(0xFF, 0xAB, 0x91) :
+            Color.FromRgb(0xA5, 0xD6, 0xA7));
+        ResultBanner.Background = new SolidColorBrush(isError ? Color.FromRgb(0x3C, 0x21, 0x20) :
+            Color.FromRgb(0x1B, 0x35, 0x23));
+        ResultBanner.BorderBrush = new SolidColorBrush(isError ? Color.FromRgb(0x6D, 0x38, 0x34) :
+            Color.FromRgb(0x36, 0x5A, 0x3B));
+        ResultBanner.Visibility = Visibility.Visible;
     }
 
     internal static void VerifyForm()
@@ -142,6 +148,12 @@ public partial class InquiryWindow : Window
                 window.CloseInquiryButton.Content?.ToString() != "×" ||
                 window.Width != 620 || window.Height != 640)
                 throw new InvalidOperationException("Inquiry window frame differs from v3.2.8");
+            if (window.TagCombo.Height != 56 || window.SubjectBox.Height != 56 ||
+                window.SubjectBox.Foreground is not SolidColorBrush fieldForeground ||
+                fieldForeground.Color != Color.FromRgb(0xF5, 0xF1, 0xF7) ||
+                window.SelectFilesButton.BorderBrush is not SolidColorBrush attachBorder ||
+                attachBorder.Color != Color.FromRgb(0xF4, 0x43, 0x36))
+                throw new InvalidOperationException("Inquiry form retained native-theme controls");
             if (window.SendButton.IsEnabled || window.TagCombo.Items.Count != 3)
                 throw new InvalidOperationException("Inquiry form initial state differs from v3.2.7");
             window.SubjectBox.Text = "件名";
@@ -152,12 +164,38 @@ public partial class InquiryWindow : Window
             if (window.SendButton.IsEnabled)
                 throw new InvalidOperationException("Blank inquiry body enabled Send");
             window.Show();
+            window.ShowResult("Failure", true);
+            if (window.ResultBanner.Visibility != Visibility.Visible ||
+                window.ResultText.Text != "Failure")
+                throw new InvalidOperationException("Inquiry error alert is missing");
             window.Close();
             if (window.IsVisible || window.SubjectBox.Text != "件名")
                 throw new InvalidOperationException("Inquiry close did not hide and preserve its form");
             window.Show();
             if (!window.IsVisible || window.SubjectBox.Text != "件名")
                 throw new InvalidOperationException("Inquiry reopen did not restore its form");
+        }
+        finally { window.CloseForShutdown(); }
+        Console.WriteLine("[PASS] 3.2.8 inquiry frame, dark form controls, alerts and hide/reopen state");
+    }
+
+    internal static void RenderPreview(string outputPath)
+    {
+        var window = new InquiryWindow();
+        try
+        {
+            if (window.Content is not FrameworkElement root)
+                throw new InvalidOperationException("Inquiry root visual is missing");
+            var size = new Size(620, 640);
+            root.Measure(size);
+            root.Arrange(new Rect(size));
+            root.UpdateLayout();
+            var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(root);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var output = File.Create(outputPath);
+            encoder.Save(output);
         }
         finally { window.CloseForShutdown(); }
     }

@@ -31,6 +31,7 @@ public partial class App : Application
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
             e.Args.Contains("--input-processing-self-test") || e.Args.Contains("--inquiry-self-test") ||
+            e.Args.Contains("--inquiry-preview") ||
             e.Args.Contains("--support-log-self-test") || e.Args.Contains("--update-catalog-self-test") ||
             e.Args.Contains("--update-package-self-test") || e.Args.Contains("--update-package-file-test"))
         {
@@ -83,6 +84,13 @@ public partial class App : Application
                 {
                     InquiryWindow.VerifyForm();
                     Task.Run(InquirySubmission.VerifyAsync).GetAwaiter().GetResult();
+                }
+                var inquiryPreviewIndex = Array.IndexOf(e.Args, "--inquiry-preview");
+                if (inquiryPreviewIndex >= 0)
+                {
+                    if (inquiryPreviewIndex + 1 >= e.Args.Length)
+                        throw new ArgumentException("--inquiry-preview needs a PNG path");
+                    InquiryWindow.RenderPreview(e.Args[inquiryPreviewIndex + 1]);
                 }
                 if (e.Args.Contains("--support-log-self-test")) SupportLog.Verify();
                 if (e.Args.Contains("--update-catalog-self-test"))
