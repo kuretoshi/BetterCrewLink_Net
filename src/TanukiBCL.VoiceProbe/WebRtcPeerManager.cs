@@ -148,7 +148,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         var peer = CreatePeer(remoteSocketId, initiator: true);
         var channel = await peer.Connection.createDataChannel("tanuki-probe", null);
-        ConfigureDataChannel(peer, channel);
+        ConfigureDataChannel(peer, channel, "local");
 
         var offer = peer.Connection.createOffer(null);
         await peer.Connection.setLocalDescription(offer);
@@ -305,7 +305,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             if (HasSctpMedia(description.sdp))
             {
                 var channel = await peer.Connection.createDataChannel("tanuki-probe", null);
-                ConfigureDataChannel(peer, channel);
+                ConfigureDataChannel(peer, channel, "local");
             }
             var answer = peer.Connection.createAnswer(null);
             await peer.Connection.setLocalDescription(answer);
@@ -404,7 +404,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         };
         connection.oniceconnectionstatechange += state => Log($"peer {Short(remoteSocketId)} ice={state}");
         connection.onicecandidateerror += (_, error) => Log($"peer {Short(remoteSocketId)} ice-candidate-error={error}");
-        connection.ondatachannel += channel => ConfigureDataChannel(peer, channel);
+        connection.ondatachannel += channel => ConfigureDataChannel(peer, channel, "remote");
         connection.OnRtpPacketReceived += (_, mediaType, packet) =>
         {
             if (mediaType == SDPMediaTypesEnum.audio)
@@ -452,10 +452,14 @@ internal sealed class WebRtcPeerManager : IDisposable
         new(RttMs: rttMs, JitterMs: observedJitterMs,
             LossPercent: sample.FractionLost * 100d / 256d, Direct: direct);
 
-    private void ConfigureDataChannel(Peer peer, RTCDataChannel channel)
+    private void ConfigureDataChannel(Peer peer, RTCDataChannel channel, string origin)
     {
         lock (peer.DataChannelGate)
+        {
             peer.Channel ??= channel;
+            peer.AllChannels.Add(channel);
+        }
+        Log($"data channel configured: {Short(peer.RemoteSocketId)} origin={origin} label={channel.label} id={channel.id} state={channel.readyState}");
         channel.onopen += () =>
         {
             if (!peers.TryGetValue(peer.RemoteSocketId, out var current) || !ReferenceEquals(current, peer))
@@ -463,7 +467,7 @@ internal sealed class WebRtcPeerManager : IDisposable
                 return;
             }
             var wasOpen = MarkDataChannelOpen(peer, channel);
-            Log($"data channel open: {Short(peer.RemoteSocketId)}");
+            Log($"data channel open: {Short(peer.RemoteSocketId)} origin={origin} id={channel.id}");
             if (!wasOpen) OnDataChannelReady(peer);
             if (sendTestTone)
             {
@@ -542,7 +546,11 @@ internal sealed class WebRtcPeerManager : IDisposable
             return;
         }
 
-        Log($"data channel stalled: {Short(peer.RemoteSocketId)}");
+        string channels;
+        lock (peer.DataChannelGate)
+            channels = string.Join(",", peer.AllChannels.Select(channel =>
+                $"{channel.label}:{channel.id}:{channel.readyState}"));
+        Log($"data channel stalled: {Short(peer.RemoteSocketId)} channels=[{channels}]");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
     }
 
@@ -766,6 +774,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         public RTCDataChannel? Channel { get; set; }
         public object DataChannelGate { get; } = new();
         public HashSet<RTCDataChannel> OpenChannels { get; } = [];
+        public List<RTCDataChannel> AllChannels { get; } = [];
         public List<RTCIceCandidateInit> PendingCandidates { get; } = [];
         public object LocalCandidateGate { get; } = new();
         public List<object> PendingLocalCandidates { get; } = [];
