@@ -136,8 +136,11 @@
                         <Border x:Name="ShortcutBorder" Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="6">
                             <Grid>
-                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
-                                              VerticalAlignment="Center" />
+                                <ScrollViewer x:Name="PART_ContentHost" Visibility="Collapsed" />
+                                <TextBlock x:Name="ShortcutValue" Text="{TemplateBinding Text}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           Foreground="{TemplateBinding Foreground}"
+                                           FontFamily="Source Code Pro" FontSize="13" FontWeight="Bold" />
                                 <StackPanel x:Name="RecordingPrompt" Orientation="Horizontal"
                                             HorizontalAlignment="Center" VerticalAlignment="Center"
                                             IsHitTestVisible="False" Visibility="Collapsed">
@@ -150,7 +153,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="Tag" Value="Recording">
-                                <Setter TargetName="PART_ContentHost" Property="Visibility" Value="Hidden" />
+                                <Setter TargetName="ShortcutValue" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="RecordingPrompt" Property="Visibility" Value="Visible" />
                                 <Setter TargetName="ShortcutBorder" Property="Background" Value="#392B40" />
                                 <Setter TargetName="ShortcutBorder" Property="BorderBrush" Value="#CE93D8" />

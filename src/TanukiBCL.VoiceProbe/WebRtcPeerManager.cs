@@ -152,7 +152,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         var offer = peer.Connection.createOffer(null);
         await peer.Connection.setLocalDescription(offer);
-        Log($"offer > {Short(remoteSocketId)}");
+        Log($"offer > {Short(remoteSocketId)} sctp={HasSctpMedia(offer.sdp)}");
         await SendSignalAsync(peer, new { type = "offer", sdp = offer.sdp });
         FlushLocalCandidates(peer);
     }
@@ -285,17 +285,8 @@ internal sealed class WebRtcPeerManager : IDisposable
             type = type.Equals("offer", StringComparison.OrdinalIgnoreCase) ? RTCSdpType.offer : RTCSdpType.answer,
             sdp = sdpElement.GetString()!
         };
-        // SIPSorcery needs a local data channel before creating an answer to
-        // include the SCTP application media section. Without this, ICE/audio
-        // can connect while the offerer's first data channel never opens.
-        if (description.type == RTCSdpType.offer &&
-            description.sdp.Contains("m=application ", StringComparison.Ordinal))
-        {
-            var channel = await peer.Connection.createDataChannel("tanuki-probe", null);
-            ConfigureDataChannel(peer, channel);
-        }
         var result = peer.Connection.setRemoteDescription(description);
-        Log($"{type} < {Short(remoteSocketId)} result={result}");
+        Log($"{type} < {Short(remoteSocketId)} result={result} sctp={HasSctpMedia(description.sdp)}");
         if (result != SetDescriptionResultEnum.OK)
         {
             throw new InvalidOperationException($"リモートSDPを適用できません: {result}");
@@ -309,9 +300,16 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         if (description.type == RTCSdpType.offer)
         {
+            // Create the answerer's local SCTP channel after the remote SDP
+            // establishes the DTLS role, but before generating the answer.
+            if (HasSctpMedia(description.sdp))
+            {
+                var channel = await peer.Connection.createDataChannel("tanuki-probe", null);
+                ConfigureDataChannel(peer, channel);
+            }
             var answer = peer.Connection.createAnswer(null);
             await peer.Connection.setLocalDescription(answer);
-            Log($"answer > {Short(remoteSocketId)}");
+            Log($"answer > {Short(remoteSocketId)} sctp={HasSctpMedia(answer.sdp)}");
             await SendSignalAsync(peer, new { type = "answer", sdp = answer.sdp });
             FlushLocalCandidates(peer);
         }
@@ -754,6 +752,8 @@ internal sealed class WebRtcPeerManager : IDisposable
     }
 
     private void Log(string message) => Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss.fff} [{owner}/RTC] {message}");
+    private static bool HasSctpMedia(string? sdp) =>
+        sdp?.Contains("m=application ", StringComparison.Ordinal) == true;
     private static string Short(string socketId) => socketId.Length <= 8 ? socketId : socketId[..8];
 
     private sealed record Peer(
