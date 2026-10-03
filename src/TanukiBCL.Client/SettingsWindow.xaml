@@ -20,6 +20,53 @@
         <Style TargetType="RadioButton">
             <Setter Property="Foreground" Value="#F5F1F7" />
         </Style>
+        <Style x:Key="AudioModeRadioStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border Background="Transparent" MinHeight="32">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Grid Width="20" Height="20" Margin="0,0,8,0">
+                                    <Ellipse x:Name="OuterRing" Width="16" Height="16"
+                                             Stroke="#B8AFBC" StrokeThickness="2" />
+                                    <Ellipse x:Name="SelectedDot" Width="8" Height="8"
+                                             Fill="#BA68C8" Visibility="Collapsed" />
+                                </Grid>
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="OuterRing" Property="Stroke" Value="#BA68C8" />
+                                <Setter TargetName="SelectedDot" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="AudioLevelBarStyle" TargetType="ProgressBar">
+            <Setter Property="Height" Value="8" />
+            <Setter Property="Background" Value="#5A2020" />
+            <Setter Property="Foreground" Value="#F44336" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Border x:Name="PART_Track" Background="{TemplateBinding Background}"
+                                CornerRadius="4" ClipToBounds="True">
+                            <Border x:Name="PART_Indicator" HorizontalAlignment="Left"
+                                    Background="{TemplateBinding Foreground}" CornerRadius="4" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="ComboBox">
             <Setter Property="Height" Value="32" />
         </Style>
@@ -387,8 +434,8 @@
                                     <StackPanel Grid.Column="1">
                                         <ComboBox x:Name="MicrophoneCombo" Style="{StaticResource DarkAudioComboStyle}"
                                                   SelectionChanged="MicrophoneCombo_SelectionChanged" />
-                                        <ProgressBar x:Name="MicrophoneLevelBar" Minimum="0" Maximum="100" Height="8"
-                                                     Foreground="#B061C0" Background="#403146" Margin="0,12,0,0" />
+                                        <ProgressBar x:Name="MicrophoneLevelBar" Minimum="0" Maximum="100"
+                                                     Style="{StaticResource AudioLevelBarStyle}" Margin="0,12,0,0" />
                                         <TextBlock x:Name="MicrophoneLevelStatus" Foreground="IndianRed"
                                                    Visibility="Collapsed" TextWrapping="Wrap" Margin="0,6,0,0" />
                                     </StackPanel>
@@ -416,10 +463,13 @@
                                 CornerRadius="8" Padding="16,16">
                             <StackPanel>
                                 <RadioButton x:Name="VoiceModeRadio" Content="常に有効" GroupName="MicrophoneMode"
+                                             Style="{StaticResource AudioModeRadioStyle}"
                                              MinHeight="32" Margin="0,0,0,6" />
                                 <RadioButton x:Name="PushToTalkModeRadio" Content="押して話す" GroupName="MicrophoneMode"
+                                             Style="{StaticResource AudioModeRadioStyle}"
                                              MinHeight="32" Margin="0,0,0,6" />
                                 <RadioButton x:Name="PushToMuteModeRadio" Content="押してミュート" GroupName="MicrophoneMode"
+                                             Style="{StaticResource AudioModeRadioStyle}"
                                              MinHeight="32" />
                             </StackPanel>
                         </Border>
