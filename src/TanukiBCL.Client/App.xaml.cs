@@ -41,6 +41,7 @@ public partial class App : Application
                 if (e.Args.Contains("--voice-view-self-test"))
                 {
                     VoiceView.VerifyNameLayout();
+                    VoiceView.VerifyPeerQualityFallback();
                     GameLauncher.Verify();
                     VoiceView.VerifyLaunchControls();
                     CustomPlatformWindow.Verify();

@@ -219,8 +219,34 @@ public partial class VoiceView : UserControl
             var config = PlayerAudioConfig.For(player, this.playerConfigs);
             avatar.SetVisualState(status.Talking && !player.InVent &&
                 (player.ShiftedColor < 0 || game.GameState == GameState.Discussion), false,
-                config.IsMuted || config.Volume == 0d, status.ConnectionState, status.UsingRadio, status.Quality);
+                config.IsMuted || config.Volume == 0d, status.ConnectionState, status.UsingRadio,
+                ResolvePeerQuality(status.Quality, serverQuality));
         }
+    }
+
+    internal static ConnectionQuality? ResolvePeerQuality(ConnectionQuality? peer, ConnectionQuality? server)
+    {
+        // The upstream peer sampler adds the current Engine.IO ping to each
+        // peer's RTC sample. Keep measured peer RTT/jitter/loss if available.
+        var serverPing = server?.ServerPingMs;
+        return peer is not null
+            ? serverPing is not null ? peer with { ServerPingMs = serverPing } : peer
+            : serverPing is not null ? new ConnectionQuality(ServerPingMs: serverPing) : null;
+    }
+
+    internal static void VerifyPeerQualityFallback()
+    {
+        var server = new ConnectionQuality(ServerPingMs: 25d);
+        var fallback = ResolvePeerQuality(null, server);
+        if (fallback?.Bars != 3 || fallback.ServerPingMs != 25d)
+            throw new InvalidOperationException("Connected peer did not inherit the measured server ping.");
+        var measured = new ConnectionQuality(RttMs: 230d, JitterMs: 35d, LossPercent: 4d, Direct: true);
+        var merged = ResolvePeerQuality(measured, server);
+        if (merged?.RttMs != 230d || merged.JitterMs != 35d || merged.LossPercent != 4d ||
+            !merged.Direct || merged.ServerPingMs != 25d || merged.Bars != 2)
+            throw new InvalidOperationException("Server ping overwrote the peer's RTC measurements.");
+        if (ResolvePeerQuality(null, null) is not null)
+            throw new InvalidOperationException("Unmeasured quality was fabricated.");
     }
 
     public void SetWarning(string? warning)
