@@ -43,6 +43,8 @@ internal static class Program
                     ProbeOptions.Parse(args.Where(arg => arg != "--nos-palette").ToArray()).GameProcessId, palette: true);
             if (args.Contains("--speaker-loopback-test"))
                 return await SpeakerLoopbackTestRunner.RunAsync(args);
+            if (args.Contains("--microphone-tone-test"))
+                return await MicrophoneToneTestRunner.RunAsync(args);
             if (args.Contains("--speaker-loopback-self-test"))
                 return SpeakerLoopbackTestRunner.RunSelfTest();
             var options = ProbeOptions.Parse(args);
@@ -196,6 +198,7 @@ internal static class Program
               --list-audio-devices 入出力デバイスの番号と名前を表示
               --play-test-tone --output-device <n> --seconds <1-15> [--vad-tone]  選択した出力先へ440Hz検証音を流す。--vad-toneは150Hz VAD用成分を追加（保存なし）
               --speaker-loopback-test [--speaker-name name] [--seconds n]  出力デバイスの440Hz成分だけを測定（音声は保存しない）
+              --microphone-tone-test [--microphone-name name] [--seconds n]  入力デバイスの440Hz成分だけを測定（音声は保存しない）
               --speaker-loopback-self-test 440Hz検出と別周波数の除外を合成音で検証
               --scan-game         起動中の全Among Usプロセスを読み取り検証
               --expected-players  検証するプロセス数・ロビー人数（既定5）
