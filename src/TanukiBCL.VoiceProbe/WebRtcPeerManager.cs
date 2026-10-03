@@ -26,6 +26,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private readonly Func<string, bool>? testToneTarget;
     private readonly bool traceDtlsRecords;
     private readonly bool turnTcp;
+    private readonly bool activeSctpAnswer;
     private bool natFix;
     private readonly Func<string, object, Task> sendSignal;
     private readonly ConcurrentDictionary<string, Peer> peers = new();
@@ -36,7 +37,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal, bool sendTestTone,
         bool natFix = false, Func<string, bool>? testToneTarget = null, bool traceDtlsRecords = false,
-        bool turnTcp = false)
+        bool turnTcp = false, bool activeSctpAnswer = false)
     {
         this.owner = owner;
         this.sendSignal = sendSignal;
@@ -44,6 +45,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         this.testToneTarget = testToneTarget;
         this.traceDtlsRecords = traceDtlsRecords;
         this.turnTcp = turnTcp;
+        this.activeSctpAnswer = activeSctpAnswer;
         this.natFix = natFix;
     }
 
@@ -329,10 +331,10 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         if (description.type == RTCSdpType.offer)
         {
-            // SIPSorcery needs an answerer-side channel for reliable SCTP
-            // establishment with the .NET offerer. Create it after applying
-            // remote SDP so the DTLS role has been established.
-            if (HasSctpMedia(description.sdp))
+            // Released TanukiBCL creates the channel only on the offerer;
+            // the answerer accepts it through ondatachannel. Retain the old
+            // two-channel path solely for controlled CLI comparisons.
+            if (HasSctpMedia(description.sdp) && activeSctpAnswer)
             {
                 var channel = await peer.Connection.createDataChannel("tanuki-probe", null);
                 ConfigureDataChannel(peer, channel, "local");
@@ -341,6 +343,8 @@ internal sealed class WebRtcPeerManager : IDisposable
             await peer.Connection.setLocalDescription(answer);
             var answerSdp = LocalSdpForRemote(peer, answer.sdp);
             Log($"answer > {Short(remoteSocketId)} sctp={HasSctpMedia(answerSdp)}");
+            if (HasSctpMedia(description.sdp) && !HasSctpMedia(answerSdp))
+                throw new InvalidOperationException("SCTP answer omitted the offered application media.");
             await SendSignalAsync(peer, new { type = "answer", sdp = answerSdp });
             FlushLocalCandidates(peer);
         }

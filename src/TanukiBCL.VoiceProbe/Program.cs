@@ -174,6 +174,7 @@ internal static class Program
               --public-lobby-live-test  公開ロビー購読と無効IDのコード照会を実サーバーで検証
               --nat-fix          TURNリレーのみを使用
               --turn-tcp         CLI試験中だけNAT修正TURNへの接続をTCPに変更
+              --active-sctp-answer  CLI比較試験中だけanswer側もデータチャネルを作る（旧方式）
               --dtls-trace       CLI試験中のDTLSイベントとヘッダー順序を匿名表示
               --policy-self-test  3.2.7の音声ポリシーをローカルで検証
               --vad-self-test     3.2.7の周波数帯VADとマイク操作モードを検証

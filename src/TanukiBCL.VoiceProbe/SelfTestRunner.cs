@@ -12,6 +12,9 @@ internal static class SelfTestRunner
         if (!tcpOptions.NatFix || !tcpOptions.TurnTcp ||
             ProbeOptions.Parse(["--self-test", "--nat-fix"]).TurnTcp)
             throw new InvalidOperationException("TURN transport CLI selection did not preserve the UDP default.");
+        if (!ProbeOptions.Parse(["--self-test", "--active-sctp-answer"]).ActiveSctpAnswer ||
+            ProbeOptions.Parse(["--self-test"]).ActiveSctpAnswer)
+            throw new InvalidOperationException("Active SCTP answer comparison mode did not preserve the passive default.");
         using (var peerManager = new WebRtcPeerManager("self-test", (_, _) => Task.CompletedTask, false))
         {
             if (peerManager.ShouldDeferIncomingOffer("unseen-peer"))
