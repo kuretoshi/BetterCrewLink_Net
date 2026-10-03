@@ -23,6 +23,8 @@ public partial class SettingsWindow : Window
     private readonly ClientSettingsTransaction settingsTransaction;
     private readonly DispatcherTimer lobbyCommitTimer = new() { Interval = TimeSpan.FromMilliseconds(750) };
     private bool settingsReady;
+    private DateTimeOffset nextDebugAuthAttempt;
+    private bool debugAuthBusy;
     internal event Action? DebugOpenRequested;
     private bool lobbyPending;
     private Action? pendingConfirmation;
@@ -383,9 +385,75 @@ public partial class SettingsWindow : Window
 
     private void OpenDebugButton_Click(object sender, RoutedEventArgs e)
     {
-        var authentication = new DebugAuthWindow { Owner = this };
-        if (authentication.ShowDialog() != true) return;
-        OpenAuthenticatedDebugInfo();
+        DebugPasswordInput.Clear();
+        DebugPasswordMessage.Text = "開発者用パスワードを入力してください。";
+        DebugPasswordMessage.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0xAA, 0xBD));
+        DebugAuthBackdrop.Visibility = Visibility.Visible;
+        Dispatcher.BeginInvoke(() => DebugPasswordInput.Focus(), DispatcherPriority.Input);
+    }
+
+    private void DebugPasswordInput_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        SubmitDebugAuthButton.IsEnabled = !debugAuthBusy && DebugPasswordInput.Password.Length > 0;
+        DebugPasswordMessage.Text = "開発者用パスワードを入力してください。";
+        DebugPasswordMessage.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0xAA, 0xBD));
+    }
+
+    private void DebugPasswordInput_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            CloseDebugAuthDialog();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Return && SubmitDebugAuthButton.IsEnabled)
+        {
+            SubmitDebugAuthButton_Click(sender, e);
+            e.Handled = true;
+        }
+    }
+
+    private void DebugAuthBackdrop_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (ReferenceEquals(e.OriginalSource, DebugAuthBackdrop)) CloseDebugAuthDialog();
+    }
+
+    private void CancelDebugAuthButton_Click(object sender, RoutedEventArgs e) => CloseDebugAuthDialog();
+
+    private void CloseDebugAuthDialog()
+    {
+        if (debugAuthBusy) return;
+        DebugAuthBackdrop.Visibility = Visibility.Collapsed;
+        DebugPasswordInput.Clear();
+        DebugPasswordMessage.Text = string.Empty;
+    }
+
+    private void SubmitDebugAuthButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (debugAuthBusy || DebugPasswordInput.Password.Length == 0 ||
+            DateTimeOffset.UtcNow < nextDebugAuthAttempt) return;
+        nextDebugAuthAttempt = DateTimeOffset.UtcNow.AddSeconds(1);
+        debugAuthBusy = true;
+        SubmitDebugAuthButton.IsEnabled = false;
+        CancelDebugAuthButton.IsEnabled = false;
+        var authenticated = false;
+        try { authenticated = DeveloperDebugAuth.Verify(DebugPasswordInput.Password); }
+        finally
+        {
+            DebugPasswordInput.Clear();
+            debugAuthBusy = false;
+            CancelDebugAuthButton.IsEnabled = true;
+        }
+        if (authenticated)
+        {
+            CloseDebugAuthDialog();
+            OpenAuthenticatedDebugInfo();
+        }
+        else
+        {
+            DebugPasswordMessage.Text = "認証できませんでした。パスワードと開発者用の設定を確認してください。";
+            DebugPasswordMessage.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x80));
+        }
     }
 
     private void OpenAuthenticatedDebugInfo() => DebugOpenRequested?.Invoke();

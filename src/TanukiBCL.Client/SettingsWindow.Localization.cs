@@ -79,6 +79,17 @@ public partial class SettingsWindow
             window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style ||
             window.OpenDebugButton is null)
             throw new InvalidOperationException("Advanced settings section card layout was not applied");
+        window.OpenDebugButton_Click(window.OpenDebugButton, new System.Windows.RoutedEventArgs());
+        if (window.DebugAuthBackdrop.Visibility != System.Windows.Visibility.Visible ||
+            window.SubmitDebugAuthButton.IsEnabled)
+            throw new InvalidOperationException("Developer authentication did not open as a settings dialog");
+        window.DebugPasswordInput.Password = "test";
+        if (!window.SubmitDebugAuthButton.IsEnabled)
+            throw new InvalidOperationException("Developer authentication did not accept entered text");
+        window.CancelDebugAuthButton_Click(window.CancelDebugAuthButton, new System.Windows.RoutedEventArgs());
+        if (window.DebugAuthBackdrop.Visibility != System.Windows.Visibility.Collapsed ||
+            window.DebugPasswordInput.Password.Length != 0)
+            throw new InvalidOperationException("Developer authentication did not clear on cancel");
         var debugOpened = false;
         var settingsClosed = false;
         window.DebugOpenRequested += () => debugOpened = true;

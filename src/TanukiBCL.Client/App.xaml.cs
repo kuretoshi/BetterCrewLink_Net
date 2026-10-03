@@ -63,7 +63,6 @@ public partial class App : Application
                 if (e.Args.Contains("--settings-self-test"))
                 {
                     DeveloperDebugAuth.VerifyParity();
-                    DebugAuthWindow.VerifyUi();
                     DebugInfoWindow.VerifyUi();
                     SettingsWindow.VerifyModControls();
                     SettingsWindow.VerifyLocalization();

@@ -1099,6 +1099,28 @@
               MouseDown="ConfirmDialogBackdrop_MouseDown">
             <local:SettingsConfirmDialog x:Name="ConfirmDialog" Margin="32" VerticalAlignment="Center" />
         </Grid>
+        <Grid x:Name="DebugAuthBackdrop" Grid.ColumnSpan="2" Background="#80000000" Visibility="Collapsed"
+              MouseDown="DebugAuthBackdrop_MouseDown">
+            <Border Width="420" MaxWidth="420" Background="#25232A" CornerRadius="4"
+                    Padding="24" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="開発者認証" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
+                    <TextBlock Text="パスワード" FontSize="13" Foreground="#B7AABD" Margin="0,0,0,6" />
+                    <PasswordBox x:Name="DebugPasswordInput" Height="40" Padding="8,7"
+                                 PasswordChanged="DebugPasswordInput_PasswordChanged"
+                                 KeyDown="DebugPasswordInput_KeyDown" />
+                    <TextBlock x:Name="DebugPasswordMessage"
+                               Text="開発者用パスワードを入力してください。"
+                               Foreground="#B7AABD" FontSize="12" TextWrapping="Wrap" Margin="0,7,0,20" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button x:Name="CancelDebugAuthButton" Content="キャンセル" Padding="12,6"
+                                Margin="0,0,8,0" Click="CancelDebugAuthButton_Click" />
+                        <Button x:Name="SubmitDebugAuthButton" Content="開く" Padding="12,6"
+                                IsEnabled="False" Click="SubmitDebugAuthButton_Click" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
         </Grid>
     </Grid>
 </Window>
