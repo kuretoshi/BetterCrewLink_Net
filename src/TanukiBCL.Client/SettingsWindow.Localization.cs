@@ -16,6 +16,10 @@ public partial class SettingsWindow
         var settings = new ClientSettings();
         var window = new SettingsWindow(settings, true, null, false, null, (_, _, _) => { }, _ => { });
         window.ApplyTemplate();
+        if (window.WindowStyle != System.Windows.WindowStyle.None ||
+            window.MinimizeSettingsButton is null || window.CloseSettingsButton is null ||
+            window.SaveStatusText.Visibility != System.Windows.Visibility.Collapsed)
+            throw new InvalidOperationException("Released settings title bar or hidden save status was not applied");
         var generalItem = (System.Windows.Controls.ListBoxItem)window.CategoryList.Items[0];
         generalItem.ApplyTemplate();
         if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path

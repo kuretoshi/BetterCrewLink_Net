@@ -34,6 +34,7 @@ public partial class SettingsWindow
             // Keep the existing controls and pending draft intact on failure.
             SaveStatusText.Text = $"設定をリセットできませんでした。もう一度お試しください: {error.Message}";
             SaveStatusText.Foreground = System.Windows.Media.Brushes.IndianRed;
+            SaveStatusText.Visibility = Visibility.Visible;
             return;
         }
         // Never flush a pre-reset lobby draft or failed slider after resetting.

@@ -141,8 +141,7 @@ public partial class SettingsWindow
             settingsTransaction.Apply(ReadSettingsControls(), persist, keys);
             if (persist) failedSaveKeys.ExceptWith(keys);
             if (failedSaveKeys.Count > 0) return true;
-            SaveStatusText.Text = persist ? "変更を保存しました。" : "変更を反映中…";
-            SaveStatusText.Foreground = new SolidColorBrush(Color.FromRgb(0xb7, 0xaa, 0xbd));
+            SaveStatusText.Visibility = Visibility.Collapsed;
             return true;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
@@ -233,6 +232,7 @@ public partial class SettingsWindow
     {
         SaveStatusText.Text = $"設定を保存できませんでした。閉じる操作で再試行します: {error.Message}";
         SaveStatusText.Foreground = Brushes.IndianRed;
+        SaveStatusText.Visibility = Visibility.Visible;
     }
 
     protected override void OnDeactivated(EventArgs e)

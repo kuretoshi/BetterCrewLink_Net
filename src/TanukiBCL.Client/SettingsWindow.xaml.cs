@@ -742,6 +742,16 @@ public partial class SettingsWindow : Window
 
     internal static bool IsValidServerUrl(string candidate) => ServerUrlDialog.IsValidUrl(candidate);
 
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        else
+            DragMove();
+    }
+
+    private void MinimizeSettingsButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
     private void CloseSettingsButton_Click(object sender, RoutedEventArgs e) => Close();
 
     internal static void RenderServerDialogPreview(string directory)
