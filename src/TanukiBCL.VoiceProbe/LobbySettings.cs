@@ -44,11 +44,15 @@ internal sealed record LobbySettings
     [JsonPropertyName("publicLobby_language")]
     public string PublicLobbyLanguage { get; init; } = "ja";
 
+    [JsonPropertyName("publicLobby_mods")]
+    public string PublicLobbyMods { get; init; } = "NONE";
+
     public LobbySettings Normalize() => this with
     {
         MaxDistance = double.IsFinite(MaxDistance) ? Math.Clamp(MaxDistance, 1d, 10d) : 5.32d,
         PublicLobbyTitle = PublicLobbyTitle ?? string.Empty,
-        PublicLobbyLanguage = string.IsNullOrWhiteSpace(PublicLobbyLanguage) ? "ja" : PublicLobbyLanguage
+        PublicLobbyLanguage = string.IsNullOrWhiteSpace(PublicLobbyLanguage) ? "ja" : PublicLobbyLanguage,
+        PublicLobbyMods = PublicLobbyMods ?? "NONE"
     };
 
     // SettingsPanel.tsx RADIO_ONLY_FORCED_SETTINGS. Keep the original values so

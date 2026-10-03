@@ -874,9 +874,15 @@ internal static class SpatialVoicePolicySelfTest
                 document.RootElement.TryGetProperty("jackalRadioEnabled", out _));
             Check("lobby wire: nosFixerJammingVoiceBlock", true,
                 document.RootElement.TryGetProperty("nosFixerJammingVoiceBlock", out _));
+            Check("lobby wire: released publicLobby_mods default", true,
+                document.RootElement.GetProperty("publicLobby_mods").GetString() == "NONE");
         }
         Check("lobby wire: round trip", true,
             JsonSerializer.Deserialize<LobbySettings>(wire, LobbySettings.WireJsonOptions) == lobbySettings);
+        var importedMods = JsonSerializer.Deserialize<LobbySettings>(
+            "{\"publicLobby_mods\":\"TOH4E\"}", LobbySettings.WireJsonOptions);
+        Check("lobby wire: preserves imported publicLobby_mods", true,
+            importedMods?.PublicLobbyMods == "TOH4E");
 
         var beforeRadioOnly = lobbySettings with
         {
