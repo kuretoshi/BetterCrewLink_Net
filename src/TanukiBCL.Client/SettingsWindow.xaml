@@ -969,20 +969,20 @@
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
                                 <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
-                                    <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="常に手前に表示"
+                                    <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="最前面に表示"
                                               Style="{StaticResource OverlaySwitchStyle}" />
                                 </Border>
                                 <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
-                                    <CheckBox x:Name="EnableOverlayCheck" Content="ゲーム画面にオーバーレイを表示"
+                                    <CheckBox x:Name="EnableOverlayCheck" Content="オーバーレイを有効化"
                                               Style="{StaticResource OverlaySwitchStyle}" />
                                 </Border>
                                 <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
-                                    <CheckBox x:Name="CompactOverlayCheck" Content="発話中のプレイヤーだけを表示"
+                                    <CheckBox x:Name="CompactOverlayCheck" Content="コンパクトなオーバーレイ"
                                               Style="{StaticResource OverlaySwitchStyle}"
                                               IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" />
                                 </Border>
                                 <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
-                                    <CheckBox x:Name="MeetingOverlayCheck" Content="会議中の発話枠を表示"
+                                    <CheckBox x:Name="MeetingOverlayCheck" Content="議論のオーバーレイ表示"
                                               Style="{StaticResource OverlaySwitchStyle}"
                                               IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" />
                                 </Border>
@@ -991,17 +991,17 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="250" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="アバターの位置" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="OverlayPositionLabel" Text="オーバーレイの位置" VerticalAlignment="Center" />
                                     <ComboBox x:Name="OverlayPositionCombo" Grid.Column="1"
                                               Style="{StaticResource DarkAudioComboStyle}" FontSize="14"
                                               IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}">
-                                        <ComboBoxItem Content="表示しない" Tag="hidden" />
-                                        <ComboBoxItem Content="上" Tag="top" />
+                                        <ComboBoxItem Content="非表示" Tag="hidden" />
+                                        <ComboBoxItem Content="中央上" Tag="top" />
                                         <ComboBoxItem Content="左下" Tag="bottom_left" />
                                         <ComboBoxItem Content="右" Tag="right" />
-                                        <ComboBoxItem Content="右（発話中に名前表示）" Tag="right1" />
+                                        <ComboBoxItem Content="背景付き右" Tag="right1" />
                                         <ComboBoxItem Content="左" Tag="left" />
-                                        <ComboBoxItem Content="左（発話中に名前表示）" Tag="left1" />
+                                        <ComboBoxItem Content="背景付き左" Tag="left1" />
                                     </ComboBox>
                                 </Grid>
                             </StackPanel>

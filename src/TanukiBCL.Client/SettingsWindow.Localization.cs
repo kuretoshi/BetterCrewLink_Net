@@ -44,6 +44,31 @@ public partial class SettingsWindow
         var settings = new ClientSettings();
         var window = new SettingsWindow(settings, true, null, false, null, (_, _, _) => { }, _ => { });
         window.ApplyTemplate();
+        bool OverlayLabelsMatch(string language)
+        {
+            var locations = window.OverlayPositionCombo.Items.OfType<ComboBoxItem>().ToArray();
+            return Equals(window.OverlayAlwaysOnTopCheck.Content,
+                       UiLocalization.Translate(language, "settings.overlay.always_on_top")) &&
+                   Equals(window.EnableOverlayCheck.Content,
+                       UiLocalization.Translate(language, "settings.overlay.enabled")) &&
+                   Equals(window.CompactOverlayCheck.Content,
+                       UiLocalization.Translate(language, "settings.overlay.compact")) &&
+                   Equals(window.MeetingOverlayCheck.Content,
+                       UiLocalization.Translate(language, "settings.overlay.meeting")) &&
+                   window.OverlayPositionLabel.Text == UiLocalization.Translate(language, "settings.overlay.pos") &&
+                   locations.Length == 7 && locations.All(location =>
+                       location.Tag is string key &&
+                       Equals(location.Content,
+                           UiLocalization.Translate(language,
+                               $"settings.overlay.locations.{(key == "bottom_left" ? "bottom" : key)}")));
+        }
+        if (!OverlayLabelsMatch("ja"))
+            throw new InvalidOperationException("Released Japanese overlay settings labels were not applied: " +
+                $"top={window.OverlayAlwaysOnTopCheck.Content}, enabled={window.EnableOverlayCheck.Content}, " +
+                $"compact={window.CompactOverlayCheck.Content}, meeting={window.MeetingOverlayCheck.Content}, " +
+                $"position={window.OverlayPositionLabel.Text}, locations=" +
+                string.Join("|", window.OverlayPositionCombo.Items.OfType<ComboBoxItem>()
+                    .Select(item => $"{item.Tag}:{item.Content}")));
         if (window.WindowStyle != System.Windows.WindowStyle.None ||
             window.MinimizeSettingsButton is null || window.CloseSettingsButton is null ||
             window.SaveStatusText.Visibility != System.Windows.Visibility.Collapsed)
@@ -188,7 +213,8 @@ public partial class SettingsWindow
             window.DeadOnlyDescription.Text != UiLocalization.Translate("en", "settings.lobbysettings.ghost_only_warning") ||
             window.MeetingGhostOnlyDescription.Text != UiLocalization.Translate("en", "settings.lobbysettings.meetings_only_warning") ||
             window.LobbyNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.mine_notice") ||
-            !Equals(window.CopyObsUrlButton.ToolTip, "Copy URL"))
+            !Equals(window.CopyObsUrlButton.ToolTip, "Copy URL") ||
+            !OverlayLabelsMatch("en"))
             throw new InvalidOperationException("English settings language did not apply");
         window.VisionHearingCheck.IsChecked = true;
         if (window.DistanceTitleText.Text != UiLocalization.Translate("en", "settings.lobbysettings.voicedistance_impostor"))
