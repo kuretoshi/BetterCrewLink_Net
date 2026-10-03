@@ -1,0 +1,34 @@
+<Window x:Class="TanukiBCL.Client.DebugInfoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TanukiBCL Debug" Width="900" Height="680" MinWidth="620" MinHeight="440"
+        WindowStartupLocation="CenterOwner" Background="#25232A" Foreground="#F5F1F7">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <DockPanel Margin="16,12,16,8">
+            <Button x:Name="SaveLogButton" DockPanel.Dock="Right" Content="ログを保存"
+                    Padding="12,6" Click="SaveLogButton_Click" />
+            <TextBlock x:Name="ModNameText" VerticalAlignment="Center" FontSize="13" />
+        </DockPanel>
+        <TextBlock x:Name="HelpText" Grid.Row="1" Margin="16,0,16,8"
+                   Foreground="#B7AABD" FontSize="12" Text="ゲーム・音声の状態を自動更新します。" />
+        <TabControl x:Name="DebugTabs" Grid.Row="2" Height="36" Margin="12,0,12,0"
+                    SelectionChanged="DebugTabs_SelectionChanged">
+            <TabItem Header="リアルタイム" />
+            <TabItem Header="SNR役職" />
+            <TabItem Header="ゲーム状態" />
+            <TabItem Header="音声接続" />
+            <TabItem Header="ログ" />
+        </TabControl>
+        <TextBox x:Name="DebugText" Grid.Row="3" Margin="16,0,16,16" Padding="10"
+                 IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                 FontFamily="Consolas" FontSize="12" Background="#1D1A23" Foreground="#F5F1F7"
+                 BorderThickness="0" />
+    </Grid>
+</Window>

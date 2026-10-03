@@ -61,6 +61,9 @@ public partial class App : Application
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
                 if (e.Args.Contains("--settings-self-test"))
                 {
+                    DeveloperDebugAuth.VerifyParity();
+                    DebugAuthWindow.VerifyUi();
+                    DebugInfoWindow.VerifyUi();
                     SettingsWindow.VerifyModControls();
                     SettingsWindow.VerifyLocalization();
                     var previewIndex = Array.IndexOf(e.Args, "--server-dialog-preview");

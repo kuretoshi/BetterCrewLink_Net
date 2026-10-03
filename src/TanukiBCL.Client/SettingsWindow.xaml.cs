@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
     private readonly ClientSettingsTransaction settingsTransaction;
     private readonly DispatcherTimer lobbyCommitTimer = new() { Interval = TimeSpan.FromMilliseconds(750) };
     private bool settingsReady;
+    internal bool DebugOpenRequested { get; private set; }
     private bool lobbyPending;
     private Action? pendingConfirmation;
     internal event Action<ClientSettingsChange>? SettingsApplied;
@@ -377,6 +378,14 @@ public partial class SettingsWindow : Window
 
     private static void SetShortcutRecording(TextBox box, bool recording) =>
         box.Tag = recording ? "Recording" : null;
+
+    private void OpenDebugButton_Click(object sender, RoutedEventArgs e)
+    {
+        var authentication = new DebugAuthWindow { Owner = this };
+        if (authentication.ShowDialog() != true) return;
+        DebugOpenRequested = true;
+        Close();
+    }
 
     private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {

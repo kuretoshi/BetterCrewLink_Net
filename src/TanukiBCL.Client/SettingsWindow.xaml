@@ -661,6 +661,19 @@
                                 </Grid>
                             </StackPanel>
                         </Border>
+                        <TextBlock Text="デバッグ" FontSize="12" Foreground="#B7AABD" Margin="4,24,0,14" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
+                            <Grid Margin="16,12">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock Text="デバッグ情報" FontWeight="SemiBold" />
+                                    <TextBlock Text="ゲーム状態や音声接続を診断表示で確認します。"
+                                               Foreground="#B7AABD" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                </StackPanel>
+                                <Button x:Name="OpenDebugButton" Grid.Column="1" Content="デバッグ情報を開く"
+                                        VerticalAlignment="Center" Padding="10,6" Click="OpenDebugButton_Click" />
+                            </Grid>
+                        </Border>
                         <TextBlock Text="ベータ/デバッグ" FontSize="12" Foreground="#B7AABD" Margin="4,24,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>

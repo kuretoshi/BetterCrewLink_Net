@@ -3,6 +3,7 @@ using System.IO;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Windows;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
@@ -17,6 +18,7 @@ public partial class MainWindow : Window
     private SettingsWindow? settingsWindow;
     private InquiryWindow? inquiryWindow;
     private OverlayWindow? overlayWindow;
+    private DebugInfoWindow? debugInfoWindow;
     private int? activeGamePid;
     private GlobalHotkeyMonitor? hotkeys;
     private Task? reloadTask;
@@ -159,6 +161,59 @@ public partial class MainWindow : Window
             settingsWindow = null;
             hotkeysSuspended = false;
         }
+        if (window.DebugOpenRequested && !isClosing) ShowDebugInfo();
+    }
+
+    private void ShowDebugInfo()
+    {
+        if (debugInfoWindow is { IsVisible: true })
+        {
+            debugInfoWindow.Activate();
+            return;
+        }
+        var window = new DebugInfoWindow(CaptureDebugInfo) { Owner = this };
+        debugInfoWindow = window;
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(debugInfoWindow, window)) debugInfoWindow = null;
+        };
+        window.Show();
+    }
+
+    private DebugInfoSnapshot CaptureDebugInfo()
+    {
+        var state = currentState;
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        var live = state is null
+            ? "ゲーム情報を待っています…"
+            : $"ゲーム状態: {state.GameState} / プレイヤー: {state.Players.Count}人\n" +
+              $"ロビー: {state.LobbyCode} / マップ: {state.Map} / 通信妨害: {state.CommsSabotaged}\n" +
+              string.Join("\n", state.Players.Select(player =>
+                  $"{player.Name} / PlayerId: {player.Id} / ClientId: {player.ClientId} / " +
+                  $"{(player.IsDead ? "死亡" : "生存")} / " +
+                  $"{player.SnrRole?.RoleName ?? player.TohRole?.RoleName ?? (player.IsImpostor ? "Impostor" : "Crewmate")} / " +
+                  $"ベント: {player.InVent} / 座標: {player.X:F2}, {player.Y:F2}"));
+        var roles = state?.Mod == AmongUsModType.SuperNewRoles
+            ? JsonSerializer.Serialize(state.Players.Select(player => new
+            {
+                player.Name, player.Id, player.ClientId, player.SnrRole
+            }), jsonOptions)
+            : "SuperNewRolesの起動を確認してください。";
+        var voice = JsonSerializer.Serialize(new
+        {
+            Server = StatusText.Text,
+            ServerQuality = serverQuality,
+            MicrophoneMuted = microphoneMuted,
+            Deafened = deafened,
+            RadioTransmitting = radioTransmitting,
+            Peers = peers.Select(peer => new
+            {
+                peer.ClientId, peer.Name, peer.Connection, peer.Voice, peer.Radio,
+                peer.Received, peer.Gain, peer.VadActive, peer.Audible, peer.Quality
+            })
+        }, jsonOptions);
+        return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live, roles,
+            state is null ? "情報を待っています…" : JsonSerializer.Serialize(state, jsonOptions), voice);
     }
 
     private void ShowInquiry()

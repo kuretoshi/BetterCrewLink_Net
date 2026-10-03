@@ -70,8 +70,9 @@ public partial class SettingsWindow
         SetShortcutRecording(window.PushToTalkShortcutBox, false);
         if (prompt.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Shortcut recording prompt did not close");
-        if (window.AdvancedPanel.Children.OfType<Border>().Count() != 2 ||
-            window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style)
+        if (window.AdvancedPanel.Children.OfType<Border>().Count() != 3 ||
+            window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style ||
+            window.OpenDebugButton is null)
             throw new InvalidOperationException("Advanced settings section card layout was not applied");
         var generalItem = (System.Windows.Controls.ListBoxItem)window.CategoryList.Items[0];
         generalItem.ApplyTemplate();
