@@ -96,9 +96,11 @@ internal static class Program
                 return await GameAudioSelfTestRunner.RunServerRecoveryAsync(options);
             }
 
-            if (options.SelfTest || args.Contains("--quality-self-test"))
+            if (options.SelfTest || args.Contains("--quality-self-test") || args.Contains("--mixed-nat-self-test"))
             {
-                return await SelfTestRunner.RunAsync(options, expectPeerQuality: args.Contains("--quality-self-test"));
+                return await SelfTestRunner.RunAsync(options,
+                    expectPeerQuality: args.Contains("--quality-self-test"),
+                    mixedNat: args.Contains("--mixed-nat-self-test"));
             }
 
             if (options.TanukiInteropTest)
@@ -156,6 +158,7 @@ internal static class Program
               --host               ホストとして参加
               --seconds <number>   指定秒数後に自動終了
               --self-test         2クライアントでP2Pデータチャネルを自動検証
+              --mixed-nat-self-test  片側だけNAT修正ONでP2P接続を検証（--nat-fixでON側を逆転）
               --policy-self-test  3.2.7の音声ポリシーをローカルで検証
               --vad-self-test     3.2.7の周波数帯VADとマイク操作モードを検証
               --audio-processing-self-test  エコーキャンセル・ノイズ抑制・自動ゲイン処理を検証

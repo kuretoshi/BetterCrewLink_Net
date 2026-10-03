@@ -2,7 +2,8 @@ namespace TanukiBCL.VoiceProbe;
 
 internal static class SelfTestRunner
 {
-    public static async Task<int> RunAsync(ProbeOptions baseOptions, bool expectPeerQuality = false)
+    public static async Task<int> RunAsync(ProbeOptions baseOptions, bool expectPeerQuality = false,
+        bool mixedNat = false)
     {
         using (var peerManager = new WebRtcPeerManager("self-test", (_, _) => Task.CompletedTask, false))
         {
@@ -35,11 +36,12 @@ internal static class SelfTestRunner
             IsHost = false,
             Duration = null,
             SelfTest = false,
+            NatFix = mixedNat ? !baseOptions.NatFix : baseOptions.NatFix,
             LiveAudio = false,
             GameProcessId = null
         };
 
-        Console.WriteLine($"P2Pセルフテスト開始: lobby={lobby} timeout={timeout.TotalSeconds:0}s");
+        Console.WriteLine($"P2Pセルフテスト開始: lobby={lobby} timeout={timeout.TotalSeconds:0}s natFix={firstOptions.NatFix}/{secondOptions.NatFix}");
         using var cancellation = new CancellationTokenSource(timeout);
         await using var first = new VoiceServerProbe(firstOptions, "A");
         await using var second = new VoiceServerProbe(secondOptions, "B");
