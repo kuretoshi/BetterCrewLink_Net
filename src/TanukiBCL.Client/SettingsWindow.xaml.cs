@@ -876,7 +876,10 @@ public partial class SettingsWindow : Window
                 throw new InvalidOperationException("Shared Jackal radio setting did not follow MOD switch");
             window.CategoryList.SelectedIndex = 7;
             if (window.UpdatePanel.Visibility != Visibility.Visible || window.StartUpdateButton.IsEnabled ||
-                !window.UpdateVersionText.Text.Contains(UpdateCatalog.CurrentVersion) ||
+                window.UpdateVersionText.Visibility != Visibility.Collapsed ||
+                window.UpdateStatusText.Visibility != Visibility.Visible ||
+                window.UpdateStatusText.Text != "アップデートを確認してください。" ||
+                window.CheckUpdateButton.Height != 40 || window.StartUpdateButton.Height != 40 ||
                 window.ManualUpdateDownloadButton.Visibility != Visibility.Collapsed)
                 throw new InvalidOperationException("Update settings did not initialize");
             window.ShowUpdateError("Test update failure");

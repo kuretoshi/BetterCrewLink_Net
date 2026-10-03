@@ -15,8 +15,10 @@ public partial class SettingsWindow
 
     private void InitializeUpdatePanel()
     {
-        UpdateVersionText.Text = $"現在のバージョン v{UpdateCatalog.CurrentVersion}";
+        UpdateVersionText.Text = string.Empty;
+        UpdateVersionText.Visibility = Visibility.Collapsed;
         UpdateStatusText.Text = "アップデートを確認してください。";
+        UpdateStatusText.Visibility = Visibility.Visible;
         UpdateProgress.Visibility = Visibility.Collapsed;
         ManualUpdateDownloadButton.Visibility = Visibility.Collapsed;
     }
@@ -26,6 +28,8 @@ public partial class SettingsWindow
         if (updateBusy) return;
         updateBusy = true;
         updateCandidate = null;
+        UpdateVersionText.Visibility = Visibility.Collapsed;
+        UpdateStatusText.Visibility = Visibility.Visible;
         CheckUpdateButton.IsEnabled = false;
         StartUpdateButton.IsEnabled = false;
         UpdateProgress.Visibility = Visibility.Collapsed;
@@ -38,16 +42,20 @@ public partial class SettingsWindow
             if (updateCancellation.IsCancellationRequested) return;
             if (updateCandidate is null)
             {
-                UpdateStatusText.Text = "利用できる.NET版の更新はありません。";
+                UpdateStatusText.Text = "最新バージョンです";
             }
             else if (!UpdateInstallationAvailable())
             {
+                UpdateVersionText.Text = $"最新バージョンv{updateCandidate.Version}";
+                UpdateVersionText.Visibility = Visibility.Visible;
                 UpdateStatusText.Text = $"新しいバージョン {updateCandidate.Version} があります。" +
                     "この起動場所には更新補助ツールがないため、配布版から起動してください。";
             }
             else
             {
-                UpdateStatusText.Text = $"最新バージョン {updateCandidate.Version} を利用できます。";
+                UpdateVersionText.Text = $"最新バージョンv{updateCandidate.Version}";
+                UpdateVersionText.Visibility = Visibility.Visible;
+                UpdateStatusText.Visibility = Visibility.Collapsed;
                 StartUpdateButton.IsEnabled = true;
             }
         }
@@ -74,6 +82,7 @@ public partial class SettingsWindow
         StartUpdateButton.IsEnabled = false;
         UpdateProgress.Value = 0;
         UpdateProgress.Visibility = Visibility.Visible;
+        UpdateStatusText.Visibility = Visibility.Visible;
         ManualUpdateDownloadButton.Visibility = Visibility.Collapsed;
         UpdateStatusText.Text = "ダウンロード中…";
         try
@@ -118,6 +127,7 @@ public partial class SettingsWindow
 
     private void ShowUpdateError(string message)
     {
+        UpdateStatusText.Visibility = Visibility.Visible;
         UpdateStatusText.Text = message;
         ManualUpdateDownloadButton.Visibility = Visibility.Visible;
     }

@@ -764,26 +764,31 @@
                         </Border>
                     </StackPanel>
                     <StackPanel x:Name="UpdatePanel" Visibility="Collapsed">
-                        <TextBlock Text="アップデート" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
-                        <Border Background="#29252F" Padding="20" CornerRadius="6">
+                        <TextBlock Text="アップデート" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                Padding="20" CornerRadius="8">
                             <StackPanel>
-                                <TextBlock x:Name="UpdateVersionText" Margin="0,0,0,12" />
+                                <TextBlock x:Name="UpdateVersionText" FontSize="15" FontWeight="Medium"
+                                           Visibility="Collapsed" Margin="0,0,0,6" />
                                 <TextBlock x:Name="UpdateStatusText" Text="アップデートを確認してください。"
-                                           FontSize="15" FontWeight="Medium" TextWrapping="Wrap" Margin="0,0,0,14" />
+                                           FontSize="15" FontWeight="Medium" TextWrapping="Wrap" Margin="0,0,0,20" />
                                 <ProgressBar x:Name="UpdateProgress" Height="6" Minimum="0" Maximum="100"
-                                             Visibility="Collapsed" Margin="0,0,0,16" />
-                                <WrapPanel>
+                                             Visibility="Collapsed" Margin="0,0,0,20" />
+                                <WrapPanel MaxWidth="440" HorizontalAlignment="Left">
                                     <Button x:Name="CheckUpdateButton" Content="アップデートを確認"
-                                            Padding="14,8" MinWidth="175" Margin="0,0,12,8"
+                                            Width="200" Height="40" Margin="0,0,12,8"
+                                            Background="Transparent" Foreground="#BA68C8"
+                                            BorderBrush="#BA68C8" BorderThickness="1"
                                             Click="CheckUpdateButton_Click" />
                                     <Button x:Name="StartUpdateButton" Content="アップデート開始"
-                                            Padding="14,8" MinWidth="175" Margin="0,0,0,8" IsEnabled="False"
-                                            Background="#8B4D99" Foreground="White" Click="StartUpdateButton_Click" />
+                                            Width="200" Height="40" Margin="0,0,0,8" IsEnabled="False"
+                                            Background="#BA68C8" Foreground="#1D1B22"
+                                            BorderThickness="0" Click="StartUpdateButton_Click" />
                                 </WrapPanel>
-                                <TextBlock Text="開始後はダウンロードを検証し、アプリを終了して更新します。旧版はバックアップとして残します。"
-                                           FontSize="12" Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,10,0,0" />
+                                <TextBlock Text="アップデート開始後は、ダウンロード完了時にアプリを終了して更新します。"
+                                           FontSize="12" Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,8,0,0" />
                                 <Button x:Name="ManualUpdateDownloadButton" Content="手動でダウンロード"
-                                        HorizontalAlignment="Left" Padding="14,8" Margin="0,12,0,0"
+                                        HorizontalAlignment="Left" Padding="14,8" Margin="0,8,0,0"
                                         Visibility="Collapsed" Click="ManualUpdateDownloadButton_Click" />
                             </StackPanel>
                         </Border>
