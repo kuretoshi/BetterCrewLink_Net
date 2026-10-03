@@ -143,7 +143,7 @@ public partial class SettingsWindow : Window
         var wasEditable = lobbySettingsEditable;
         lobbySettingsEditable = state is not { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
-        if (wasEditable != lobbySettingsEditable) ShowSelectedLobbySettings();
+        if (wasEditable != lobbySettingsEditable || showingCurrentLobby) ShowSelectedLobbySettings();
         else UpdateLobbyNotice();
         UpdateModSettingsVisibility();
         UpdateShortcutLabels();
@@ -552,9 +552,16 @@ public partial class SettingsWindow : Window
     private void ShowSelectedLobbySettings()
     {
         UpdateModSettingsVisibility();
-        var value = showingCurrentLobby ? currentLobbySettings : lobbyDraft;
+        var lobbyCode = currentGameState?.LobbyCode;
+        var inLobby = currentLobbySettings is not null &&
+            !string.IsNullOrWhiteSpace(lobbyCode) &&
+            !string.Equals(lobbyCode, "MENU", StringComparison.OrdinalIgnoreCase);
+        var value = showingCurrentLobby ? inLobby ? currentLobbySettings : null : lobbyDraft;
         UpdateLobbyNotice();
-        NoLobbyText.Visibility = value is null ? Visibility.Visible : Visibility.Collapsed;
+        LobbyInfoAlert.Visibility = !showingCurrentLobby || !inLobby ? Visibility.Visible : Visibility.Collapsed;
+        NoLobbyText.Visibility = showingCurrentLobby && !inLobby ? Visibility.Visible : Visibility.Collapsed;
+        LobbyNotice.Visibility = showingCurrentLobby && !inLobby ? Visibility.Collapsed : Visibility.Visible;
+        LobbyHostPanel.Visibility = showingCurrentLobby && inLobby ? Visibility.Visible : Visibility.Collapsed;
         LobbyControlsPanel.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
         if (value is not null) LoadLobbyControls(value);
@@ -571,7 +578,28 @@ public partial class SettingsWindow : Window
                 ? "settings.lobbysettings.mine_notice"
                 : "settings.lobbysettings.inlobbyonly";
         LobbyNotice.Text = UiLocalization.Translate(settings.Language, key);
+        LobbyHostNotice.Text = UiLocalization.Translate(settings.Language,
+            currentGameState?.IsHost == true
+                ? "settings.lobbysettings.host_notice_you"
+                : "settings.lobbysettings.host_notice");
+        LobbyHostName.Text = ResolveLobbyHostName();
+        LobbyHostEditButton.Visibility = currentGameState?.IsHost == true
+            ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    private string ResolveLobbyHostName()
+    {
+        if (currentGameState?.IsHost == true)
+            return UiLocalization.Translate(settings.Language, "settings.lobbysettings.host_you");
+        var name = currentGameState?.Players.FirstOrDefault(player =>
+            player.ClientId == currentGameState.HostId)?.Name;
+        if (string.IsNullOrWhiteSpace(name))
+            return UiLocalization.Translate(settings.Language, "settings.lobbysettings.host_unknown");
+        var marker = name.IndexOf("town of host for e", StringComparison.OrdinalIgnoreCase);
+        return marker < 0 ? name : name[..marker].TrimEnd();
+    }
+
+    private void LobbyHostEditButton_Click(object sender, RoutedEventArgs e) => MyLobbyTab.IsChecked = true;
 
     private void UpdateModSettingsVisibility()
     {

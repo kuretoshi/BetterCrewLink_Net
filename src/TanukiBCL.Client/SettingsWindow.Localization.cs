@@ -107,6 +107,9 @@ public partial class SettingsWindow
             !Equals(window.ImpostorVentCheck.Content, UiLocalization.Translate("en", "settings.lobbysettings.private_talk_invents")) ||
             !Equals(window.PublicLobbyOnCheck.Content, UiLocalization.Translate("en", "settings.lobbysettings.public_lobby.enabled")) ||
             window.NoLobbyText.Text != UiLocalization.Translate("en", "settings.lobbysettings.no_lobby") ||
+            window.RadioOnlyDescription.Text != UiLocalization.Translate("en", "settings.lobbysettings.impostor_radio_only_description") ||
+            window.DeadOnlyDescription.Text != UiLocalization.Translate("en", "settings.lobbysettings.ghost_only_warning") ||
+            window.MeetingGhostOnlyDescription.Text != UiLocalization.Translate("en", "settings.lobbysettings.meetings_only_warning") ||
             window.LobbyNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.mine_notice") ||
             !Equals(window.CopyObsUrlButton.ToolTip, "Copy URL"))
             throw new InvalidOperationException("English settings language did not apply");
@@ -124,11 +127,40 @@ public partial class SettingsWindow
         window.UpdateCurrentGameState(new AmongUsState { IsHost = true, GameState = GameState.Tasks });
         if (window.LobbyNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.inlobbyonly"))
             throw new InvalidOperationException("Active host lobby notice did not follow English language");
-        window.UpdateCurrentGameState(new AmongUsState { IsHost = true, GameState = GameState.Lobby });
+        window.UpdateCurrentLobbySettings(new LobbySettings());
+        window.UpdateCurrentGameState(new AmongUsState
+        {
+            IsHost = true, GameState = GameState.Lobby, LobbyCode = "ABCDEF"
+        });
         window.CurrentLobbyTab.IsChecked = true;
-        if (window.LobbyNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.host_notice_you"))
-            throw new InvalidOperationException("Current host lobby notice did not follow English language");
+        if (window.LobbyHostPanel.Visibility != System.Windows.Visibility.Visible ||
+            window.LobbyInfoAlert.Visibility != System.Windows.Visibility.Collapsed ||
+            window.LobbyHostNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.host_notice_you") ||
+            window.LobbyHostName.Text != UiLocalization.Translate("en", "settings.lobbysettings.host_you") ||
+            window.LobbyHostEditButton.Visibility != System.Windows.Visibility.Visible)
+            throw new InvalidOperationException("Current host lobby card did not follow released behavior");
+        window.LobbyHostEditButton.RaiseEvent(new System.Windows.RoutedEventArgs(
+            System.Windows.Controls.Button.ClickEvent));
+        if (window.MyLobbyTab.IsChecked != true)
+            throw new InvalidOperationException("Host lobby edit button did not open own settings");
+        window.UpdateCurrentGameState(new AmongUsState
+        {
+            GameState = GameState.Lobby, LobbyCode = "ABCDEF", HostId = 8,
+            Players = [new Player { ClientId = 8, Name = "Alice" }]
+        });
+        window.CurrentLobbyTab.IsChecked = true;
+        if (window.LobbyHostName.Text != "Alice" ||
+            window.LobbyHostNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.host_notice") ||
+            window.LobbyHostEditButton.Visibility != System.Windows.Visibility.Collapsed)
+            throw new InvalidOperationException("Guest lobby host card did not show the game host");
+        window.UpdateCurrentGameState(new AmongUsState { GameState = GameState.Menu });
+        if (window.LobbyInfoAlert.Visibility != System.Windows.Visibility.Visible ||
+            window.NoLobbyText.Visibility != System.Windows.Visibility.Visible ||
+            window.LobbyHostPanel.Visibility != System.Windows.Visibility.Collapsed ||
+            window.LobbyControlsPanel.Visibility != System.Windows.Visibility.Collapsed)
+            throw new InvalidOperationException("Current lobby remained visible after leaving the game");
         window.MyLobbyTab.IsChecked = true;
+        window.VisionHearingCheck.IsChecked = true;
         VerifyShortcutLabels("en", false);
         if (window.PlayerRows.Children[0] is not TextBlock { Text: "No other players right now. Join a lobby to adjust their volume." })
             throw new InvalidOperationException("Empty player state was not translated");

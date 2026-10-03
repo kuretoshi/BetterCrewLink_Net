@@ -293,6 +293,25 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="LobbyHostEditButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Background" Value="#BA68C8" />
+            <Setter Property="Foreground" Value="#1D1B22" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ShortcutFieldStyle" TargetType="TextBox">
             <Setter Property="Width" Value="200" />
             <Setter Property="Height" Value="34" />
@@ -475,17 +494,44 @@
                             <RadioButton x:Name="MyLobbyTab" Content="自分の設定" GroupName="LobbyView"
                                          Checked="LobbyTab_Changed" Style="{StaticResource LobbyTabStyle}" />
                         </StackPanel>
-                        <Border Background="#071B25" CornerRadius="4" MinHeight="48" Margin="0,0,0,24"
+                        <Border x:Name="LobbyInfoAlert" Background="#071B25" CornerRadius="4" MinHeight="48" Margin="0,0,0,24"
                                 Padding="16,10">
                             <DockPanel LastChildFill="True">
                                 <TextBlock Text="ⓘ" Foreground="#29B6F6" FontSize="18" FontWeight="SemiBold"
                                            DockPanel.Dock="Left" Margin="0,0,12,0" />
-                                <TextBlock x:Name="LobbyNotice" TextWrapping="Wrap" Foreground="#80D8FF"
-                                           FontSize="14" FontWeight="SemiBold" />
+                                <Grid>
+                                    <TextBlock x:Name="LobbyNotice" TextWrapping="Wrap" Foreground="#80D8FF"
+                                               FontSize="14" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="NoLobbyText" Text="ロビーに未接続です。参加または作成すると設定を確認できます。"
+                                               TextWrapping="Wrap" Foreground="#80D8FF" FontSize="14"
+                                               FontWeight="SemiBold" Visibility="Collapsed" />
+                                </Grid>
                             </DockPanel>
                         </Border>
-                        <TextBlock x:Name="NoLobbyText" Text="ロビーに未接続です。参加または作成すると設定を確認できます。"
-                                   Visibility="Collapsed" Foreground="#B7AABD" />
+                        <Border x:Name="LobbyHostPanel" Background="#2A2630" BorderBrush="#3F3944"
+                                BorderThickness="1" CornerRadius="8" Margin="0,0,0,20"
+                                Padding="16,12" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="ホスト" FontWeight="SemiBold" FontSize="14" />
+                                    <TextBlock x:Name="LobbyHostNotice" Text="ロビー設定はホストが管理します。"
+                                               Foreground="#B7AABD" FontSize="12" TextWrapping="Wrap"
+                                               Margin="0,4,12,0" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock x:Name="LobbyHostName" Text="不明" Foreground="#BA68C8"
+                                               FontSize="14" FontWeight="Bold" Margin="0,0,12,0" />
+                                    <Button x:Name="LobbyHostEditButton" Content="変更"
+                                            Click="LobbyHostEditButton_Click"
+                                            Style="{StaticResource LobbyHostEditButtonStyle}"
+                                            Visibility="Collapsed" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
                         <StackPanel x:Name="LobbyControlsPanel">
                         <TextBlock Text="ロビー設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,8" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
@@ -494,7 +540,7 @@
                                 <CheckBox x:Name="RadioOnlyCheck" Content="インポスターラジオ専用モード"
                                           Checked="RadioOnlyCheck_Changed" Unchecked="RadioOnlyCheck_Changed"
                                           Style="{StaticResource LobbySwitchStyle}" />
-                                <TextBlock Text="ロビーと会議以外の近距離通話を無効にし、生存インポスターはラジオ使用中だけ内通できます。会議中もラジオの声はインポスターにだけ聞こえます。"
+                                <TextBlock x:Name="RadioOnlyDescription" Text="ロビーと会議以外の近距離通話を無効にし、生存インポスターはラジオ使用中だけ内通できます。会議中もラジオの声はインポスターにだけ聞こえます。"
                                            TextWrapping="Wrap" Foreground="#B7AABD" FontSize="12"
                                            Margin="16,-7,62,14" />
                                 <Grid Height="64" Margin="16,0" VerticalAlignment="Center">
@@ -532,8 +578,14 @@
                                           Style="{StaticResource LobbySwitchStyle}" />
                                 <CheckBox x:Name="DeadOnlyCheck" Content="幽霊だけが話す/聞くことが可能"
                                           Style="{StaticResource LobbySwitchStyle}" />
+                                <TextBlock x:Name="DeadOnlyDescription" Text="生きているプレーヤーのサウンドを無効にする。"
+                                           TextWrapping="Wrap" Foreground="#B7AABD" FontSize="12"
+                                           Margin="16,-7,62,14" />
                                 <CheckBox x:Name="MeetingGhostOnlyCheck" Content="ミーティング/ロビーのみ"
                                           Style="{StaticResource LobbySwitchStyle}" />
+                                <TextBlock x:Name="MeetingGhostOnlyDescription" Text="会議以外での生存プレイヤーのサウンドを無効にします"
+                                           TextWrapping="Wrap" Foreground="#B7AABD" FontSize="12"
+                                           Margin="16,-7,62,14" />
                             </StackPanel>
                         </Border>
                         <StackPanel x:Name="SnrControlsPanel" Visibility="Collapsed" Margin="0,14,0,0">
