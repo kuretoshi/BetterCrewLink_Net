@@ -95,7 +95,9 @@ internal static class SelfTestRunner
                 if (!double.IsFinite(quality.JitterMs!.Value) || quality.JitterMs < 0d || quality.JitterMs > 1_000d ||
                     !double.IsFinite(quality.LossPercent!.Value) || quality.LossPercent < 0d || quality.LossPercent > 100d)
                     throw new InvalidOperationException("The reported RTP quality is outside plausible bounds.");
-                Console.WriteLine($"[PASS] RTP/RTCP受信品質を取得: jitter={quality.JitterMs:0.0} ms loss={quality.LossPercent:0.0}%");
+                if (!quality.Direct)
+                    throw new InvalidOperationException("The local peer connection did not report a direct host ICE pair.");
+                Console.WriteLine($"[PASS] RTP/RTCP受信品質を取得: jitter={quality.JitterMs:0.0} ms loss={quality.LossPercent:0.0}% direct={quality.Direct}");
             }
 
             Console.WriteLine("[PASS] Socket.IO、WebRTCデータチャネル、Opus音声トラック、ホストの3.2.7ロビー設定配信と変更反映を検証しました。");

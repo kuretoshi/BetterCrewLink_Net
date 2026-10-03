@@ -546,6 +546,19 @@ internal static class SpatialVoicePolicySelfTest
         CheckGain("quality: observed RTP jitter", 1.5d, inboundReport.JitterMs ?? -1d);
         CheckGain("quality: RTCP interval loss percent", 25d, inboundReport.LossPercent ?? -1d);
         Check("quality: RTCP does not fabricate RTT", true, inboundReport.RttMs is null);
+        var hostCandidate = new RTCIceCandidate(RTCIceProtocol.udp,
+            System.Net.IPAddress.Loopback, 5000, RTCIceCandidateType.host);
+        var relayCandidate = new RTCIceCandidate(RTCIceProtocol.udp,
+            System.Net.IPAddress.Loopback, 5001, RTCIceCandidateType.relay);
+        Check("quality: no nominated ICE pair is not direct", true,
+            !WebRtcPeerManager.IsDirectHostPair(null));
+        Check("quality: nominated host pair is direct", true,
+            WebRtcPeerManager.IsDirectHostPair(new ChecklistEntry(hostCandidate, hostCandidate, true)));
+        Check("quality: nominated relay pair is not direct", true,
+            !WebRtcPeerManager.IsDirectHostPair(new ChecklistEntry(hostCandidate, relayCandidate, true)));
+        Check("quality: direct path is included in report", true,
+            WebRtcPeerManager.FromReceptionReport(
+                new ReceptionReportSample(1, 0, 0, 0, 0, 0, 0), 1.5d, direct: true).Direct);
 
         Check("mod: Nebula plugin", true,
             AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], ["NebulaLoader.dll"])

@@ -412,14 +412,20 @@ internal sealed class WebRtcPeerManager : IDisposable
             var sample = report.ReceiverReport?.ReceptionReports?.FirstOrDefault()
                 ?? report.SenderReport?.ReceptionReports?.FirstOrDefault();
             if (sample is not null)
-                PeerQualityChanged?.Invoke(remoteSocketId, FromReceptionReport(sample, peer.JitterEstimator.JitterMs));
+                PeerQualityChanged?.Invoke(remoteSocketId, FromReceptionReport(
+                    sample, peer.JitterEstimator.JitterMs, IsDirectHostPair(connection.GetRtpChannel().NominatedEntry)));
         };
         connection.OnAudioFrameReceived += frame => ReceiveAudio(peer, frame);
         return peer;
     }
 
-    internal static ConnectionQuality FromReceptionReport(ReceptionReportSample sample, double? observedJitterMs) =>
-        new(JitterMs: observedJitterMs, LossPercent: sample.FractionLost * 100d / 256d);
+    internal static bool IsDirectHostPair(ChecklistEntry? nominatedEntry) =>
+        nominatedEntry?.LocalCandidate.type == RTCIceCandidateType.host &&
+        nominatedEntry.RemoteCandidate.type == RTCIceCandidateType.host;
+
+    internal static ConnectionQuality FromReceptionReport(
+        ReceptionReportSample sample, double? observedJitterMs, bool direct = false) =>
+        new(JitterMs: observedJitterMs, LossPercent: sample.FractionLost * 100d / 256d, Direct: direct);
 
     private void ConfigureDataChannel(Peer peer, RTCDataChannel channel)
     {
