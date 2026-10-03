@@ -21,6 +21,45 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="8,4" />
         </Style>
+        <Geometry x:Key="TuneIcon">M3 17v2h6v-2zM3 5v2h10V5zm10 16v-2h8v-2h-8v-2h-2v6zM7 9v2H3v2h4v2h2V9zm14 4v-2H11v2zm-6-4h2V7h4V5h-4V3h-2z</Geometry>
+        <Geometry x:Key="GroupsIcon">M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.61c0-1.18.68-2.26 1.76-2.73 1.17-.52 2.61-.91 4.24-.91M4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m1.13 1.1c-.37-.06-.74-.1-1.13-.1-.99 0-1.93.21-2.78.58C.48 14.9 0 15.62 0 16.43V18h4.5v-1.61c0-.83.23-1.61.63-2.29M20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m4 3.43c0-.81-.48-1.53-1.22-1.85-.85-.37-1.79-.58-2.78-.58-.39 0-.76.04-1.13.1.4.68.63 1.46.63 2.29V18H24zM12 6c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3</Geometry>
+        <Geometry x:Key="PersonIcon">M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4m0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4</Geometry>
+        <Geometry x:Key="VolumeIcon">M3 9v6h4l5 5V4L7 9zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02M14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77</Geometry>
+        <Geometry x:Key="KeyboardIcon">M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m-9 3h2v2h-2zm0 3h2v2h-2zM8 8h2v2H8zm0 3h2v2H8zm-1 2H5v-2h2zm0-3H5V8h2zm9 7H8v-2h8zm0-4h-2v-2h2zm0-3h-2V8h2zm3 3h-2v-2h2zm0-3h-2V8h2z</Geometry>
+        <Geometry x:Key="LayersIcon">m11.99 18.54-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27z</Geometry>
+        <Geometry x:Key="ScienceIcon">M19.8 18.4 14 10.67V6.5l1.35-1.69c.26-.33.03-.81-.39-.81H9.04c-.42 0-.65.48-.39.81L10 6.5v4.17L4.2 18.4c-.49.66-.02 1.6.8 1.6h14c.82 0 1.29-.94.8-1.6</Geometry>
+        <Geometry x:Key="UpdateIcon">M17 1.01 7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99M17 19H7V5h10zm-1-6h-3V8h-2v5H8l4 4z</Geometry>
+        <Geometry x:Key="VideoIcon">M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11z</Geometry>
+        <Style x:Key="CategoryItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="NavBackground" Background="{TemplateBinding Background}"
+                                CornerRadius="4" Margin="8,2" Padding="12,8">
+                            <DockPanel LastChildFill="True">
+                                <Viewbox Width="20" Height="20" Margin="0,0,12,0" DockPanel.Dock="Left">
+                                    <Path x:Name="NavIcon" Data="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Fill="#AAA5AD" Width="24" Height="24" Stretch="Uniform" />
+                                </Viewbox>
+                                <TextBlock Text="{TemplateBinding Content}" TextWrapping="Wrap" />
+                            </DockPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBackground" Property="Background" Value="#302A35" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="NavBackground" Property="Background" Value="#423348" />
+                                <Setter TargetName="NavIcon" Property="Fill" Value="#CE93D8" />
+                                <Setter Property="FontWeight" Value="Bold" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -28,19 +67,19 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Border x:Name="SettingsNavigation" Background="#19171D" BorderBrush="#403146" BorderThickness="0,0,1,0">
-            <StackPanel Margin="12,22">
-                <TextBlock Text="⚙ 設定" FontWeight="SemiBold" Foreground="#C779D7" Margin="8,0,0,18" />
+            <StackPanel Margin="0,8">
                 <ListBox x:Name="CategoryList" Background="Transparent" Foreground="White"
-                         BorderThickness="0" SelectionChanged="CategoryList_SelectionChanged">
-                    <ListBoxItem Content="一般" Padding="12,9" />
-                    <ListBoxItem Content="ロビー設定" Padding="12,9" />
-                    <ListBoxItem Content="プレイヤー" Padding="12,9" />
-                    <ListBoxItem Content="オーディオ" Padding="12,9" />
-                    <ListBoxItem Content="キー割り当て" Padding="12,9" />
-                    <ListBoxItem Content="オーバーレイ" Padding="12,9" />
-                    <ListBoxItem Content="詳細設定" Padding="12,9" />
-                    <ListBoxItem Content="アップデート" Padding="12,9" />
-                    <ListBoxItem Content="配信設定" Padding="12,9" />
+                         BorderThickness="0"
+                         SelectionChanged="CategoryList_SelectionChanged">
+                    <ListBoxItem Content="一般" Tag="{StaticResource TuneIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="ロビー設定" Tag="{StaticResource GroupsIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="プレイヤー" Tag="{StaticResource PersonIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="オーディオ" Tag="{StaticResource VolumeIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="キー割り当て" Tag="{StaticResource KeyboardIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="オーバーレイ" Tag="{StaticResource LayersIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="詳細設定" Tag="{StaticResource ScienceIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="アップデート" Tag="{StaticResource UpdateIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="配信設定" Tag="{StaticResource VideoIcon}" Style="{StaticResource CategoryItemStyle}" />
                 </ListBox>
             </StackPanel>
         </Border>
@@ -52,16 +91,36 @@
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <StackPanel x:Name="GeneralPanel">
-                        <TextBlock Text="一般" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
-                        <TextBlock x:Name="LanguageLabel" Text="言語" Margin="0,0,0,6" />
-                        <ComboBox x:Name="LanguageCombo" DisplayMemberPath="Name" Margin="0,0,0,18" />
-                        <Border Background="#29252F" Padding="16" CornerRadius="6">
-                            <CheckBox x:Name="AlwaysOnTopCheck" Content="常に手前に表示" />
+                        <TextBlock Text="一般" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,8" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" Padding="16,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="280" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="LanguageLabel" Text="言語" FontWeight="SemiBold" />
+                                <ComboBox x:Name="LanguageCombo" Grid.Column="1" DisplayMemberPath="Name" />
+                            </Grid>
                         </Border>
-                        <TextBlock Text="トラブルシューティング" FontSize="16" FontWeight="SemiBold" Margin="0,28,0,12" />
-                        <TextBlock Text="すべての設定がリセットされます。" TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,12" />
-                        <Button x:Name="ResetDefaultsButton" Content="デフォルトに戻す" Click="ResetDefaultsButton_Click"
-                                HorizontalAlignment="Left" Padding="14,8" />
+                        <TextBlock Text="トラブルシューティング" FontSize="12" Foreground="#B7AABD" Margin="4,28,0,8" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" Padding="16,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="デフォルトに戻す" FontWeight="SemiBold" />
+                                    <TextBlock Text="すべての設定がリセットされます。" TextWrapping="Wrap"
+                                               Foreground="#B7AABD" FontSize="12" Margin="0,3,0,0" />
+                                </StackPanel>
+                                <Button x:Name="ResetDefaultsButton" Grid.Column="1" Content="デフォルトに戻す"
+                                        Click="ResetDefaultsButton_Click" HorizontalAlignment="Right"
+                                        VerticalAlignment="Center" Padding="12,6" Margin="12,0,0,0" />
+                            </Grid>
+                        </Border>
                         <TextBlock x:Name="ResetDisabledReason" Text="ゲーム内ではホストとして利用できません！"
                                    TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,8,0,0" Visibility="Collapsed" />
                     </StackPanel>
@@ -246,9 +305,7 @@
                     </StackPanel>
                     <StackPanel x:Name="OverlayPanel" Visibility="Collapsed">
                         <TextBlock Text="オーバーレイ" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
-                        <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="常に手前に表示"
-                                  IsChecked="{Binding IsChecked, ElementName=AlwaysOnTopCheck, Mode=TwoWay}"
-                                  Margin="0,0,0,16" />
+                        <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="常に手前に表示" Margin="0,0,0,16" />
                         <CheckBox x:Name="EnableOverlayCheck" Content="ゲーム画面にオーバーレイを表示"
                                   Margin="0,0,0,16" />
                         <CheckBox x:Name="CompactOverlayCheck" Content="発話中のプレイヤーだけを表示"

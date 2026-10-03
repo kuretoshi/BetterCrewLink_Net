@@ -15,6 +15,12 @@ public partial class SettingsWindow
         UiLocalization.Verify();
         var settings = new ClientSettings();
         var window = new SettingsWindow(settings, true, null, false, null, (_, _, _) => { }, _ => { });
+        window.ApplyTemplate();
+        var generalItem = (System.Windows.Controls.ListBoxItem)window.CategoryList.Items[0];
+        generalItem.ApplyTemplate();
+        if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path
+            { Data: not null })
+            throw new InvalidOperationException("Settings navigation icon template was not applied");
         window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "en");
         if (settings.Language != "en" || window.Title != "Settings" ||
             window.LanguageLabel.Text != "Language" ||

@@ -12,7 +12,7 @@ public partial class SettingsWindow
     private readonly HashSet<string> failedSaveKeys = [];
     private void InitializeImmediateSettings()
     {
-        BindToggle(AlwaysOnTopCheck, nameof(ClientSettings.AlwaysOnTop));
+        BindToggle(OverlayAlwaysOnTopCheck, nameof(ClientSettings.AlwaysOnTop));
         LanguageCombo.SelectionChanged += (_, _) =>
         {
             if (!settingsReady) return;
