@@ -50,6 +50,11 @@ public partial class SettingsWindow
         if (window.AudioPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 5 ||
             window.MicrophoneLevelStatus.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Released audio settings card layout was not applied");
+        if (window.OverlayPositionCombo.Style != window.MicrophoneCombo.Style ||
+            window.ServerUrlBox.Style != window.MicrophoneCombo.Style ||
+            (window.OverlayPositionCombo.SelectedItem as ComboBoxItem)?.Tag as string != "right" ||
+            window.ServerUrlBox.SelectedItem as string != settings.ServerUrl)
+            throw new InvalidOperationException("Overlay or server selector lost its released dark style or saved selection");
         if (window.StreamingPanel.Children.OfType<Border>().Count() != 1 ||
             window.ShowLobbyCodeCheck.Style != window.ObsOverlayCheck.Style ||
             window.CopyObsUrlButton.Content is not System.Windows.Shapes.Path ||

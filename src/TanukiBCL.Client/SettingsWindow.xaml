@@ -936,6 +936,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="アバターの位置" VerticalAlignment="Center" />
                                     <ComboBox x:Name="OverlayPositionCombo" Grid.Column="1"
+                                              Style="{StaticResource DarkAudioComboStyle}" FontSize="14"
                                               IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}">
                                         <ComboBoxItem Content="表示しない" Tag="hidden" />
                                         <ComboBoxItem Content="上" Tag="top" />
@@ -956,7 +957,8 @@
                                 <Grid Margin="16,12">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="280" /></Grid.ColumnDefinitions>
                                     <TextBlock Text="ボイスサーバー" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                    <ComboBox x:Name="ServerUrlBox" Grid.Column="1" IsEditable="False" MinHeight="34"
+                                    <ComboBox x:Name="ServerUrlBox" Grid.Column="1" IsEditable="False"
+                                              Style="{StaticResource DarkAudioComboStyle}" FontSize="14"
                                               SelectionChanged="ServerUrlBox_SelectionChanged" />
                                 </Grid>
                                 <Border Height="1" Background="#403A45" />
