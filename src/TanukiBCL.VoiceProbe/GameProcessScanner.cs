@@ -150,6 +150,10 @@ internal static class GameProcessScanner
                         ? $" snr={snr.RoleName ?? snr.RoleId.ToString()}" +
                           $" modifier={snr.ModifierName ?? snr.ModifierId?.ToString() ?? "?"}" +
                           (snr.JumboCurrentSize is { } size ? $" jumbo={size:0.###}" : string.Empty)
+                        : string.Empty) +
+                    (result.State.Mod == AmongUsModType.TownOfHostForE && player.TohRole is { } toh
+                        ? $" toh={toh.RoleName ?? toh.RoleId.ToString()}" +
+                          $" killer={toh.IsKiller?.ToString() ?? "?"}"
                         : string.Empty));
             }
 
@@ -174,7 +178,10 @@ internal static class GameProcessScanner
             : state.GameState is GameState.Tasks or GameState.Discussion) &&
         (state.Mod != AmongUsModType.SuperNewRoles ||
          state.GameState is not (GameState.Tasks or GameState.Discussion) ||
-         state.Players.Where(player => !player.Disconnected).All(player => player.SnrRole is not null));
+         state.Players.Where(player => !player.Disconnected).All(player => player.SnrRole is not null)) &&
+        (state.Mod != AmongUsModType.TownOfHostForE ||
+         state.GameState is not (GameState.Tasks or GameState.Discussion) ||
+         state.Players.Where(player => !player.Disconnected).All(player => player.TohRole is not null));
 
     internal static bool Validate(
         IReadOnlyCollection<ProcessReadResult> results,
@@ -184,6 +191,10 @@ internal static class GameProcessScanner
         var states = results.Where(result => result.State is not null).Select(result => result.State!).ToArray();
         var localPlayers = states.SelectMany(state => state.Players.Where(player => player.IsLocal)).ToArray();
         var expectedPlayers = expectation.Players;
+        var tohHosts = states.Where(state => state.Mod == AmongUsModType.TownOfHostForE).ToArray();
+        var hostOnlyToh = tohHosts.Length == 1 && states.Length == expectedPlayers &&
+                          states.Count(state => state.Mod == AmongUsModType.None) == expectedPlayers - 1 &&
+                          tohHosts[0].Players.All(player => player.Disconnected || player.TohRole is not null);
         var passed = expectedPlayers > 0 && results.Count == expectedPlayers &&
                      states.Length == expectedPlayers &&
                      states.Select(state => state.LobbyCode).Distinct(StringComparer.Ordinal).Count() == 1 &&
@@ -195,7 +206,8 @@ internal static class GameProcessScanner
                      (expectation.Impostors is null || states.All(state => CountImpostors(state) == expectation.Impostors)) &&
                      localPlayers.Length == expectedPlayers &&
                      localPlayers.Select(player => player!.ClientId).Distinct().Count() == expectedPlayers &&
-                     localPlayers.Count(player => player!.IsImpostor) == CountImpostors(states.FirstOrDefault());
+                     (hostOnlyToh ||
+                      localPlayers.Count(player => player!.IsImpostor) == CountImpostors(states.FirstOrDefault()));
 
         var voiceRulesPassed = states.Length > 0 && states.Length == results.Count && states.All(state =>
         {
@@ -227,6 +239,8 @@ internal static class GameProcessScanner
             };
         });
 
+        if (hostOnlyToh)
+            Console.WriteLine("[INFO] TOHホスト専用構成: バニラ側の自己役職表示は比較せず、ホストのTOH役職辞書が揃ったことを確認しました。");
         Console.WriteLine(passed
             ? $"[PASS] 全{expectedPlayers}プロセスでゲーム状態と指定した期待値が一致しました。"
             : "[FAIL] ゲーム状態が指定した期待値と一致しません。上のPID別結果を確認してください。");

@@ -37,6 +37,34 @@ internal static class GameProcessScannerSelfTest
         snrState.Players[0].SnrRole = new SnrRoleData(1, "Crewmate", 0, "None", 0, "None");
         Require(GameProcessScanner.IsReady(snrState, GameState.Tasks),
             "SNR scan did not complete after role discovery");
+        var tohState = new AmongUsState
+        {
+            Mod = AmongUsModType.TownOfHostForE,
+            GameState = GameState.Tasks,
+            Players = [new Player { Id = 0, Name = "TOH player" }]
+        };
+        Require(!GameProcessScanner.IsReady(tohState, GameState.Tasks),
+            "TOH scan completed before the host role reader");
+        tohState.Players[0].TohRole = new TohRoleData(0, "Crewmate", false, false);
+        Require(GameProcessScanner.IsReady(tohState, GameState.Tasks),
+            "TOH scan did not complete after role discovery");
+        var hostOnlyToh = Enumerable.Range(0, 4).Select(local =>
+            new GameProcessScanner.ProcessReadResult(local + 10, true, new AmongUsState
+            {
+                Mod = local == 0 ? AmongUsModType.TownOfHostForE : AmongUsModType.None,
+                GameState = GameState.Tasks,
+                LobbyCode = "TOH123",
+                Players = Enumerable.Range(0, 4).Select(id => new Player
+                {
+                    Id = id, ClientId = id + 20, IsLocal = id == local,
+                    Name = $"Player{id}", IsImpostor = id == (local == 0 ? 3 : local),
+                    TohRole = local == 0 ? new TohRoleData(id == 3 ? 1 : 0,
+                        id == 3 ? "Impostor" : "Crewmate", false, id == 3) : null
+                }).ToList()
+            }, "", null)).ToArray();
+        Require(GameProcessScanner.Validate(hostOnlyToh,
+            new GameScanExpectation("Tasks", 4, 0, 1, false, 4), GameState.Tasks),
+            "TOH host-only scan rejected client-specific vanilla self roles");
         Require(GameProcessScanner.Validate(results, expectation, GameState.Lobby), "Four-player lobby failed");
         Require(!GameProcessScanner.Validate(results, expectation with { Players = 5 }, GameState.Lobby), "Wrong count accepted");
         Require(!GameProcessScanner.Validate(results, expectation with { Alive = 3 }, GameState.Lobby), "Wrong alive count accepted");
