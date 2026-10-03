@@ -83,11 +83,26 @@ public partial class VoiceView : UserControl
         view.Measure(new Size(280, 390));
         view.Arrange(new Rect(0, 0, 280, 390));
         view.UpdateLayout();
-        if (view.LocalAvatar.Width != 100 || view.LocalAvatar.Height != 100 ||
-            view.HeaderPanel.Margin != new Thickness(0, -13, 0, 6) ||
+        if (view.LocalAvatarSlot.Width != 100 || view.LocalAvatarSlot.Height != 100 ||
+            view.LocalAvatar.Width != 90 || view.LocalAvatar.Height != 90 ||
+            view.HeaderPanel.Margin != new Thickness(0, -6, 0, 6) ||
             view.LocalName.FontWeight != FontWeights.SemiBold ||
             view.CodeBackground.Padding != new Thickness(9, 5, 9, 5))
             throw new InvalidOperationException("Compact header no longer matches the released avatar/name/code geometry");
+        var nameTop = view.LocalName.TranslatePoint(new Point(), view).Y;
+        var codeTop = view.CodeBackground.TranslatePoint(new Point(), view).Y;
+        var dividerTop = view.HeaderDivider.TranslatePoint(new Point(), view).Y;
+        if (nameTop is < 25 or > 34 || codeTop is < 54 or > 63 || dividerTop is < 120 or > 129)
+            throw new InvalidOperationException($"Compact header shifted: name={nameTop:0.0}, code={codeTop:0.0}, divider={dividerTop:0.0}");
+        if (view.SettingsButton.Content is not Canvas settingsIcon ||
+            view.ReloadButton.Content is not Canvas reloadIcon ||
+            view.CloseButton.Content is not Canvas closeIcon ||
+            settingsIcon.Children.Count != 1 || reloadIcon.Children.Count != 1 || closeIcon.Children.Count != 1 ||
+            view.SettingsButton.TranslatePoint(new Point(), view).X != 0 ||
+            view.ReloadButton.TranslatePoint(new Point(), view).X != 24 ||
+            view.CloseButton.TranslatePoint(new Point(), view).X != 256)
+            throw new InvalidOperationException("Released compact title-bar icons or positions changed");
+        Console.WriteLine($"VoiceView header geometry: name={nameTop:0.0}, code={codeTop:0.0}, divider={dividerTop:0.0}");
         if (view.LocalName.TextTrimming != TextTrimming.None || view.LocalName.ActualWidth <= 115 ||
             view.LocalName.FontSize != 20 || view.LocalName.TextWrapping != TextWrapping.NoWrap)
             throw new InvalidOperationException("Long player name was clipped, shrunk or ellipsized");
@@ -285,7 +300,7 @@ public partial class VoiceView : UserControl
         WaitingPanel.Visibility = inLobby ? Visibility.Collapsed : Visibility.Visible;
         OtherPlayersScroll.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
         LobbyHeader.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
-        HeaderPanel.Margin = inLobby ? new Thickness(0, -13, 0, 6) : new Thickness(0);
+        HeaderPanel.Margin = inLobby ? new Thickness(0, -6, 0, 6) : new Thickness(0);
         if (!inLobby || local is null || game is null)
         {
             ClosePlayerConfigPopup();
