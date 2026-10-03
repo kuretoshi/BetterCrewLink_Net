@@ -369,11 +369,12 @@ public partial class SettingsWindow : Window
                         MicrophoneLevelBar.Value = level;
                 })));
             microphoneLevelSession = started;
-            MicrophoneLevelStatus.Text = "マイク入力レベル";
+            MicrophoneLevelStatus.Visibility = Visibility.Collapsed;
         }
         catch (Exception error)
         {
             MicrophoneLevelStatus.Text = $"マイクに接続できません: {error.Message}";
+            MicrophoneLevelStatus.Visibility = Visibility.Visible;
         }
     }
 

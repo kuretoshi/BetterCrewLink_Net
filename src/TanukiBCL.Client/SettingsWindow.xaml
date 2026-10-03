@@ -23,6 +23,66 @@
         <Style TargetType="ComboBox">
             <Setter Property="Height" Value="32" />
         </Style>
+        <Style x:Key="DarkAudioComboStyle" TargetType="ComboBox">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Background" Value="#25232A" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#5A515D" />
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ComboBoxItem">
+                        <Setter Property="Foreground" Value="White" />
+                        <Setter Property="Background" Value="#25232A" />
+                        <Setter Property="Padding" Value="8,6" />
+                        <Style.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter Property="Background" Value="#49374E" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="1" CornerRadius="4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="30" />
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter Grid.Column="0" Margin="10,0,2,0" VerticalAlignment="Center"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                                    <Path Grid.Column="1" Data="M7 10l5 5 5-5z" Fill="White"
+                                          Width="20" Height="20" Stretch="Uniform" />
+                                </Grid>
+                            </Border>
+                            <ToggleButton x:Name="DropDownToggle" Focusable="False" ClickMode="Press"
+                                          Background="Transparent" BorderThickness="0"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent" />
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True"
+                                   Focusable="False" StaysOpen="False" IsOpen="{TemplateBinding IsDropDownOpen}">
+                                <Border Background="#25232A" BorderBrush="#5A515D" BorderThickness="1"
+                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="TextBox">
             <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="8,4" />
@@ -271,76 +331,155 @@
                         <StackPanel x:Name="PlayerRows" />
                     </StackPanel>
                     <StackPanel x:Name="AudioPanel" Visibility="Collapsed">
-                        <TextBlock Text="オーディオ" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,20" />
-                        <TextBlock Text="マイク" Margin="0,0,0,6" />
-                        <ComboBox x:Name="MicrophoneCombo" Margin="0,0,0,8"
-                                  SelectionChanged="MicrophoneCombo_SelectionChanged" />
-                        <ProgressBar x:Name="MicrophoneLevelBar" Minimum="0" Maximum="100" Height="8"
-                                     Foreground="#B061C0" Background="#403146" Margin="0,0,0,5" />
-                        <TextBlock x:Name="MicrophoneLevelStatus" Foreground="#B7AABD"
-                                   Text="マイク入力レベル" Margin="0,0,0,16" />
-                        <TextBlock Text="スピーカー" Margin="0,0,0,6" />
-                        <ComboBox x:Name="SpeakerCombo" Margin="0,0,0,8"
-                                  SelectionChanged="SpeakerCombo_SelectionChanged" />
-                        <Button x:Name="TestSpeakerButton" Content="スピーカーテスト"
-                                Width="170" Height="34" HorizontalAlignment="Right"
-                                Margin="0,0,0,10" Click="TestSpeakerButton_Click" />
-                        <TextBlock Text="デバイスの変更はすぐに反映されます。音声接続を切り替える間、一時的に通話が途切れます。"
-                                   TextWrapping="Wrap"
-                                   Foreground="#B7AABD" Margin="0,0,0,20" />
-                        <TextBlock Text="音声操作モード" Margin="0,0,0,8" />
-                        <RadioButton x:Name="VoiceModeRadio" Content="声で起動" GroupName="MicrophoneMode" Margin="0,0,0,7" />
-                        <RadioButton x:Name="PushToTalkModeRadio" Content="押している間だけ話す" GroupName="MicrophoneMode" Margin="0,0,0,7" />
-                        <RadioButton x:Name="PushToMuteModeRadio" Content="押している間だけミュート" GroupName="MicrophoneMode" Margin="0,0,0,20" />
-                        <CheckBox x:Name="MicrophoneGainCheck" Content="マイク入力ゲインを調整する" Margin="0,0,0,8" />
-                        <DockPanel Margin="0,0,0,18">
-                            <TextBlock x:Name="MicrophoneGainValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="MicrophoneGainSlider" Minimum="0" Maximum="300"
-                                    TickFrequency="2" IsSnapToTickEnabled="True"
-                                    IsEnabled="{Binding IsChecked, ElementName=MicrophoneGainCheck}"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <CheckBox x:Name="MicSensitivityCheck" Content="マイク感度で無音時の送信を抑える" Margin="0,0,0,8" />
-                        <DockPanel Margin="0,0,0,8">
-                            <TextBlock x:Name="MicSensitivityValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="MicSensitivitySlider" Minimum="0" Maximum="1"
-                                    TickFrequency="0.05" IsSnapToTickEnabled="True"
-                                    IsEnabled="{Binding IsChecked, ElementName=MicSensitivityCheck}"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <TextBlock Text="値を上げるほど小さな声にも反応します。無音時は送信音声を抑えます。"
-                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,18" />
-                        <TextBlock Text="マスター音量" />
-                        <DockPanel Margin="0,5,0,20">
-                            <TextBlock x:Name="MasterVolumeValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="MasterVolumeSlider" Minimum="0" Maximum="200"
-                                    TickFrequency="1" IsSnapToTickEnabled="True"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <TextBlock Text="幽霊として聞く生存者の音量" />
-                        <DockPanel Margin="0,5,0,20">
-                            <TextBlock x:Name="CrewVolumeAsGhostValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="CrewVolumeAsGhostSlider" Minimum="0" Maximum="100"
-                                    TickFrequency="1" IsSnapToTickEnabled="True"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <TextBlock Text="インポスターとして聞く幽霊の音量" />
-                        <DockPanel Margin="0,5,0,20">
-                            <TextBlock x:Name="GhostVolumeAsImpostorValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="GhostVolumeAsImpostorSlider" Minimum="0" Maximum="100"
-                                    TickFrequency="1" IsSnapToTickEnabled="True"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <TextBlock Text="変装時のボイスエフェクトの強さ" />
-                        <DockPanel Margin="0,5,0,12">
-                            <TextBlock x:Name="VoiceEffectStrengthValue" DockPanel.Dock="Right" Width="52" TextAlignment="Right" />
-                            <Slider x:Name="VoiceEffectStrengthSlider" Minimum="0" Maximum="100"
-                                    TickFrequency="1" IsSnapToTickEnabled="True"
-                                    ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <Button x:Name="TestVoiceEffectButton" Content="ボイスエフェクトテスト"
-                                Width="240" Height="40" HorizontalAlignment="Center" Margin="0,0,0,20"
-                                Click="TestVoiceEffectButton_Click" />
+                        <TextBlock Text="オーディオ" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
+                            <StackPanel>
+                                <Grid Margin="16,16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="184" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="マイク" FontWeight="SemiBold" />
+                                    <StackPanel Grid.Column="1">
+                                        <ComboBox x:Name="MicrophoneCombo" Style="{StaticResource DarkAudioComboStyle}"
+                                                  SelectionChanged="MicrophoneCombo_SelectionChanged" />
+                                        <ProgressBar x:Name="MicrophoneLevelBar" Minimum="0" Maximum="100" Height="8"
+                                                     Foreground="#B061C0" Background="#403146" Margin="0,12,0,0" />
+                                        <TextBlock x:Name="MicrophoneLevelStatus" Foreground="IndianRed"
+                                                   Visibility="Collapsed" TextWrapping="Wrap" Margin="0,6,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                                <Border Height="1" Background="#403A45" />
+                                <Grid Margin="16,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="184" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="スピーカー" FontWeight="SemiBold" />
+                                    <StackPanel Grid.Column="1">
+                                        <ComboBox x:Name="SpeakerCombo" Style="{StaticResource DarkAudioComboStyle}"
+                                                  SelectionChanged="SpeakerCombo_SelectionChanged" />
+                                        <Button x:Name="TestSpeakerButton" Content="スピーカーテスト"
+                                                Width="128" Height="32" HorizontalAlignment="Right"
+                                                Background="#F50057" Foreground="White" BorderThickness="0"
+                                                Margin="0,8,0,0" Click="TestSpeakerButton_Click" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="音声モード" FontSize="12" Foreground="#B7AABD" Margin="4,28,0,14" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" Padding="16,16">
+                            <StackPanel>
+                                <RadioButton x:Name="VoiceModeRadio" Content="常に有効" GroupName="MicrophoneMode"
+                                             MinHeight="32" Margin="0,0,0,6" />
+                                <RadioButton x:Name="PushToTalkModeRadio" Content="押して話す" GroupName="MicrophoneMode"
+                                             MinHeight="32" Margin="0,0,0,6" />
+                                <RadioButton x:Name="PushToMuteModeRadio" Content="押してミュート" GroupName="MicrophoneMode"
+                                             MinHeight="32" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="マイク" FontSize="12" Foreground="#B7AABD" Margin="4,28,0,14" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
+                            <StackPanel>
+                                <Grid Margin="16,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="184" />
+                                        <ColumnDefinition Width="36" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="44" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="マイク音量" FontWeight="SemiBold" />
+                                    <CheckBox x:Name="MicrophoneGainCheck" Grid.Column="1" Style="{StaticResource OverlaySwitchStyle}"
+                                              ToolTip="マイク音量を調整" />
+                                    <Slider x:Name="MicrophoneGainSlider" Grid.Column="2" Minimum="0" Maximum="300"
+                                            TickFrequency="2" IsSnapToTickEnabled="True" Margin="10,0"
+                                            IsEnabled="{Binding IsChecked, ElementName=MicrophoneGainCheck}"
+                                            ValueChanged="VolumeSlider_ValueChanged" />
+                                    <TextBlock x:Name="MicrophoneGainValue" Grid.Column="3" TextAlignment="Right" />
+                                </Grid>
+                                <Border Height="1" Background="#403A45" />
+                                <Grid Margin="16,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="184" />
+                                        <ColumnDefinition Width="36" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="44" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="マイク感度" FontWeight="SemiBold" />
+                                    <CheckBox x:Name="MicSensitivityCheck" Grid.Column="1" Style="{StaticResource OverlaySwitchStyle}"
+                                              ToolTip="マイク感度を調整" />
+                                    <Slider x:Name="MicSensitivitySlider" Grid.Column="2" Minimum="0" Maximum="1"
+                                            TickFrequency="0.05" IsSnapToTickEnabled="True" Margin="10,0"
+                                            IsEnabled="{Binding IsChecked, ElementName=MicSensitivityCheck}"
+                                            ValueChanged="VolumeSlider_ValueChanged" />
+                                    <TextBlock x:Name="MicSensitivityValue" Grid.Column="3" TextAlignment="Right" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" Margin="0,24,0,0">
+                            <StackPanel>
+                                <Grid Margin="16,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="184" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="44" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="マスターボリューム" FontWeight="SemiBold" />
+                                    <Slider x:Name="MasterVolumeSlider" Grid.Column="1" Minimum="0" Maximum="200"
+                                            TickFrequency="1" IsSnapToTickEnabled="True" Margin="10,0"
+                                            ValueChanged="VolumeSlider_ValueChanged" />
+                                    <TextBlock x:Name="MasterVolumeValue" Grid.Column="2" TextAlignment="Right" />
+                                </Grid>
+                                <Border Height="1" Background="#403A45" />
+                                <Grid Margin="16,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="184" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="44" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="幽霊クルーの音量" FontWeight="SemiBold" />
+                                    <Slider x:Name="CrewVolumeAsGhostSlider" Grid.Column="1" Minimum="0" Maximum="100"
+                                            TickFrequency="1" IsSnapToTickEnabled="True" Margin="10,0"
+                                            ValueChanged="VolumeSlider_ValueChanged" />
+                                    <TextBlock x:Name="CrewVolumeAsGhostValue" Grid.Column="2" TextAlignment="Right" />
+                                </Grid>
+                                <Border Height="1" Background="#403A45" />
+                                <Grid Margin="16,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="184" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="44" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="インポスター時の幽霊の音量" FontWeight="SemiBold" />
+                                    <Slider x:Name="GhostVolumeAsImpostorSlider" Grid.Column="1" Minimum="0" Maximum="100"
+                                            TickFrequency="1" IsSnapToTickEnabled="True" Margin="10,0"
+                                            ValueChanged="VolumeSlider_ValueChanged" />
+                                    <TextBlock x:Name="GhostVolumeAsImpostorValue" Grid.Column="2" TextAlignment="Right" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" Margin="0,24,0,0" Padding="16,10">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="184" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="44" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="ボイスエフェクトの強さ" FontWeight="SemiBold" />
+                                    <Slider x:Name="VoiceEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100"
+                                            TickFrequency="1" IsSnapToTickEnabled="True" Margin="10,0"
+                                            ValueChanged="VolumeSlider_ValueChanged" />
+                                    <TextBlock x:Name="VoiceEffectStrengthValue" Grid.Column="2" TextAlignment="Right" />
+                                </Grid>
+                                <Button x:Name="TestVoiceEffectButton" Content="ボイスエフェクトテスト"
+                                        Width="240" Height="36" HorizontalAlignment="Center" Margin="0,16,0,6"
+                                        Click="TestVoiceEffectButton_Click" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                     <StackPanel x:Name="KeybindsPanel" Visibility="Collapsed">
                         <TextBlock Text="キー割り当て" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />

@@ -20,6 +20,9 @@ public partial class SettingsWindow
             window.MinimizeSettingsButton is null || window.CloseSettingsButton is null ||
             window.SaveStatusText.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Released settings title bar or hidden save status was not applied");
+        if (window.AudioPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 5 ||
+            window.MicrophoneLevelStatus.Visibility != System.Windows.Visibility.Collapsed)
+            throw new InvalidOperationException("Released audio settings card layout was not applied");
         var generalItem = (System.Windows.Controls.ListBoxItem)window.CategoryList.Items[0];
         generalItem.ApplyTemplate();
         if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path
@@ -35,6 +38,7 @@ public partial class SettingsWindow
             window.CategoryList.Items[0] is not System.Windows.Controls.ListBoxItem { Content: "General" } ||
             window.CategoryList.Items[4] is not System.Windows.Controls.ListBoxItem
                 { Content: "Keyboard Shortcuts" } ||
+            !Equals(window.VoiceModeRadio.Content, UiLocalization.Translate("en", "settings.audio.voice_activity")) ||
             !Equals(window.NatFixCheck.Content, UiLocalization.Translate("en", "settings.advanced.nat_fix")))
             throw new InvalidOperationException("English settings language did not apply");
         window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "ja");
