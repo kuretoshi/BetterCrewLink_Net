@@ -215,6 +215,8 @@
         </Style>
         <Style x:Key="OverlaySwitchStyle" TargetType="CheckBox">
             <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="MinHeight" Value="34" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -965,23 +967,23 @@
                         </Border>
                     </StackPanel>
                     <StackPanel x:Name="OverlayPanel" Visibility="Collapsed">
-                        <TextBlock Text="オーバーレイ" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,8" />
+                        <TextBlock Text="オーバーレイ" FontSize="13" FontWeight="SemiBold" Foreground="#B7AABD" Margin="4,0,0,13" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
+                                <Border Padding="16,5" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
                                     <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="最前面に表示"
                                               Style="{StaticResource OverlaySwitchStyle}" />
                                 </Border>
-                                <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
+                                <Border Padding="16,5" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
                                     <CheckBox x:Name="EnableOverlayCheck" Content="オーバーレイを有効化"
                                               Style="{StaticResource OverlaySwitchStyle}" />
                                 </Border>
-                                <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
+                                <Border Padding="16,5" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
                                     <CheckBox x:Name="CompactOverlayCheck" Content="コンパクトなオーバーレイ"
                                               Style="{StaticResource OverlaySwitchStyle}"
                                               IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" />
                                 </Border>
-                                <Border Padding="16,10" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
+                                <Border Padding="16,5" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
                                     <CheckBox x:Name="MeetingOverlayCheck" Content="議論のオーバーレイ表示"
                                               Style="{StaticResource OverlaySwitchStyle}"
                                               IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}" />
@@ -991,7 +993,8 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="250" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="OverlayPositionLabel" Text="オーバーレイの位置" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="OverlayPositionLabel" Text="オーバーレイの位置"
+                                               FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center" />
                                     <ComboBox x:Name="OverlayPositionCombo" Grid.Column="1"
                                               Style="{StaticResource DarkAudioComboStyle}" FontSize="14"
                                               IsEnabled="{Binding IsChecked, ElementName=EnableOverlayCheck}">
