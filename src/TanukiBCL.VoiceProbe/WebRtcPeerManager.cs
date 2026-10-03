@@ -155,8 +155,9 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         var offer = peer.Connection.createOffer(null);
         await peer.Connection.setLocalDescription(offer);
-        Log($"offer > {Short(remoteSocketId)} sctp={HasSctpMedia(offer.sdp)}");
-        await SendSignalAsync(peer, new { type = "offer", sdp = offer.sdp });
+        var offerSdp = LocalSdpForRemote(peer, offer.sdp);
+        Log($"offer > {Short(remoteSocketId)} sctp={HasSctpMedia(offerSdp)}");
+        await SendSignalAsync(peer, new { type = "offer", sdp = offerSdp });
         FlushLocalCandidates(peer);
     }
 
@@ -275,6 +276,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             {
                 return;
             }
+            if (!IsRelayCandidate(candidate.candidate)) MarkRemoteNonRelayCandidate(peer);
             if (peer.RelayOnly && !IsRelayCandidate(candidate.candidate))
             {
                 DeferNonRelayCandidate(peer, candidate);
@@ -303,6 +305,8 @@ internal sealed class WebRtcPeerManager : IDisposable
             type = type.Equals("offer", StringComparison.OrdinalIgnoreCase) ? RTCSdpType.offer : RTCSdpType.answer,
             sdp = peer.RelayOnly ? PreferRelayCandidates(peer, sdpElement.GetString()!) : sdpElement.GetString()!
         };
+        if (!peer.RelayOnly && ContainsNonRelayCandidate(description.sdp))
+            MarkRemoteNonRelayCandidate(peer);
         var result = peer.Connection.setRemoteDescription(description);
         Log($"{type} < {Short(remoteSocketId)} result={result} sctp={HasSctpMedia(description.sdp)}");
         if (result != SetDescriptionResultEnum.OK)
@@ -328,8 +332,9 @@ internal sealed class WebRtcPeerManager : IDisposable
             }
             var answer = peer.Connection.createAnswer(null);
             await peer.Connection.setLocalDescription(answer);
-            Log($"answer > {Short(remoteSocketId)} sctp={HasSctpMedia(answer.sdp)}");
-            await SendSignalAsync(peer, new { type = "answer", sdp = answer.sdp });
+            var answerSdp = LocalSdpForRemote(peer, answer.sdp);
+            Log($"answer > {Short(remoteSocketId)} sctp={HasSctpMedia(answerSdp)}");
+            await SendSignalAsync(peer, new { type = "answer", sdp = answerSdp });
             FlushLocalCandidates(peer);
         }
     }
@@ -388,15 +393,16 @@ internal sealed class WebRtcPeerManager : IDisposable
                     sdpMid = candidate.sdpMid ?? "0"
                 }
             };
+            var localCandidate = new LocalCandidateSignal(signal, IsRelayCandidate(candidateText));
             lock (peer.LocalCandidateGate)
             {
                 if (!peer.LocalDescriptionSent)
                 {
-                    peer.PendingLocalCandidates.Add(signal);
+                    peer.PendingLocalCandidates.Add(localCandidate);
                     return;
                 }
             }
-            _ = SendSignalAsync(peer, signal);
+            SendOrDeferLocalCandidate(peer, localCandidate);
         };
         connection.onconnectionstatechange += state =>
         {
@@ -758,7 +764,7 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     private void FlushLocalCandidates(Peer peer)
     {
-        object[] pending;
+        LocalCandidateSignal[] pending;
         lock (peer.LocalCandidateGate)
         {
             peer.LocalDescriptionSent = true;
@@ -766,9 +772,83 @@ internal sealed class WebRtcPeerManager : IDisposable
             peer.PendingLocalCandidates.Clear();
         }
         foreach (var signal in pending)
+            SendOrDeferLocalCandidate(peer, signal);
+    }
+
+    private static string LocalSdpForRemote(Peer peer, string sdp)
+    {
+        if (peer.Initiator || peer.RelayOnly || Volatile.Read(ref peer.RemoteNonRelayCandidateSeen) == 1 ||
+            Volatile.Read(ref peer.LocalCandidateFallbackElapsed) == 1) return sdp;
+        var result = new StringBuilder(sdp.Length);
+        var lines = sdp.Split('\n');
+        for (var index = 0; index < lines.Length; index++)
         {
-            _ = SendSignalAsync(peer, signal);
+            var line = lines[index].TrimEnd('\r');
+            if (line.StartsWith("a=candidate:", StringComparison.OrdinalIgnoreCase) &&
+                !IsRelayCandidate(line)) continue;
+            result.Append(lines[index]);
+            if (index < lines.Length - 1) result.Append('\n');
         }
+        return result.ToString();
+    }
+
+    private static bool ContainsNonRelayCandidate(string sdp) =>
+        sdp.Split('\n').Any(rawLine =>
+            rawLine.StartsWith("a=candidate:", StringComparison.OrdinalIgnoreCase) &&
+            !IsRelayCandidate(rawLine));
+
+    private void MarkRemoteNonRelayCandidate(Peer peer)
+    {
+        if (peer.RelayOnly || Interlocked.Exchange(ref peer.RemoteNonRelayCandidateSeen, 1) == 1) return;
+        FlushDeferredLocalCandidates(peer);
+    }
+
+    private void SendOrDeferLocalCandidate(Peer peer, LocalCandidateSignal candidate)
+    {
+        if (peer.Initiator || peer.RelayOnly || candidate.Relay ||
+            Volatile.Read(ref peer.RemoteNonRelayCandidateSeen) == 1 ||
+            Volatile.Read(ref peer.LocalCandidateFallbackElapsed) == 1)
+        {
+            _ = SendSignalAsync(peer, candidate.Payload);
+            return;
+        }
+        lock (peer.LocalCandidateGate)
+        {
+            if (Volatile.Read(ref peer.RemoteNonRelayCandidateSeen) == 0)
+            {
+                peer.DeferredLocalCandidates.Add(candidate.Payload);
+                if (Interlocked.CompareExchange(ref peer.LocalCandidateFallbackStarted, 1, 0) == 0)
+                    _ = FlushDeferredLocalCandidatesAsync(peer);
+                return;
+            }
+        }
+        _ = SendSignalAsync(peer, candidate.Payload);
+    }
+
+    private async Task FlushDeferredLocalCandidatesAsync(Peer peer)
+    {
+        // Relay-only browsers can abandon ICE before the later relay candidate
+        // arrives if they first receive this peer's host candidates.
+        await Task.Delay(TimeSpan.FromSeconds(4));
+        Volatile.Write(ref peer.LocalCandidateFallbackElapsed, 1);
+        if (IsCurrentPeer(peer.RemoteSocketId, peer.InstanceId) &&
+            peer.Connection.iceConnectionState != RTCIceConnectionState.connected)
+            FlushDeferredLocalCandidates(peer);
+    }
+
+    private void FlushDeferredLocalCandidates(Peer peer)
+    {
+        object[] pending;
+        lock (peer.LocalCandidateGate)
+        {
+            if (!peer.LocalDescriptionSent) return;
+            pending = [.. peer.DeferredLocalCandidates];
+            peer.DeferredLocalCandidates.Clear();
+        }
+        foreach (var signal in pending)
+            _ = SendSignalAsync(peer, signal);
+        if (pending.Length > 0)
+            Log($"peer {Short(peer.RemoteSocketId)} released non-relay local candidates={pending.Length}");
     }
 
     private static RTCIceCandidateInit? ReadCandidate(JsonElement signal)
@@ -903,6 +983,8 @@ internal sealed class WebRtcPeerManager : IDisposable
         sdp?.Contains("m=application ", StringComparison.Ordinal) == true;
     private static string Short(string socketId) => socketId.Length <= 8 ? socketId : socketId[..8];
 
+    private sealed record LocalCandidateSignal(object Payload, bool Relay);
+
     private sealed record Peer(
         string RemoteSocketId,
         string ConnectionId,
@@ -920,7 +1002,11 @@ internal sealed class WebRtcPeerManager : IDisposable
         public List<RTCIceCandidateInit> DeferredCandidates { get; } = [];
         public int DeferredCandidateFallbackStarted;
         public object LocalCandidateGate { get; } = new();
-        public List<object> PendingLocalCandidates { get; } = [];
+        public List<LocalCandidateSignal> PendingLocalCandidates { get; } = [];
+        public List<object> DeferredLocalCandidates { get; } = [];
+        public int RemoteNonRelayCandidateSeen;
+        public int LocalCandidateFallbackStarted;
+        public int LocalCandidateFallbackElapsed;
         public bool LocalDescriptionSent { get; set; }
         public object AudioGate { get; } = new();
         public int AudioFrames { get; set; }
