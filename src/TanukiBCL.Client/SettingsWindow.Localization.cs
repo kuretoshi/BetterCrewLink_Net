@@ -28,6 +28,11 @@ public partial class SettingsWindow
             jackalRadio ? "settings.keyboard.impostor_jackal_radio" : "settings.keyboard.impostor_radio");
         MuteShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.mute");
         DeafenShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.deafen");
+        var prompt = UiLocalization.Translate(language, "settings.keyboard.press_key");
+        PushToTalkShortcutBox.ToolTip = prompt;
+        ImpostorRadioShortcutBox.ToolTip = prompt;
+        MuteShortcutBox.ToolTip = prompt;
+        DeafenShortcutBox.ToolTip = prompt;
     }
 
     internal static void VerifyLocalization()
@@ -52,6 +57,19 @@ public partial class SettingsWindow
             window.PushToTalkShortcutBox.Style != window.MuteShortcutBox.Style ||
             window.PushToTalkShortcutBox.Style != window.DeafenShortcutBox.Style)
             throw new InvalidOperationException("Released keyboard shortcut card layout was not applied");
+        window.PushToTalkShortcutBox.ApplyTemplate();
+        var prompt = window.PushToTalkShortcutBox.Template.FindName(
+            "RecordingPrompt", window.PushToTalkShortcutBox) as StackPanel;
+        if (prompt is null) throw new InvalidOperationException("Shortcut recording prompt template was not applied");
+        var originalShortcut = window.PushToTalkShortcutBox.Text;
+        SetShortcutRecording(window.PushToTalkShortcutBox, true);
+        if (!IsShortcutRecording(window.PushToTalkShortcutBox) ||
+            prompt.Visibility != System.Windows.Visibility.Visible ||
+            window.PushToTalkShortcutBox.Text != originalShortcut)
+            throw new InvalidOperationException("Shortcut recording changed the saved shortcut or hid its prompt");
+        SetShortcutRecording(window.PushToTalkShortcutBox, false);
+        if (prompt.Visibility != System.Windows.Visibility.Collapsed)
+            throw new InvalidOperationException("Shortcut recording prompt did not close");
         if (window.AdvancedPanel.Children.OfType<Border>().Count() != 2 ||
             window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style)
             throw new InvalidOperationException("Advanced settings section card layout was not applied");
@@ -102,7 +120,8 @@ public partial class SettingsWindow
                 window.ImpostorRadioShortcutLabel.Text != UiLocalization.Translate(language,
                     jackalRadio ? "settings.keyboard.impostor_jackal_radio" : "settings.keyboard.impostor_radio") ||
                 window.MuteShortcutLabel.Text != UiLocalization.Translate(language, "settings.keyboard.mute") ||
-                window.DeafenShortcutLabel.Text != UiLocalization.Translate(language, "settings.keyboard.deafen"))
+                window.DeafenShortcutLabel.Text != UiLocalization.Translate(language, "settings.keyboard.deafen") ||
+                !Equals(window.PushToTalkShortcutBox.ToolTip, UiLocalization.Translate(language, "settings.keyboard.press_key")))
                 throw new InvalidOperationException("Keyboard shortcut labels did not follow game MOD and language");
         }
 

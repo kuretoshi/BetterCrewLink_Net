@@ -339,18 +339,44 @@ public partial class SettingsWindow : Window
         if (e.Key == Key.Tab) return;
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         var shortcut = GlobalHotkeyMonitor.FromKey(key);
-        if (shortcut is not null) box.Text = shortcut;
+        if (shortcut is not null)
+        {
+            box.Text = shortcut;
+            SetShortcutRecording(box, false);
+        }
         e.Handled = true;
     }
 
     private void ShortcutBox_PreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (sender is not TextBox box) return;
-        if (e.ChangedButton == MouseButton.XButton1) box.Text = "MouseButton4";
-        else if (e.ChangedButton == MouseButton.XButton2) box.Text = "MouseButton5";
-        else return;
-        e.Handled = true;
+        if (e.ChangedButton == MouseButton.Left && box.IsKeyboardFocused)
+        {
+            SetShortcutRecording(box, !IsShortcutRecording(box));
+            e.Handled = true;
+        }
+        else if (IsShortcutRecording(box) && e.ChangedButton is MouseButton.XButton1 or MouseButton.XButton2)
+        {
+            box.Text = e.ChangedButton == MouseButton.XButton1 ? "MouseButton4" : "MouseButton5";
+            SetShortcutRecording(box, false);
+            e.Handled = true;
+        }
     }
+
+    private void ShortcutBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox box) SetShortcutRecording(box, true);
+    }
+
+    private void ShortcutBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox box) SetShortcutRecording(box, false);
+    }
+
+    private static bool IsShortcutRecording(TextBox box) => Equals(box.Tag, "Recording");
+
+    private static void SetShortcutRecording(TextBox box, bool recording) =>
+        box.Tag = recording ? "Recording" : null;
 
     private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {

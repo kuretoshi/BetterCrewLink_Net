@@ -130,13 +130,35 @@
             <Setter Property="Background" Value="#1E1A22" />
             <Setter Property="Foreground" Value="#F5F1F7" />
             <Setter Property="BorderBrush" Value="#57515B" />
-            <Style.Triggers>
-                <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                    <Setter Property="Background" Value="#392B40" />
-                    <Setter Property="Foreground" Value="#CE93D8" />
-                    <Setter Property="BorderBrush" Value="#CE93D8" />
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="ShortcutBorder" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="6">
+                            <Grid>
+                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
+                                              VerticalAlignment="Center" />
+                                <StackPanel x:Name="RecordingPrompt" Orientation="Horizontal"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            IsHitTestVisible="False" Visibility="Collapsed">
+                                    <Path Data="{DynamicResource KeyboardIcon}" Fill="#CE93D8"
+                                          Width="15" Height="15" Stretch="Uniform" Margin="0,0,6,0" />
+                                    <TextBlock Text="{TemplateBinding ToolTip}" Foreground="#CE93D8"
+                                               FontFamily="Source Code Pro" FontSize="13" FontWeight="Bold" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Tag" Value="Recording">
+                                <Setter TargetName="PART_ContentHost" Property="Visibility" Value="Hidden" />
+                                <Setter TargetName="RecordingPrompt" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="ShortcutBorder" Property="Background" Value="#392B40" />
+                                <Setter TargetName="ShortcutBorder" Property="BorderBrush" Value="#CE93D8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Geometry x:Key="TuneIcon">M3 17v2h6v-2zM3 5v2h10V5zm10 16v-2h8v-2h-8v-2h-2v6zM7 9v2H3v2h4v2h2V9zm14 4v-2H11v2zm-6-4h2V7h4V5h-4V3h-2z</Geometry>
         <Geometry x:Key="GroupsIcon">M12 12.75c1.63 0 3.07.39 4.24.9 1.08.48 1.76 1.56 1.76 2.73V18H6v-1.61c0-1.18.68-2.26 1.76-2.73 1.17-.52 2.61-.91 4.24-.91M4 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m1.13 1.1c-.37-.06-.74-.1-1.13-.1-.99 0-1.93.21-2.78.58C.48 14.9 0 15.62 0 16.43V18h4.5v-1.61c0-.83.23-1.61.63-2.29M20 13c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m4 3.43c0-.81-.48-1.53-1.22-1.85-.85-.37-1.79-.58-2.78-.58-.39 0-.76.04-1.13.1.4.68.63 1.46.63 2.29V18H24zM12 6c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3</Geometry>
@@ -517,7 +539,10 @@
                                         <TextBlock x:Name="PushToTalkShortcutLabel" Text="押して話す" FontWeight="SemiBold" />
                                         <TextBox x:Name="PushToTalkShortcutBox" Grid.Column="1" IsReadOnly="True"
                                                  Style="{StaticResource ShortcutFieldStyle}"
-                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                                                 GotKeyboardFocus="ShortcutBox_GotKeyboardFocus"
+                                                 LostKeyboardFocus="ShortcutBox_LostKeyboardFocus"
+                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown"
+                                                 PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
                                     </Grid>
                                 </Border>
                                 <Border Padding="16,10" BorderBrush="#3F3944" BorderThickness="0,0,0,1">
@@ -526,7 +551,10 @@
                                         <TextBlock x:Name="ImpostorRadioShortcutLabel" Text="インポスターラジオ" FontWeight="SemiBold" TextWrapping="Wrap" />
                                         <TextBox x:Name="ImpostorRadioShortcutBox" Grid.Column="1" IsReadOnly="True"
                                                  Style="{StaticResource ShortcutFieldStyle}"
-                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                                                 GotKeyboardFocus="ShortcutBox_GotKeyboardFocus"
+                                                 LostKeyboardFocus="ShortcutBox_LostKeyboardFocus"
+                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown"
+                                                 PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
                                     </Grid>
                                 </Border>
                                 <Border Padding="16,10" BorderBrush="#3F3944" BorderThickness="0,0,0,1">
@@ -535,7 +563,10 @@
                                         <TextBlock x:Name="MuteShortcutLabel" Text="ミュート" FontWeight="SemiBold" />
                                         <TextBox x:Name="MuteShortcutBox" Grid.Column="1" IsReadOnly="True"
                                                  Style="{StaticResource ShortcutFieldStyle}"
-                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                                                 GotKeyboardFocus="ShortcutBox_GotKeyboardFocus"
+                                                 LostKeyboardFocus="ShortcutBox_LostKeyboardFocus"
+                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown"
+                                                 PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
                                     </Grid>
                                 </Border>
                                 <Border Padding="16,10">
@@ -544,7 +575,10 @@
                                         <TextBlock x:Name="DeafenShortcutLabel" Text="スピーカーミュート" FontWeight="SemiBold" />
                                         <TextBox x:Name="DeafenShortcutBox" Grid.Column="1" IsReadOnly="True"
                                                  Style="{StaticResource ShortcutFieldStyle}"
-                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown" PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                                                 GotKeyboardFocus="ShortcutBox_GotKeyboardFocus"
+                                                 LostKeyboardFocus="ShortcutBox_LostKeyboardFocus"
+                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown"
+                                                 PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
                                     </Grid>
                                 </Border>
                             </StackPanel>
