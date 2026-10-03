@@ -149,6 +149,7 @@ public partial class MainWindow : Window
         window.SettingsApplied += SettingsWindow_SettingsApplied;
         window.SettingsReset += SettingsWindow_SettingsReset;
         window.UpdateInstallRequested += QueueUpdateInstall;
+        window.DebugOpenRequested += ShowDebugInfo;
         try
         {
             window.ShowDialog();
@@ -158,14 +159,15 @@ public partial class MainWindow : Window
             window.SettingsApplied -= SettingsWindow_SettingsApplied;
             window.SettingsReset -= SettingsWindow_SettingsReset;
             window.UpdateInstallRequested -= QueueUpdateInstall;
+            window.DebugOpenRequested -= ShowDebugInfo;
             settingsWindow = null;
             hotkeysSuspended = false;
         }
-        if (window.DebugOpenRequested && !isClosing) ShowDebugInfo();
     }
 
     private void ShowDebugInfo()
     {
+        if (isClosing) return;
         if (debugInfoWindow is { IsVisible: true })
         {
             debugInfoWindow.Activate();

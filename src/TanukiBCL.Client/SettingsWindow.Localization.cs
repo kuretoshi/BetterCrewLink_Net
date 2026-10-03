@@ -74,6 +74,13 @@ public partial class SettingsWindow
             window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style ||
             window.OpenDebugButton is null)
             throw new InvalidOperationException("Advanced settings section card layout was not applied");
+        var debugOpened = false;
+        var settingsClosed = false;
+        window.DebugOpenRequested += () => debugOpened = true;
+        window.Closed += (_, _) => settingsClosed = true;
+        window.OpenAuthenticatedDebugInfo();
+        if (!debugOpened || settingsClosed)
+            throw new InvalidOperationException("Opening debug info must leave settings open");
         var generalItem = (System.Windows.Controls.ListBoxItem)window.CategoryList.Items[0];
         generalItem.ApplyTemplate();
         if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path
