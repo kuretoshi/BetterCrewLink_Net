@@ -99,7 +99,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             testToneTarget: options.ExpectedPeerClientId is int expectedClientId
                 ? socketId => peerClientIds.TryGetValue(socketId, out var clientId) && clientId == expectedClientId
                 : null,
-            traceDtlsRecords: options.DtlsTrace);
+            traceDtlsRecords: options.DtlsTrace, turnTcp: options.TurnTcp);
         peerManager.PeerVerified += socketId =>
         {
             Log("OK", $"P2P双方向通信成功 peer={socketId}");

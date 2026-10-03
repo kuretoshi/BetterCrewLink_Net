@@ -8,6 +8,10 @@ internal static class SelfTestRunner
         bool mixedNat = false)
     {
         DtlsRecordHeaderTrace.Verify();
+        var tcpOptions = ProbeOptions.Parse(["--self-test", "--nat-fix", "--turn-tcp"]);
+        if (!tcpOptions.NatFix || !tcpOptions.TurnTcp ||
+            ProbeOptions.Parse(["--self-test", "--nat-fix"]).TurnTcp)
+            throw new InvalidOperationException("TURN transport CLI selection did not preserve the UDP default.");
         using (var peerManager = new WebRtcPeerManager("self-test", (_, _) => Task.CompletedTask, false))
         {
             if (peerManager.ShouldDeferIncomingOffer("unseen-peer"))

@@ -17,12 +17,15 @@ internal sealed class WebRtcPeerManager : IDisposable
     [
         new("turn:turn.bettercrewl.ink:3478", "M9DRVaByiujoXeuYAAAG", "TpHR9HQNZ8taxjb3")
     ];
+    private static readonly IReadOnlyList<IceServer> NatFixTcpIceServers =
+        NatFixIceServers.Select(server => server with { Url = $"{server.Url}?transport=tcp" }).ToArray();
     private const int SamplesPerChannel = 960;
     private const int PlaybackChannels = 2;
     private readonly string owner;
     private readonly bool sendTestTone;
     private readonly Func<string, bool>? testToneTarget;
     private readonly bool traceDtlsRecords;
+    private readonly bool turnTcp;
     private bool natFix;
     private readonly Func<string, object, Task> sendSignal;
     private readonly ConcurrentDictionary<string, Peer> peers = new();
@@ -32,13 +35,15 @@ internal sealed class WebRtcPeerManager : IDisposable
     private bool forceRelayOnly;
 
     public WebRtcPeerManager(string owner, Func<string, object, Task> sendSignal, bool sendTestTone,
-        bool natFix = false, Func<string, bool>? testToneTarget = null, bool traceDtlsRecords = false)
+        bool natFix = false, Func<string, bool>? testToneTarget = null, bool traceDtlsRecords = false,
+        bool turnTcp = false)
     {
         this.owner = owner;
         this.sendSignal = sendSignal;
         this.sendTestTone = sendTestTone;
         this.testToneTarget = testToneTarget;
         this.traceDtlsRecords = traceDtlsRecords;
+        this.turnTcp = turnTcp;
         this.natFix = natFix;
     }
 
@@ -358,10 +363,11 @@ internal sealed class WebRtcPeerManager : IDisposable
         // Match v3.2.7: NAT fix selects its static TURN config at peer creation.
         // Existing peers keep their ICE configuration until they reconnect.
         var useNatFix = Volatile.Read(ref natFix);
+        var selectedIceServers = useNatFix ? (turnTcp ? NatFixTcpIceServers : NatFixIceServers) : iceServers;
         var configuration = new RTCConfiguration
         {
             iceTransportPolicy = useNatFix || forceRelayOnly ? RTCIceTransportPolicy.relay : RTCIceTransportPolicy.all,
-            iceServers = (useNatFix ? NatFixIceServers : iceServers).Select(server => new RTCIceServer
+            iceServers = selectedIceServers.Select(server => new RTCIceServer
             {
                 urls = server.Url,
                 username = server.Username,
@@ -488,7 +494,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             if (!peers.TryGetValue(remoteSocketId, out var currentPeer) || !ReferenceEquals(currentPeer, peer))
                 return;
             Log($"peer {Short(remoteSocketId)} ice={state} dtlsRole={connection.IceRole} " +
-                $"pair={DescribeNominatedPair(connection)}");
+                $"pair={DescribeNominatedPair(connection)} turnTransport={DescribeTurnTransport(connection)}");
             if (state == RTCIceConnectionState.connected &&
                 Interlocked.Exchange(ref peer.DtlsHandshakeWatchdogStarted, 1) == 0)
                 _ = WatchDtlsHandshakeAsync(peer);
@@ -560,6 +566,9 @@ internal sealed class WebRtcPeerManager : IDisposable
             ? "none"
             : $"{nominated.LocalCandidate.type}/{nominated.RemoteCandidate.type}";
     }
+
+    private static string DescribeTurnTransport(RTCPeerConnection connection) =>
+        connection.GetRtpChannel().NominatedEntry?.LocalCandidate.IceServer?.Protocol.ToString() ?? "none";
 
     internal static ConnectionQuality FromReceptionReport(
         ReceptionReportSample sample, double? observedJitterMs, bool direct = false, double? rttMs = null) =>
@@ -707,6 +716,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         Log($"DTLS handshake stalled: {Short(peer.RemoteSocketId)} " +
             $"ice={peer.Connection.iceConnectionState} dtlsRole={peer.Connection.IceRole} " +
             $"sctp={peer.Connection.sctp.state} pair={DescribeNominatedPair(peer.Connection)} " +
+            $"turnTransport={DescribeTurnTransport(peer.Connection)} " +
             $"dtlsRx={Volatile.Read(ref peer.DtlsPacketsReceived)} " +
             $"firstRecord=handshake:{Volatile.Read(ref peer.DtlsHandshakeDatagrams)}" +
             $"/ccs:{Volatile.Read(ref peer.DtlsChangeCipherDatagrams)}" +

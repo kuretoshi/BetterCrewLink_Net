@@ -33,7 +33,8 @@ internal sealed record ProbeOptions(
     bool NosSnapshot,
     int ExpectedPlayers = 5,
     bool OldSampleDebug = false,
-    bool DtlsTrace = false)
+    bool DtlsTrace = false,
+    bool TurnTcp = false)
 {
     public static ProbeOptions Parse(string[] args)
     {
@@ -43,7 +44,7 @@ internal sealed record ProbeOptions(
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--host" or "--self-test" or "--quality-self-test" or "--mixed-nat-self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--policy-self-test" or "--vad-self-test" or "--nat-fix" or "--nos-snapshot" or "--old-sample-debug" or "--capture-device-self-test" or "--dtls-trace")
+            if (argument is "--host" or "--self-test" or "--quality-self-test" or "--mixed-nat-self-test" or "--tanuki-interop-test" or "--live-audio" or "--list-audio-devices" or "--scan-game" or "--game-audio-self-test" or "--game-audio-transition-test" or "--game-audio-recovery-test" or "--game-audio-server-recovery-test" or "--expect-nearby" or "--auto-radio-tone" or "--policy-self-test" or "--vad-self-test" or "--nat-fix" or "--nos-snapshot" or "--old-sample-debug" or "--capture-device-self-test" or "--dtls-trace" or "--turn-tcp")
             {
                 switches.Add(argument);
                 continue;
@@ -110,7 +111,8 @@ internal sealed record ProbeOptions(
             values.TryGetValue("--expected-players", out var playersText)
                 ? ParsePositiveInt(playersText, "--expected-players") : 5,
             switches.Contains("--old-sample-debug"),
-            switches.Contains("--dtls-trace"));
+            switches.Contains("--dtls-trace"),
+            switches.Contains("--turn-tcp"));
     }
 
     private static int? ParseOptionalInt(IReadOnlyDictionary<string, string> values, string name)
