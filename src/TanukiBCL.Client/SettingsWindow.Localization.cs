@@ -52,6 +52,9 @@ public partial class SettingsWindow
             window.PushToTalkShortcutBox.Style != window.MuteShortcutBox.Style ||
             window.PushToTalkShortcutBox.Style != window.DeafenShortcutBox.Style)
             throw new InvalidOperationException("Released keyboard shortcut card layout was not applied");
+        if (window.AdvancedPanel.Children.OfType<Border>().Count() != 2 ||
+            window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style)
+            throw new InvalidOperationException("Advanced settings section card layout was not applied");
         var generalItem = (System.Windows.Controls.ListBoxItem)window.CategoryList.Items[0];
         generalItem.ApplyTemplate();
         if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path
@@ -68,7 +71,7 @@ public partial class SettingsWindow
             window.CategoryList.Items[4] is not System.Windows.Controls.ListBoxItem
                 { Content: "Keyboard Shortcuts" } ||
             !Equals(window.VoiceModeRadio.Content, UiLocalization.Translate("en", "settings.audio.voice_activity")) ||
-            !Equals(window.NatFixCheck.Content, UiLocalization.Translate("en", "settings.advanced.nat_fix")) ||
+            window.NatFixLabel.Text != UiLocalization.Translate("en", "settings.advanced.nat_fix") ||
             !Equals(window.CopyObsUrlButton.ToolTip, "Copy URL"))
             throw new InvalidOperationException("English settings language did not apply");
         VerifyShortcutLabels("en", false);
