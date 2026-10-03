@@ -83,6 +83,11 @@ public partial class VoiceView : UserControl
         view.Measure(new Size(280, 390));
         view.Arrange(new Rect(0, 0, 280, 390));
         view.UpdateLayout();
+        if (view.LocalAvatar.Width != 100 || view.LocalAvatar.Height != 100 ||
+            view.HeaderPanel.Margin != new Thickness(0, -13, 0, 6) ||
+            view.LocalName.FontWeight != FontWeights.SemiBold ||
+            view.CodeBackground.Padding != new Thickness(9, 5, 9, 5))
+            throw new InvalidOperationException("Compact header no longer matches the released avatar/name/code geometry");
         if (view.LocalName.TextTrimming != TextTrimming.None || view.LocalName.ActualWidth <= 115 ||
             view.LocalName.FontSize != 20 || view.LocalName.TextWrapping != TextWrapping.NoWrap)
             throw new InvalidOperationException("Long player name was clipped, shrunk or ellipsized");
@@ -280,7 +285,7 @@ public partial class VoiceView : UserControl
         WaitingPanel.Visibility = inLobby ? Visibility.Collapsed : Visibility.Visible;
         OtherPlayersScroll.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
         LobbyHeader.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
-        HeaderPanel.Margin = inLobby ? new Thickness(0, 10, 0, 8) : new Thickness(0);
+        HeaderPanel.Margin = inLobby ? new Thickness(0, -13, 0, 6) : new Thickness(0);
         if (!inLobby || local is null || game is null)
         {
             ClosePlayerConfigPopup();
