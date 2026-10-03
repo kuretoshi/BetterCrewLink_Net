@@ -56,7 +56,7 @@ public partial class VoiceView : UserControl
     private static string CollapseNoWrapWhitespace(string value) =>
         HtmlWhitespace.Replace(value, " ").Trim(' ', '\t', '\r', '\n', '\f');
 
-    private static string FormatVersionLabel(string version)
+    internal static string FormatVersionLabel(string version)
     {
         var beta = Regex.Match(version, @"^(\d+\.\d+\.\d+)-net-beta\.(\d+)$");
         if (beta.Success) return $"v{beta.Groups[1].Value} β{beta.Groups[2].Value}";

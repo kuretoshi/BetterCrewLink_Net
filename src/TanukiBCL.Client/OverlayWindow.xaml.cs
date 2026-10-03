@@ -214,7 +214,7 @@ public partial class OverlayWindow : Window
             AmongUsModType.NebulaOnTheShip => "NoS",
             _ => AmongUsMod.For(state.Mod).Label
         };
-        WatermarkTitle.Text = $"TanukiBCL v3.2.7 .NET{(mod.Length > 0 ? $" [{mod}]" : "")}";
+        WatermarkTitle.Text = $"TanukiBCL.Net {VoiceView.FormatVersionLabel(UpdateCatalog.CurrentVersion)}{(mod.Length > 0 ? $" [{mod}]" : "")}";
         WatermarkServer.Text = settings.ServerUrl;
         WatermarkTitle.TextAlignment = isTasks ? TextAlignment.Center : TextAlignment.Left;
         WatermarkServer.TextAlignment = WatermarkTitle.TextAlignment;
@@ -417,7 +417,7 @@ public partial class OverlayWindow : Window
                 { [2] = new(true, true, false) }, false, false, false);
             if (window.AvatarPanel.Children.Count != 2 ||
                 window.MeetingCanvas.Children.Count != 2 ||
-                window.WatermarkTitle.Text.Length == 0)
+                window.WatermarkTitle.Text != $"TanukiBCL.Net {VoiceView.FormatVersionLabel(UpdateCatalog.CurrentVersion)}")
                 throw new InvalidOperationException("Overlay render smoke test failed");
             var retainedSlot = window.MeetingCanvas.Children[1];
             window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, false, false) }, false, false, false);
