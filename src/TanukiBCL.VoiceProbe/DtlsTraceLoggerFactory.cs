@@ -46,6 +46,11 @@ internal sealed class DtlsTraceLoggerFactory : ILoggerFactory
                 return "handshake-start";
             if (template.Contains("DTLS handshake failed", StringComparison.OrdinalIgnoreCase))
                 return "handshake-failed";
+            if (template.Contains("source does not match any known ICE remote candidate", StringComparison.OrdinalIgnoreCase))
+                return "source-rejected";
+            if (template.Contains("DTLS packet received", StringComparison.OrdinalIgnoreCase) &&
+                template.Contains("no DTLS transport", StringComparison.OrdinalIgnoreCase))
+                return "no-transport";
             return null;
         }
     }

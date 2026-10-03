@@ -376,7 +376,32 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             // RFC 5764 DTLS demultiplexing range. Count only, never retain packets.
             if (packet.Length > 0 && packet[0] is >= 20 and < 64)
+            {
                 Interlocked.Increment(ref peer.DtlsPacketsReceived);
+                switch (packet[0])
+                {
+                    case 20: Interlocked.Increment(ref peer.DtlsChangeCipherDatagrams); break;
+                    case 21: Interlocked.Increment(ref peer.DtlsAlertDatagrams); break;
+                    case 22:
+                        Interlocked.Increment(ref peer.DtlsHandshakeDatagrams);
+                        // DTLS record header: epoch at bytes 3-4, handshake type at 13.
+                        // Classify only plaintext epoch zero; later flights are encrypted.
+                        if (packet.Length > 13 && packet[3] == 0 && packet[4] == 0)
+                        {
+                            switch (packet[13])
+                            {
+                                case 1: Interlocked.Increment(ref peer.DtlsClientHelloDatagrams); break;
+                                case 2: Interlocked.Increment(ref peer.DtlsServerHelloDatagrams); break;
+                                case 3: Interlocked.Increment(ref peer.DtlsHelloVerifyDatagrams); break;
+                                default: Interlocked.Increment(ref peer.DtlsOtherPlainHandshakeDatagrams); break;
+                            }
+                        }
+                        else if (packet.Length > 4)
+                            Interlocked.Increment(ref peer.DtlsEncryptedHandshakeDatagrams);
+                        break;
+                    case 23: Interlocked.Increment(ref peer.DtlsApplicationDatagrams); break;
+                }
+            }
         };
 
         connection.onicecandidate += candidate =>
@@ -660,7 +685,16 @@ internal sealed class WebRtcPeerManager : IDisposable
         Log($"DTLS handshake stalled: {Short(peer.RemoteSocketId)} " +
             $"ice={peer.Connection.iceConnectionState} dtlsRole={peer.Connection.IceRole} " +
             $"sctp={peer.Connection.sctp.state} pair={DescribeNominatedPair(peer.Connection)} " +
-            $"dtlsRx={Volatile.Read(ref peer.DtlsPacketsReceived)}");
+            $"dtlsRx={Volatile.Read(ref peer.DtlsPacketsReceived)} " +
+            $"firstRecord=handshake:{Volatile.Read(ref peer.DtlsHandshakeDatagrams)}" +
+            $"/ccs:{Volatile.Read(ref peer.DtlsChangeCipherDatagrams)}" +
+            $"/alert:{Volatile.Read(ref peer.DtlsAlertDatagrams)}" +
+            $"/app:{Volatile.Read(ref peer.DtlsApplicationDatagrams)} " +
+            $"plainHandshake=clientHello:{Volatile.Read(ref peer.DtlsClientHelloDatagrams)}" +
+            $"/serverHello:{Volatile.Read(ref peer.DtlsServerHelloDatagrams)}" +
+            $"/helloVerify:{Volatile.Read(ref peer.DtlsHelloVerifyDatagrams)}" +
+            $"/other:{Volatile.Read(ref peer.DtlsOtherPlainHandshakeDatagrams)}" +
+            $" encryptedHandshake:{Volatile.Read(ref peer.DtlsEncryptedHandshakeDatagrams)}");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
 
@@ -1065,6 +1099,15 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int DataChannelWatchdogStarted;
         public int DtlsHandshakeWatchdogStarted;
         public int DtlsPacketsReceived;
+        public int DtlsHandshakeDatagrams;
+        public int DtlsChangeCipherDatagrams;
+        public int DtlsAlertDatagrams;
+        public int DtlsApplicationDatagrams;
+        public int DtlsClientHelloDatagrams;
+        public int DtlsServerHelloDatagrams;
+        public int DtlsHelloVerifyDatagrams;
+        public int DtlsOtherPlainHandshakeDatagrams;
+        public int DtlsEncryptedHandshakeDatagrams;
         public int SctpClosedRecoveryStarted;
         public int DataChannelOpen;
         public int AudioSendFailureLogged;
