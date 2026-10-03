@@ -141,6 +141,16 @@ internal static class GameProcessScanner
                 $"players={result.State.Players.Count} active={alive + dead} " +
                 $"alive={alive} dead={dead} impostors={impostors}");
 
+            if (result.State.LobbyCodeInt == 32 &&
+                result.State.Players.FirstOrDefault(player =>
+                    player.ClientId == result.State.HostId && !player.Disconnected && !player.IsDummy) is { } host)
+            {
+                var releasedCode = GameCodeCodec.ReleasedLocalHostCode(host);
+                if (releasedCode != result.State.LobbyCode)
+                    Console.WriteLine($"  [WARN] released 3.2.8 raw local code={releasedCode}; " +
+                                      $".NET normalized code={result.State.LobbyCode} (decorated host name)");
+            }
+
             foreach (var player in result.State.Players.OrderBy(player => player.ClientId))
             {
                 Console.WriteLine(

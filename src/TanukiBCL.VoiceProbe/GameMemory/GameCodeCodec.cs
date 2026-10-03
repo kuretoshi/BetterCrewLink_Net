@@ -35,6 +35,11 @@ public static class GameCodeCodec
         return (hash % 99999).ToString();
     }
 
+    // The released 3.2.8 GameReader hashes the host name exactly as each game
+    // process sees it. TOH can decorate that name only for vanilla guests,
+    // yielding a different raw room from the canonical room used by .NET.
+    public static string ReleasedLocalHostCode(Player host) => (host.NameHash % 99999).ToString();
+
     public static string? LocalHostCode(int hostClientId, IReadOnlyList<Player> players)
     {
         // Among Us can retain disconnected players with their client ID reset to

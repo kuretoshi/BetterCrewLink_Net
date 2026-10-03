@@ -20,6 +20,11 @@ internal static class GameProcessScannerSelfTest
         Require(GameCodeCodec.LocalHostCode(baseHost) == "46282" &&
             GameCodeCodec.LocalHostCode(decoratedHost) == "46282",
             "TOH host decoration split the local voice lobby");
+        Require(GameCodeCodec.ReleasedLocalHostCode(baseHost) == "46282" &&
+            GameCodeCodec.ReleasedLocalHostCode(decoratedHost) ==
+            (decoratedHost.NameHash % 99999).ToString() &&
+            GameCodeCodec.ReleasedLocalHostCode(decoratedHost) != GameCodeCodec.LocalHostCode(decoratedHost),
+            "Released local-room hash no longer exposes the TOH decorated-name mismatch");
         var disconnectedGuests = new[]
         {
             baseHost,
