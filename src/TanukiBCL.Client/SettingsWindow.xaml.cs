@@ -54,6 +54,7 @@ public partial class SettingsWindow : Window
         Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged, Action<ClientSettings>? persistSettings = null)
     {
         InitializeComponent();
+        PreviewKeyDown += DebugAuthPreviewKeyDown;
         InitializeUpdatePanel();
         this.settings = settings;
         settingsTransaction = new ClientSettingsTransaction(settings, persistSettings ?? ClientSettingsStore.Save);
@@ -388,8 +389,17 @@ public partial class SettingsWindow : Window
         DebugPasswordInput.Clear();
         DebugPasswordMessage.Text = "開発者用パスワードを入力してください。";
         DebugPasswordMessage.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0xAA, 0xBD));
+        SettingsNavigation.IsEnabled = false;
+        SettingsContent.IsEnabled = false;
         DebugAuthBackdrop.Visibility = Visibility.Visible;
         Dispatcher.BeginInvoke(() => DebugPasswordInput.Focus(), DispatcherPriority.Input);
+    }
+
+    private void DebugAuthPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DebugAuthBackdrop.Visibility != Visibility.Visible || e.Key != Key.Escape || debugAuthBusy) return;
+        CloseDebugAuthDialog();
+        e.Handled = true;
     }
 
     private void DebugPasswordInput_PasswordChanged(object sender, RoutedEventArgs e)
@@ -401,12 +411,7 @@ public partial class SettingsWindow : Window
 
     private void DebugPasswordInput_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
-        {
-            CloseDebugAuthDialog();
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Return && SubmitDebugAuthButton.IsEnabled)
+        if (e.Key == Key.Return && SubmitDebugAuthButton.IsEnabled)
         {
             SubmitDebugAuthButton_Click(sender, e);
             e.Handled = true;
@@ -424,8 +429,11 @@ public partial class SettingsWindow : Window
     {
         if (debugAuthBusy) return;
         DebugAuthBackdrop.Visibility = Visibility.Collapsed;
+        SettingsNavigation.IsEnabled = true;
+        SettingsContent.IsEnabled = true;
         DebugPasswordInput.Clear();
         DebugPasswordMessage.Text = string.Empty;
+        OpenDebugButton.Focus();
     }
 
     private void SubmitDebugAuthButton_Click(object sender, RoutedEventArgs e)
