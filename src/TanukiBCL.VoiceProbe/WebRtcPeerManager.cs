@@ -409,7 +409,15 @@ internal sealed class WebRtcPeerManager : IDisposable
                 PeerConnectionFailed?.Invoke(remoteSocketId);
             }
         };
-        connection.oniceconnectionstatechange += state => Log($"peer {Short(remoteSocketId)} ice={state}");
+        connection.oniceconnectionstatechange += state =>
+        {
+            if (!peers.TryGetValue(remoteSocketId, out var currentPeer) || !ReferenceEquals(currentPeer, peer))
+                return;
+            Log($"peer {Short(remoteSocketId)} ice={state}");
+            if (state == RTCIceConnectionState.connected &&
+                Interlocked.Exchange(ref peer.DtlsHandshakeWatchdogStarted, 1) == 0)
+                _ = WatchDtlsHandshakeAsync(peer);
+        };
         connection.onicecandidateerror += (_, error) => Log($"peer {Short(remoteSocketId)} ice-candidate-error={error}");
         connection.ondatachannel += channel => ConfigureDataChannel(peer, channel, "remote");
         connection.OnRtpPacketReceived += (_, mediaType, packet) =>
@@ -567,9 +575,24 @@ internal sealed class WebRtcPeerManager : IDisposable
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
     }
 
+    private async Task WatchDtlsHandshakeAsync(Peer peer)
+    {
+        // ICE can connect while DTLS remains stuck in "connecting". The
+        // generic 30-second watchdog is too late to recover that state promptly.
+        await Task.Delay(TimeSpan.FromSeconds(10));
+        if (!peers.TryGetValue(peer.RemoteSocketId, out var current) ||
+            !ReferenceEquals(current, peer) ||
+            peer.Connection.connectionState != RTCPeerConnectionState.connecting)
+            return;
+
+        Log($"DTLS handshake stalled: {Short(peer.RemoteSocketId)} ice={peer.Connection.iceConnectionState}");
+        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
+    }
+
     private async Task WatchHandshakeAsync(Peer peer)
     {
-        // The data-channel watchdog starts only after ICE reaches connected.
+        // The data-channel watchdog starts only after the overall connection
+        // (including DTLS) reaches connected.
         // A lost offer/answer can otherwise remain in new/connecting forever.
         await Task.Delay(TimeSpan.FromSeconds(30));
         if (!peers.TryGetValue(peer.RemoteSocketId, out var current) ||
@@ -802,6 +825,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         public bool AudioReported { get; set; }
         public int TestToneStarted;
         public int DataChannelWatchdogStarted;
+        public int DtlsHandshakeWatchdogStarted;
         public int DataChannelOpen;
         public int AudioSendFailureLogged;
         public RtpAudioJitterEstimator JitterEstimator { get; } = new();
