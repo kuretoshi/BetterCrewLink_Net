@@ -232,6 +232,67 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="LobbySwitchStyle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="MinHeight" Value="52" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Border Background="Transparent" BorderBrush="#3B3540"
+                                BorderThickness="0,0,0,1" Padding="16,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter VerticalAlignment="Center" Margin="0,0,12,0"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                                <Border x:Name="SwitchTrack" Grid.Column="1" Width="36" Height="20"
+                                        CornerRadius="10" Background="#68646B" VerticalAlignment="Center">
+                                    <Ellipse x:Name="SwitchThumb" Width="16" Height="16" Fill="White"
+                                             HorizontalAlignment="Left" Margin="2,0,0,0" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SwitchTrack" Property="Background" Value="#AE70BB" />
+                                <Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right" />
+                                <Setter TargetName="SwitchThumb" Property="Margin" Value="0,0,2,0" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="LobbyTabStyle" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="TabSurface" Background="Transparent" BorderBrush="Transparent"
+                                BorderThickness="0,0,0,2" Padding="16,6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="TabSurface" Property="BorderBrush" Value="#BA68C8" />
+                                <Setter Property="Foreground" Value="#BA68C8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="ShortcutFieldStyle" TargetType="TextBox">
             <Setter Property="Width" Value="200" />
             <Setter Property="Height" Value="34" />
@@ -408,40 +469,73 @@
                                    TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,8,0,0" Visibility="Collapsed" />
                     </StackPanel>
                     <StackPanel x:Name="LobbyPanel" Visibility="Collapsed">
-                        <TextBlock Text="ロビー設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                             <RadioButton x:Name="CurrentLobbyTab" Content="現在のロビー" GroupName="LobbyView"
-                                         Checked="LobbyTab_Changed" Margin="0,0,24,0" />
+                                         Checked="LobbyTab_Changed" Style="{StaticResource LobbyTabStyle}" />
                             <RadioButton x:Name="MyLobbyTab" Content="自分の設定" GroupName="LobbyView"
-                                         Checked="LobbyTab_Changed" />
+                                         Checked="LobbyTab_Changed" Style="{StaticResource LobbyTabStyle}" />
                         </StackPanel>
-                        <TextBlock x:Name="LobbyNotice" TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,20" />
-                        <TextBlock x:Name="NoLobbyText" Text="現在参加中のロビー設定はありません。"
+                        <Border Background="#071B25" CornerRadius="4" MinHeight="48" Margin="0,0,0,24"
+                                Padding="16,10">
+                            <DockPanel LastChildFill="True">
+                                <TextBlock Text="ⓘ" Foreground="#29B6F6" FontSize="18" FontWeight="SemiBold"
+                                           DockPanel.Dock="Left" Margin="0,0,12,0" />
+                                <TextBlock x:Name="LobbyNotice" TextWrapping="Wrap" Foreground="#80D8FF"
+                                           FontSize="14" FontWeight="SemiBold" />
+                            </DockPanel>
+                        </Border>
+                        <TextBlock x:Name="NoLobbyText" Text="ロビーに未接続です。参加または作成すると設定を確認できます。"
                                    Visibility="Collapsed" Foreground="#B7AABD" />
                         <StackPanel x:Name="LobbyControlsPanel">
-                        <CheckBox x:Name="RadioOnlyCheck" Content="インポスターラジオ専用モード"
-                                  Checked="RadioOnlyCheck_Changed" Unchecked="RadioOnlyCheck_Changed" Margin="0,0,0,5" />
-                        <TextBlock Text="有効時は通常の近距離会話を停止し、関連設定を3.2.7と同じ値に固定します。解除すると元の設定に戻ります。"
-                                   TextWrapping="Wrap" Foreground="#B7AABD" Margin="0,0,0,20" />
-                        <TextBlock x:Name="DistanceTitleText" Text="音声が届く距離" />
-                        <DockPanel Margin="0,5,0,18">
-                            <TextBlock x:Name="DistanceValue" DockPanel.Dock="Right" Width="45" TextAlignment="Right" />
-                            <Slider x:Name="DistanceSlider" Minimum="1" Maximum="10" TickFrequency="0.1"
-                                    IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" />
-                        </DockPanel>
-                        <CheckBox x:Name="WallsBlockAudioCheck" Content="壁越しで音声をブロック" Margin="0,0,0,14" />
-                        <CheckBox x:Name="VisionHearingCheck" Content="視界内のプレイヤーの声だけが聞こえる"
-                                  Checked="VisionHearingCheck_Changed" Unchecked="VisionHearingCheck_Changed"
-                                  Margin="0,0,0,14" />
-                        <CheckBox x:Name="HauntingCheck" Content="インポスターは幽霊の声を聞ける" Margin="0,0,0,14" />
-                        <CheckBox x:Name="HearVentsCheck" Content="ベント内のインポスターの声を聞ける" Margin="0,0,0,14" />
-                        <CheckBox x:Name="ImpostorVentCheck" Content="ベント内のインポスター同士で会話できる" Margin="0,0,0,14" />
-                        <CheckBox x:Name="ImpostorRadioCheck" Content="インポスターラジオを有効化" Margin="0,0,0,14" />
-                        <CheckBox x:Name="CommsSabotageCheck" Content="通信妨害中はクルーメイトの受信を遮断" Margin="0,0,0,14" />
-                        <CheckBox x:Name="HearThroughCamerasCheck" Content="カメラ越しに声が聞こえる" Margin="0,0,0,14" />
-                        <CheckBox x:Name="VoiceEffectEnabledCheck" Content="変装時のボイスエフェクトを有効にする" Margin="0,0,0,14" />
-                        <CheckBox x:Name="DeadOnlyCheck" Content="幽霊同士のみ会話できる" Margin="0,0,0,14" />
-                        <CheckBox x:Name="MeetingGhostOnlyCheck" Content="会議中のみ幽霊以外も会話できる" Margin="0,0,0,14" />
+                        <TextBlock Text="ロビー設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,8" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" ClipToBounds="True">
+                            <StackPanel>
+                                <CheckBox x:Name="RadioOnlyCheck" Content="インポスターラジオ専用モード"
+                                          Checked="RadioOnlyCheck_Changed" Unchecked="RadioOnlyCheck_Changed"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <TextBlock Text="ロビーと会議以外の近距離通話を無効にし、生存インポスターはラジオ使用中だけ内通できます。会議中もラジオの声はインポスターにだけ聞こえます。"
+                                           TextWrapping="Wrap" Foreground="#B7AABD" FontSize="12"
+                                           Margin="16,-7,62,14" />
+                                <Grid Height="64" Margin="16,0" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="48" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="DistanceTitleText" Text="ボイスの距離" FontSize="14"
+                                               FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <Slider x:Name="DistanceSlider" Grid.Column="1" Minimum="1" Maximum="10"
+                                            TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                            ValueChanged="VolumeSlider_ValueChanged" Margin="0,0,12,0"
+                                            VerticalAlignment="Center" />
+                                    <TextBlock x:Name="DistanceValue" Grid.Column="2" TextAlignment="Right" />
+                                </Grid>
+                                <CheckBox x:Name="WallsBlockAudioCheck" Content="壁越しで音声をブロック"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="VisionHearingCheck" Content="視界内のプレイヤーの声だけが聞こえる"
+                                          Checked="VisionHearingCheck_Changed" Unchecked="VisionHearingCheck_Changed"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="VoiceEffectEnabledCheck" Content="ボイスエフェクトを有効化"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="HauntingCheck" Content="インポスターが幽霊の声も聞こえる"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="HearVentsCheck" Content="インポスターはベント内にいても声が聞こえる"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="ImpostorVentCheck" Content="インポスター同士でベント内で会話ができる"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="CommsSabotageCheck" Content="コミュサボタージュで音声を無効化"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="HearThroughCamerasCheck" Content="カメラ越しに声が聞こえる"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="ImpostorRadioCheck" Content="インポスターラジオ"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="DeadOnlyCheck" Content="幽霊だけが話す/聞くことが可能"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="MeetingGhostOnlyCheck" Content="ミーティング/ロビーのみ"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                            </StackPanel>
+                        </Border>
                         <StackPanel x:Name="SnrControlsPanel" Visibility="Collapsed" Margin="0,14,0,0">
                             <TextBlock Text="【MOD】SNR設定" FontWeight="SemiBold" Foreground="#C779D7"
                                        Margin="0,0,0,14" />
@@ -482,7 +576,7 @@
                                       Content="第三陣営のキルできる役職が幽霊の声も聞こえる"
                                       Margin="0,0,0,14" />
                             <CheckBox x:Name="NosVoicePositionsCheck" Margin="0,0,0,14">
-                                <TextBlock Text="話す位置と聞く位置をNoSの座標に変更" TextWrapping="Wrap" />
+                                <TextBlock Text="プレイヤーらのスピーカー位置(話している位置)と、自身のマイク位置(収音する位置)をNoSのデータに含まれている座標に変更" TextWrapping="Wrap" />
                             </CheckBox>
                             <CheckBox x:Name="NosSizeVoiceEffectCheck" Content="大きさが変化した場合にエフェクトをかける"
                                       Margin="0,0,0,14" />

@@ -144,6 +144,7 @@ public partial class SettingsWindow : Window
         lobbySettingsEditable = state is not { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
         if (wasEditable != lobbySettingsEditable) ShowSelectedLobbySettings();
+        else UpdateLobbyNotice();
         UpdateModSettingsVisibility();
         UpdateShortcutLabels();
         var signature = string.Join(';', (state?.Players ?? []).Where(player => !player.IsLocal && !player.IsDummy)
@@ -552,15 +553,24 @@ public partial class SettingsWindow : Window
     {
         UpdateModSettingsVisibility();
         var value = showingCurrentLobby ? currentLobbySettings : lobbyDraft;
-        LobbyNotice.Text = showingCurrentLobby
-            ? "ホストから受け取った設定です。ここでは変更できません。"
-            : lobbySettingsEditable
-                ? "ホスト時に参加者へ送信する設定です。"
-                : "ゲーム進行中のホストは自分のロビー設定を変更できません。";
+        UpdateLobbyNotice();
         NoLobbyText.Visibility = value is null ? Visibility.Visible : Visibility.Collapsed;
         LobbyControlsPanel.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
         if (value is not null) LoadLobbyControls(value);
+    }
+
+    private void UpdateLobbyNotice()
+    {
+        if (LobbyNotice is null) return;
+        var key = showingCurrentLobby
+            ? currentGameState?.IsHost == true
+                ? "settings.lobbysettings.host_notice_you"
+                : "settings.lobbysettings.host_notice"
+            : lobbySettingsEditable
+                ? "settings.lobbysettings.mine_notice"
+                : "settings.lobbysettings.inlobbyonly";
+        LobbyNotice.Text = UiLocalization.Translate(settings.Language, key);
     }
 
     private void UpdateModSettingsVisibility()
@@ -696,8 +706,15 @@ public partial class SettingsWindow : Window
     private void VisionHearingCheck_Changed(object sender, RoutedEventArgs e)
     {
         if (DistanceTitleText is null) return;
-        DistanceTitleText.Text = VisionHearingCheck.IsChecked == true
-            ? "インポスターに届く音声距離" : "音声が届く距離";
+        UpdateDistanceTitle();
+    }
+
+    private void UpdateDistanceTitle()
+    {
+        DistanceTitleText.Text = UiLocalization.Translate(settings.Language,
+            VisionHearingCheck.IsChecked == true
+                ? "settings.lobbysettings.voicedistance_impostor"
+                : "settings.lobbysettings.voicedistance");
     }
 
     private void UpdateVolumeLabels()

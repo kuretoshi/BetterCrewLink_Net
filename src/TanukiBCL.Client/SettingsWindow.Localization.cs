@@ -12,6 +12,8 @@ public partial class SettingsWindow
     {
         Title = UiLocalization.Translate(language, "settings.title");
         staticText.Apply(this, language, PlayerRows);
+        UpdateLobbyNotice();
+        UpdateDistanceTitle();
         CopyObsUrlButton.ToolTip = UiLocalization.Translate(language, "settings.streaming.copy_url");
         UpdateShortcutLabels();
         RenderPlayers();
@@ -101,8 +103,32 @@ public partial class SettingsWindow
                 { Content: "Keyboard Shortcuts" } ||
             !Equals(window.VoiceModeRadio.Content, UiLocalization.Translate("en", "settings.audio.voice_activity")) ||
             window.NatFixLabel.Text != UiLocalization.Translate("en", "settings.advanced.nat_fix") ||
+            !Equals(window.HauntingCheck.Content, UiLocalization.Translate("en", "settings.lobbysettings.impostorshearsghost")) ||
+            !Equals(window.ImpostorVentCheck.Content, UiLocalization.Translate("en", "settings.lobbysettings.private_talk_invents")) ||
+            !Equals(window.PublicLobbyOnCheck.Content, UiLocalization.Translate("en", "settings.lobbysettings.public_lobby.enabled")) ||
+            window.NoLobbyText.Text != UiLocalization.Translate("en", "settings.lobbysettings.no_lobby") ||
+            window.LobbyNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.mine_notice") ||
             !Equals(window.CopyObsUrlButton.ToolTip, "Copy URL"))
             throw new InvalidOperationException("English settings language did not apply");
+        window.VisionHearingCheck.IsChecked = true;
+        if (window.DistanceTitleText.Text != UiLocalization.Translate("en", "settings.lobbysettings.voicedistance_impostor"))
+            throw new InvalidOperationException("Vision-hearing distance title did not follow English language");
+        if (window.HearVentsCheck.Content?.ToString() != UiLocalization.Translate("en", "settings.lobbysettings.hear_imposters_invents") ||
+            window.CommsSabotageCheck.Content?.ToString() != UiLocalization.Translate("en", "settings.lobbysettings.comms_sabotage_audio") ||
+            window.VoiceEffectEnabledCheck.Content?.ToString() != UiLocalization.Translate("en", "settings.lobbysettings.voice_effect_enabled") ||
+            window.DeadOnlyCheck.Content?.ToString() != UiLocalization.Translate("en", "settings.lobbysettings.ghost_only") ||
+            window.MeetingGhostOnlyCheck.Content?.ToString() != UiLocalization.Translate("en", "settings.lobbysettings.meetings_only") ||
+            window.NosVoicePositionsCheck.Content is not TextBlock positionLabel ||
+            positionLabel.Text != UiLocalization.Translate("en", "settings.lobbysettings.nos_voice_positions"))
+            throw new InvalidOperationException("Lobby switches did not follow English language");
+        window.UpdateCurrentGameState(new AmongUsState { IsHost = true, GameState = GameState.Tasks });
+        if (window.LobbyNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.inlobbyonly"))
+            throw new InvalidOperationException("Active host lobby notice did not follow English language");
+        window.UpdateCurrentGameState(new AmongUsState { IsHost = true, GameState = GameState.Lobby });
+        window.CurrentLobbyTab.IsChecked = true;
+        if (window.LobbyNotice.Text != UiLocalization.Translate("en", "settings.lobbysettings.host_notice_you"))
+            throw new InvalidOperationException("Current host lobby notice did not follow English language");
+        window.MyLobbyTab.IsChecked = true;
         VerifyShortcutLabels("en", false);
         if (window.PlayerRows.Children[0] is not TextBlock { Text: "No other players right now. Join a lobby to adjust their volume." })
             throw new InvalidOperationException("Empty player state was not translated");
@@ -116,6 +142,8 @@ public partial class SettingsWindow
         VerifyPlayerRow("Disconnected", "Unmute", "Muted");
         window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "ja");
         if (settings.Language != "ja" || window.Title != "設定" || window.LanguageLabel.Text != "言語" ||
+            window.DistanceTitleText.Text != UiLocalization.Translate("ja", "settings.lobbysettings.voicedistance_impostor") ||
+            window.LobbyNotice.Text != UiLocalization.Translate("ja", "settings.lobbysettings.mine_notice") ||
             !Equals(window.CopyObsUrlButton.ToolTip, "URLをコピー"))
             throw new InvalidOperationException("Japanese settings language was not restored");
         VerifyPlayerRow("切断済み", "ミュート解除", "ミュート中");

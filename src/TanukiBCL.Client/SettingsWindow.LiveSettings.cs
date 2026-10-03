@@ -194,8 +194,9 @@ public partial class SettingsWindow
             other.IsChecked = false;
             QueueLobbyCommit();
         }
-        if (requested) ConfirmChange(deadOnly ? "生きているプレーヤーのサウンドを無効にする。"
-            : "会議以外での生存プレイヤーのサウンドを無効にします", Apply);
+        if (requested) ConfirmChange(UiLocalization.Translate(settings.Language, deadOnly
+            ? "settings.lobbysettings.ghost_only_warning"
+            : "settings.lobbysettings.meetings_only_warning"), Apply);
         else Apply();
     }
 
