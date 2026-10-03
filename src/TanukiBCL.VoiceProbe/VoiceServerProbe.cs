@@ -24,6 +24,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly ConcurrentDictionary<string, byte> pendingOfferFallbacks = new();
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
     private readonly ConcurrentDictionary<int, NosRadioReport> nosRadioReports = new();
+    private readonly AirshipSpawnFallback airshipSpawnFallback = new();
     private AmongUsState? currentGameState;
     private AmongUsMemoryReaderService? gameReader;
     private readonly SemaphoreSlim gameStateGate = new(1, 1);
@@ -320,6 +321,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public void ApplyGameState(AmongUsState state)
     {
+        airshipSpawnFallback.Update(state, DateTimeOffset.UtcNow);
         if (state.LobbyCode != tohLobbyCode || state.GameState == GameState.Menu)
         {
             tohLobbyCode = state.LobbyCode;
@@ -1499,7 +1501,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
 
         var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings,
-            IsImpostorRadioActive(clientId), CanHearNosJackalRadio(currentGameState, other, me));
+            IsImpostorRadioActive(clientId), CanHearNosJackalRadio(currentGameState, other, me),
+            airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
         mix = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs)).Apply(mix);
         var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
             activeLobbySettings, voiceEffectStrength, mix.Audible, IsImpostorRadioActive(clientId));
@@ -1650,7 +1653,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 var mix = player is null
                     ? new PeerVoiceMix(0d, 0d, 0d, "unmapped-player")
                     : SpatialVoicePolicy.Calculate(currentGameState, me, player, spatialVoiceSettings,
-                        IsImpostorRadioActive(pair.Value), CanHearNosJackalRadio(currentGameState, player, me));
+                        IsImpostorRadioActive(pair.Value), CanHearNosJackalRadio(currentGameState, player, me),
+                        airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
                 return $"{pair.Value}:{mix.Gain:0.000}:{mix.Pan:0.00}:{mix.Reason}";
             })
             .Order(StringComparer.Ordinal)

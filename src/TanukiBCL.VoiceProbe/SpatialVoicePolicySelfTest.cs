@@ -475,6 +475,55 @@ internal static class SpatialVoicePolicySelfTest
             new SpatialVoiceSettings(MaxDistance: 5d, WallsBlockAudio: true, HearThroughCameras: true));
         Check("Airship outfit fallback: distance and walls bypassed", true,
             airshipFallbackMix.Audible && airshipFallbackMix.Gain == 1d && airshipFallbackMix.Pan == 0d);
+        Check("Airship meeting fallback: living player cannot hear a haunting ghost", false,
+            SpatialVoicePolicy.Calculate(airshipOutfitMeeting,
+                new Player { IsImpostor = true }, new Player { IsDead = true },
+                new SpatialVoiceSettings(Haunting: true)).Audible);
+        var spawnWindow = new AirshipSpawnFallback();
+        var spawnClock = new DateTimeOffset(2026, 10, 3, 0, 0, 0, TimeSpan.Zero);
+        spawnWindow.Update(new AmongUsState
+            { GameState = GameState.Discussion, Map = MapType.Airship }, spawnClock);
+        var airshipAfterMeeting = new AmongUsState
+            { GameState = GameState.Tasks, OldGameState = GameState.Discussion, Map = MapType.Airship };
+        spawnWindow.Update(airshipAfterMeeting, spawnClock);
+        Check("Airship spawn: 15-second window begins after discussion", true,
+            spawnWindow.IsActive(airshipAfterMeeting, spawnClock.AddMilliseconds(14_999)) &&
+            !spawnWindow.IsActive(airshipAfterMeeting, spawnClock.AddSeconds(15)));
+        spawnWindow.Update(new AmongUsState
+            { GameState = GameState.Tasks, OldGameState = GameState.Tasks, Map = MapType.Airship },
+            spawnClock.AddSeconds(10));
+        Check("Airship spawn: later task snapshots do not extend the window", false,
+            spawnWindow.IsActive(airshipAfterMeeting, spawnClock.AddSeconds(15)));
+        var spawnMix = SpatialVoicePolicy.Calculate(airshipAfterMeeting,
+            new Player(), new Player { X = 20d }, new SpatialVoiceSettings(MaxDistance: 5d),
+            airshipSpawnFallback: true);
+        Check("Airship spawn: living player hears distant voice centered", true,
+            spawnMix is { Audible: true, Pan: 0d, Gain: 1d });
+        var spawnCameraState = new AmongUsState
+        {
+            GameState = GameState.Tasks, Map = MapType.Airship, CurrentCamera = CameraLocation.East
+        };
+        var spawnCameraMix = SpatialVoicePolicy.Calculate(spawnCameraState,
+            new Player(), new Player { X = -8.2872d, Y = 0.0527d },
+            new SpatialVoiceSettings(HearThroughCameras: true), airshipSpawnFallback: true);
+        Check("Airship spawn: camera reception does not replace the centered fallback", true,
+            spawnCameraMix is { Audible: true, Pan: 0d, Gain: 1d, CameraMuffled: false });
+        Check("Airship spawn: ghost listener still obeys distance", false,
+            SpatialVoicePolicy.Calculate(airshipAfterMeeting,
+                new Player { IsDead = true }, new Player { X = 20d },
+                new SpatialVoiceSettings(MaxDistance: 5d), airshipSpawnFallback: true).Audible);
+        var spawnDoorState = new AmongUsState
+        {
+            GameState = GameState.Tasks, Map = MapType.Airship, ClosedDoors = [20]
+        };
+        Check("Airship spawn: closed doors still block the fallback", false,
+            SpatialVoicePolicy.Calculate(spawnDoorState,
+                new Player { X = 32.5d, Y = -4.1d }, new Player { X = 32.5d, Y = -4.5d },
+                new SpatialVoiceSettings(WallsBlockAudio: true), airshipSpawnFallback: true).Audible);
+        spawnWindow.Update(new AmongUsState
+            { GameState = GameState.Lobby, Map = MapType.Airship }, spawnClock.AddSeconds(1));
+        Check("Airship spawn: leaving tasks clears the window", false,
+            spawnWindow.IsActive(airshipAfterMeeting, spawnClock.AddSeconds(1)));
         Check("vision hearing: pan uses effective range", true,
             Math.Abs(SpatialVoicePolicy.Calculate(visionTasks, new Player(),
                 new Player { X = 1d }, visionPolicy).Pan - 0.4d) < 0.001d);

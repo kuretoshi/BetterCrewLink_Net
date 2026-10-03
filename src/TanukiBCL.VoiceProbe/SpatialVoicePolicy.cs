@@ -53,7 +53,8 @@ internal static class SpatialVoicePolicy
         Player other,
         SpatialVoiceSettings settings,
         bool otherUsingImpostorRadio = false,
-        bool nosJackalRadioHearable = false)
+        bool nosJackalRadioHearable = false,
+        bool airshipSpawnFallback = false)
     {
         var isNos = state.Mod == AmongUsModType.NebulaOnTheShip;
         var isSnr = state.Mod == AmongUsModType.SuperNewRoles;
@@ -72,6 +73,8 @@ internal static class SpatialVoicePolicy
             : tohHearingGhosts || nosHearingGhosts || snrKillerHearingGhosts ||
               me.IsImpostor && settings.Haunting;
         var airshipMeetingFallback = state.Map == MapType.Airship && state.AirshipMeetingByOutfit;
+        var postMeetingSpawnFallback = state.Map == MapType.Airship &&
+            state.GameState == GameState.Tasks && airshipSpawnFallback;
         var useNosPositions = isNos && settings.NosVoicePositions;
         var meX = useNosPositions ? state.NosLocalMicPosition?.X ?? me.X : me.X;
         var meY = useNosPositions ? state.NosLocalMicPosition?.Y ?? me.Y : me.Y;
@@ -133,6 +136,18 @@ internal static class SpatialVoicePolicy
                 break;
         }
 
+        // The released Airship fallback always hides ghosts from living players
+        // during a meeting, even when haunting would otherwise enable them.
+        if (airshipMeetingFallback && !me.IsDead && other.IsDead)
+            return Muted(0d, distance, "airship-meeting-ghost");
+
+        // During the post-meeting spawn window upstream still applies wall
+        // occlusion before its usual distance bypass (including for radio).
+        if (postMeetingSpawnFallback && settings.WallsBlockAudio && !me.IsDead &&
+            WallCollision.Intersects(new Player { X = meX, Y = meY },
+                new Player { X = otherX, Y = otherY }, state.Map, state.ClosedDoors))
+            return Muted(pan, distance, "airship-spawn-wall");
+
         if (otherUsingImpostorRadio)
         {
             return CanHearImpostorRadio(me, other, settings) ||
@@ -189,7 +204,8 @@ internal static class SpatialVoicePolicy
         // selected camera instead. Camera reception uses that camera's position
         // for both attenuation and panning.
         var cameraMuffle = false;
-        if (!airshipMeetingFallback && distance > maxDistance && settings.HearThroughCameras &&
+        if (!airshipMeetingFallback && !(postMeetingSpawnFallback && !me.IsDead) &&
+            distance > maxDistance && settings.HearThroughCameras &&
             state.CurrentCamera != CameraLocation.None &&
             CameraGeometry.TryRelativePosition(state.Map, state.CurrentCamera,
                 new Player { X = otherX, Y = otherY },
@@ -213,12 +229,13 @@ internal static class SpatialVoicePolicy
             baseGain = cameraMuffle ? 0.8d : 0.5d;
         }
 
-        if (airshipMeetingFallback)
+        if (airshipMeetingFallback || postMeetingSpawnFallback && !me.IsDead)
         {
-            // TASKS is a stale state during this Airship meeting fallback.
-            // Upstream recenters the panner and skips both distance and walls.
+            // The meeting fallback skips distance and ordinary walls; the
+            // post-meeting spawn window skips distance after the wall check above.
             return ApplyListenerVolume(new PeerVoiceMix(baseGain, 0d, distance,
-                "airship-meeting-fallback", Muffled: ventMuffle), me, other, settings);
+                airshipMeetingFallback ? "airship-meeting-fallback" : "airship-spawn-fallback",
+                Muffled: ventMuffle), me, other, settings);
         }
 
         if (distance > maxDistance ||
