@@ -1,3 +1,5 @@
+using SIPSorcery.Net;
+
 namespace TanukiBCL.VoiceProbe;
 
 internal static class SelfTestRunner
@@ -12,6 +14,15 @@ internal static class SelfTestRunner
                 throw new InvalidOperationException("An incoming offer was discarded before a local offer existed.");
             }
         }
+        if (!WebRtcPeerManager.ShouldRecoverClosedSctp(RTCPeerConnectionState.connected,
+                RTCSctpTransportState.Closed, false) ||
+            WebRtcPeerManager.ShouldRecoverClosedSctp(RTCPeerConnectionState.connecting,
+                RTCSctpTransportState.Closed, false) ||
+            WebRtcPeerManager.ShouldRecoverClosedSctp(RTCPeerConnectionState.connected,
+                RTCSctpTransportState.Connected, false) ||
+            WebRtcPeerManager.ShouldRecoverClosedSctp(RTCPeerConnectionState.connected,
+                RTCSctpTransportState.Closed, true))
+            throw new InvalidOperationException("SCTP closed-state recovery gate is incorrect.");
 
         var lobby = baseOptions.LobbyCode ?? CreateLobbyCode();
         var timeout = baseOptions.Duration ?? TimeSpan.FromSeconds(30);

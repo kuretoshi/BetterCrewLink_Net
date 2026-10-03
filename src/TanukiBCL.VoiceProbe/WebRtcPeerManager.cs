@@ -441,7 +441,13 @@ internal sealed class WebRtcPeerManager : IDisposable
         connection.sctp.OnStateChanged += state =>
         {
             if (IsCurrentPeer(remoteSocketId, peer.InstanceId))
+            {
                 Log($"peer {Short(remoteSocketId)} sctp={state} association={connection.sctp.RTCSctpAssociation?.State}");
+                if (ShouldRecoverClosedSctp(connection.connectionState, state,
+                        Volatile.Read(ref peer.DataChannelOpen) == 1) &&
+                    Interlocked.Exchange(ref peer.SctpClosedRecoveryStarted, 1) == 0)
+                    _ = RecoverClosedSctpAsync(peer);
+            }
         };
         connection.OnRtpClosed += reason =>
         {
@@ -604,6 +610,25 @@ internal sealed class WebRtcPeerManager : IDisposable
             $"association={peer.Connection.sctp.RTCSctpAssociation?.State} channels=[{channels}]");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
+
+    private async Task RecoverClosedSctpAsync(Peer peer)
+    {
+        // SIPSorcery 10.0.17 can give up on SCTP association after two seconds.
+        // A closed SCTP transport cannot open the pending data channel, so do
+        // not wait for the eight-second generic data-channel watchdog.
+        await Task.Delay(200);
+        if (!IsCurrentPeer(peer.RemoteSocketId, peer.InstanceId) ||
+            !ShouldRecoverClosedSctp(peer.Connection.connectionState, peer.Connection.sctp.state,
+                Volatile.Read(ref peer.DataChannelOpen) == 1)) return;
+
+        Log($"SCTP association closed before data channel opened: {Short(peer.RemoteSocketId)}");
+        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
+    }
+
+    internal static bool ShouldRecoverClosedSctp(RTCPeerConnectionState connectionState,
+        RTCSctpTransportState sctpState, bool dataChannelOpen) =>
+        connectionState == RTCPeerConnectionState.connected &&
+        sctpState == RTCSctpTransportState.Closed && !dataChannelOpen;
 
     private async Task WatchDtlsHandshakeAsync(Peer peer)
     {
@@ -1019,6 +1044,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int TestToneStarted;
         public int DataChannelWatchdogStarted;
         public int DtlsHandshakeWatchdogStarted;
+        public int SctpClosedRecoveryStarted;
         public int DataChannelOpen;
         public int AudioSendFailureLogged;
         public RtpAudioJitterEstimator JitterEstimator { get; } = new();
