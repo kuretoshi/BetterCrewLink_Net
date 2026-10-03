@@ -70,6 +70,12 @@ public partial class SettingsWindow
             hintContent.Children.OfType<Viewbox>().Count() != 1 ||
             hintContent.Children.OfType<System.Windows.Controls.TextBlock>().Count() != 1)
             throw new InvalidOperationException("Released keyboard shortcut information banner was not applied");
+        window.CategoryList.SelectedIndex = 4;
+        if (window.SettingsContent.Margin.Top != 16)
+            throw new InvalidOperationException("Keyboard shortcut alert did not align to the released top inset");
+        window.CategoryList.SelectedIndex = 0;
+        if (window.SettingsContent.Margin.Top != 24)
+            throw new InvalidOperationException("General settings top inset was not restored");
         window.PushToTalkShortcutBox.ApplyTemplate();
         var prompt = window.PushToTalkShortcutBox.Template.FindName(
             "RecordingPrompt", window.PushToTalkShortcutBox) as StackPanel;

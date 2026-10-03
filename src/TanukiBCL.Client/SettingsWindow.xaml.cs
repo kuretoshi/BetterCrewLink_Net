@@ -282,6 +282,7 @@ public partial class SettingsWindow : Window
         PlayersPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
         AudioPanel.Visibility = CategoryList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
         KeybindsPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
+        SettingsContent.Margin = new Thickness(26, CategoryList.SelectedIndex == 4 ? 16 : 24, 24, 24);
         OverlayPanel.Visibility = CategoryList.SelectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
         AdvancedPanel.Visibility = CategoryList.SelectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
         UpdatePanel.Visibility = CategoryList.SelectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
