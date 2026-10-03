@@ -134,16 +134,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 PeerConnectionStatusChanged?.Invoke(clientId, "data-ready");
             }
         };
-        peerManager.PeerDataChannelStalled += remoteSocketId =>
+        peerManager.PeerDataChannelStalled += (remoteSocketId, peerInstanceId) =>
         {
-            _ = RunPeerOperationAsync(() => RecoverStalledPeerAsync(remoteSocketId));
+            _ = RunPeerOperationAsync(() => RecoverStalledPeerAsync(remoteSocketId, peerInstanceId));
         };
-        peerManager.PeerConnectionFailed += remoteSocketId =>
+        peerManager.PeerConnectionFailed += (remoteSocketId, peerInstanceId) =>
         {
             if (string.CompareOrdinal(socket.Id, remoteSocketId) < 0)
             {
                 Log("INFO", $"失敗したpeerを自動再接続 peer={remoteSocketId}");
-                _ = RunPeerOperationAsync(remoteSocketId, () => peerManager.ReconnectAsync(remoteSocketId));
+                _ = RunPeerOperationAsync(remoteSocketId, () =>
+                    peerManager.IsCurrentPeer(remoteSocketId, peerInstanceId)
+                        ? peerManager.ReconnectAsync(remoteSocketId)
+                        : Task.CompletedTask);
             }
         };
         peerManager.PeerConnectionStateChanged += (remoteSocketId, state) =>
@@ -856,7 +859,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         _ = OfferFallbackAsync(remoteSocketId);
     }
 
-    private async Task RecoverStalledPeerAsync(string remoteSocketId)
+    private async Task RecoverStalledPeerAsync(string remoteSocketId, Guid peerInstanceId)
     {
         // Delay outside the peer operation gate: a new offer from the remote
         // peer must be processed while we wait for its own recovery attempt.
@@ -865,6 +868,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             await Task.Delay(4_000, lifetimeToken);
         }
         if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
+            !peerManager.IsCurrentPeer(remoteSocketId, peerInstanceId) ||
             peerManager.HasOpenDataChannel(remoteSocketId)) return;
 
         var attempt = stalledReconnectAttempts.AddOrUpdate(remoteSocketId, 1, (_, count) => count + 1);
@@ -875,6 +879,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         await RunPeerOperationAsync(remoteSocketId, async () =>
         {
             if (!socket.Connected || !peerClientIds.ContainsKey(remoteSocketId) ||
+                !peerManager.IsCurrentPeer(remoteSocketId, peerInstanceId) ||
                 peerManager.HasOpenDataChannel(remoteSocketId)) return;
             Log("INFO", $"データチャネル停滞を再接続 peer={remoteSocketId} attempt={attempt}");
             await peerManager.ReconnectAsync(remoteSocketId);

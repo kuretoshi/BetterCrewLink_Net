@@ -48,9 +48,9 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public event Action<string, string>? PeerDataReceived;
 
-    public event Action<string>? PeerConnectionFailed;
+    public event Action<string, Guid>? PeerConnectionFailed;
 
-    public event Action<string>? PeerDataChannelStalled;
+    public event Action<string, Guid>? PeerDataChannelStalled;
 
     public event Action<string>? PeerDataChannelOpened;
 
@@ -180,6 +180,9 @@ internal sealed class WebRtcPeerManager : IDisposable
         peers.TryGetValue(remoteSocketId, out var peer) && Volatile.Read(ref peer.DataChannelOpen) == 1;
 
     public bool HasPeer(string remoteSocketId) => peers.ContainsKey(remoteSocketId);
+
+    public bool IsCurrentPeer(string remoteSocketId, Guid peerInstanceId) =>
+        peers.TryGetValue(remoteSocketId, out var peer) && peer.InstanceId == peerInstanceId;
 
     private static bool CanSendAudio(Peer peer) =>
         peer.Connection.connectionState == RTCPeerConnectionState.connected ||
@@ -406,19 +409,29 @@ internal sealed class WebRtcPeerManager : IDisposable
             }
             else if (state == RTCPeerConnectionState.failed)
             {
-                PeerConnectionFailed?.Invoke(remoteSocketId);
+                PeerConnectionFailed?.Invoke(remoteSocketId, peer.InstanceId);
             }
         };
         connection.oniceconnectionstatechange += state =>
         {
             if (!peers.TryGetValue(remoteSocketId, out var currentPeer) || !ReferenceEquals(currentPeer, peer))
                 return;
-            Log($"peer {Short(remoteSocketId)} ice={state}");
+            Log($"peer {Short(remoteSocketId)} ice={state} dtlsRole={connection.IceRole}");
             if (state == RTCIceConnectionState.connected &&
                 Interlocked.Exchange(ref peer.DtlsHandshakeWatchdogStarted, 1) == 0)
                 _ = WatchDtlsHandshakeAsync(peer);
         };
         connection.onicecandidateerror += (_, error) => Log($"peer {Short(remoteSocketId)} ice-candidate-error={error}");
+        connection.sctp.OnStateChanged += state =>
+        {
+            if (IsCurrentPeer(remoteSocketId, peer.InstanceId))
+                Log($"peer {Short(remoteSocketId)} sctp={state} association={connection.sctp.RTCSctpAssociation?.State}");
+        };
+        connection.OnRtpClosed += reason =>
+        {
+            if (IsCurrentPeer(remoteSocketId, peer.InstanceId))
+                Log($"peer {Short(remoteSocketId)} transport-closed={reason}");
+        };
         connection.ondatachannel += channel => ConfigureDataChannel(peer, channel, "remote");
         connection.OnRtpPacketReceived += (_, mediaType, packet) =>
         {
@@ -571,8 +584,9 @@ internal sealed class WebRtcPeerManager : IDisposable
         lock (peer.DataChannelGate)
             channels = string.Join(",", peer.AllChannels.Select(channel =>
                 $"{channel.label}:{channel.id}:{channel.readyState}"));
-        Log($"data channel stalled: {Short(peer.RemoteSocketId)} channels=[{channels}]");
-        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
+        Log($"data channel stalled: {Short(peer.RemoteSocketId)} sctp={peer.Connection.sctp.state} " +
+            $"association={peer.Connection.sctp.RTCSctpAssociation?.State} channels=[{channels}]");
+        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
 
     private async Task WatchDtlsHandshakeAsync(Peer peer)
@@ -586,7 +600,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             return;
 
         Log($"DTLS handshake stalled: {Short(peer.RemoteSocketId)} ice={peer.Connection.iceConnectionState}");
-        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
+        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
 
     private async Task WatchHandshakeAsync(Peer peer)
@@ -603,7 +617,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         }
 
         Log($"peer handshake stalled: {Short(peer.RemoteSocketId)} state={peer.Connection.connectionState}");
-        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId);
+        PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
 
     private async Task SendTestToneAsync(Peer peer)
@@ -806,6 +820,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         RTCPeerConnection Connection,
         bool Initiator)
     {
+        public Guid InstanceId { get; } = Guid.NewGuid();
         public AudioEncoder Decoder { get; } = new(true, true);
         public RTCDataChannel? Channel { get; set; }
         public object DataChannelGate { get; } = new();
