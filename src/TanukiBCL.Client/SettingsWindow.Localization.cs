@@ -12,6 +12,7 @@ public partial class SettingsWindow
     {
         Title = UiLocalization.Translate(language, "settings.title");
         staticText.Apply(this, language, PlayerRows);
+        CopyObsUrlButton.ToolTip = UiLocalization.Translate(language, "settings.streaming.copy_url");
         RenderPlayers();
     }
 
@@ -28,6 +29,10 @@ public partial class SettingsWindow
         if (window.AudioPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 5 ||
             window.MicrophoneLevelStatus.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Released audio settings card layout was not applied");
+        if (window.StreamingPanel.Children.OfType<Border>().Count() != 1 ||
+            window.ShowLobbyCodeCheck.Style != window.ObsOverlayCheck.Style ||
+            window.CopyObsUrlButton.Content is not System.Windows.Shapes.Path)
+            throw new InvalidOperationException("Released streaming settings card layout was not applied");
         var generalItem = (System.Windows.Controls.ListBoxItem)window.CategoryList.Items[0];
         generalItem.ApplyTemplate();
         if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path
@@ -44,7 +49,8 @@ public partial class SettingsWindow
             window.CategoryList.Items[4] is not System.Windows.Controls.ListBoxItem
                 { Content: "Keyboard Shortcuts" } ||
             !Equals(window.VoiceModeRadio.Content, UiLocalization.Translate("en", "settings.audio.voice_activity")) ||
-            !Equals(window.NatFixCheck.Content, UiLocalization.Translate("en", "settings.advanced.nat_fix")))
+            !Equals(window.NatFixCheck.Content, UiLocalization.Translate("en", "settings.advanced.nat_fix")) ||
+            !Equals(window.CopyObsUrlButton.ToolTip, "Copy URL"))
             throw new InvalidOperationException("English settings language did not apply");
         if (window.PlayerRows.Children[0] is not TextBlock { Text: "No other players right now. Join a lobby to adjust their volume." })
             throw new InvalidOperationException("Empty player state was not translated");
@@ -55,7 +61,8 @@ public partial class SettingsWindow
         });
         VerifyPlayerRow("Disconnected", "Unmute", "Muted");
         window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "ja");
-        if (settings.Language != "ja" || window.Title != "設定" || window.LanguageLabel.Text != "言語")
+        if (settings.Language != "ja" || window.Title != "設定" || window.LanguageLabel.Text != "言語" ||
+            !Equals(window.CopyObsUrlButton.ToolTip, "URLをコピー"))
             throw new InvalidOperationException("Japanese settings language was not restored");
         VerifyPlayerRow("切断済み", "ミュート解除", "ミュート中");
         window.Close();

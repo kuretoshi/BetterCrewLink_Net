@@ -606,19 +606,35 @@
                         </Border>
                     </StackPanel>
                     <StackPanel x:Name="StreamingPanel" Visibility="Collapsed">
-                        <TextBlock Text="配信設定" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,24" />
-                        <CheckBox x:Name="ShowLobbyCodeCheck" Content="ロビーコードの表示" Margin="0,0,0,18" />
-                        <CheckBox x:Name="ObsOverlayCheck" Content="OBS ブラウザーのオーバーレイ"
-                                  Checked="ObsOverlayCheck_Changed" Unchecked="ObsOverlayCheck_Changed"
-                                  Margin="0,0,0,18" />
-                        <StackPanel x:Name="ObsUrlPanel" Visibility="Collapsed">
-                            <TextBlock Text="OBSブラウザソースURL" Margin="0,0,0,7" />
-                            <TextBox x:Name="ObsUrlBox" IsReadOnly="True" Margin="0,0,0,10" />
-                            <Button Content="URLをコピー" Width="130" Height="34" HorizontalAlignment="Left"
-                                    Click="CopyObsUrlButton_Click" />
-                            <TextBlock Text="URLに配信接続用の識別子が含まれます。共有先に注意してください。"
-                                       Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,12,0,0" />
-                        </StackPanel>
+                        <TextBlock Text="配信設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
+                            <StackPanel>
+                                <Border Padding="16,10" BorderBrush="#3F3944" BorderThickness="0,0,0,1">
+                                    <CheckBox x:Name="ShowLobbyCodeCheck" Content="ロビーコードの表示"
+                                              Style="{StaticResource OverlaySwitchStyle}" />
+                                </Border>
+                                <Border x:Name="ObsToggleBorder" Padding="16,10" BorderBrush="#3F3944">
+                                    <CheckBox x:Name="ObsOverlayCheck" Content="OBS ブラウザーのオーバーレイ"
+                                              Style="{StaticResource OverlaySwitchStyle}"
+                                              Checked="ObsOverlayCheck_Changed" Unchecked="ObsOverlayCheck_Changed" />
+                                </Border>
+                                <StackPanel x:Name="ObsUrlPanel" Visibility="Collapsed" Margin="16,10,16,16">
+                                    <TextBlock Text="OBSブラウザソースURL" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                    <Grid>
+                                        <TextBox x:Name="ObsUrlBox" IsReadOnly="True" Height="40"
+                                                 Padding="10,7,44,7" Background="#25232A"
+                                                 BorderBrush="#5A515D" />
+                                        <Button x:Name="CopyObsUrlButton" Width="36" Height="36" Padding="8"
+                                                Margin="0,2,2,2" HorizontalAlignment="Right"
+                                                Background="Transparent" BorderThickness="0"
+                                                ToolTip="URLをコピー" Click="CopyObsUrlButton_Click">
+                                            <Path x:Name="CopyObsUrlIcon" Fill="#B7AABD" Stretch="Uniform"
+                                                  Data="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+                                        </Button>
+                                    </Grid>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>

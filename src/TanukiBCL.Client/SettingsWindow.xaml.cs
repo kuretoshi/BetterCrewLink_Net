@@ -33,6 +33,8 @@ public partial class SettingsWindow : Window
     private bool loadingLobbyControls;
     private bool showingCurrentLobby;
     private string? obsSecretDraft;
+    private Geometry? originalObsCopyIcon;
+    private int obsCopyFeedbackVersion;
     private VoiceEffectPreviewSession? voiceEffectPreview;
     private MicrophoneLevelSession? microphoneLevelSession;
     private SpeakerTestSession? speakerTestSession;
@@ -293,10 +295,11 @@ public partial class SettingsWindow : Window
 
     private void UpdateObsUrl()
     {
-        if (ObsUrlPanel is null || ObsOverlayCheck is null || ObsUrlBox is null ||
+        if (ObsUrlPanel is null || ObsToggleBorder is null || ObsOverlayCheck is null || ObsUrlBox is null ||
             ServerUrlBox is null || OverlayPositionCombo is null) return;
         var enabled = ObsOverlayCheck.IsChecked == true;
         ObsUrlPanel.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        ObsToggleBorder.BorderThickness = enabled ? new Thickness(0, 0, 0, 1) : new Thickness(0);
         if (!enabled) return;
         if (!StreamingSettings.IsValidSecret(obsSecretDraft))
             obsSecretDraft = StreamingSettings.CreateSecret();
@@ -310,10 +313,19 @@ public partial class SettingsWindow : Window
         });
     }
 
-    private void CopyObsUrlButton_Click(object sender, RoutedEventArgs e)
+    private async void CopyObsUrlButton_Click(object sender, RoutedEventArgs e)
     {
         UpdateObsUrl();
-        try { Clipboard.SetText(ObsUrlBox.Text); }
+        try
+        {
+            Clipboard.SetText(ObsUrlBox.Text);
+            originalObsCopyIcon ??= CopyObsUrlIcon.Data;
+            CopyObsUrlIcon.Data = Geometry.Parse("M9 16.17l-3.88-3.88L3.71 13.7 9 19l12-12-1.41-1.41z");
+            var version = ++obsCopyFeedbackVersion;
+            await Task.Delay(1_500);
+            if (version == obsCopyFeedbackVersion && !Dispatcher.HasShutdownStarted)
+                CopyObsUrlIcon.Data = originalObsCopyIcon;
+        }
         catch (ExternalException exception)
         {
             MessageBox.Show(this, $"URLをコピーできませんでした: {exception.Message}", "配信設定");
@@ -841,9 +853,15 @@ public partial class SettingsWindow : Window
             if (window.StreamingPanel.Visibility != Visibility.Visible ||
                 !StreamingSettings.IsValidSecret(window.obsSecretDraft) ||
                 window.ObsUrlPanel.Visibility != Visibility.Visible ||
-                !window.ObsUrlBox.Text.Contains("version=3.2.7&compact=0&position=right&meeting=1&secret=") ||
+                window.ObsToggleBorder.BorderThickness.Bottom != 1 ||
+                !window.ObsUrlBox.Text.Contains("version=3.2.8&compact=0&position=right&meeting=1&secret=") ||
                 !window.ObsUrlBox.Text.Contains("&server=https%3A%2F%2Fbettercrewl.ink"))
                 throw new InvalidOperationException("OBS streaming settings did not initialize");
+            window.ObsOverlayCheck.IsChecked = false;
+            if (window.ObsUrlPanel.Visibility != Visibility.Collapsed ||
+                window.ObsToggleBorder.BorderThickness.Bottom != 0)
+                throw new InvalidOperationException("OBS URL row did not hide with its switch");
+            window.ObsOverlayCheck.IsChecked = true;
             var streamSettings = new ClientSettings
             {
                 HideCode = true, ObsOverlay = true, ObsSecret = window.obsSecretDraft

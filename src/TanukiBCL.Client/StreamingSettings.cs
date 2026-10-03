@@ -14,7 +14,7 @@ internal static class StreamingSettings
         .Select(_ => SecretAlphabet[RandomNumberGenerator.GetInt32(SecretAlphabet.Length)]).ToArray());
 
     public static string BuildObsUrl(ClientSettings settings) =>
-        $"{ObsOverlayUrl}?version=3.2.7" +
+        $"{ObsOverlayUrl}?version={UpdateCatalog.CurrentVersion.Split('-', 2)[0]}" +
         $"&compact={(settings.CompactOverlay ? '1' : '0')}" +
         $"&position={settings.OverlayPosition}" +
         $"&meeting={(settings.MeetingOverlay ? '1' : '0')}" +
