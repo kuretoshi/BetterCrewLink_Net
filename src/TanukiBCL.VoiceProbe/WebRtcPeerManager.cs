@@ -372,6 +372,12 @@ internal sealed class WebRtcPeerManager : IDisposable
         peers[remoteSocketId] = peer;
         _ = WatchHandshakeAsync(peer);
         connection.addTrack(new MediaStreamTrack([OpusFormat], MediaStreamStatusEnum.SendRecv));
+        connection.GetRtpChannel().OnRTPDataReceived += (_, _, packet) =>
+        {
+            // RFC 5764 DTLS demultiplexing range. Count only, never retain packets.
+            if (packet.Length > 0 && packet[0] is >= 20 and < 64)
+                Interlocked.Increment(ref peer.DtlsPacketsReceived);
+        };
 
         connection.onicecandidate += candidate =>
         {
@@ -410,7 +416,9 @@ internal sealed class WebRtcPeerManager : IDisposable
             {
                 return;
             }
-            Log($"peer {Short(remoteSocketId)} state={state}");
+            Log($"peer {Short(remoteSocketId)} state={state}" +
+                (state == RTCPeerConnectionState.connected
+                    ? $" dtlsRx={Volatile.Read(ref peer.DtlsPacketsReceived)}" : string.Empty));
             PeerConnectionStateChanged?.Invoke(remoteSocketId, state);
             if (state == RTCPeerConnectionState.connected &&
                 ShouldSendTestTone(peer) &&
@@ -651,7 +659,8 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         Log($"DTLS handshake stalled: {Short(peer.RemoteSocketId)} " +
             $"ice={peer.Connection.iceConnectionState} dtlsRole={peer.Connection.IceRole} " +
-            $"sctp={peer.Connection.sctp.state} pair={DescribeNominatedPair(peer.Connection)}");
+            $"sctp={peer.Connection.sctp.state} pair={DescribeNominatedPair(peer.Connection)} " +
+            $"dtlsRx={Volatile.Read(ref peer.DtlsPacketsReceived)}");
         PeerDataChannelStalled?.Invoke(peer.RemoteSocketId, peer.InstanceId);
     }
 
@@ -1055,6 +1064,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int TestToneStarted;
         public int DataChannelWatchdogStarted;
         public int DtlsHandshakeWatchdogStarted;
+        public int DtlsPacketsReceived;
         public int SctpClosedRecoveryStarted;
         public int DataChannelOpen;
         public int AudioSendFailureLogged;

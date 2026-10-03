@@ -12,6 +12,9 @@ internal static class Program
 
         try
         {
+            if (args.Contains("--dtls-trace"))
+                SIPSorcery.LogFactory.Set(new DtlsTraceLoggerFactory());
+
             if (args.Contains("--nos-palette-self-test"))
                 return GameMemory.NosPaletteSelfTest.Run();
             if (args.Contains("--nos-snapshot-self-test"))
@@ -163,6 +166,7 @@ internal static class Program
               --seconds <number>   指定秒数後に自動終了
               --self-test         2クライアントでP2Pデータチャネルを自動検証
               --mixed-nat-self-test  片側だけNAT修正ONでP2P接続を検証（--nat-fixでON側を逆転）
+              --dtls-trace       CLI試験中のDTLS開始・失敗イベントだけを匿名表示
               --policy-self-test  3.2.7の音声ポリシーをローカルで検証
               --vad-self-test     3.2.7の周波数帯VADとマイク操作モードを検証
               --audio-processing-self-test  エコーキャンセル・ノイズ抑制・自動ゲイン処理を検証
