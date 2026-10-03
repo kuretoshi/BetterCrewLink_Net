@@ -365,7 +365,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     player.Name = name;
                     player.AppearanceName = name;
                 }
-                var local = state.Players.SingleOrDefault(player => player.IsLocal);
+                var local = state.Players.FirstOrDefault(player => player.IsLocal);
                 if (local is not null && DateTimeOffset.UtcNow - tohRoleReceivedAt < TimeSpan.FromSeconds(5))
                     local.TohRole = tohRoleOverride;
             }
@@ -529,7 +529,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         try
         {
             var state = currentGameState ?? throw new InvalidOperationException("ゲーム状態をまだ取得していません。");
-            var local = state.Players.SingleOrDefault(player => player.IsLocal)
+            var local = state.Players.FirstOrDefault(player => player.IsLocal)
                 ?? throw new InvalidOperationException("ローカルプレイヤーを特定できません。");
             if (impostorRadioTransmitting)
             {
@@ -566,7 +566,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         try
         {
             var state = currentGameState ?? throw new InvalidOperationException("ゲーム状態をまだ取得していません。");
-            var local = state.Players.SingleOrDefault(player => player.IsLocal)
+            var local = state.Players.FirstOrDefault(player => player.IsLocal)
                 ?? throw new InvalidOperationException("ローカルプレイヤーを特定できません。");
 
             ResetPeerState();
@@ -1082,7 +1082,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
         foreach (var (socketId, clientId) in peerClientIds)
         {
-            var player = state.Players.SingleOrDefault(candidate =>
+            var player = state.Players.FirstOrDefault(candidate =>
                 candidate.ClientId == clientId && !candidate.IsLocal && !candidate.Disconnected);
             if (player is null) continue;
             var role = player.TohRole;
@@ -1140,13 +1140,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             !targetClientId.TryGetInt32(out var targetClient) || targetClient != state.ClientId ||
             !data.TryGetProperty("targetPlayerId", out var targetPlayerId) ||
             !targetPlayerId.TryGetInt32(out var targetPlayer) ||
-            state.Players.SingleOrDefault(player => player.IsLocal)?.Id != targetPlayer ||
+            state.Players.FirstOrDefault(player => player.IsLocal)?.Id != targetPlayer ||
             !TohRoleWire.TryRead(data, out var parsed)) return;
         tohRoleOverride = parsed;
         tohRoleReceivedAt = DateTimeOffset.UtcNow;
         tohLobbyEnabled = true;
         state.Mod = AmongUsModType.TownOfHostForE;
-        var local = state.Players.SingleOrDefault(player => player.IsLocal);
+        var local = state.Players.FirstOrDefault(player => player.IsLocal);
         if (local is not null) local.TohRole = parsed;
         TohRoleReportReceived?.Invoke(clientId, parsed);
         RefreshPeerMixes();
@@ -1154,7 +1154,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private void SyncNosRadioReports(AmongUsState state)
     {
-        var local = state.Players.SingleOrDefault(player => player.IsLocal);
+        var local = state.Players.FirstOrDefault(player => player.IsLocal);
         var active = state.Mod == AmongUsModType.NebulaOnTheShip &&
             state.GameState is GameState.Tasks or GameState.Discussion && local is not null;
         var session = active ? $"{state.LobbyCode}|{state.ClientId}" : string.Empty;
@@ -1188,7 +1188,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private void SendNosRadioReportToPeer(string remoteSocketId)
     {
         var state = currentGameState;
-        var local = state?.Players.SingleOrDefault(player => player.IsLocal);
+        var local = state?.Players.FirstOrDefault(player => player.IsLocal);
         if (state is null || local is null || state.Mod != AmongUsModType.NebulaOnTheShip ||
             state.GameState is not (GameState.Tasks or GameState.Discussion) ||
             state.NosLocalMicPosition is null || !peerClientIds.ContainsKey(remoteSocketId))
@@ -1212,7 +1212,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private void ApplyNosRadioReport(int clientId, JsonElement data)
     {
         var state = currentGameState;
-        var sender = state?.Players.SingleOrDefault(player => player.ClientId == clientId);
+        var sender = state?.Players.FirstOrDefault(player => player.ClientId == clientId);
         if (state is null || state.Mod != AmongUsModType.NebulaOnTheShip ||
             state.GameState is not (GameState.Tasks or GameState.Discussion) ||
             sender is null || sender.IsLocal || sender.Disconnected ||
@@ -1396,8 +1396,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
 
         var state = currentGameState;
-        var sender = state?.Players.SingleOrDefault(candidate => candidate.IsLocal);
-        var listener = state?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+        var sender = state?.Players.FirstOrDefault(candidate => candidate.IsLocal);
+        var listener = state?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
         if (state is null || sender is null || listener is null) return false;
         if (HasNosJackalRadio(state, sender))
             return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode &&
@@ -1443,7 +1443,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private void ApplyImpostorRadioStatus(int clientId, JsonElement data, bool active)
     {
-        var sender = currentGameState?.Players.SingleOrDefault(player => player.ClientId == clientId);
+        var sender = currentGameState?.Players.FirstOrDefault(player => player.ClientId == clientId);
         if (active && (sender is null || sender.IsDead || currentGameState is null ||
             !CanUseRadio(currentGameState, sender)))
         {
@@ -1488,8 +1488,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             return;
         }
 
-        var me = currentGameState.Players.SingleOrDefault(player => player.IsLocal);
-        var other = currentGameState.Players.SingleOrDefault(player => player.ClientId == clientId);
+        var me = currentGameState.Players.FirstOrDefault(player => player.IsLocal);
+        var other = currentGameState.Players.FirstOrDefault(player => player.ClientId == clientId);
         if (me is null || other is null)
         {
             var unmappedMix = new PeerVoiceMix(0d, 0d, 0d, "unmapped-player");
@@ -1547,7 +1547,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var wasHost = currentGameState?.IsHost == true;
         ApplyGameState(state);
         if (!socket.Connected) return;
-        var local = state.Players.SingleOrDefault(player => player.IsLocal);
+        var local = state.Players.FirstOrDefault(player => player.IsLocal);
         var targetLobby = state.GameState is GameState.Menu or GameState.Unknown || local is null ? "MENU" : state.LobbyCode;
         var version = Volatile.Read(ref serverConnectionVersion);
         if (string.Equals(targetLobby, currentJoinedLobby, StringComparison.Ordinal) &&
@@ -1637,7 +1637,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             return;
         }
 
-        var me = currentGameState.Players.SingleOrDefault(player => player.IsLocal);
+        var me = currentGameState.Players.FirstOrDefault(player => player.IsLocal);
         if (me is null)
         {
             return;
@@ -1646,7 +1646,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var mixes = peerClientIds
             .Select(pair =>
             {
-                var player = currentGameState.Players.SingleOrDefault(candidate => candidate.ClientId == pair.Value);
+                var player = currentGameState.Players.FirstOrDefault(candidate => candidate.ClientId == pair.Value);
                 var mix = player is null
                     ? new PeerVoiceMix(0d, 0d, 0d, "unmapped-player")
                     : SpatialVoicePolicy.Calculate(currentGameState, me, player, spatialVoiceSettings,

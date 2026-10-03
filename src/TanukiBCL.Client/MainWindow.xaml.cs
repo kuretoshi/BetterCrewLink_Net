@@ -537,13 +537,13 @@ public partial class MainWindow : Window
         activeProbe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(session, () => UpdatePeerConnection(clientId, status));
         activeProbe.PeerQualityChanged += (clientId, quality) => Dispatch(session, () =>
         {
-            var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+            var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
             FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}").Quality = quality;
             UpdateCompactView();
         });
         activeProbe.PeerVadChanged += (clientId, active) => Dispatch(session, () =>
         {
-            var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+            var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
             var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
             row.VadActive = active;
             row.Talking = active && row.Audible && player?.InVent != true;
@@ -551,7 +551,7 @@ public partial class MainWindow : Window
         });
         activeProbe.PeerPcmReceived += (clientId, _) => Dispatch(session, () =>
         {
-            var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+            var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
             var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
             var firstFrame = !row.HasReceivedFrames;
             row.IncrementReceived();
@@ -709,7 +709,7 @@ public partial class MainWindow : Window
 
     private void UpdatePeerMix(int clientId, PeerVoiceMix mix)
     {
-        var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+        var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
         var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
         row.Audible = mix.Audible;
         row.Talking = row.VadActive && mix.Audible && player?.InVent != true;
@@ -721,7 +721,7 @@ public partial class MainWindow : Window
 
     private void UpdatePeerConnection(int clientId, string status)
     {
-        var player = currentState?.Players.SingleOrDefault(candidate => candidate.ClientId == clientId);
+        var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
         var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
         if (status is "connecting" or "failed" or "closed")
         {

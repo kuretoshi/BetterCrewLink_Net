@@ -130,7 +130,7 @@ internal static class GameProcessScanner
                 continue;
             }
 
-            var local = result.State.Players.SingleOrDefault(player => player.IsLocal);
+            var local = result.State.Players.FirstOrDefault(player => player.IsLocal);
             var alive = result.State.Players.Count(player => !player.IsDead && !player.Disconnected);
             var dead = result.State.Players.Count(player => player.IsDead && !player.Disconnected);
             var impostors = result.State.Players.Count(player => player.IsImpostor && !player.Disconnected);
