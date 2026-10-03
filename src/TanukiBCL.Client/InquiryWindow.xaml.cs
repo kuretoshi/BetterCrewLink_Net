@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 
@@ -12,6 +14,7 @@ public partial class InquiryWindow : Window
 {
     private readonly ObservableCollection<InquiryAttachment> attachments = [];
     private bool sending;
+    private bool shuttingDown;
 
     public InquiryWindow()
     {
@@ -53,6 +56,37 @@ public partial class InquiryWindow : Window
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void MinimizeInquiryButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void CloseInquiryButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        for (var node = e.OriginalSource as DependencyObject; node is not null;
+             node = VisualTreeHelper.GetParent(node))
+            if (node is Button) return;
+        if (e.ClickCount == 2)
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+        else if (e.LeftButton == MouseButtonState.Pressed)
+            DragMove();
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        if (!shuttingDown)
+        {
+            e.Cancel = true;
+            Hide();
+        }
+        base.OnClosing(e);
+    }
+
+    internal void CloseForShutdown()
+    {
+        shuttingDown = true;
+        Close();
+    }
 
     private async void SendButton_Click(object sender, RoutedEventArgs e)
     {
@@ -104,6 +138,10 @@ public partial class InquiryWindow : Window
         var window = new InquiryWindow();
         try
         {
+            if (window.WindowStyle != WindowStyle.None || window.MinimizeInquiryButton.Content?.ToString() != "−" ||
+                window.CloseInquiryButton.Content?.ToString() != "×" ||
+                window.Width != 620 || window.Height != 640)
+                throw new InvalidOperationException("Inquiry window frame differs from v3.2.8");
             if (window.SendButton.IsEnabled || window.TagCombo.Items.Count != 3)
                 throw new InvalidOperationException("Inquiry form initial state differs from v3.2.7");
             window.SubjectBox.Text = "件名";
@@ -113,7 +151,14 @@ public partial class InquiryWindow : Window
             window.BodyBox.Text = " ";
             if (window.SendButton.IsEnabled)
                 throw new InvalidOperationException("Blank inquiry body enabled Send");
+            window.Show();
+            window.Close();
+            if (window.IsVisible || window.SubjectBox.Text != "件名")
+                throw new InvalidOperationException("Inquiry close did not hide and preserve its form");
+            window.Show();
+            if (!window.IsVisible || window.SubjectBox.Text != "件名")
+                throw new InvalidOperationException("Inquiry reopen did not restore its form");
         }
-        finally { window.Close(); }
+        finally { window.CloseForShutdown(); }
     }
 }

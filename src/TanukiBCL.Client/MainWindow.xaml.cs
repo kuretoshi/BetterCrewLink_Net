@@ -230,9 +230,10 @@ public partial class MainWindow : Window
     private void ShowInquiry()
     {
         if (isClosing) return;
-        if (inquiryWindow is { IsVisible: true } open)
+        if (inquiryWindow is { } open)
         {
             if (open.WindowState == WindowState.Minimized) open.WindowState = WindowState.Normal;
+            if (!open.IsVisible) open.Show();
             open.Activate();
             return;
         }
@@ -919,6 +920,8 @@ public partial class MainWindow : Window
         overlayWindow = null;
         publicLobbyBrowserWindow?.Close();
         publicLobbyBrowserWindow = null;
+        inquiryWindow?.CloseForShutdown();
+        inquiryWindow = null;
         if (relaunch is not null)
         {
             try { Process.Start(relaunch)?.Dispose(); }
