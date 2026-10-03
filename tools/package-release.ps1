@@ -20,10 +20,14 @@ $project = Join-Path $repoRoot 'src/TanukiBCL.Client/TanukiBCL.Client.csproj'
 & dotnet publish $project -c Release -r win-x64 --self-contained true "-p:Version=$Version" -p:DebugType=None -p:DebugSymbols=false -o $publishDirectory
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 
+foreach ($document in @('README.md', 'LICENSE')) {
+    Copy-Item -LiteralPath (Join-Path $repoRoot $document) -Destination (Join-Path $publishDirectory $document)
+}
+
 $required = @(
     'TanukiBCL.Net.exe', 'TanukiBCL.Net.deps.json', 'update-manifest.json',
     'Updater/TanukiBCL.Updater.exe', 'NoSReader/TbclSnapshotReader.exe',
-    'RoleReaders/SnrRoleReader.exe'
+    'RoleReaders/SnrRoleReader.exe', 'README.md', 'LICENSE'
 )
 foreach ($item in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory $item))) {
