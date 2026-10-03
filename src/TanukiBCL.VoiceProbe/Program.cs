@@ -55,7 +55,8 @@ internal static class Program
                 (!options.AutoRadioTone || !options.IsHost || options.GameProcessId is null || options.Duration is null))
                 throw new ArgumentException("--radio-enabled-test requires --auto-radio-tone --host --game-process-id and --seconds.");
             if (args.Contains("--play-test-tone"))
-                return await TonePlaybackTestRunner.RunAsync(options, args.Contains("--output-device"), args.Contains("--vad-tone"));
+                return await TonePlaybackTestRunner.RunAsync(options, args.Contains("--output-device"),
+                    args.Contains("--vad-tone"), args.Contains("--speech-like"));
             if (args.Contains("--capture-device-self-test"))
                 return await AudioCaptureDeviceSelfTest.RunAsync(options);
             if (options.PolicySelfTest)
@@ -200,6 +201,7 @@ internal static class Program
               --live-audio        マイク入力を送信し、受信音声をスピーカー再生
               --list-audio-devices 入出力デバイスの番号と名前を表示
               --play-test-tone --output-device <n> --seconds <1-15> [--vad-tone]  選択した出力先へ440Hz検証音を流す。--vad-toneは150Hz VAD用成分を追加（保存なし）
+              --play-test-tone --output-device <n> --seconds <1-15> --speech-like  音量と基本周波数が変動する440Hz付き診断音を流す（実音声ではない）
               --speaker-loopback-test [--speaker-name name] [--seconds n]  出力デバイスの440Hz成分だけを測定（音声は保存しない）
               --microphone-tone-test [--microphone-name name] [--seconds n]  入力デバイスの440Hz成分だけを測定（音声は保存しない）
               --peer-pcm-tone-test --game-process-id PID --expected-peer-client-id ID --seconds N  相手から復号したPCMの440Hz成分を測定（保存なし）

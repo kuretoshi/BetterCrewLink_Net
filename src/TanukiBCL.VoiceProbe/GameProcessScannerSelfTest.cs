@@ -123,6 +123,7 @@ internal static class GameProcessScannerSelfTest
         Require(ProbeOptions.Parse(["--scan-game", "--expected-players", "4"]).ExpectedPlayers == 4, "Count not parsed");
         Require(ProbeOptions.Parse(["--live-game-audio-test"]).LiveGameAudioTest,
             "Live game audio flag was parsed as a value instead of a switch");
+        _ = ProbeOptions.Parse(["--play-test-tone", "--output-device", "7", "--seconds", "1", "--speech-like"]);
         try
         {
             ProbeOptions.Parse(["--expected-players", "0"]);
