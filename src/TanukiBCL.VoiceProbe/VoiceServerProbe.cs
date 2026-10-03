@@ -822,6 +822,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 impostorRadioStates.TryRemove(departedClientId, out _);
                 nosRadioReports.TryRemove(departedClientId, out _);
                 PeerVadChanged?.Invoke(departedClientId, false);
+                PeerConnectionStatusChanged?.Invoke(departedClientId, "closed");
             }
             peerManager.RemovePeer(remoteSocketId);
             audioSession?.RemovePeer(remoteSocketId);

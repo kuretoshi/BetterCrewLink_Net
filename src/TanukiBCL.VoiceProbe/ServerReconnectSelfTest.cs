@@ -30,6 +30,8 @@ internal static class ServerReconnectSelfTest
         var replacementCleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var retainedPeerKnown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var retainedPeerCleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var leavingPeerKnown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var leavingPeerCleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var peer20Registrations = 0;
         var peer20Closures = 0;
         probe.PeerMixChanged += (id, _) =>
@@ -40,6 +42,7 @@ internal static class ServerReconnectSelfTest
                 else replacementKnown.TrySetResult();
             }
             if (id == 22) retainedPeerKnown.TrySetResult();
+            if (id == 23) leavingPeerKnown.TrySetResult();
         };
         probe.PeerConnectionStatusChanged += (id, status) =>
         {
@@ -49,6 +52,7 @@ internal static class ServerReconnectSelfTest
                 else replacementCleared.TrySetResult();
             }
             if (id == 22 && status == "closed") retainedPeerCleared.TrySetResult();
+            if (id == 23 && status == "closed") leavingPeerCleared.TrySetResult();
         };
         probe.ApplyGameState(state);
         var run = probe.RunAsync(timeout.Token);
@@ -79,6 +83,13 @@ internal static class ServerReconnectSelfTest
             if (probe.IsPeerPresent(20) || !probe.IsPeerPresent(22) || retainedPeerCleared.Task.IsCompleted)
                 throw new InvalidOperationException("setClients did not prune only peers omitted by the authoritative roster");
             Console.WriteLine("[PASS] setClients prunes a departed peer and preserves a retained peer");
+            await server.SendEventAsync(1, "setClient", "leaving-peer", new { clientId = 23 });
+            await leavingPeerKnown.Task.WaitAsync(timeout.Token);
+            await server.SendEventAsync(1, "leave", "leaving-peer");
+            await leavingPeerCleared.Task.WaitAsync(timeout.Token);
+            if (probe.IsPeerPresent(23) || !probe.IsPeerPresent(22))
+                throw new InvalidOperationException("leave kept a stale peer or removed an unrelated peer");
+            Console.WriteLine("[PASS] leave clears the departed peer's UI status without removing another peer");
             server.DropConnection(1);
             await retainedPeerCleared.Task.WaitAsync(timeout.Token);
             if (probe.IsPeerPresent(22)) throw new InvalidOperationException("disconnect kept stale peers");
