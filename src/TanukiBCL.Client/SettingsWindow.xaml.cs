@@ -160,7 +160,7 @@ public partial class SettingsWindow : Window
         {
             PlayerRows.Children.Add(new TextBlock
             {
-                Text = "調整できるプレイヤーがいません。",
+                Text = PlayerText("empty"),
                 Foreground = new SolidColorBrush(Color.FromRgb(0xb7, 0xaa, 0xbd))
             });
             return;
@@ -168,6 +168,8 @@ public partial class SettingsWindow : Window
 
         foreach (var player in players) PlayerRows.Children.Add(CreatePlayerRow(player));
     }
+
+    private string PlayerText(string key) => UiLocalization.Translate(settings.Language, $"settings.players.{key}");
 
     private Border CreatePlayerRow(Player player)
     {
@@ -188,7 +190,8 @@ public partial class SettingsWindow : Window
         heading.Children.Add(new TextBlock { Text = player.Name, FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 275 });
         if (player.Disconnected)
-            heading.Children.Add(new TextBlock { Text = "  切断済み", Foreground = Brushes.Gray, FontSize = 11 });
+            heading.Children.Add(new TextBlock { Text = $"  {PlayerText("disconnected")}",
+                Foreground = Brushes.Gray, FontSize = 11 });
 
         var muteIcon = new System.Windows.Shapes.Path
         {
@@ -197,7 +200,7 @@ public partial class SettingsWindow : Window
         var mute = new Button
         {
             Width = 30, Height = 30, Padding = new Thickness(4), BorderThickness = new Thickness(0),
-            Content = muteIcon, ToolTip = "このプレイヤーをミュート", IsEnabled = !player.Disconnected,
+            Content = muteIcon, ToolTip = PlayerText("mute"), IsEnabled = !player.Disconnected,
             HorizontalAlignment = HorizontalAlignment.Left
         };
         var slider = new Slider
@@ -207,7 +210,7 @@ public partial class SettingsWindow : Window
             Margin = new Thickness(8, 0, 8, 0),
             Value = PlayerAudioConfig.For(player, settings.PlayerConfigMap).Volume
         };
-        AutomationProperties.SetName(slider, $"{player.Name}の音量");
+        AutomationProperties.SetName(slider, $"{player.Name} {PlayerText("volume")}");
         var value = new TextBlock { Width = 62, TextAlignment = TextAlignment.Right };
         void UpdateControls()
         {
@@ -215,10 +218,10 @@ public partial class SettingsWindow : Window
             muteIcon.Data = config.IsMuted ? VolumeOff : VolumeUp;
             mute.Background = new SolidColorBrush(config.IsMuted
                 ? Color.FromArgb(0x24, 0xf4, 0x43, 0x36) : Color.FromArgb(0x10, 0xff, 0xff, 0xff));
-            mute.ToolTip = config.IsMuted ? "このプレイヤーのミュートを解除" : "このプレイヤーをミュート";
+            mute.ToolTip = config.IsMuted ? PlayerText("unmute") : PlayerText("mute");
             AutomationProperties.SetName(mute, $"{player.Name}: {mute.ToolTip}");
             slider.IsEnabled = !player.Disconnected && !config.IsMuted;
-            value.Text = config.IsMuted ? "ミュート" : $"{Math.Floor(config.Volume * 100d)}%";
+            value.Text = config.IsMuted ? PlayerText("muted") : $"{Math.Floor(config.Volume * 100d)}%";
         }
         UpdateControls();
         mute.Click += (_, _) =>

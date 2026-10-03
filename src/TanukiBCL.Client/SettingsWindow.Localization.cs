@@ -1,3 +1,7 @@
+using System.Windows.Controls;
+using TanukiBCL.VoiceProbe;
+using TanukiBCL.VoiceProbe.GameMemory;
+
 namespace TanukiBCL.Client;
 
 public partial class SettingsWindow
@@ -8,6 +12,7 @@ public partial class SettingsWindow
     {
         Title = UiLocalization.Translate(language, "settings.title");
         staticText.Apply(this, language, PlayerRows);
+        RenderPlayers();
     }
 
     internal static void VerifyLocalization()
@@ -41,10 +46,33 @@ public partial class SettingsWindow
             !Equals(window.VoiceModeRadio.Content, UiLocalization.Translate("en", "settings.audio.voice_activity")) ||
             !Equals(window.NatFixCheck.Content, UiLocalization.Translate("en", "settings.advanced.nat_fix")))
             throw new InvalidOperationException("English settings language did not apply");
+        if (window.PlayerRows.Children[0] is not TextBlock { Text: "No other players right now. Join a lobby to adjust their volume." })
+            throw new InvalidOperationException("Empty player state was not translated");
+        settings.PlayerConfigMap[51] = new PlayerAudioConfig(IsMuted: true);
+        window.UpdateCurrentGameState(new AmongUsState
+        {
+            Players = [new Player { Name = "Remote", PlayerConfigId = 51, Disconnected = true }]
+        });
+        VerifyPlayerRow("Disconnected", "Unmute", "Muted");
         window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "ja");
         if (settings.Language != "ja" || window.Title != "設定" || window.LanguageLabel.Text != "言語")
             throw new InvalidOperationException("Japanese settings language was not restored");
+        VerifyPlayerRow("切断済み", "ミュート解除", "ミュート中");
         window.Close();
         Console.WriteLine("[PASS] Settings language switches English/Japanese and persists through transaction");
+
+        void VerifyPlayerRow(string disconnected, string unmute, string muted)
+        {
+            if (window.PlayerRows.Children[0] is not Border { Child: StackPanel content } ||
+                content.Children[0] is not StackPanel heading ||
+                heading.Children[2] is not TextBlock disconnectedText ||
+                !disconnectedText.Text.Contains(disconnected, StringComparison.Ordinal) ||
+                content.Children[1] is not Grid controls ||
+                controls.Children[0] is not Button muteButton ||
+                !Equals(muteButton.ToolTip, unmute) ||
+                controls.Children[2] is not TextBlock { Text: var volumeText } ||
+                volumeText != muted)
+                throw new InvalidOperationException("Player settings row did not follow the selected language");
+        }
     }
 }
