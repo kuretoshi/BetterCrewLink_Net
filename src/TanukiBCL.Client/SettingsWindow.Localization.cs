@@ -48,12 +48,34 @@ public partial class SettingsWindow
             window.MinimizeSettingsButton is null || window.CloseSettingsButton is null ||
             window.SaveStatusText.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Released settings title bar or hidden save status was not applied");
-        if (window.SettingsPageScrollViewer.Resources[typeof(System.Windows.Controls.Primitives.ScrollBar)]
+        if (window.SettingsPageScrollViewer.Resources["ThinSettingsScrollBarStyle"]
                 is not System.Windows.Style scrollBarStyle ||
             !scrollBarStyle.Setters.OfType<System.Windows.Setter>().Any(setter =>
                 setter.Property == System.Windows.FrameworkElement.WidthProperty &&
                 Equals(setter.Value, 8d)))
             throw new InvalidOperationException("Released settings scrollbar width was not applied");
+        window.CategoryList.SelectedIndex = 6;
+        window.SettingsPageScrollViewer.Measure(new System.Windows.Size(550, 500));
+        window.SettingsPageScrollViewer.Arrange(new System.Windows.Rect(0, 0, 550, 500));
+        window.ApplySettingsPageScrollBarStyle();
+        window.SettingsPageScrollViewer.InvalidateMeasure();
+        window.SettingsPageScrollViewer.Measure(new System.Windows.Size(550, 500));
+        window.SettingsPageScrollViewer.Arrange(new System.Windows.Rect(0, 0, 550, 500));
+        window.SettingsPageScrollViewer.UpdateLayout();
+        var pageScrollBar = window.SettingsPageScrollViewer.Template.FindName(
+            "PART_VerticalScrollBar", window.SettingsPageScrollViewer)
+            as System.Windows.Controls.Primitives.ScrollBar;
+        if (pageScrollBar is null || !ReferenceEquals(pageScrollBar.Style, scrollBarStyle) ||
+            Math.Abs(pageScrollBar.ActualWidth - 8d) > 0.01d ||
+            pageScrollBar.Template.FindName("PART_Track", pageScrollBar)
+                is not System.Windows.Controls.Primitives.Track)
+            throw new InvalidOperationException(
+                $"Released settings scrollbar did not render at 8px (actual={pageScrollBar?.ActualWidth})");
+        if (window.SettingsPageScrollViewer.ExtentHeight <=
+            window.SettingsPageScrollViewer.ViewportHeight)
+            throw new InvalidOperationException($"Advanced settings page did not expose a scrollable range: " +
+                $"extent={window.SettingsPageScrollViewer.ExtentHeight}, " +
+                $"viewport={window.SettingsPageScrollViewer.ViewportHeight}");
         if (window.AudioPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 5 ||
             window.MicrophoneLevelStatus.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Released audio settings card layout was not applied");

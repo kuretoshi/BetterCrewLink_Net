@@ -139,6 +139,20 @@ public partial class SettingsWindow : Window
         if (showingCurrentLobby) ShowSelectedLobbySettings();
     }
 
+    private void SettingsPageScrollViewer_Loaded(object sender, RoutedEventArgs e) =>
+        ApplySettingsPageScrollBarStyle();
+
+    private void ApplySettingsPageScrollBarStyle()
+    {
+        SettingsPageScrollViewer.ApplyTemplate();
+        if (SettingsPageScrollViewer.Template.FindName(
+                "PART_VerticalScrollBar", SettingsPageScrollViewer)
+            is System.Windows.Controls.Primitives.ScrollBar scrollBar)
+        {
+            scrollBar.Style = (Style)SettingsPageScrollViewer.Resources["ThinSettingsScrollBarStyle"];
+        }
+    }
+
     internal void UpdateCurrentGameState(AmongUsState? state)
     {
         currentGameState = state;
