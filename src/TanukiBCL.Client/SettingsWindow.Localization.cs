@@ -48,6 +48,12 @@ public partial class SettingsWindow
             window.MinimizeSettingsButton is null || window.CloseSettingsButton is null ||
             window.SaveStatusText.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Released settings title bar or hidden save status was not applied");
+        if (window.SettingsPageScrollViewer.Resources[typeof(System.Windows.Controls.Primitives.ScrollBar)]
+                is not System.Windows.Style scrollBarStyle ||
+            !scrollBarStyle.Setters.OfType<System.Windows.Setter>().Any(setter =>
+                setter.Property == System.Windows.FrameworkElement.WidthProperty &&
+                Equals(setter.Value, 8d)))
+            throw new InvalidOperationException("Released settings scrollbar width was not applied");
         if (window.AudioPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 5 ||
             window.MicrophoneLevelStatus.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Released audio settings card layout was not applied");
