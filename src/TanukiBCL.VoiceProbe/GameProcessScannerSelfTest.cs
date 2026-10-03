@@ -26,6 +26,17 @@ internal static class GameProcessScannerSelfTest
         Require(GameProcessScanner.IsReady(state, GameState.Lobby), "Explicit lobby scan never completes");
         Require(!GameProcessScanner.IsReady(state, null), "Default must still wait for a game");
         Require(!GameProcessScanner.IsReady(state, GameState.Tasks), "Wrong state accepted");
+        var snrState = new AmongUsState
+        {
+            Mod = AmongUsModType.SuperNewRoles,
+            GameState = GameState.Tasks,
+            Players = [new Player { Id = 0, Name = "SNR player" }]
+        };
+        Require(!GameProcessScanner.IsReady(snrState, GameState.Tasks),
+            "SNR scan completed before the live role reader");
+        snrState.Players[0].SnrRole = new SnrRoleData(1, "Crewmate", 0, "None", 0, "None");
+        Require(GameProcessScanner.IsReady(snrState, GameState.Tasks),
+            "SNR scan did not complete after role discovery");
         Require(GameProcessScanner.Validate(results, expectation, GameState.Lobby), "Four-player lobby failed");
         Require(!GameProcessScanner.Validate(results, expectation with { Players = 5 }, GameState.Lobby), "Wrong count accepted");
         Require(!GameProcessScanner.Validate(results, expectation with { Alive = 3 }, GameState.Lobby), "Wrong alive count accepted");

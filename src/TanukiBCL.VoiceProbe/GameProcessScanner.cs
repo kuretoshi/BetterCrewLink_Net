@@ -145,7 +145,12 @@ internal static class GameProcessScanner
                 Console.WriteLine(
                     $"  {(player.IsLocal ? '*' : ' ')} id={player.Id} client={player.ClientId} name={player.Name} " +
                     $"role={(player.IsImpostor ? "Impostor" : "Crewmate")} dead={player.IsDead} " +
-                    $"pos=({player.X:0.0000},{player.Y:0.0000})");
+                    $"pos=({player.X:0.0000},{player.Y:0.0000})" +
+                    (result.State.Mod == AmongUsModType.SuperNewRoles && player.SnrRole is { } snr
+                        ? $" snr={snr.RoleName ?? snr.RoleId.ToString()}" +
+                          $" modifier={snr.ModifierName ?? snr.ModifierId?.ToString() ?? "?"}" +
+                          (snr.JumboCurrentSize is { } size ? $" jumbo={size:0.###}" : string.Empty)
+                        : string.Empty));
             }
 
             if (local is not null)
@@ -166,7 +171,10 @@ internal static class GameProcessScanner
     internal static bool IsReady(AmongUsState state, GameState? expectedGameState) =>
         state.Players.Count > 0 && (expectedGameState.HasValue
             ? state.GameState == expectedGameState.Value
-            : state.GameState is GameState.Tasks or GameState.Discussion);
+            : state.GameState is GameState.Tasks or GameState.Discussion) &&
+        (state.Mod != AmongUsModType.SuperNewRoles ||
+         state.GameState is not (GameState.Tasks or GameState.Discussion) ||
+         state.Players.Where(player => !player.Disconnected).All(player => player.SnrRole is not null));
 
     internal static bool Validate(
         IReadOnlyCollection<ProcessReadResult> results,
