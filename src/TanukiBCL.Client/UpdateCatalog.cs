@@ -9,7 +9,7 @@ namespace TanukiBCL.Client;
 
 internal sealed record UpdateCandidate(string Version, Uri DownloadUrl, string Sha256, long Size, Uri ReleasePage);
 
-// The Electron 3.2.7 updater installs Electron/NSIS artifacts. The .NET client
+// The Electron updater installs Electron/NSIS artifacts. The .NET client
 // must use its own release feed and reject source archives or unverified assets.
 internal static partial class UpdateCatalog
 {
@@ -18,8 +18,6 @@ internal static partial class UpdateCatalog
     internal static readonly Uri ReleasesPage = new(
         "https://github.com/kuretoshi/BetterCrewLink_Net/releases");
     private const string AssetName = "TanukiBCL.Net-win-x64.zip";
-    private const string DownloadPrefix =
-        "https://github.com/kuretoshi/BetterCrewLink_Net/releases/download/";
 
     internal static string CurrentVersion => typeof(App).Assembly
         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
@@ -45,10 +43,17 @@ internal static partial class UpdateCatalog
             if (!release.TryGetProperty("tag_name", out var tagElement) ||
                 tagElement.GetString() is not { } tag || CompareVersions(tag, currentVersion) <= 0)
                 continue;
+            var releasePath = "/kuretoshi/BetterCrewLink_Net/releases/tag/" + Uri.EscapeDataString(tag);
+            var downloadPath = "/kuretoshi/BetterCrewLink_Net/releases/download/" +
+                Uri.EscapeDataString(tag) + "/" + AssetName;
             if (!release.TryGetProperty("html_url", out var pageElement) ||
                 !Uri.TryCreate(pageElement.GetString(), UriKind.Absolute, out var page) ||
                 page.Scheme != Uri.UriSchemeHttps || page.Host != "github.com" ||
-                !page.AbsolutePath.StartsWith("/kuretoshi/BetterCrewLink_Net/releases/tag/", StringComparison.Ordinal))
+                page.AbsolutePath != releasePath || page.Query.Length != 0 || page.Fragment.Length != 0)
+                continue;
+            if (tag.Contains("-net-beta.", StringComparison.Ordinal) &&
+                (!release.TryGetProperty("prerelease", out var prerelease) ||
+                 prerelease.ValueKind != JsonValueKind.True))
                 continue;
             if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
                 continue;
@@ -62,8 +67,8 @@ internal static partial class UpdateCatalog
                     !HexSha256().IsMatch(digest[7..]) ||
                     !asset.TryGetProperty("browser_download_url", out var urlElement) ||
                     !Uri.TryCreate(urlElement.GetString(), UriKind.Absolute, out var url) ||
-                    !url.AbsoluteUri.StartsWith(DownloadPrefix, StringComparison.Ordinal) ||
-                    !url.AbsolutePath.EndsWith('/' + AssetName, StringComparison.Ordinal))
+                    url.Scheme != Uri.UriSchemeHttps || url.Host != "github.com" ||
+                    url.AbsolutePath != downloadPath || url.Query.Length != 0 || url.Fragment.Length != 0)
                     continue;
                 var candidate = new UpdateCandidate(tag, url, digest[7..].ToLowerInvariant(), size, page);
                 if (newest is null || CompareVersions(candidate.Version, newest.Version) > 0)
@@ -141,6 +146,18 @@ internal static partial class UpdateCatalog
             throw new InvalidOperationException("The first .NET beta was not offered to a same-base development build");
         if (await CheckAsync(client, "3.2.8-net-beta.1", new Uri("https://example.invalid/releases")) is not null)
             throw new InvalidOperationException("The installed beta was offered again as an update");
+        handler.Body = json.Replace("v3.2.7-net.2", "v3.2.8-net-beta.1")
+            .Replace("\"prerelease\":true", "\"prerelease\":false");
+        if (await CheckAsync(client, "3.2.8-netdev.0", new Uri("https://example.invalid/releases")) is not null)
+            throw new InvalidOperationException("A beta without GitHub pre-release metadata was accepted");
+        handler.Body = json.Replace("v3.2.7-net.2", "v3.2.8-net-beta.1")
+            .Replace("/releases/download/v3.2.8-net-beta.1/", "/releases/download/v3.2.7-net.2/");
+        if (await CheckAsync(client, "3.2.8-netdev.0", new Uri("https://example.invalid/releases")) is not null)
+            throw new InvalidOperationException("An update ZIP from another release tag was accepted");
+        handler.Body = json.Replace("v3.2.7-net.2", "v3.2.8-net-beta.1")
+            .Replace("/releases/tag/v3.2.8-net-beta.1", "/releases/tag/v3.2.7-net.2");
+        if (await CheckAsync(client, "3.2.8-netdev.0", new Uri("https://example.invalid/releases")) is not null)
+            throw new InvalidOperationException("An update page from another release tag was accepted");
         handler.Body = json.Replace("sha256:aaaaaaaa", "sha256:zzzzzzzz");
         if (await CheckAsync(client, "3.2.7-net.1", new Uri("https://example.invalid/releases")) is not null)
             throw new InvalidOperationException("Unverifiable release asset was accepted");
