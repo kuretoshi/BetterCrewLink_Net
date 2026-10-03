@@ -36,6 +36,12 @@ internal static class ServerReconnectSelfTest
         try
         {
             await server.ExpectJoinAsync(1, "ABCDEF", 2, 19, timeout.Token);
+            await server.ExpectLobbyAsync(1, "ABCDEF", "Local", false, "", "ja", 1, timeout.Token);
+            probe.SetOwnLobbySettings(new LobbySettings
+            {
+                PublicLobbyOn = true, PublicLobbyTitle = "Loopback test", PublicLobbyLanguage = "en"
+            });
+            await server.ExpectLobbyAsync(1, "ABCDEF", "Local", true, "Loopback test", "en", 1, timeout.Token);
             await server.SendEventAsync(1, "setClient", "old-peer", new { clientId = 20 });
             await peerKnown.Task.WaitAsync(timeout.Token);
             if (!probe.IsPeerPresent(20)) throw new InvalidOperationException("test peer was not registered");
@@ -46,17 +52,20 @@ internal static class ServerReconnectSelfTest
             // No game-state event is sent here: reconnect must use the retained
             // snapshot even if neither the lobby code nor memory state changes.
             await server.ExpectJoinAsync(2, "ABCDEF", 2, 19, timeout.Token);
+            await server.ExpectLobbyAsync(2, "ABCDEF", "Local", true, "Loopback test", "en", 1, timeout.Token);
             Console.WriteLine("[PASS] transport interruption automatically rejoins the unchanged game lobby and clears old peers");
 
             // The explicit reload also raises OnConnected. It must not race the
             // automatic recovery into a second leave/id/join cycle.
             var reload = probe.RestartServerConnectionAsync(timeout.Token);
             await server.ExpectJoinAsync(3, "ABCDEF", 2, 19, timeout.Token);
+            await server.ExpectLobbyAsync(3, "ABCDEF", "Local", true, "Loopback test", "en", 1, timeout.Token);
             await reload.WaitAsync(timeout.Token);
             await Task.Delay(100, timeout.Token);
             if (server.GetJoinCount(3) != 1)
                 throw new InvalidOperationException("manual reload and automatic recovery both joined the lobby");
             Console.WriteLine("[PASS] manual reload remains a single lobby join");
+            Console.WriteLine("[PASS] public lobby announcements match 3.2.8 on initial join, settings change, reconnect and reload");
 
             // Dispose while a reload owns the game gate; cancellation must drain
             // it before the socket is destroyed, and repeated Dispose is safe.
@@ -156,6 +165,31 @@ internal static class ServerReconnectSelfTest
                 return;
             }
             throw new InvalidOperationException("server stopped before lobby join");
+        }
+
+        public async Task ExpectLobbyAsync(int id, string lobbyCode, string host, bool isPublic,
+            string title, string language, int players, CancellationToken token)
+        {
+            await foreach (var received in events.Reader.ReadAllAsync(token))
+            {
+                if (received.Connection != id || received.Event[0].GetString() != "lobby") continue;
+                var data = received.Event;
+                if (data.GetArrayLength() != 3 || data[1].GetString() != lobbyCode)
+                    throw new InvalidOperationException("public lobby event argument shape is incorrect");
+                var payload = data[2];
+                if (payload.GetProperty("id").GetInt32() != -1 ||
+                    payload.GetProperty("host").GetString() != host ||
+                    payload.GetProperty("isPublic").GetBoolean() != isPublic ||
+                    payload.GetProperty("title").GetString() != title ||
+                    payload.GetProperty("language").GetString() != language ||
+                    payload.GetProperty("current_players").GetInt32() != players ||
+                    payload.GetProperty("max_players").GetInt32() != 15 ||
+                    payload.GetProperty("mods").GetString() != "NONE" ||
+                    payload.GetProperty("gameState").GetInt32() != 0)
+                    throw new InvalidOperationException("public lobby event differs from the released wire format");
+                return;
+            }
+            throw new InvalidOperationException("server stopped before public lobby announcement");
         }
 
         private async Task AcceptAsync()

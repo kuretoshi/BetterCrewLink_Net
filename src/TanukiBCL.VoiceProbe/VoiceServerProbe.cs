@@ -1743,6 +1743,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         if (!socket.Connected || version != Volatile.Read(ref serverConnectionVersion)) return;
         Volatile.Write(ref joinedConnectionVersion, version);
         currentJoinedLobby = options.LobbyCode!;
+        if (currentGameState is { } state)
+            await PublishPublicLobbyIfChangedAsync(state);
     }
 
     public ValueTask DisposeAsync()
