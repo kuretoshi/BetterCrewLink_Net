@@ -78,13 +78,14 @@ internal static partial class UpdateCatalog
             var match = VersionPattern().Match(value.Trim());
             if (!match.Success) return [0, 0, 0, -1, 0];
             static int SafePart(string part) => int.TryParse(part, out var parsed) ? parsed : 0;
-            // A .NET release with the same upstream base version must replace
-            // a netdev build even when both channel revisions are zero.
+            // Keep the .NET development, beta and stable channels distinct
+            // even when they share the same upstream compatibility version.
             var channel = match.Groups[4].Value switch
             {
                 "netdev" => 0,
-                "net" => 1,
-                _ => 2
+                "net-beta" => 1,
+                "net" => 2,
+                _ => 3
             };
             return [SafePart(match.Groups[1].Value), SafePart(match.Groups[2].Value),
                 SafePart(match.Groups[3].Value), channel, SafePart(match.Groups[5].Value)];
@@ -99,7 +100,7 @@ internal static partial class UpdateCatalog
         return 0;
     }
 
-    [GeneratedRegex("^[vV]?(\\d+)\\.(\\d+)\\.(\\d+)(?:-(netdev|net)\\.(\\d+))?(?:\\+.*)?$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex("^[vV]?(\\d+)\\.(\\d+)\\.(\\d+)(?:-(netdev|net-beta|net)\\.(\\d+))?(?:\\+.*)?$", RegexOptions.CultureInvariant)]
     private static partial Regex VersionPattern();
 
     [GeneratedRegex("^[a-fA-F0-9]{64}$", RegexOptions.CultureInvariant)]
@@ -122,16 +123,20 @@ internal static partial class UpdateCatalog
             throw new InvalidOperationException(".NET update release candidate was not recognized");
         if (await CheckAsync(client, "3.2.7-net.2", new Uri("https://example.invalid/releases")) is not null)
             throw new InvalidOperationException("Same version was offered as an update");
-        if (CompareVersions("v3.2.8-net.0", "3.2.8-netdev.0") <= 0 ||
-            CompareVersions("v3.2.8-netdev.1", "3.2.8-net.0") >= 0 ||
+        if (CompareVersions("v3.2.8-net-beta.1", "3.2.8-netdev.0") <= 0 ||
+            CompareVersions("v3.2.8-netdev.1", "3.2.8-net-beta.1") >= 0 ||
+            CompareVersions("v3.2.8-net-beta.2", "3.2.8-net-beta.1") <= 0 ||
+            CompareVersions("v3.2.8-net.0", "3.2.8-net-beta.99") <= 0 ||
             CompareVersions("v3.2.8-net.1", "3.2.8-net.0") <= 0 ||
             CompareVersions("v3.2.8", "3.2.8-net.99") <= 0 ||
             CompareVersions("v3.2.8-other.99", "3.2.8-netdev.0") >= 0)
-            throw new InvalidOperationException("Development, .NET release, and stable version ordering is incorrect");
-        handler.Body = json.Replace("v3.2.7-net.2", "v3.2.8-net.0");
+            throw new InvalidOperationException("Development, beta and stable version ordering is incorrect");
+        handler.Body = json.Replace("v3.2.7-net.2", "v3.2.8-net-beta.1");
         if ((await CheckAsync(client, "3.2.8-netdev.0", new Uri("https://example.invalid/releases")))?.Version !=
-            "v3.2.8-net.0")
-            throw new InvalidOperationException("The first stable .NET build was not offered to a same-base development build");
+            "v3.2.8-net-beta.1")
+            throw new InvalidOperationException("The first .NET beta was not offered to a same-base development build");
+        if (await CheckAsync(client, "3.2.8-net-beta.1", new Uri("https://example.invalid/releases")) is not null)
+            throw new InvalidOperationException("The installed beta was offered again as an update");
         handler.Body = json.Replace("sha256:aaaaaaaa", "sha256:zzzzzzzz");
         if (await CheckAsync(client, "3.2.7-net.1", new Uri("https://example.invalid/releases")) is not null)
             throw new InvalidOperationException("Unverifiable release asset was accepted");

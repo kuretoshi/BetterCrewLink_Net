@@ -128,7 +128,9 @@ public partial class SettingsWindow
             return;
         }
 
-        UpdateVersionText.Text = $"最新バージョンv{candidate.Version}";
+        var displayVersion = candidate.Version.StartsWith('v') || candidate.Version.StartsWith('V')
+            ? candidate.Version : $"v{candidate.Version}";
+        UpdateVersionText.Text = $"最新バージョン{displayVersion}";
         UpdateVersionText.Visibility = Visibility.Visible;
         if (!installationAvailable)
         {

@@ -39,7 +39,8 @@ public partial class VoiceView : UserControl
     public VoiceView()
     {
         InitializeComponent();
-        VersionText.Text = $"v{typeof(VoiceView).Assembly.GetName().Version?.ToString(3)}";
+        VersionText.Text = FormatVersionLabel(UpdateCatalog.CurrentVersion);
+        VersionText.ToolTip = $"v{UpdateCatalog.CurrentVersion}";
         popupCloseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         popupCloseTimer.Tick += (_, _) =>
         {
@@ -55,11 +56,26 @@ public partial class VoiceView : UserControl
     private static string CollapseNoWrapWhitespace(string value) =>
         HtmlWhitespace.Replace(value, " ").Trim(' ', '\t', '\r', '\n', '\f');
 
+    private static string FormatVersionLabel(string version)
+    {
+        var beta = Regex.Match(version, @"^(\d+\.\d+\.\d+)-net-beta\.(\d+)$");
+        if (beta.Success) return $"v{beta.Groups[1].Value} β{beta.Groups[2].Value}";
+        var development = Regex.Match(version, @"^(\d+\.\d+\.\d+)-netdev\.\d+$");
+        if (development.Success) return $"v{development.Groups[1].Value} DEV";
+        var stable = Regex.Match(version, @"^(\d+\.\d+\.\d+)-net\.\d+$");
+        if (stable.Success) return $"v{stable.Groups[1].Value} NET";
+        return $"v{version}";
+    }
+
     internal static void VerifyNameLayout()
     {
         var view = new VoiceView();
-        if (!view.VersionText.Text.StartsWith("v3.2.8", StringComparison.Ordinal))
-            throw new InvalidOperationException("Voice window version does not match the 3.2.8 target");
+        if (view.VersionText.Text != FormatVersionLabel(UpdateCatalog.CurrentVersion) ||
+            (string?)view.VersionText.ToolTip != $"v{UpdateCatalog.CurrentVersion}" ||
+            FormatVersionLabel("3.2.8-netdev.0") != "v3.2.8 DEV" ||
+            FormatVersionLabel("3.2.8-net-beta.1") != "v3.2.8 β1" ||
+            FormatVersionLabel("3.2.8-net.0") != "v3.2.8 NET")
+            throw new InvalidOperationException("Voice window version/channel label is incorrect");
         if (CollapseNoWrapWhitespace("コヨーテ \r\nさぁ、狩りの時間だ") !=
             "コヨーテ さぁ、狩りの時間だ")
             throw new InvalidOperationException("TOH role-name line breaks were not collapsed like HTML nowrap");

@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') {
-    throw 'Version must be a semantic version such as 3.2.7-net.1.'
+    throw 'Version must be a semantic version such as 3.2.8-net-beta.1.'
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path

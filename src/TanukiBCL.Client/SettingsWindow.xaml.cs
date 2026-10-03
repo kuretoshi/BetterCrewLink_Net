@@ -999,11 +999,11 @@ public partial class SettingsWindow : Window
                 window.CheckUpdateButton.Height != 40 || window.StartUpdateButton.Height != 40 ||
                 window.ManualUpdateDownloadButton.Visibility != Visibility.Collapsed)
                 throw new InvalidOperationException("Update settings did not initialize");
-            var updateCandidate = new UpdateCandidate("3.2.8-test",
+            var updateCandidate = new UpdateCandidate("v3.2.8-net-beta.1",
                 new Uri("https://example.invalid/update.zip"), new string('0', 64), 100,
                 new Uri("https://example.invalid/release"));
             window.ShowUpdateCheckResult(updateCandidate, installationAvailable: true);
-            if (window.UpdateVersionText.Text != "最新バージョンv3.2.8-test" ||
+            if (window.UpdateVersionText.Text != "最新バージョンv3.2.8-net-beta.1" ||
                 window.UpdateVersionText.Visibility != Visibility.Visible ||
                 window.UpdateStatusText.Visibility != Visibility.Collapsed ||
                 !window.StartUpdateButton.IsEnabled)
