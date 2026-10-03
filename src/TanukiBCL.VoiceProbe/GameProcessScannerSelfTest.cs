@@ -41,7 +41,8 @@ internal static class GameProcessScannerSelfTest
                 LobbyCode = "ABCDEF",
                 Players = Enumerable.Range(0, 4).Select(id => new Player
                 {
-                    Id = id, ClientId = id + 20, IsLocal = id == local, Name = $"Player{id}"
+                    Id = id, ClientId = id + 20, IsLocal = id == local,
+                    Name = $"Player{id}", X = id * 2d
                 }).ToList()
             }, "", null)).ToArray();
         var state = results[0].State!;

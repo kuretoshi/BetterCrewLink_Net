@@ -235,7 +235,15 @@ internal static class GameProcessScanner
                 GameState.Tasks => mixes.All(item => me.IsDead || !item.Player.IsDead
                     ? item.Mix.Reason is "proximity" or "out-of-range"
                     : !item.Mix.Audible && item.Mix.Reason == "living-cannot-hear-ghost"),
-                GameState.Lobby => mixes.All(item => item.Mix.Audible && item.Mix.Gain == 1d && item.Mix.Pan == 0d && item.Mix.Reason == "lobby"),
+                GameState.Lobby => mixes.All(item => item.Mix.Reason switch
+                {
+                    "lobby" => item.Mix.Distance <= 5.32d &&
+                        item.Mix.Gain >= 0d && item.Mix.Gain <= 1d &&
+                        Math.Abs(item.Mix.Pan) <= 1d,
+                    "out-of-range" => !item.Mix.Audible && item.Mix.Distance > 5.32d,
+                    "dummy" or "nos-fixer-jamming" => !item.Mix.Audible,
+                    _ => false
+                }),
                 _ => false
             };
         });
