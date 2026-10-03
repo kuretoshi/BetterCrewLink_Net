@@ -285,6 +285,15 @@ internal sealed class WebRtcPeerManager : IDisposable
             type = type.Equals("offer", StringComparison.OrdinalIgnoreCase) ? RTCSdpType.offer : RTCSdpType.answer,
             sdp = sdpElement.GetString()!
         };
+        // SIPSorcery needs a local data channel before creating an answer to
+        // include the SCTP application media section. Without this, ICE/audio
+        // can connect while the offerer's first data channel never opens.
+        if (description.type == RTCSdpType.offer &&
+            description.sdp.Contains("m=application ", StringComparison.Ordinal))
+        {
+            var channel = await peer.Connection.createDataChannel("tanuki-probe", null);
+            ConfigureDataChannel(peer, channel);
+        }
         var result = peer.Connection.setRemoteDescription(description);
         Log($"{type} < {Short(remoteSocketId)} result={result}");
         if (result != SetDescriptionResultEnum.OK)
@@ -447,14 +456,15 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     private void ConfigureDataChannel(Peer peer, RTCDataChannel channel)
     {
-        peer.Channel = channel;
+        lock (peer.DataChannelGate)
+            peer.Channel ??= channel;
         channel.onopen += () =>
         {
             if (!peers.TryGetValue(peer.RemoteSocketId, out var current) || !ReferenceEquals(current, peer))
             {
                 return;
             }
-            var wasOpen = Interlocked.Exchange(ref peer.DataChannelOpen, 1) == 1;
+            var wasOpen = MarkDataChannelOpen(peer, channel);
             Log($"data channel open: {Short(peer.RemoteSocketId)}");
             if (!wasOpen) OnDataChannelReady(peer);
             if (sendTestTone)
@@ -466,7 +476,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             var isCurrent = peers.TryGetValue(peer.RemoteSocketId, out var current) &&
                 ReferenceEquals(current, peer);
-            if (isCurrent && Interlocked.Exchange(ref peer.DataChannelOpen, 1) == 0)
+            if (isCurrent && !MarkDataChannelOpen(peer, channel))
             {
                 Log($"data channel ready via message: {Short(peer.RemoteSocketId)}");
                 OnDataChannelReady(peer);
@@ -491,9 +501,27 @@ internal sealed class WebRtcPeerManager : IDisposable
         };
         channel.onclose += () =>
         {
-            Interlocked.Exchange(ref peer.DataChannelOpen, 0);
+            lock (peer.DataChannelGate)
+            {
+                peer.OpenChannels.Remove(channel);
+                if (ReferenceEquals(peer.Channel, channel))
+                    peer.Channel = peer.OpenChannels.FirstOrDefault();
+                Volatile.Write(ref peer.DataChannelOpen, peer.OpenChannels.Count > 0 ? 1 : 0);
+            }
             Log($"data channel closed: {Short(peer.RemoteSocketId)}");
         };
+    }
+
+    private static bool MarkDataChannelOpen(Peer peer, RTCDataChannel channel)
+    {
+        lock (peer.DataChannelGate)
+        {
+            var wasOpen = peer.OpenChannels.Count > 0;
+            peer.OpenChannels.Add(channel);
+            peer.Channel = channel;
+            Volatile.Write(ref peer.DataChannelOpen, 1);
+            return wasOpen;
+        }
     }
 
     private void OnDataChannelReady(Peer peer)
@@ -736,6 +764,8 @@ internal sealed class WebRtcPeerManager : IDisposable
     {
         public AudioEncoder Decoder { get; } = new(true, true);
         public RTCDataChannel? Channel { get; set; }
+        public object DataChannelGate { get; } = new();
+        public HashSet<RTCDataChannel> OpenChannels { get; } = [];
         public List<RTCIceCandidateInit> PendingCandidates { get; } = [];
         public object LocalCandidateGate { get; } = new();
         public List<object> PendingLocalCandidates { get; } = [];

@@ -160,7 +160,7 @@ internal static class GameProcessScanner
             if (local is not null)
             {
                 var settings = new SpatialVoiceSettings();
-                Console.WriteLine("  voice mix (TanukiBCL v3.2.5 defaults):");
+                Console.WriteLine("  voice mix (current compatible defaults):");
                 foreach (var other in result.State.Players.Where(player => !player.IsLocal).OrderBy(player => player.ClientId))
                 {
                     var mix = SpatialVoicePolicy.Calculate(result.State, local, other, settings);
