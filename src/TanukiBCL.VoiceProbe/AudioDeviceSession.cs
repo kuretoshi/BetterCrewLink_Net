@@ -193,6 +193,7 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.RadioHighPass.Enabled = mix.RadioHighPass;
         peer.RadioEcho.Enabled = mix.RadioEcho;
         peer.CameraMuffle.Enabled = mix.CameraMuffled;
+        peer.GhostReverb.Enabled = mix.Reverb && mix.Audible;
         peer.NosSizeEffect.SetEffect(nosSizeEffect);
     }
 
@@ -233,9 +234,10 @@ internal sealed class AudioDeviceSession : IDisposable
             var cameraMuffle = new CameraMuffleSampleProvider(radioHighPass);
             var panning = new PanningSampleProvider(cameraMuffle);
             var volume = new VolumeSampleProvider(panning);
-            var radioEcho = new RadioEchoSampleProvider(volume);
+            var ghostReverb = new GhostReverbSampleProvider(volume);
+            var radioEcho = new RadioEchoSampleProvider(ghostReverb);
             var created = new PeerPlayback(buffer, nosSizeEffect, muffle, radioHighPass,
-                cameraMuffle, panning, volume, radioEcho);
+                cameraMuffle, panning, volume, ghostReverb, radioEcho);
             peerPlayback[peerId] = created;
             playbackMixer.AddMixerInput(radioEcho);
             return created;
@@ -401,6 +403,7 @@ internal sealed class AudioDeviceSession : IDisposable
         CameraMuffleSampleProvider CameraMuffle,
         PanningSampleProvider Panning,
         VolumeSampleProvider Volume,
+        GhostReverbSampleProvider GhostReverb,
         RadioEchoSampleProvider RadioEcho);
 
 }

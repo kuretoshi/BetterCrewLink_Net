@@ -11,6 +11,8 @@ internal static class SpatialVoicePolicySelfTest
     {
         PublicLobbyAnnouncement.Verify();
         var failures = 0;
+        Check("ghost reverb: impulse, tail, bypass, and reset", true,
+            GhostReverbSelfTest.Verify());
         var overlayState = new AmongUsState { GameState = GameState.Tasks, Players =
         [
             new Player { Id = 0, ClientId = 1, IsLocal = true },
@@ -574,6 +576,15 @@ internal static class SpatialVoicePolicySelfTest
         CheckGain("impostor hearing ghost: tasks", 0.1d,
             SpatialVoicePolicy.Calculate(tasks, new Player { IsImpostor = true },
                 new Player { IsDead = true }, ghostVolumePolicy).Gain);
+        Check("ghost reverb: haunting during tasks", true,
+            SpatialVoicePolicy.Calculate(tasks, new Player { IsImpostor = true },
+                new Player { IsDead = true }, ghostVolumePolicy).Reverb);
+        Check("ghost reverb: disabled in meeting", false,
+            SpatialVoicePolicy.Calculate(discussion, new Player { IsImpostor = true },
+                new Player { IsDead = true }, ghostVolumePolicy).Reverb);
+        Check("ghost reverb: ghost listener does not receive it", false,
+            SpatialVoicePolicy.Calculate(tasks, ghostListener,
+                new Player { IsDead = true }, ghostVolumePolicy).Reverb);
 
         var configuredPlayer = new Player { PlayerConfigId = 123, NameHash = 456 };
         var playerConfigs = new Dictionary<int, PlayerAudioConfig>

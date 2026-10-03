@@ -38,7 +38,8 @@ internal sealed record PeerVoiceMix(
     bool Muffled = false,
     bool RadioHighPass = false,
     bool RadioEcho = false,
-    bool CameraMuffled = false)
+    bool CameraMuffled = false,
+    bool Reverb = false)
 {
     public bool Audible => Gain > 0.0001d;
 }
@@ -186,6 +187,7 @@ internal static class SpatialVoicePolicy
         }
 
         var baseGain = 1d;
+        var ghostReverb = false;
         if (!me.IsDead && other.IsDead)
         {
             if (!canHearGhosts)
@@ -194,6 +196,7 @@ internal static class SpatialVoicePolicy
             }
 
             baseGain *= settings.GhostVolumeAsImpostor;
+            ghostReverb = true;
         }
 
         if (meJackalTeam && me.InVent && !other.InVent &&
@@ -235,7 +238,7 @@ internal static class SpatialVoicePolicy
             // post-meeting spawn window skips distance after the wall check above.
             return ApplyListenerVolume(new PeerVoiceMix(baseGain, 0d, distance,
                 airshipMeetingFallback ? "airship-meeting-fallback" : "airship-spawn-fallback",
-                Muffled: ventMuffle), me, other, settings);
+                Muffled: ventMuffle, Reverb: ghostReverb), me, other, settings);
         }
 
         if (distance > maxDistance ||
@@ -257,7 +260,7 @@ internal static class SpatialVoicePolicy
 
         return ApplyListenerVolume(new PeerVoiceMix(baseGain * distanceGain, pan, distance,
             cameraMuffle ? "camera" : "proximity", Muffled: ventMuffle && !cameraMuffle,
-            CameraMuffled: cameraMuffle), me, other, settings);
+            CameraMuffled: cameraMuffle, Reverb: ghostReverb), me, other, settings);
     }
 
     private static PeerVoiceMix ApplyListenerVolume(PeerVoiceMix mix, Player me, Player other,
