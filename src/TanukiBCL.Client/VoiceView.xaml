@@ -99,11 +99,13 @@
             </Grid>
             <TextBlock x:Name="WarningText" Visibility="Collapsed" TextAlignment="Center" FontSize="11"
                        Foreground="#D7D1DA" Margin="4,4,4,0" TextWrapping="Wrap" />
+            <TextBlock x:Name="SecondWarningText" Visibility="Collapsed" TextAlignment="Center" FontSize="11"
+                       Foreground="#D7D1DA" Margin="4,0,4,0" TextWrapping="Wrap" />
         </StackPanel>
 
         <Border x:Name="HeaderDivider" Grid.Row="2" Background="#5C565F" />
 
-        <Grid Grid.Row="3">
+        <Grid x:Name="GameContent" Grid.Row="3">
             <StackPanel x:Name="WaitingPanel" VerticalAlignment="Top" Margin="0,0,0,0"
                         HorizontalAlignment="Center" Visibility="Collapsed">
                 <TextBlock x:Name="WaitingTitle" Text="Among Usを待っています" FontSize="20"
@@ -219,6 +221,21 @@
                 </Button>
             </StackPanel>
         </Grid>
+        <StackPanel x:Name="ErrorPanel" Grid.Row="1" Grid.RowSpan="3" Panel.ZIndex="2"
+                    Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    Width="264" Margin="8,0">
+            <TextBlock Text="ERROR" Foreground="#F44336" FontSize="20"
+                       TextAlignment="Center" Margin="0,0,0,8" />
+            <TextBlock x:Name="ErrorMessage" TextAlignment="Center" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,22,0,0">
+                <TextBlock Text="Need help?" VerticalAlignment="Center" />
+                <Button Content="Get support" Click="ErrorSupportButton_Click"
+                        Foreground="#CE93D8" Background="Transparent" Margin="4,0,8,0" />
+                <Button Content="Reload" Click="ReloadButton_Click" Foreground="White"
+                        Background="Transparent" BorderBrush="White" BorderThickness="2"
+                        Padding="10,2" />
+            </StackPanel>
+        </StackPanel>
         <Border x:Name="DetectedModBadge" Grid.RowSpan="5" Visibility="Collapsed"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="6,0,6,58"
                 MaxWidth="268" Padding="5,2" CornerRadius="4" Background="#59000000"

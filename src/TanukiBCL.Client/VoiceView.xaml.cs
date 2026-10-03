@@ -446,14 +446,49 @@ public partial class VoiceView : UserControl
         view.Update(game, true, false, false, false, peers);
         if (view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
             throw new InvalidOperationException("Footer did not return on the game-waiting screen");
+        view.SetError("Connection failed");
+        if (view.ErrorPanel.Visibility != Visibility.Visible ||
+            view.ErrorMessage.Text != "Connection failed" ||
+            view.HeaderPanel.Visibility != Visibility.Collapsed ||
+            view.HeaderDivider.Visibility != Visibility.Collapsed ||
+            view.GameContent.Visibility != Visibility.Collapsed ||
+            view.FooterBar.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Error view does not match the released layout");
+        view.SetError(null);
+        if (view.ErrorPanel.Visibility != Visibility.Collapsed ||
+            view.HeaderPanel.Visibility != Visibility.Visible ||
+            view.HeaderDivider.Visibility != Visibility.Visible ||
+            view.GameContent.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Error view did not restore normal content");
+        view.SetWarnings("dead only", "meeting ghost only");
+        if (view.WarningText.Visibility != Visibility.Visible ||
+            view.SecondWarningText.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Both independent lobby warnings must be visible");
+        view.SetWarnings(null, null);
+        if (view.WarningText.Visibility != Visibility.Collapsed ||
+            view.SecondWarningText.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("Lobby warnings did not clear");
         view.popupCloseTimer.Stop();
-        Console.WriteLine("[PASS] VoiceView keeps duplicate-client avatars distinct and hides the footer above six peers");
+        Console.WriteLine("[PASS] VoiceView keeps duplicate-client avatars distinct and matches footer/error states");
     }
 
-    public void SetWarning(string? warning)
+    public void SetError(string? error)
     {
-        WarningText.Text = warning ?? string.Empty;
-        WarningText.Visibility = string.IsNullOrWhiteSpace(warning) ? Visibility.Collapsed : Visibility.Visible;
+        var hasError = !string.IsNullOrWhiteSpace(error);
+        ErrorMessage.Text = error ?? string.Empty;
+        ErrorPanel.Visibility = hasError ? Visibility.Visible : Visibility.Collapsed;
+        HeaderPanel.Visibility = hasError ? Visibility.Collapsed : Visibility.Visible;
+        HeaderDivider.Visibility = hasError ? Visibility.Collapsed : Visibility.Visible;
+        GameContent.Visibility = hasError ? Visibility.Collapsed : Visibility.Visible;
+        if (hasError) ClosePlayerConfigPopup();
+    }
+
+    public void SetWarnings(string? first, string? second)
+    {
+        WarningText.Text = first ?? string.Empty;
+        WarningText.Visibility = string.IsNullOrWhiteSpace(first) ? Visibility.Collapsed : Visibility.Visible;
+        SecondWarningText.Text = second ?? string.Empty;
+        SecondWarningText.Visibility = string.IsNullOrWhiteSpace(second) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     public void SetDetectedMod(string? mod)
@@ -552,7 +587,10 @@ public partial class VoiceView : UserControl
     }
 
     private void GithubButton_Click(object sender, RoutedEventArgs e) =>
-        OpenLink("https://github.com/kuretoshi/TanukiBCL");
+        OpenLink("https://github.com/kuretoshi/BetterCrewLink/tree/voice_fixed");
+
+    private void ErrorSupportButton_Click(object sender, RoutedEventArgs e) =>
+        OpenLink("https://discord.gg/4cpvp3KyhF");
 
     private void DiscordButton_Click(object sender, RoutedEventArgs e) =>
         OpenLink("https://discord.gg/jEyDrpBsmJ");

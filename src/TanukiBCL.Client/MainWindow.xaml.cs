@@ -450,6 +450,7 @@ public partial class MainWindow : Window
             return;
         }
         if (!sessions.TryStart(out var session)) return;
+        CompactVoiceView.SetError(null);
         connectionIntentVersion++;
         await session.RunAsync(() => RunSessionAsync(session, process, input, output), result =>
         {
@@ -459,7 +460,8 @@ public partial class MainWindow : Window
                 if (!isClosing && !Dispatcher.HasShutdownStarted)
                 {
                     StatusText.Text = $"接続失敗: {error.Message}";
-                    ShowDiagnostics();
+                    CompactVoiceView.SetError(error.Message);
+                    ShowCompactView();
                 }
             }
             else if (!isClosing && !Dispatcher.HasShutdownStarted) StatusText.Text = "停止しました";
@@ -550,6 +552,7 @@ public partial class MainWindow : Window
         {
             StatusText.Text = status;
             voiceServerConnected = status == "ボイスサーバー接続済み";
+            if (voiceServerConnected) CompactVoiceView.SetError(null);
             UpdateCompactView();
         });
         activeProbe.ServerQualityChanged += quality => Dispatch(session, () =>
@@ -646,7 +649,9 @@ public partial class MainWindow : Window
         var session = sessions.Current;
         if (activeProbe is null || session is null || !session.AcceptsCallbacks)
         {
-            ShowDiagnostics();
+            RefreshProcesses();
+            if (ProcessCombo.SelectedItem is ProcessChoice) StartButton_Click(this, new RoutedEventArgs());
+            else ShowDiagnostics();
             return;
         }
 
@@ -658,6 +663,7 @@ public partial class MainWindow : Window
             reload = activeProbe.RestartServerConnectionAsync(session.Token);
             reloadTask = reload;
             await reload;
+            CompactVoiceView.SetError(null);
         }
         catch (OperationCanceledException) when (session.Token.IsCancellationRequested)
         {
@@ -667,7 +673,8 @@ public partial class MainWindow : Window
             if (session.AcceptsCallbacks)
             {
                 StatusText.Text = $"再読み込み失敗: {exception.Message}";
-                ShowDiagnostics();
+                CompactVoiceView.SetError(exception.Message);
+                ShowCompactView();
             }
         }
         finally
@@ -864,11 +871,9 @@ public partial class MainWindow : Window
         var mod = currentState?.Mod ?? AmongUsModType.None;
         CompactVoiceView.SetDetectedMod(mod == AmongUsModType.None ? null : AmongUsMod.For(mod).Label);
         var active = probe?.CurrentLobbySettings;
-        CompactVoiceView.SetWarning(active?.DeadOnly == true
-            ? "幽霊のみのボイス設定です"
-            : active?.MeetingGhostOnly == true
-                ? "会議中は幽霊のみ会話できます"
-                : null);
+        CompactVoiceView.SetWarnings(
+            active?.DeadOnly == true ? "幽霊のみのボイス設定です" : null,
+            active?.MeetingGhostOnly == true ? "会議中は幽霊のみ会話できます" : null);
         if (settings.ObsOverlay && sessions.Current?.AcceptsCallbacks == true &&
             currentState is { } state && probe is { } activeProbe)
         {
