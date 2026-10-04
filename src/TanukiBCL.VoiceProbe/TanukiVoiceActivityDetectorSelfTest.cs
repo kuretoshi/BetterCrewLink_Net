@@ -105,8 +105,29 @@ internal static class TanukiVoiceActivityDetectorSelfTest
             Console.Error.WriteLine("[FAIL] Remote NoS jamming incorrectly blocked the local microphone.");
             return 1;
         }
+        nosState.GameState = GameState.Tasks;
+        nosState.Players[0].ShiftedColor = 7;
+        if (!LocalVadVisibilityPolicy.IsHidden(nosState, jamBlockOn))
+        {
+            Console.Error.WriteLine("[FAIL] Shifted local player VAD was visible during Tasks.");
+            return 1;
+        }
+        nosState.GameState = GameState.Discussion;
+        if (LocalVadVisibilityPolicy.IsHidden(nosState, jamBlockOn))
+        {
+            Console.Error.WriteLine("[FAIL] Shifted local player VAD remained hidden during discussion.");
+            return 1;
+        }
+        nosState.Players[0].NosPlayer!.IsJammed = true;
+        if (!LocalVadVisibilityPolicy.IsHidden(nosState, jamBlockOn) ||
+            LocalVadVisibilityPolicy.IsHidden(nosState, jamBlockOff) ||
+            LocalVadVisibilityPolicy.IsHidden(null, jamBlockOn))
+        {
+            Console.Error.WriteLine("[FAIL] NoS jamming VAD visibility did not follow active settings.");
+            return 1;
+        }
 
-        Console.WriteLine("[PASS] 3.2.8 frequency-band VAD, activation, deafen, and NoS local jamming policy");
+        Console.WriteLine("[PASS] 3.2.8 frequency-band VAD, activation, deafen, NoS jamming, and VAD visibility policy");
         return 0;
     }
 

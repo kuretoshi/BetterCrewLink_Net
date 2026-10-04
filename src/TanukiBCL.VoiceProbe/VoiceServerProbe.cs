@@ -66,6 +66,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly object radioTransmitGate = new();
     private volatile bool impostorRadioTransmitting;
     private volatile bool localVadTalking;
+    private volatile bool localVadHidden;
     private long impostorRadioVersion;
     private DateTimeOffset lastRadioStatusSentAt;
     private string nosRadioSession = string.Empty;
@@ -348,7 +349,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         SendImpostorRadioStatus();
         if (socket.Connected)
         {
-            _ = socket.EmitAsync("VAD", !active && localVadTalking);
+            _ = socket.EmitAsync("VAD", !active && !localVadHidden && localVadTalking);
         }
         ImpostorRadioTransmitChanged?.Invoke(active);
         return true;
@@ -414,6 +415,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
         currentGameState = state;
         UpdateLocalJamming();
+        UpdateLocalVadVisibility();
         SyncNosRadioReports(state);
         SyncTohReports(state);
         if (state.HostId > 0)
@@ -454,6 +456,17 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private void UpdateLocalJamming() =>
         audioSession?.SetJammed(LocalJammingPolicy.IsJammed(currentGameState, activeLobbySettings));
+
+    private void UpdateLocalVadVisibility()
+    {
+        var hidden = LocalVadVisibilityPolicy.IsHidden(currentGameState, activeLobbySettings);
+        if (localVadHidden == hidden) return;
+        localVadHidden = hidden;
+        var visibleTalking = !hidden && localVadTalking;
+        LocalVadChanged?.Invoke(visibleTalking);
+        if (socket.Connected)
+            _ = socket.EmitAsync("VAD", visibleTalking && !impostorRadioTransmitting);
+    }
 
     public void SetMasterVolume(double volumePercent)
     {
@@ -689,10 +702,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 talking =>
                 {
                     localVadTalking = talking;
-                    LocalVadChanged?.Invoke(talking);
+                    LocalVadChanged?.Invoke(talking && !localVadHidden);
                     if (socket.Connected)
                     {
-                        _ = socket.EmitAsync("VAD", talking && !impostorRadioTransmitting);
+                        _ = socket.EmitAsync("VAD", talking && !localVadHidden && !impostorRadioTransmitting);
                     }
                 },
                 echoCancellation,
@@ -1350,6 +1363,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         activeLobbySettings = next;
         hasActiveLobbySettings = true;
         UpdateLocalJamming();
+        UpdateLocalVadVisibility();
         spatialVoiceSettings = spatialVoiceSettings with
         {
             MaxDistance = next.MaxDistance,
@@ -1653,6 +1667,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         activeLobbySettings = new LobbySettings();
         hasActiveLobbySettings = false;
         UpdateLocalJamming();
+        UpdateLocalVadVisibility();
         LobbySettingsChanged?.Invoke(null);
         hostClientId = state.HostId > 0 ? state.HostId : null;
         impostorRadioStates.Clear();
