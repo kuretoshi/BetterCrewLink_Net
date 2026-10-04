@@ -50,6 +50,11 @@ internal static class Program
                 using var started = Process.Start(start)
                     ?? throw new InvalidOperationException("Updated client could not be started");
             });
+            try { CleanupCompletedStage(stageRoot); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+            {
+                Console.Error.WriteLine($"Update succeeded, but staging cleanup failed: {error.Message}");
+            }
             Console.WriteLine($"Updated {installDir}; previous version retained at {backup}");
             return 0;
         }
@@ -69,6 +74,7 @@ internal static class Program
         if (Path.GetPathRoot(install)?.TrimEnd(Path.DirectorySeparatorChar)
                 .Equals(install, PathComparison) == true ||
             !stage.StartsWith(tempRoot, PathComparison) ||
+            !Guid.TryParseExact(Path.GetFileName(stage), "N", out _) ||
             Path.GetDirectoryName(stage)?.TrimEnd(Path.DirectorySeparatorChar)
                 .Equals(tempRoot.TrimEnd(Path.DirectorySeparatorChar), PathComparison) != true ||
             install.StartsWith(stage + Path.DirectorySeparatorChar, PathComparison) ||
@@ -146,6 +152,21 @@ internal static class Program
         VerifyManifest(destination);
     }
 
+    private static void CleanupCompletedStage(string stageRoot)
+    {
+        var payload = Path.Combine(stageRoot, "payload");
+        if (Directory.Exists(payload))
+        {
+            if ((File.GetAttributes(payload) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Staging payload is a reparse point");
+            Directory.Delete(payload, recursive: true);
+        }
+        var archive = Path.Combine(stageRoot, "package.zip");
+        if (File.Exists(archive)) File.Delete(archive);
+        // The updater is running from this directory. Windows cannot remove its
+        // executable until the process exits, so leave that small file alone.
+    }
+
     private static void Verify()
     {
         var root = Path.Combine(Path.GetTempPath(), $"tanukibcl-updater-test-{Guid.NewGuid():N}");
@@ -175,7 +196,27 @@ internal static class Program
             catch (IOException error) when (error.Message == "Launch failed") { }
             if (File.ReadAllText(Path.Combine(install, "TanukiBCL.Net.exe")) != "new")
                 throw new InvalidOperationException("Updater did not roll back after launch failure");
-            Console.WriteLine("[PASS] Updater stages, swaps, preserves backup and rolls back launch failure");
+            try
+            {
+                ValidatePaths(install, Path.Combine(Path.GetTempPath(), "TanukiBCL.Net", "updates", "not-a-guid"));
+                throw new InvalidOperationException("An unrelated staging directory was accepted");
+            }
+            catch (InvalidOperationException error) when (error.Message == "Unsafe updater paths") { }
+            var stage = Path.Combine(Path.GetTempPath(), "TanukiBCL.Net", "updates", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(stage, "payload"));
+            try
+            {
+                File.WriteAllText(Path.Combine(stage, "package.zip"), "downloaded archive");
+                File.WriteAllText(Path.Combine(stage, "payload", "TanukiBCL.Net.exe"), "new package");
+                File.WriteAllText(Path.Combine(stage, "TanukiBCL.Updater.exe"), "running helper");
+                CleanupCompletedStage(stage);
+                if (Directory.Exists(Path.Combine(stage, "payload")) ||
+                    File.Exists(Path.Combine(stage, "package.zip")) ||
+                    !File.Exists(Path.Combine(stage, "TanukiBCL.Updater.exe")))
+                    throw new InvalidOperationException("Successful update left the large staging payload behind");
+            }
+            finally { Directory.Delete(stage, recursive: true); }
+            Console.WriteLine("[PASS] Updater swaps/rolls back, rejects unsafe paths and clears successful staging payloads");
         }
         finally { Directory.Delete(root, recursive: true); }
     }
