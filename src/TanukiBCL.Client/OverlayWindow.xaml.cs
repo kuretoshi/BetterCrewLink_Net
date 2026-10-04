@@ -637,8 +637,45 @@ public partial class OverlayWindow : Window
                 }
                 if (speechRingPixels < 8)
                     throw new InvalidOperationException($"{position} avatar was positioned but visually clipped at {width}x{height}");
+
+                // The previous narrow ancestor also left the name's WPF bounds
+                // inside the viewport while clipping most of the actual glyphs.
+                // Compare a long label with that same label hidden, including
+                // its trailing ellipsis at the far end of the measured box.
+                foreach (var row in window.avatarRows.Values)
+                {
+                    row.Name.Text = new string('W', 40);
+                    row.Name.Background = Brushes.Transparent;
+                    row.Name.Opacity = 1d;
+                }
+                window.OverlayCanvas.UpdateLayout();
+                var textVisible = new RenderTargetBitmap((int)width, (int)height, 96, 96, PixelFormats.Pbgra32);
+                textVisible.Render(window.OverlayCanvas);
+                var visiblePixels = new byte[(int)width * (int)height * 4];
+                textVisible.CopyPixels(visiblePixels, (int)width * 4, 0);
+                foreach (var row in window.avatarRows.Values) row.Name.Opacity = 0d;
+                var textHidden = new RenderTargetBitmap((int)width, (int)height, 96, 96, PixelFormats.Pbgra32);
+                textHidden.Render(window.OverlayCanvas);
+                var hiddenPixels = new byte[(int)width * (int)height * 4];
+                textHidden.CopyPixels(hiddenPixels, (int)width * 4, 0);
+                foreach (var row in window.avatarRows.Values)
+                {
+                    var label = row.Name;
+                    var labelOrigin = label.TransformToAncestor(window.OverlayCanvas).Transform(new Point());
+                    var trailingGlyphPixels = 0;
+                    for (var y = Math.Max(0, (int)labelOrigin.Y); y < Math.Min((int)height, (int)(labelOrigin.Y + label.ActualHeight)); y++)
+                    for (var x = Math.Max(0, (int)(labelOrigin.X + label.ActualWidth * 0.75d));
+                        x < Math.Min((int)width, (int)(labelOrigin.X + label.ActualWidth)); x++)
+                    {
+                        var pixel = (y * (int)width + x) * 4;
+                        if (visiblePixels[pixel + 3] > hiddenPixels[pixel + 3] + 20)
+                            trailingGlyphPixels++;
+                    }
+                    if (trailingGlyphPixels < 4)
+                        throw new InvalidOperationException($"{position} name bounds were valid but its trailing text was visually clipped at {width}x{height}");
+                }
             }
-            Console.WriteLine("[PASS] Alternate side avatars and labels stay inside 720x576/1280x720 viewport edges");
+            Console.WriteLine("[PASS] Alternate side avatars and full labels render inside 720x576/1280x720 viewport edges");
         }
         finally { window.Close(); }
     }
