@@ -330,7 +330,12 @@ public partial class OverlayWindow : Window
         {
             Canvas.SetLeft(AvatarBackground, position.StartsWith("right", StringComparison.Ordinal)
                 ? Math.Max(0, Width - regionWidth) : 0d);
-            Canvas.SetTop(AvatarBackground, 0d);
+            // Released overlay.css gives side .otherplayers a full viewport height
+            // and centers its players_container with justify-content:center.
+            // The WPF panel only occupies its content height, so center that
+            // measured panel in the game client area instead of pinning it to top.
+            Canvas.SetTop(AvatarBackground,
+                Math.Max(0d, (Height - AvatarBackground.DesiredSize.Height) / 2d));
         }
         else if (position == "top")
         {
@@ -533,6 +538,8 @@ public partial class OverlayWindow : Window
                     .Transform(new Point()).X;
                 var nameLeft = item.Name.TransformToAncestor(window.OverlayCanvas)
                     .Transform(new Point()).X;
+                var avatarTop = item.Avatar.TransformToAncestor(window.OverlayCanvas)
+                    .Transform(new Point()).Y;
                 var right = position.StartsWith("right", StringComparison.Ordinal);
                 if (right ? avatarLeft <= nameLeft : avatarLeft >= nameLeft)
                     throw new InvalidOperationException($"{position} placed the name on the wrong side of the avatar");
@@ -540,8 +547,12 @@ public partial class OverlayWindow : Window
                     throw new InvalidOperationException($"{position} failed to anchor the avatar to the screen's right edge");
                 if (!right && avatarLeft > 40)
                     throw new InvalidOperationException($"{position} failed to anchor the avatar to the screen's left edge");
+                if (nameLeft < -0.5d || nameLeft + item.Name.ActualWidth > 1280.5d)
+                    throw new InvalidOperationException($"{position} clipped the side name outside the game client area: {nameLeft}..{nameLeft + item.Name.ActualWidth}");
+                if (Math.Abs(avatarTop + item.Avatar.ActualHeight / 2d - 360d) > 40d)
+                    throw new InvalidOperationException($"{position} failed to center the avatar vertically");
             }
-            Console.WriteLine("[PASS] Left/right side avatars and name placement at both normal and alternate positions");
+            Console.WriteLine("[PASS] Left/right side avatars, names and vertical centering at normal and alternate positions");
         }
         finally { window.Close(); }
     }
