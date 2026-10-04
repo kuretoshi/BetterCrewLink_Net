@@ -560,8 +560,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         try
         {
             var state = currentGameState ?? throw new InvalidOperationException("ゲーム状態をまだ取得していません。");
-            var local = state.Players.FirstOrDefault(player => player.IsLocal)
-                ?? throw new InvalidOperationException("ローカルプレイヤーを特定できません。");
+            var localPlayerId = state.Players.FirstOrDefault(player => player.IsLocal)?.Id ?? 0;
             if (impostorRadioTransmitting)
             {
                 SetImpostorRadioTransmitting(false);
@@ -571,8 +570,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             currentJoinedLobby = "MENU";
             var version = Volatile.Read(ref serverConnectionVersion);
             await Task.Delay(500, lifetimeToken);
-            await socket.EmitAsync("id", local.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString()).WaitAsync(lifetimeToken);
-            await socket.EmitAsync("join", state.LobbyCode, local.Id, state.ClientId, state.IsHost).WaitAsync(lifetimeToken);
+            await socket.EmitAsync("id", localPlayerId, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString()).WaitAsync(lifetimeToken);
+            await socket.EmitAsync("join", state.LobbyCode, localPlayerId, state.ClientId, state.IsHost).WaitAsync(lifetimeToken);
             if (!socket.Connected || version != Volatile.Read(ref serverConnectionVersion)) return;
             Volatile.Write(ref joinedConnectionVersion, version);
             currentJoinedLobby = state.LobbyCode;
@@ -597,8 +596,6 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         try
         {
             var state = currentGameState ?? throw new InvalidOperationException("ゲーム状態をまだ取得していません。");
-            var local = state.Players.FirstOrDefault(player => player.IsLocal)
-                ?? throw new InvalidOperationException("ローカルプレイヤーを特定できません。");
 
             ResetPeerState();
             currentJoinedLobby = "MENU";
@@ -1615,7 +1612,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         ApplyGameState(state);
         if (!socket.Connected) return;
         var local = state.Players.FirstOrDefault(player => player.IsLocal);
-        var targetLobby = state.GameState is GameState.Menu or GameState.Unknown || local is null ? "MENU" : state.LobbyCode;
+        // The released controller remains in the known lobby when the
+        // end-game screen temporarily has no local PlayerControl. It uses
+        // player ID 0 if a reconnect happens before the new roster appears.
+        var targetLobby = state.GameState is GameState.Menu or GameState.Unknown ? "MENU" : state.LobbyCode;
         var version = Volatile.Read(ref serverConnectionVersion);
         if (string.Equals(targetLobby, currentJoinedLobby, StringComparison.Ordinal) &&
             (targetLobby == "MENU" || Volatile.Read(ref joinedConnectionVersion) == version))
@@ -1651,14 +1651,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             return;
         }
 
-        await socket.EmitAsync("id", local!.Id, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString()).WaitAsync(lifetimeToken);
-        await socket.EmitAsync("join", targetLobby, local.Id, state.ClientId, state.IsHost).WaitAsync(lifetimeToken);
+        var localPlayerId = local?.Id ?? 0;
+        await socket.EmitAsync("id", localPlayerId, state.ClientId, string.Empty, string.Empty, state.ClientId.ToString()).WaitAsync(lifetimeToken);
+        await socket.EmitAsync("join", targetLobby, localPlayerId, state.ClientId, state.IsHost).WaitAsync(lifetimeToken);
         // A disconnect can run while the send is awaiting transport I/O.
         // Never restore membership belonging to that disconnected socket.
         if (!socket.Connected || version != Volatile.Read(ref serverConnectionVersion)) return;
         Volatile.Write(ref joinedConnectionVersion, version);
         currentJoinedLobby = targetLobby;
-        Log("INFO", $"ゲーム状態に追従してロビー参加 code={targetLobby} client={state.ClientId} player={local.Id}");
+        Log("INFO", $"ゲーム状態に追従してロビー参加 code={targetLobby} client={state.ClientId} player={localPlayerId}");
         if (state.IsHost)
         {
             ApplyLobbySettings(ownLobbySettings);

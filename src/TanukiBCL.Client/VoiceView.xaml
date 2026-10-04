@@ -52,7 +52,7 @@
         <StackPanel x:Name="HeaderPanel" Grid.Row="1" Margin="0,-6,0,6">
             <Grid x:Name="LobbyHeader" HorizontalAlignment="Center">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="96" />
+                    <ColumnDefinition x:Name="LocalAvatarColumn" Width="96" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Grid x:Name="LocalAvatarSlot" Grid.Column="0" Width="100" Height="100">
@@ -67,7 +67,7 @@
                     <StackPanel Grid.Column="0" HorizontalAlignment="Center">
                         <!-- 3.2.7 uses nowrap in a 115px box with visible overflow,
                              not ellipsis or font shrinking. Measure unconstrained. -->
-                        <Canvas Width="115" Height="24" ClipToBounds="False">
+                        <Canvas x:Name="LocalNameSlot" Width="115" Height="24" ClipToBounds="False">
                             <TextBlock x:Name="LocalName" FontSize="20" FontWeight="SemiBold" TextAlignment="Center"
                                        TextWrapping="NoWrap" TextTrimming="None" />
                         </Canvas>

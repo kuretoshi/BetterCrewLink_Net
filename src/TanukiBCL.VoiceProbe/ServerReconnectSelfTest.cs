@@ -121,6 +121,19 @@ internal static class ServerReconnectSelfTest
             Console.WriteLine("[PASS] manual reload remains a single lobby join");
             Console.WriteLine("[PASS] public lobby announcements match 3.2.8 on initial join, settings change, reconnect and reload");
 
+            // The end-game screen can expose a valid lobby code but no local
+            // player. Released 3.2.8 keeps that lobby (and rejoins with ID 0
+            // after a transport restart) until the next game's roster loads.
+            probe.ApplyGameState(new AmongUsState
+            {
+                GameState = GameState.Lobby, LobbyCode = "ABCDEF", ClientId = 19,
+                IsHost = true, HostId = 19, Players = []
+            });
+            var endScreenReload = probe.RestartServerConnectionAsync(timeout.Token);
+            await server.ExpectJoinAsync(4, "ABCDEF", 0, 19, timeout.Token);
+            await endScreenReload.WaitAsync(timeout.Token);
+            Console.WriteLine("[PASS] end-game roster gap retains the lobby across a reconnect");
+
             // Dispose while a reload owns the game gate; cancellation must drain
             // it before the socket is destroyed, and repeated Dispose is safe.
             var stoppingReload = probe.RestartServerConnectionAsync(timeout.Token);

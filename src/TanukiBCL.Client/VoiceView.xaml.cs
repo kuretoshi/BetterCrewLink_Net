@@ -308,13 +308,30 @@ public partial class VoiceView : UserControl
     {
         this.playerConfigs = playerConfigs ?? new Dictionary<int, PlayerAudioConfig>();
         var local = game?.Players.FirstOrDefault(player => player.IsLocal);
-        var inLobby = local is not null && game is not null && !string.IsNullOrWhiteSpace(game.LobbyCode) &&
-                      game.GameState is not (GameState.Menu or GameState.Unknown);
-        WaitingPanel.Visibility = inLobby ? Visibility.Collapsed : Visibility.Visible;
-        OtherPlayersScroll.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
-        LobbyHeader.Visibility = inLobby ? Visibility.Visible : Visibility.Collapsed;
-        HeaderPanel.Margin = inLobby ? new Thickness(0, -6, 0, 6) : new Thickness(0);
-        if (!inLobby || local is null || game is null)
+        // Released VoiceView keeps the lobby code and mute controls visible on
+        // the end-game screen even while Among Us temporarily exposes no local
+        // player. Only the avatar/name/remote roster depend on that player.
+        var lobbyDetected = game is not null && !string.IsNullOrWhiteSpace(game.LobbyCode) &&
+            game.LobbyCode != "MENU" && game.GameState is not (GameState.Menu or GameState.Unknown);
+        var hasLocal = lobbyDetected && local is not null;
+        WaitingPanel.Visibility = lobbyDetected ? Visibility.Collapsed : Visibility.Visible;
+        OtherPlayersScroll.Visibility = hasLocal ? Visibility.Visible : Visibility.Collapsed;
+        LobbyHeader.Visibility = lobbyDetected ? Visibility.Visible : Visibility.Collapsed;
+        LocalAvatarSlot.Visibility = hasLocal ? Visibility.Visible : Visibility.Collapsed;
+        LocalAvatarColumn.Width = new GridLength(hasLocal ? 96d : 0d);
+        LocalNameSlot.Visibility = hasLocal ? Visibility.Visible : Visibility.Collapsed;
+        CodeBackground.Margin = hasLocal ? new Thickness(0, 5, 0, 0) : new Thickness(0);
+        HeaderPanel.Margin = hasLocal ? new Thickness(0, -6, 0, 6) :
+            lobbyDetected ? new Thickness(0, 6, 0, 6) : new Thickness(0);
+        if (lobbyDetected && game is not null)
+        {
+            LobbyCode.Text = hideCode ? "LOBBY" : game.LobbyCode;
+            MuteIcon.Data = muted || deafened ? MicOff : Mic;
+            DeafenIcon.Data = deafened ? VolumeOff : VolumeUp;
+            MuteButton.ToolTip = muted || deafened ? "マイクミュート解除" : "マイクをミュート";
+            DeafenButton.ToolTip = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
+        }
+        if (!hasLocal || local is null || game is null)
         {
             remoteDeadForDisplay.Clear();
             previousDeathDisplayState = GameState.Unknown;
@@ -342,14 +359,9 @@ public partial class VoiceView : UserControl
         var hideAppearance = game.GameState == GameState.Tasks;
         LocalName.Text = CollapseNoWrapWhitespace(
             string.IsNullOrWhiteSpace(local.AppearanceName) ? local.Name : local.AppearanceName);
-        LobbyCode.Text = hideCode ? "LOBBY" : game.LobbyCode;
         LocalAvatar.SetPlayer(local, game.PlayerColors, hideAppearance, game.Mod, game.GameExecutablePath);
         LocalAvatar.SetVisualState(localTalking && (local.ShiftedColor < 0 || game.GameState == GameState.Discussion), muted, deafened,
             connected ? "connected" : "disconnected", localUsingRadio, serverQuality);
-        MuteIcon.Data = muted || deafened ? MicOff : Mic;
-        DeafenIcon.Data = deafened ? VolumeOff : VolumeUp;
-        MuteButton.ToolTip = muted || deafened ? "マイクミュート解除" : "マイクをミュート";
-        DeafenButton.ToolTip = deafened ? "スピーカーミュート解除" : "スピーカーをミュート";
 
         var others = game.Players.Where(player => !player.IsLocal).ToArray();
         SetFooterVisible(others.Length <= 6);
@@ -471,6 +483,26 @@ public partial class VoiceView : UserControl
         if (view.OtherPlayersPanel.Children.Count != 6 ||
             view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
             throw new InvalidOperationException("Footer did not return with six remote players");
+        game.GameState = GameState.Lobby;
+        game.Players.Clear();
+        view.Update(game, true, false, true, false, peers);
+        if (view.WaitingPanel.Visibility != Visibility.Collapsed ||
+            view.LobbyHeader.Visibility != Visibility.Visible ||
+            view.LocalAvatarSlot.Visibility != Visibility.Collapsed ||
+            view.LocalNameSlot.Visibility != Visibility.Collapsed ||
+            view.LocalAvatarColumn.Width.Value != 0d ||
+            view.OtherPlayersScroll.Visibility != Visibility.Collapsed ||
+            view.OtherPlayersPanel.Children.Count != 0 ||
+            view.LobbyCode.Text != "ABCDEF" ||
+            (string?)view.MuteButton.ToolTip != "マイクミュート解除")
+            throw new InvalidOperationException("End-game roster gap showed the launcher instead of the released code-only lobby");
+        game.Players.Add(new Player { Id = 1, ClientId = 3, IsLocal = true, Name = "Local" });
+        view.Update(game, true, false, true, false, peers);
+        if (view.LocalAvatarSlot.Visibility != Visibility.Visible ||
+            view.LocalNameSlot.Visibility != Visibility.Visible ||
+            view.LocalAvatarColumn.Width.Value != 96d ||
+            view.LocalName.Text != "Local")
+            throw new InvalidOperationException("Normal lobby header did not return after the roster recovered");
         game.GameState = GameState.Menu;
         view.Update(game, true, false, false, false, peers);
         if (view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
