@@ -722,6 +722,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                     var offsetsJson = await FetchJsonAsync($"{BaseUrl}/offsets/{(processInfo.Is64Bit ? "x64" : "x86")}/{offsetFile}", cancellationToken);
                     var offsets = BuildOffsets(context, offsetsJson.RootElement);
                     context.Offsets = offsets;
+                    // Signature resolution is complete. The full GameAssembly
+                    // snapshot is not needed for the recurring state reads.
+                    context.ReleaseModuleSnapshot();
                     return context;
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -737,6 +740,18 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             context.Dispose();
             throw;
         }
+    }
+
+    internal static async Task VerifyModuleSnapshotReleaseAsync(int processId)
+    {
+        using var process = Process.GetProcessById(processId);
+        var info = GameProcessScanner.CreateProcessInfo(process);
+        using var initialized = await InitializeContextAsync(info, CancellationToken.None);
+        if (initialized.GameAssemblySize <= 0 || initialized.ModuleReadSummary.Length == 0 ||
+            initialized.RetainedModuleSnapshotBytes != 0)
+            throw new InvalidOperationException("GameAssembly signature snapshot remained after offsets were resolved.");
+        Console.WriteLine($"[PASS] GameAssembly signature snapshot released after offset initialization " +
+            $"({initialized.GameAssemblySize / 1024d / 1024d:F1} MiB; {initialized.ModuleReadSummary})");
     }
 
     private static void AddOffsetCandidate(List<string> candidateFiles, JsonElement versionElement)
@@ -1048,6 +1063,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         public ReaderOffsets Offsets { get; set; } = new();
         public List<PlayerColorPair> PlayerColors { get; private set; } = [];
         public string ModuleReadSummary { get; private set; } = string.Empty;
+        public int RetainedModuleSnapshotBytes => moduleBytes?.Length ?? 0;
+
+        public void ReleaseModuleSnapshot() => moduleBytes = null;
 
         public int ReadInt32(long address) => BitConverter.ToInt32(ReadBytes(address, 4));
 
@@ -1456,6 +1474,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
 
         public void Dispose()
         {
+            moduleBytes = null;
             if (Handle != IntPtr.Zero)
             {
                 CloseHandle(Handle);
@@ -1547,13 +1566,13 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         {
             var buffer = new byte[GameAssemblySize];
             const int chunkSize = 0x1000;
+            var chunk = new byte[chunkSize];
             long totalRead = 0;
             var failedChunks = 0;
 
             for (var offset = 0; offset < GameAssemblySize; offset += chunkSize)
             {
                 var size = Math.Min(chunkSize, GameAssemblySize - offset);
-                var chunk = new byte[size];
                 if (!ReadProcessMemory(Handle, new IntPtr(GameAssemblyBase + offset), chunk, size, out var bytesRead) ||
                     bytesRead.ToInt64() <= 0)
                 {

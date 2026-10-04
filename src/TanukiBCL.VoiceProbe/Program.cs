@@ -23,6 +23,13 @@ internal static class Program
             {
                 return GameProcessScannerSelfTest.Run();
             }
+            if (args.Contains("--module-snapshot-self-test"))
+            {
+                var parsed = ProbeOptions.Parse(args.Where(arg => arg != "--module-snapshot-self-test").ToArray());
+                await GameMemory.AmongUsMemoryReaderService.VerifyModuleSnapshotReleaseAsync(
+                    parsed.GameProcessId ?? throw new ArgumentException("--game-process-id is required."));
+                return 0;
+            }
             if (args.Contains("--audio-processing-self-test"))
             {
                 return MicrophoneProcessorSelfTest.Run();
@@ -217,6 +224,7 @@ internal static class Program
               --scan-game         起動中の全Among Usプロセスを読み取り検証
               --expected-players  検証するプロセス数・ロビー人数（既定5）
               --game-scan-self-test ゲーム読取検証コマンドの回帰テスト
+              --module-snapshot-self-test --game-process-id <pid>  Check GameAssembly snapshot release after offset initialization
               --nos-palette       NoSロビー色を取得（--game-process-id 必須）
               --nos-palette-self-test NoS色パレットの読取回帰テスト
               --nos-snapshot-self-test 64bit NoSプレイヤー・ラジオ読取の回帰テスト
