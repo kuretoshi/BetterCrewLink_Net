@@ -167,6 +167,20 @@ internal static partial class UpdateCatalog
         Console.WriteLine("[PASS] .NET release updater selects a newer verified asset and rejects invalid/missing releases");
     }
 
+    internal static async Task VerifyLiveAsync(string currentVersion, string expectedTag)
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var candidate = await CheckAsync(client, currentVersion);
+        if (candidate?.Version != expectedTag)
+            throw new InvalidOperationException(
+                $"Expected public update {expectedTag}, found {candidate?.Version ?? "none"}");
+        if (candidate.Size <= 0 || candidate.Sha256.Length != 64 ||
+            candidate.ReleasePage.AbsoluteUri !=
+                $"https://github.com/kuretoshi/BetterCrewLink_Net/releases/tag/{expectedTag}")
+            throw new InvalidOperationException("The public update metadata is incomplete");
+        Console.WriteLine($"[PASS] Public update feed offers {candidate.Version} ({candidate.Size} bytes, SHA-256 {candidate.Sha256})");
+    }
+
     private sealed class CatalogHandler(string body) : HttpMessageHandler
     {
         internal string Body = body;

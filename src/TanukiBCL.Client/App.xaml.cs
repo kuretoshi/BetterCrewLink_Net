@@ -33,6 +33,7 @@ public partial class App : Application
             e.Args.Contains("--input-processing-self-test") || e.Args.Contains("--inquiry-self-test") ||
             e.Args.Contains("--inquiry-preview") ||
             e.Args.Contains("--support-log-self-test") || e.Args.Contains("--update-catalog-self-test") ||
+            e.Args.Contains("--update-catalog-live-test") ||
             e.Args.Contains("--update-package-self-test") || e.Args.Contains("--update-package-file-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -98,6 +99,14 @@ public partial class App : Application
                 if (e.Args.Contains("--support-log-self-test")) SupportLog.Verify();
                 if (e.Args.Contains("--update-catalog-self-test"))
                     Task.Run(UpdateCatalog.VerifyAsync).GetAwaiter().GetResult();
+                var liveCatalogIndex = Array.IndexOf(e.Args, "--update-catalog-live-test");
+                if (liveCatalogIndex >= 0)
+                {
+                    if (liveCatalogIndex + 2 >= e.Args.Length)
+                        throw new ArgumentException("--update-catalog-live-test needs a current version and expected tag");
+                    Task.Run(() => UpdateCatalog.VerifyLiveAsync(
+                        e.Args[liveCatalogIndex + 1], e.Args[liveCatalogIndex + 2])).GetAwaiter().GetResult();
+                }
                 if (e.Args.Contains("--update-package-self-test"))
                     Task.Run(UpdatePackage.VerifyAsync).GetAwaiter().GetResult();
                 var packageFileIndex = Array.IndexOf(e.Args, "--update-package-file-test");
