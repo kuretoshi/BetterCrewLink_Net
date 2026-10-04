@@ -235,11 +235,13 @@ internal static class GameProcessScanner
 
             return state.GameState switch
             {
-                GameState.Discussion => me.IsDead
-                    ? mixes.All(item => item.Mix.Audible && item.Mix.Gain == 1d && item.Mix.Pan == 0d && item.Mix.Reason == "meeting")
-                    : mixes.All(item => item.Player.IsDead
-                        ? !item.Mix.Audible && item.Mix.Pan == 0d && item.Mix.Reason == "living-cannot-hear-ghost"
-                        : item.Mix.Audible && item.Mix.Gain == 1d && item.Mix.Pan == 0d && item.Mix.Reason == "meeting"),
+                GameState.Discussion => mixes.All(item =>
+                    item.Mix.Reason == "nos-fixer-jamming" && !item.Mix.Audible ||
+                    (me.IsDead
+                        ? item.Mix.Audible && item.Mix.Gain == 1d && item.Mix.Pan == 0d && item.Mix.Reason == "meeting"
+                        : item.Player.IsDead
+                            ? !item.Mix.Audible && item.Mix.Pan == 0d && item.Mix.Reason == "living-cannot-hear-ghost"
+                            : item.Mix.Audible && item.Mix.Gain == 1d && item.Mix.Pan == 0d && item.Mix.Reason == "meeting")),
                 GameState.Tasks when expectation.ExpectNearby => me.IsDead
                     ? mixes.All(item => item.Mix.Audible && item.Mix.Reason == "proximity")
                     : mixes.All(item => item.Player.IsDead

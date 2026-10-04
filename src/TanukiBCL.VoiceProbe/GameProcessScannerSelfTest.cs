@@ -130,6 +130,11 @@ internal static class GameProcessScannerSelfTest
             result.State!.Players[0].NosPlayer!.IsJammed = true;
         Require(GameProcessScanner.Validate(ventResults, nosExpectation, GameState.Tasks),
             "A correctly blocked NoS Fixer-jammed speaker failed the task voice scan");
+        foreach (var result in ventResults)
+            result.State!.GameState = GameState.Discussion;
+        Require(GameProcessScanner.Validate(ventResults,
+            nosExpectation with { GameState = "Discussion" }, GameState.Discussion),
+            "A correctly blocked NoS Fixer-jammed speaker failed the meeting voice scan");
         Require(GameProcessScanner.Validate(results, expectation, GameState.Lobby), "Four-player lobby failed");
         var departed = Enumerable.Range(0, 2).Select(local =>
             new GameProcessScanner.ProcessReadResult(local + 30, true, new AmongUsState
