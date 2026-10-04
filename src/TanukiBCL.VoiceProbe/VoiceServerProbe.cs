@@ -148,6 +148,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
             failedReconnectAttempts.TryRemove(remoteSocketId, out _);
+            // A normal live session does not exchange the diagnostic probe/ack
+            // that raises PeerVerified. Send the host settings as soon as this
+            // data channel opens, including after either peer reconnects.
+            if (IsCurrentHost)
+                SendLobbySettingsToPeer(remoteSocketId);
             SendNosRadioReportToPeer(remoteSocketId);
             if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
             {
