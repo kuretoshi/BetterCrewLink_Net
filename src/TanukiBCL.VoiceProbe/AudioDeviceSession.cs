@@ -6,6 +6,7 @@ namespace TanukiBCL.VoiceProbe;
 
 internal sealed class AudioDeviceSession : IDisposable
 {
+    private const int MaxReusablePlaybackBytes = 16 * 1024;
     private static readonly WaveFormat PlaybackFormat = new(48_000, 16, 2);
     private WaveInEvent capture;
     private readonly int inputDevice;
@@ -201,9 +202,29 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         var peer = GetOrCreatePeerPlayback(peerId);
-        var bytes = new byte[stereoPcm.Length * sizeof(short)];
-        MemoryMarshal.AsBytes(stereoPcm).CopyTo(bytes);
-        peer.Buffer.AddSamples(bytes, 0, bytes.Length);
+        lock (peer.PlaybackWriteGate)
+            AddPlaybackSamples(peer.Buffer, stereoPcm, ref peer.PlaybackScratch);
+    }
+
+    internal static void AddPlaybackSamples(BufferedWaveProvider target, ReadOnlySpan<short> stereoPcm,
+        ref byte[]? scratch)
+    {
+        var pcmBytes = MemoryMarshal.AsBytes(stereoPcm);
+        byte[] bytes;
+        if (pcmBytes.Length > MaxReusablePlaybackBytes)
+        {
+            // Do not keep an abnormal frame alive for the lifetime of a peer.
+            bytes = pcmBytes.ToArray();
+        }
+        else
+        {
+            if (scratch is null || scratch.Length < pcmBytes.Length)
+                scratch = new byte[pcmBytes.Length];
+            pcmBytes.CopyTo(scratch);
+            bytes = scratch;
+        }
+        // BufferedWaveProvider copies the bytes synchronously into its own ring.
+        target.AddSamples(bytes, 0, pcmBytes.Length);
     }
 
     public void SetPeerMix(string peerId, PeerVoiceMix mix, NosSizeVoiceEffect? nosSizeEffect = null)
@@ -429,7 +450,11 @@ internal sealed class AudioDeviceSession : IDisposable
         PanningSampleProvider Panning,
         VolumeSampleProvider Volume,
         GhostReverbSampleProvider GhostReverb,
-        RadioEchoSampleProvider RadioEcho);
+        RadioEchoSampleProvider RadioEcho)
+    {
+        internal readonly object PlaybackWriteGate = new();
+        internal byte[]? PlaybackScratch;
+    }
 
 }
 

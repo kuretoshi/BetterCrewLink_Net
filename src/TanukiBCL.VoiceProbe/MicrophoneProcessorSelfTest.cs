@@ -11,6 +11,7 @@ public static class MicrophoneProcessorSelfTest
             VerifyDisabled();
             VerifyCaptureFraming();
             VerifyCaptureRateConversion();
+            VerifyPlaybackBufferReuse();
             VerifyEchoCancellation();
             VerifyNoiseSuppression();
             VerifyAutomaticGain();
@@ -203,6 +204,51 @@ public static class MicrophoneProcessorSelfTest
                 $"{inputRate} Hz capture changed tone to {frequency:F1} Hz / RMS {rms:F0}");
         }
         Console.WriteLine("[PASS] Native 44.1/48/96 kHz microphone callbacks become continuous 48 kHz 20ms PCM with preserved pitch");
+    }
+
+    private static void VerifyPlaybackBufferReuse()
+    {
+        var waveBuffer = new BufferedWaveProvider(new WaveFormat(48_000, 16, 2))
+        {
+            BufferDuration = TimeSpan.FromMilliseconds(400),
+            ReadFully = false
+        };
+        byte[]? scratch = null;
+        var frame = new short[960 * 2];
+        frame[0] = 1234;
+        frame[^1] = -2345;
+        AudioDeviceSession.AddPlaybackSamples(waveBuffer, frame, ref scratch);
+        var firstScratch = scratch;
+        Array.Clear(frame);
+        var output = new byte[frame.Length * sizeof(short)];
+        Require(waveBuffer.Read(output, 0, output.Length) == output.Length &&
+            BitConverter.ToInt16(output, 0) == 1234 &&
+            BitConverter.ToInt16(output, output.Length - sizeof(short)) == -2345,
+            "reused playback buffer changed queued audio after the source was overwritten");
+
+        frame[0] = -3210;
+        AudioDeviceSession.AddPlaybackSamples(waveBuffer, frame, ref scratch);
+        Require(ReferenceEquals(firstScratch, scratch), "normal playback frame allocated another scratch buffer");
+        Require(waveBuffer.Read(output, 0, output.Length) == output.Length &&
+            BitConverter.ToInt16(output, 0) == -3210 && BitConverter.ToInt16(output, output.Length - sizeof(short)) == 0,
+            "reused playback buffer retained previous frame samples");
+
+        for (var i = 0; i < 1_000; i++)
+        {
+            AudioDeviceSession.AddPlaybackSamples(waveBuffer, frame, ref scratch);
+            waveBuffer.Read(output, 0, output.Length);
+        }
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 10_000; i++)
+        {
+            AudioDeviceSession.AddPlaybackSamples(waveBuffer, frame, ref scratch);
+            waveBuffer.Read(output, 0, output.Length);
+        }
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Require(allocated <= 8_192, $"playback copying allocated {allocated} bytes per 10,000 frames");
+        AudioDeviceSession.AddPlaybackSamples(waveBuffer, new short[16 * 1024 / sizeof(short) + 1], ref scratch);
+        Require(ReferenceEquals(firstScratch, scratch), "oversized playback frame was retained for the peer lifetime");
+        Console.WriteLine($"[PASS] Playback ring copies PCM and reuses per-peer scratch ({allocated} bytes / 10,000 warmed frames)");
     }
 
     private static void VerifyNoiseSuppression()
