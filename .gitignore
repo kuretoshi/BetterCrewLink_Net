@@ -2,6 +2,8 @@ bin/
 obj/
 publish/
 dist/
+debug-auth.json
+release-debug-auth.json
 *.user
 *.suo
 .vs/
