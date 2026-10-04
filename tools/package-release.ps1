@@ -99,4 +99,8 @@ $digest = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowe
 Write-Output "Release ZIP: $archivePath"
 Write-Output "Size: $((Get-Item -LiteralPath $archivePath).Length) bytes"
 Write-Output "SHA-256: $digest"
-Write-Output 'The release was packaged locally; no GitHub Release was created.'
+if ($Version -match '-net-beta\.') {
+    Write-Output 'Preliminary beta ZIP only: run tools/build-installer.ps1 before publishing so the ZIP includes Uninstall.exe.'
+} else {
+    Write-Output 'The release was packaged locally; no GitHub Release was created.'
+}

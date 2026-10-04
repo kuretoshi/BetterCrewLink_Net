@@ -217,6 +217,31 @@ internal static class UpdatePackage
         }
     }
 
+    internal static async Task VerifyLiveAsync(string currentVersion, string expectedTag, string stagingBase)
+    {
+        var fullBase = Path.GetFullPath(stagingBase);
+        using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        var candidate = await UpdateCatalog.CheckAsync(client, currentVersion);
+        if (candidate?.Version != expectedTag)
+            throw new InvalidOperationException(
+                $"Expected public update {expectedTag}, found {candidate?.Version ?? "none"}");
+        StagedUpdate? staged = null;
+        try
+        {
+            staged = await StageAsync(client, candidate, stagingBase: fullBase);
+            if (!File.Exists(Path.Combine(staged.PayloadDirectory, "TanukiBCL.Net.exe")) ||
+                !File.Exists(Path.Combine(staged.PayloadDirectory, "Updater", "TanukiBCL.Updater.exe")))
+                throw new InvalidDataException("Public update package is missing required executables");
+            Console.WriteLine($"[PASS] Public update {candidate.Version} downloaded, hashed and staged ({candidate.Size} bytes)");
+        }
+        finally
+        {
+            if (staged is not null &&
+                Path.GetDirectoryName(staged.Root)?.Equals(fullBase, StringComparison.OrdinalIgnoreCase) == true)
+                Directory.Delete(staged.Root, recursive: true);
+        }
+    }
+
     private sealed class PackageHandler(byte[] body) : HttpMessageHandler
     {
         internal byte[] Body = body;

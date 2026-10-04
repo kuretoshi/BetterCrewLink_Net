@@ -4,6 +4,7 @@ SetCompressor /SOLID lzma
 
 !include "MUI2.nsh"
 !include "x64.nsh"
+!include "FileFunc.nsh"
 
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\TanukiBCL.Net"
 !define MUI_ICON "${ICON_FILE}"
@@ -35,6 +36,12 @@ VIAddVersionKey "LegalCopyright" "Copyright (c) kuretoshi"
 
 Function .onInit
   SetShellVarContext current
+  ${GetParameters} $0
+  ${If} $0 == "/EXTRACT-UNINSTALLER"
+    WriteUninstaller "$EXEDIR\Uninstall.exe"
+    SetErrorLevel 0
+    Quit
+  ${EndIf}
   ${IfNot} ${RunningX64}
     MessageBox MB_ICONSTOP|MB_OK "TanukiBCL.Net requires 64-bit Windows."
     Abort

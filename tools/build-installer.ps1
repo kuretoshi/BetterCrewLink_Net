@@ -20,6 +20,9 @@ $icon = Join-Path $PSScriptRoot 'installer-icon.ico'
 $template = Join-Path $PSScriptRoot 'installer.nsi'
 $uninstallInclude = Join-Path $releaseDirectory 'uninstall-files.nsh'
 $outputFile = Join-Path $releaseDirectory ("TanukiBCL.Net-Setup-$Version.exe")
+$generatedUninstaller = Join-Path $releaseDirectory 'Uninstall.exe'
+$publishedUninstaller = Join-Path $publishDirectory 'Uninstall.exe'
+$archivePath = Join-Path $releaseDirectory 'TanukiBCL.Net-win-x64.zip'
 
 foreach ($required in @(
     (Join-Path $publishDirectory 'TanukiBCL.Net.exe'),
@@ -33,6 +36,14 @@ foreach ($required in @(
 }
 if (Test-Path -LiteralPath $outputFile) {
     throw "Installer output already exists: $outputFile"
+}
+foreach ($unexpected in @($generatedUninstaller, $publishedUninstaller)) {
+    if (Test-Path -LiteralPath $unexpected) {
+        throw "Uninstaller output already exists: $unexpected"
+    }
+}
+if (-not (Test-Path -LiteralPath $archivePath -PathType Leaf)) {
+    throw "Release ZIP is missing: $archivePath"
 }
 
 if ([string]::IsNullOrWhiteSpace($NsisPath)) {
@@ -77,9 +88,42 @@ if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $outputFile -PathType L
 }
 $installer = Get-Item -LiteralPath $outputFile
 if ($installer.Length -lt 1000000) { throw 'Installer output is unexpectedly small.' }
+$extract = Start-Process -FilePath $outputFile -ArgumentList '/EXTRACT-UNINSTALLER' `
+    -Wait -PassThru -WindowStyle Hidden
+$deadline = [DateTime]::UtcNow.AddMinutes(2)
+while ([DateTime]::UtcNow -lt $deadline) {
+    if ((Test-Path -LiteralPath $generatedUninstaller -PathType Leaf) -and
+        (Get-Item -LiteralPath $generatedUninstaller).Length -gt 100000) { break }
+    Start-Sleep -Milliseconds 250
+}
+if ($extract.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $generatedUninstaller -PathType Leaf) -or
+    (Get-Item -LiteralPath $generatedUninstaller).Length -le 100000) {
+    throw 'NSIS uninstaller extraction failed.'
+}
+Move-Item -LiteralPath $generatedUninstaller -Destination $publishedUninstaller
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression
+$archive = [System.IO.Compression.ZipFile]::Open($archivePath, [System.IO.Compression.ZipArchiveMode]::Update)
+try {
+    if ($archive.GetEntry('Uninstall.exe')) { throw 'Release ZIP already contains Uninstall.exe.' }
+    $entry = $archive.CreateEntry('Uninstall.exe', [System.IO.Compression.CompressionLevel]::Optimal)
+    $entryStream = $entry.Open()
+    try {
+        $fileStream = [System.IO.File]::OpenRead($publishedUninstaller)
+        try { $fileStream.CopyTo($entryStream) }
+        finally { $fileStream.Dispose() }
+    }
+    finally { $entryStream.Dispose() }
+}
+finally { $archive.Dispose() }
+& dotnet (Join-Path $publishDirectory 'TanukiBCL.Net.dll') --update-package-file-test $archivePath
+if ($LASTEXITCODE -ne 0) { throw 'Installer-inclusive update ZIP validation failed.' }
 $digest = (Get-FileHash -LiteralPath $outputFile -Algorithm SHA256).Hash.ToLowerInvariant()
+$archiveDigest = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Output "Installer: $outputFile"
 Write-Output "Files: $($files.Count)"
 Write-Output "Size: $($installer.Length) bytes"
 Write-Output "SHA-256: $digest"
+Write-Output "Update ZIP with uninstaller: $archivePath"
+Write-Output "Update ZIP SHA-256: $archiveDigest"
 Write-Output 'The installer was built locally; it has not been published.'

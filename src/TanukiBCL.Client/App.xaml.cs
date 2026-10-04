@@ -34,6 +34,7 @@ public partial class App : Application
             e.Args.Contains("--inquiry-preview") ||
             e.Args.Contains("--support-log-self-test") || e.Args.Contains("--update-catalog-self-test") ||
             e.Args.Contains("--update-catalog-live-test") ||
+            e.Args.Contains("--update-package-live-test") ||
             e.Args.Contains("--update-package-self-test") || e.Args.Contains("--update-package-file-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -109,6 +110,15 @@ public partial class App : Application
                 }
                 if (e.Args.Contains("--update-package-self-test"))
                     Task.Run(UpdatePackage.VerifyAsync).GetAwaiter().GetResult();
+                var livePackageIndex = Array.IndexOf(e.Args, "--update-package-live-test");
+                if (livePackageIndex >= 0)
+                {
+                    if (livePackageIndex + 3 >= e.Args.Length)
+                        throw new ArgumentException("--update-package-live-test needs a current version, expected tag and staging directory");
+                    Task.Run(() => UpdatePackage.VerifyLiveAsync(
+                        e.Args[livePackageIndex + 1], e.Args[livePackageIndex + 2],
+                        e.Args[livePackageIndex + 3])).GetAwaiter().GetResult();
+                }
                 var packageFileIndex = Array.IndexOf(e.Args, "--update-package-file-test");
                 if (packageFileIndex >= 0)
                 {
