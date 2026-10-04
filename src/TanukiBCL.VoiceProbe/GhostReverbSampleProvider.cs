@@ -18,14 +18,14 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     private ImpulseSpectrum? impulse;
     private Complex[][] leftHistory = [];
     private Complex[][] rightHistory = [];
-    private readonly Complex[] leftFft = new Complex[FftLength];
-    private readonly Complex[] rightFft = new Complex[FftLength];
-    private readonly Complex[] leftSum = new Complex[FftLength];
-    private readonly Complex[] rightSum = new Complex[FftLength];
-    private readonly float[] input = new float[BlockFrames * 2];
-    private readonly float[] output = new float[BlockFrames * 2];
-    private readonly float[] leftOverlap = new float[BlockFrames];
-    private readonly float[] rightOverlap = new float[BlockFrames];
+    private Complex[] leftFft = [];
+    private Complex[] rightFft = [];
+    private Complex[] leftSum = [];
+    private Complex[] rightSum = [];
+    private float[] input = [];
+    private float[] output = [];
+    private float[] leftOverlap = [];
+    private float[] rightOverlap = [];
     private int framePosition;
     private int historyPosition;
     private int disabledFrames;
@@ -69,6 +69,9 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
 
     internal long RetainedHistoryBytes =>
         (long)(leftHistory.Length + rightHistory.Length) * FftLength * sizeof(double) * 2;
+    internal long RetainedWorkingBytes =>
+        (long)(leftFft.Length + rightFft.Length + leftSum.Length + rightSum.Length) * sizeof(double) * 2 +
+        (long)(input.Length + output.Length + leftOverlap.Length + rightOverlap.Length) * sizeof(float);
 
     public int Read(float[] buffer, int offset, int count)
     {
@@ -79,11 +82,15 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
         var enabled = Enabled;
         if (enabled != wasEnabled)
         {
-            if (enabled && leftHistory.Length == 0)
+            if (enabled)
             {
-                var response = impulse ?? throw new InvalidOperationException("Ghost impulse was not prepared.");
-                leftHistory = AllocateHistory(response.Left.Length);
-                rightHistory = AllocateHistory(response.Right.Length);
+                if (leftHistory.Length == 0)
+                {
+                    var response = impulse ?? throw new InvalidOperationException("Ghost impulse was not prepared.");
+                    leftHistory = AllocateHistory(response.Left.Length);
+                    rightHistory = AllocateHistory(response.Right.Length);
+                }
+                if (leftFft.Length == 0) AllocateWorkingBuffers();
             }
             Reset(clearHistory: enabled);
             disabledFrames = 0;
@@ -98,6 +105,8 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
             {
                 leftHistory = [];
                 rightHistory = [];
+                leftFft = rightFft = leftSum = rightSum = [];
+                input = output = leftOverlap = rightOverlap = [];
             }
             return read;
         }
@@ -176,6 +185,18 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
         Array.Clear(rightOverlap);
         framePosition = 0;
         historyPosition = 0;
+    }
+
+    private void AllocateWorkingBuffers()
+    {
+        leftFft = new Complex[FftLength];
+        rightFft = new Complex[FftLength];
+        leftSum = new Complex[FftLength];
+        rightSum = new Complex[FftLength];
+        input = new float[BlockFrames * 2];
+        output = new float[BlockFrames * 2];
+        leftOverlap = new float[BlockFrames];
+        rightOverlap = new float[BlockFrames];
     }
 
     private static Complex[][] AllocateHistory(int partitions)
