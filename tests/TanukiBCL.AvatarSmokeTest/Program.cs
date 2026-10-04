@@ -78,7 +78,7 @@ internal static class Program
         var player = new Player { Name = "Original", AppearanceName = "Disguised",
             ColorId = 1, CurrentOutfit = 1, AppearanceColorId = 2 };
         avatar.SetPlayer(player, null, hideWhenAppearanceChanged: true);
-        if (avatar.FindName("AvatarBody") is not System.Windows.Shapes.Ellipse body ||
+        if (avatar.FindName("AvatarBody") is not Image body ||
             body.Visibility != Visibility.Hidden)
             throw new InvalidOperationException("Changed outfit should hide the avatar during tasks.");
         avatar.SetPlayer(player, null, hideWhenAppearanceChanged: false);
@@ -94,9 +94,9 @@ internal static class Program
         var settings = Activator.CreateInstance(settingsType, nonPublic: true)!;
         settingsType.GetProperty("VoiceEffectStrength")!.SetValue(settings, 63);
         var constructor = windowType.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Single(info => info.GetParameters().Length == 6);
+            .Single(info => info.GetParameters().Length == 7);
         var window = (Window)constructor.Invoke([settings, true, null, false, null,
-            (Action<int, PlayerAudioConfig, bool>)((_, _, _) => { })]);
+            (Action<int, PlayerAudioConfig, bool>)((_, _, _) => { }), null]);
         try
         {
             if (window.FindName("VoiceEffectStrengthSlider") is not Slider slider || slider.Value != 63d ||
