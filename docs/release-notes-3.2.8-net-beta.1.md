@@ -4,7 +4,7 @@
 
 ## ダウンロードと起動
 
-`TanukiBCL.Net-win-x64.zip` を展開し、`TanukiBCL.Net.exe` を実行してください。インストーラーはなく、.NETランタイムは同梱されています。64ビット版Among Usのみ対応します。Windowsのネットワーク許可画面が出た場合は、内容を確認して許可してください。
+通常は `TanukiBCL.Net-Setup-3.2.8-net-beta.1.exe` を実行してください。ユーザー別フォルダーにインストールされ、スタートメニューとWindowsのアンインストール一覧に登録されます。持ち運び用の `TanukiBCL.Net-win-x64.zip` もあります。ZIP版は展開して `TanukiBCL.Net.exe` を実行してください。両方とも.NETランタイムを同梱し、64ビット版Among Usのみ対応します。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
 
 ## 確認できたこと
 
@@ -19,6 +19,6 @@
 - 追加役職・MOD固有機能は網羅的な実戦検証が終わっていません。
 - 背景付き左右のオーバーレイは描画修正後の実画面一致を継続確認します。その他のGUI細部も公式版と差があり得ます。
 - 接続の初回試行や再接続が不安定になる場合があります。接続できないときは双方のリフレッシュを試してください。
-- 公開リリースからのアプリ内更新と、新規Windows x64環境での起動は未検証です。
+- 公開リリースからのアプリ内更新と、新規Windows x64環境での起動は未検証です。インストーラーは開発PCの隔離フォルダーへのインストール・アンインストールで検証しました。
 
-不具合は[このリポジトリのIssues](https://github.com/kuretoshi/BetterCrewLink_Net/issues)へ、再現手順とAmong Us・MODの版を添えて報告してください。ロビーコードやパスワードは公開しないでください。詳しい検証履歴は[3.2.8互換チェックリスト](compatibility-3.2.8.md)を参照してください。
+不具合は[このリポジトリのIssues](https://github.com/kuretoshi/BetterCrewLink_Net/issues)へ、再現手順とAmong Us・MODの版を添えて報告してください。ロビーコードやパスワードは公開しないでください。詳しい検証履歴は[3.2.8互換チェックリスト](https://github.com/kuretoshi/BetterCrewLink_Net/blob/main/docs/compatibility-3.2.8.md)を参照してください。

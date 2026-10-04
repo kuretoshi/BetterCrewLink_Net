@@ -14,7 +14,7 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.8](https://github.com/kuretosh
 
 ## ダウンロード
 
-[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-win-x64.zip` をダウンロードし、任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。インストーラーはありません。.NETランタイムはZIPに同梱しています。Windowsのネットワーク許可画面が出た場合は、内容を確認して許可してください。
+[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-Setup-3.2.8-net-beta.1.exe` をダウンロードして実行してください。ユーザー別のフォルダーへインストールされ、スタートメニューから起動・アンインストールできます。持ち運び用には `TanukiBCL.Net-win-x64.zip` も用意しています。ZIP版は任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。どちらも.NETランタイムを同梱しています。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
 
 公式TanukiBCLのインストーラーやLite版とは別の配布物です。公式版は[こちら](https://github.com/kuretoshi/TanukiBCL/releases)から入手できます。
 
@@ -70,13 +70,14 @@ Windows向けのself-contained配布ZIPは、バージョンを指定してロ�
 & tools/package-release.ps1 -Version 3.2.8-netdev.38
 ```
 
-`dist/<version>/TanukiBCL.Net-win-x64.zip`とSHA-256が生成・表示されます。配布物にはNoS/SNR補助リーダーと更新補助ツールが入ります。このコマンドはGitHub Releaseを公開しません。アプリ内の「アップデート」は、このリポジトリに同名のZIPを含む新しいReleaseがある場合にだけ有効になります。公開Releaseからの実更新、新規Windows環境での起動、完全互換はまだ未検証です。
+`dist/<version>/TanukiBCL.Net-win-x64.zip`とSHA-256が生成・表示されます。配布物にはNoS/SNR補助リーダーと更新補助ツールが入ります。ベータ版のインストーラーは、ZIP用の配布フォルダーを生成した後にNSIS 3.04以降で作ります。`tools/build-installer.ps1`にはNSISのパスを`-NsisPath`で渡すこともできます。アプリ内の「アップデート」は、このリポジトリに同名のZIPを含む新しいReleaseがある場合にだけ有効になります。公開Releaseからの実更新、新規Windows環境での起動、完全互換はまだ未検証です。
 
 ベータ配布用ZIPには共通の開発者デバッグパスワードが必要です。配布者本人が以下を実行し、画面に表示されない入力欄へ16文字以上のパスワードを2回入力してください。パスワードをチャット・コマンド引数・Gitに記録しないでください。
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/create-debug-auth.ps1
 & tools/package-release.ps1 -Version 3.2.8-net-beta.1 -DebugAuthFile (Join-Path $env:APPDATA 'TanukiBCL.Net\release-debug-auth.json')
+& tools/build-installer.ps1 -Version 3.2.8-net-beta.1
 ```
 
 生成された設定元ファイルはリポジトリ外に保存され、ZIPへはソルト付きPBKDF2-SHA256ハッシュのみを同梱します。共通パスワードのハッシュは配布物から解析できるため、十分長い独自のパスフレーズを使ってください。設定元ファイルがなければベータ／正式版のパッケージ作成は失敗します。アプリは同梱設定を優先し、`TANUKI_DEBUG_AUTH` 環境変数は同梱設定のない開発環境でだけ使います。これは公式版と同様にローカルアプリの操作制限であり、アプリや配布ファイルを改変する利用者を防ぐ仕組みではありません。
