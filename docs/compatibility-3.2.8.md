@@ -4,7 +4,7 @@ Target: released [`v3.2.8`](https://github.com/kuretoshi/TanukiBCL/releases/tag/
 
 ## Newly ported from 3.2.8
 
-- The NoS `TbclSnapshotReader` source matches the released upstream file byte-for-byte. It resolves `nextIndex`/`Latest` and reads snapshots without writing `RequireUpdate` or requesting game-process write access. Only the `win-x64` helper is built and bundled.
+- The NoS `TbclSnapshotReader` source matches the released upstream file after normalizing line endings (both normalized SHA-256 values are `b1e9a6721d70826ec44840a6b48eba19f432854dafa16ad6a415029469788df8`; the upstream working copy has mixed CRLF/LF and the port uses LF). It resolves `nextIndex`/`Latest` and reads snapshots without writing `RequireUpdate` or requesting game-process write access. Only the `win-x64` helper is built and bundled.
 - The .NET NoS snapshot and dynamic-palette readers now decode 64-bit pointers and 64-bit array headers, including addresses above 4 GiB. A 32-bit snapshot is explicitly rejected as unsupported.
 - Process pickers and the game scanner exclude terminated Among Us processes with zero threads, corresponding to the new upstream process filter.
 - The compact-view footer includes the new Ko-fi and X buttons and their released URLs.
