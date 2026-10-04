@@ -2,7 +2,7 @@
 
 TanukiBCL.Netは、[タヌキのベタクル v3.2.8](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.8)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
 
-現在の配布版は **`3.2.8-net-beta.4`（プレリリース）** です。公式TanukiBCL v3.2.8との通信・音声・ゲーム連動の主要経路は実機で相互確認していますが、完全互換を宣言する段階ではありません。追加役職・細部のGUI・環境ごとの再接続などはベータテストを続けます。64ビット版Among Usのみ対応します。
+現在の配布版は **`3.2.8-net-beta.4`（プレリリース）** です。公式タヌキのベタクル v3.2.8との通信・音声・ゲーム連動の主要経路は実機で相互確認していますが、バグが存在する可能性があります。64ビット版Among Usのみ対応します。
 
 ## 主な機能
 
@@ -10,19 +10,19 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.8](https://github.com/kuretosh
 - 公式TanukiBCL v3.2.8との同一ロビーでの双方向通話
 - マイク・スピーカー選択、個別ミュート、音量と音声エフェクトの設定
 - 発話状態やプレイヤーを表示するオーバーレイ、ロビー設定の同期
-- SuperNewRoles、Nebula on the Ship、TOH4E_EMの音声ルールへの対応（追加要素はベータ検証中）
+- SuperNewRoles、Nebula on the Ship、TOH4E_EMの音声ルールへの対応
 
 ## ダウンロード
 
 [このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-Setup-3.2.8-net-beta.4.exe` をダウンロードして実行してください。ユーザー別のフォルダーへインストールされ、スタートメニューから起動・アンインストールできます。持ち運び用には `TanukiBCL.Net-win-x64.zip` も用意しています。ZIP版は任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。どちらも.NETランタイムを同梱しています。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
 
-公式TanukiBCLのインストーラーやLite版とは別の配布物です。公式版は[こちら](https://github.com/kuretoshi/TanukiBCL/releases)から入手できます。
+タヌキのベタクルのインストーラーやLite版とは別の配布物です。公式版は[こちら](https://github.com/kuretoshi/TanukiBCL/releases)から入手できます。
 
 ## 使い方
 
-1. Among UsとTanukiBCL.Netを起動します。ゲームを検出すると自動で接続します。ゲームが未起動ならコンパクト画面で待機します。複数起動している場合は、公式版と同様に最小PIDのゲームを選びます。
+1. Among UsとTanukiBCL.Netを起動します。ゲームを検出すると自動で接続します。ゲームが未起動ならコンパクト画面で待機します。
 2. 必要に応じて設定画面からマイクとスピーカーを変更します。
-3. 同じロビーの相手もTanukiBCL.Netまたは互換の公式TanukiBCLを起動し、同じボイスサーバーへ接続します。
+3. 同じロビーの相手もTanukiBCL.Netまたはタヌキのベタクルを起動し、同じボイスサーバーへ接続します。
 4. 必要に応じてマイク、スピーカー、音量、ボイスエフェクト、オーバーレイを設定します。
 
 接続できない場合は、両者のボイスサーバー設定とネットワーク状態を確認し、画面左上のリフレッシュを試してください。ベータ版では初回接続や再接続が不安定になる場合があります。
@@ -39,7 +39,7 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.8](https://github.com/kuretosh
 
 ## 開発・検証
 
-現在の完全移植目標は公式TanukiBCL v3.2.8 (`8d52d02beee8410e0c4dfa06f704c7a41f5fe962`) です。当初はv3.2.5 (`33f8d252400d74756ce3bfd7e59b8011bf76d798`) を通信仕様の基準として再構築しました。[3.2.8互換チェックリスト](docs/compatibility-3.2.8.md)に残課題と実機検証を記録しています。[3.2.7チェックリスト](docs/compatibility-3.2.7.md)は履歴です。
+現在の完全移植目標は公式TanukiBCL v3.2.8 (`8d52d02beee8410e0c4dfa06f704c7a41f5fe962`) です。[3.2.8互換チェックリスト](docs/compatibility-3.2.8.md)に残課題と実機検証を記録しています。[3.2.7チェックリスト](docs/compatibility-3.2.7.md)は履歴です。
 
 以下は開発時の診断コマンドと作り直し初期からの検証メモです。配布版の利用には必要ありません。
 
