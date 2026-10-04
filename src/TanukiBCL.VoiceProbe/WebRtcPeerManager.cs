@@ -32,6 +32,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private readonly ConcurrentDictionary<string, Peer> peers = new();
     private readonly AudioEncoder audioEncoder = new(true, true);
     private readonly object audioCodecLock = new();
+    private short[]? monoEncodeBuffer;
     private IReadOnlyList<IceServer> iceServers = [new("stun:stun.l.google.com:19302", null, null)];
     private bool forceRelayOnly;
 
@@ -81,41 +82,89 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             return 0;
         }
+        if (peers.IsEmpty) return 0;
 
-        var monoCount = Math.Min(pcm16Mono.Length / sizeof(short), SamplesPerChannel);
-        var mono = new short[SamplesPerChannel];
-        for (var index = 0; index < monoCount; index++)
+        // Capture continues in the lobby even without a connected listener.
+        // Skip Opus work entirely until there is at least one eligible peer.
+        var recipients = peers.Values.ToArray();
+        var recipientCount = 0;
+        for (var index = 0; index < recipients.Length; index++)
         {
-            mono[index] = BitConverter.ToInt16(pcm16Mono.Slice(index * sizeof(short), sizeof(short)));
+            var peer = recipients[index];
+            if (CanSendAudio(peer) && (canSendToPeer is null || canSendToPeer(peer.RemoteSocketId)))
+                recipients[recipientCount++] = peer;
         }
+        if (recipientCount == 0) return 0;
 
-        byte[] encoded;
-        lock (audioCodecLock)
-        {
-            encoded = audioEncoder.EncodeAudio(mono, OpusFormat);
-        }
-
+        var encoded = EncodeMonoFrame(pcm16Mono);
         var sentPeers = 0;
-        foreach (var peer in peers.Values.ToArray())
+        for (var index = 0; index < recipientCount; index++)
         {
-            if (CanSendAudio(peer) &&
-                (canSendToPeer is null || canSendToPeer(peer.RemoteSocketId)))
+            var peer = recipients[index];
+            try
             {
-                try
+                peer.Connection.SendAudio(SamplesPerChannel, encoded);
+                sentPeers++;
+            }
+            catch (Exception exception)
+            {
+                if (Interlocked.Exchange(ref peer.AudioSendFailureLogged, 1) == 0)
                 {
-                    peer.Connection.SendAudio(SamplesPerChannel, encoded);
-                    sentPeers++;
-                }
-                catch (Exception exception)
-                {
-                    if (Interlocked.Exchange(ref peer.AudioSendFailureLogged, 1) == 0)
-                    {
-                        Log($"Opus send failed peer={Short(peer.RemoteSocketId)}: {exception.Message}");
-                    }
+                    Log($"Opus send failed peer={Short(peer.RemoteSocketId)}: {exception.Message}");
                 }
             }
         }
         return sentPeers;
+    }
+
+    private byte[] EncodeMonoFrame(ReadOnlySpan<byte> pcm16Mono)
+    {
+        lock (audioCodecLock)
+        {
+            var buffer = monoEncodeBuffer ??= new short[SamplesPerChannel];
+            CopyMonoFrame(pcm16Mono, buffer);
+            return audioEncoder.EncodeAudio(buffer, OpusFormat);
+        }
+    }
+
+    private static void CopyMonoFrame(ReadOnlySpan<byte> pcm16Mono, short[] destination)
+    {
+        var monoCount = Math.Min(pcm16Mono.Length / sizeof(short), destination.Length);
+        for (var index = 0; index < monoCount; index++)
+        {
+            destination[index] = BitConverter.ToInt16(pcm16Mono.Slice(index * sizeof(short), sizeof(short)));
+        }
+        if (monoCount < destination.Length)
+            Array.Clear(destination, monoCount, destination.Length - monoCount);
+    }
+
+    internal static void VerifyBroadcastBufferReuse()
+    {
+        using var manager = new WebRtcPeerManager("encode-test", (_, _) => Task.CompletedTask, sendTestTone: false);
+        byte[] fullFrame = new byte[SamplesPerChannel * sizeof(short)];
+        for (var i = 0; i < SamplesPerChannel; i++)
+            BitConverter.TryWriteBytes(fullFrame.AsSpan(i * sizeof(short)), (short)(i + 1));
+        if (manager.BroadcastMonoPcm48k(fullFrame) != 0 || manager.monoEncodeBuffer is not null)
+            throw new InvalidOperationException("No-listener frame was encoded or sent.");
+        // The first pass also warms the JIT path used by ConcurrentDictionary.IsEmpty.
+        for (var i = 0; i < 11_000; i++) manager.BroadcastMonoPcm48k(fullFrame);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 10_000; i++) manager.BroadcastMonoPcm48k(fullFrame);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        if (allocated > 8_192)
+            throw new InvalidOperationException($"Idle broadcast allocated {allocated} bytes for 10,000 frames.");
+
+        var first = manager.EncodeMonoFrame(fullFrame);
+        if (first.Length == 0 || manager.monoEncodeBuffer is not { } encodeBuffer ||
+            encodeBuffer[0] != 1 || encodeBuffer[^1] != SamplesPerChannel)
+            throw new InvalidOperationException("Full mono frame was not encoded correctly.");
+
+        byte[] shortFrame = [0x34, 0x12];
+        var second = manager.EncodeMonoFrame(shortFrame);
+        if (second.Length == 0 || !ReferenceEquals(encodeBuffer, manager.monoEncodeBuffer) ||
+            encodeBuffer[0] != 0x1234 || encodeBuffer.AsSpan(1).IndexOfAnyExcept((short)0) >= 0)
+            throw new InvalidOperationException("Short mono frame retained audio from the previous frame.");
+        Console.WriteLine($"[PASS] Idle capture skips Opus encoding ({allocated} bytes / 10,000 warmed frames); active frames reuse a cleared mono buffer");
     }
 
     public void Configure(JsonElement configuration)

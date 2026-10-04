@@ -37,6 +37,7 @@ internal static class Program
             }
             if (args.Contains("--audio-processing-self-test"))
             {
+                WebRtcPeerManager.VerifyBroadcastBufferReuse();
                 return MicrophoneProcessorSelfTest.Run();
             }
             if (args.Contains("--mobile-host-self-test"))
