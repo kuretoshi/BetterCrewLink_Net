@@ -1,10 +1,49 @@
-# TanukiBCL.Net
+# タヌキのベタクル .NET ベータ (TanukiBCL.Net)
 
-初回公開は **ベータ版** を予定しています。TanukiBCL v3.2.8 は互換性の目標であり、.NET版が正式版として完成したという意味ではありません。開発中の最新ローカル検証版は `3.2.8-netdev.38`、初回ベータ配布は `3.2.8-net-beta.1`（GitHub Releaseのタグは `v3.2.8-net-beta.1`、公開時は Pre-release を有効化）を使用します。以後は `net-beta.2` などと進め、互換性の検証が完了してから正式版の番号を決めます。配布ZIPの作成だけではReleaseは公開されません。
+TanukiBCL.Netは、[タヌキのベタクル v3.2.8](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.8)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
 
-## WPFクライアント
+現在の配布版は **`3.2.8-net-beta.1`（プレリリース）** です。公式TanukiBCL v3.2.8との通信・音声・ゲーム連動の主要経路は実機で相互確認していますが、完全互換を宣言する段階ではありません。追加役職・細部のGUI・環境ごとの再接続などはベータテストを続けます。64ビット版Among Usのみ対応します。
 
-Among Usプロセス、マイク、スピーカーを選択して近距離ボイスへ接続できる最小クライアントです。
+## 主な機能
+
+- Among Usの位置・会議・生死・陣営に連動した近接ボイスチャット
+- 公式TanukiBCL v3.2.8との同一ロビーでの双方向通話
+- マイク・スピーカー選択、個別ミュート、音量と音声エフェクトの設定
+- 発話状態やプレイヤーを表示するオーバーレイ、ロビー設定の同期
+- SuperNewRoles、Nebula on the Ship、TOH4E_EMの音声ルールへの対応（追加要素はベータ検証中）
+
+## ダウンロード
+
+[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-win-x64.zip` をダウンロードし、任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。インストーラーはありません。.NETランタイムはZIPに同梱しています。Windowsのネットワーク許可画面が出た場合は、内容を確認して許可してください。
+
+公式TanukiBCLのインストーラーやLite版とは別の配布物です。公式版は[こちら](https://github.com/kuretoshi/TanukiBCL/releases)から入手できます。
+
+## 使い方
+
+1. Among UsとTanukiBCL.Netを起動します。Among Usを複数起動している場合は、接続するプロセスを選びます。
+2. マイクとスピーカーを選び、「接続開始」を押します。
+3. 同じロビーの相手もTanukiBCL.Netまたは互換の公式TanukiBCLを起動し、同じボイスサーバーへ接続します。
+4. 必要に応じてマイク、スピーカー、音量、ボイスエフェクト、オーバーレイを設定します。
+
+接続できない場合は、両者のボイスサーバー設定とネットワーク状態を確認し、画面左上のリフレッシュを試してください。ベータ版では初回接続や再接続が不安定になる場合があります。
+
+## ボイスエフェクトとアップデート
+
+キノコカオスやカモフラージュなど、ゲーム状態に応じたボイスエフェクトを備えています。強さの調整やテスト再生は設定画面から行えます。追加役職を含む細部の聞こえ方はベータテスト中です。
+
+設定画面の「アップデート」から、このリポジトリの新しい.NET版リリースを確認できます。更新は利用者が開始したときだけ行います。公開リリースからの実更新と新規Windows環境での起動確認は、ベータ期間中の検証項目です。
+
+## 不具合報告
+
+[このリポジトリのIssues](https://github.com/kuretoshi/BetterCrewLink_Net/issues)へ、発生した版、Among UsとMODの版、再現手順、期待した動作と実際の動作を添えて報告してください。ゲームのロビーコード、サーバー認証情報、開発者パスワードなどの秘密情報は載せないでください。タヌキのベタクルの[Discord](https://discord.gg/cUX5KUkZPD)も参照できます。
+
+## 開発・検証
+
+現在の完全移植目標は公式TanukiBCL v3.2.8 (`8d52d02beee8410e0c4dfa06f704c7a41f5fe962`) です。当初はv3.2.5 (`33f8d252400d74756ce3bfd7e59b8011bf76d798`) を通信仕様の基準として再構築しました。[3.2.8互換チェックリスト](docs/compatibility-3.2.8.md)に残課題と実機検証を記録しています。[3.2.7チェックリスト](docs/compatibility-3.2.7.md)は履歴です。
+
+以下は開発時の診断コマンドと作り直し初期からの検証メモです。配布版の利用には必要ありません。
+
+### WPFクライアントの開発起動
 
 ```powershell
 dotnet run --project src/TanukiBCL.Client
@@ -12,16 +51,14 @@ dotnet run --project src/TanukiBCL.Client
 
 起動時に実行中のAmong Usを自動検出します。複数プロセスがある場合は対象PIDを選択し、`接続開始`を押すとゲーム状態からロビー情報を読み取ってボイスサーバーへ接続します。画面には接続状態、ゲーム状態、ロビー、参加人数、マイク発話状態に加え、参加者ごとのPeer状態、音声ルール、現在の音量を表示します。接続中はマイクとスピーカーを個別にミュートできます。マイクミュート時は音声送信を止め、VADも即座にOFFにします。他プレイヤーの役職や未発見の死亡情報は表示しません。設定画面から接続先、入出力デバイス、マスター音量、マイクゲインなどを保存できます（3.2.7設定項目の移植は継続中）。
 
-当初はTanukiBCL v3.2.5 (`33f8d252400d74756ce3bfd7e59b8011bf76d798`) を通信仕様の基準として再構築しました。現在の完成目標は[リリース v3.2.8](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.8) (`8d52d02beee8410e0c4dfa06f704c7a41f5fe962`) の機能・GUI・実機相互運用の完全互換です。対象のAmong Usは64bit版に限定します。現時点では未完成で、[3.2.8互換チェックリスト](docs/compatibility-3.2.8.md)に新しい差分と検証状況を記録しています。従来の[3.2.7チェックリスト](docs/compatibility-3.2.7.md)も履歴として残しています。
-
 Socket.IO、WebRTC、Opus音声、音声デバイス、ゲームメモリ読み取り、ゲーム状態に応じた音声ミックスまで段階的に実装しています。
 
-## 必要環境
+### 開発に必要なもの
 
 - .NET 8 SDK
 - Windows x64と64bit版Among Us（WPFクライアント・NoS補助リーダー）
 
-## ビルド
+### ビルド
 
 ```powershell
 dotnet build TanukiBCL.Net.sln
@@ -44,7 +81,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/create-debug-auth.ps1
 
 生成された設定元ファイルはリポジトリ外に保存され、ZIPへはソルト付きPBKDF2-SHA256ハッシュのみを同梱します。共通パスワードのハッシュは配布物から解析できるため、十分長い独自のパスフレーズを使ってください。設定元ファイルがなければベータ／正式版のパッケージ作成は失敗します。アプリは同梱設定を優先し、`TANUKI_DEBUG_AUTH` 環境変数は同梱設定のない開発環境でだけ使います。
 
-## サーバー接続だけを確認
+### サーバー接続だけを確認
 
 ```powershell
 dotnet run --project src/TanukiBCL.VoiceProbe -- --server https://bettercrewl.ink --seconds 10
@@ -52,7 +89,7 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- --server https://bettercrewl.in
 
 `[OK] Socket.IO接続成功` が表示されれば、Socket.IO / WebSocket層の疎通は成功です。
 
-## テスト用ロビーへ参加
+### テスト用ロビーへ参加
 
 実際のロビー情報が分かっている場合だけ指定します。
 
@@ -73,7 +110,7 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 受信した `clientPeerConfig`、`setClients`、`join`、`signal` などは標準出力へ記録します。別クライアントが同じロビーへ参加した場合はWebRTC接続も開始しますが、音声送受信はまだ行いません。
 
-## WebRTCセルフテスト
+### WebRTCセルフテスト
 
 2つのSocket.IOクライアントを一時ロビーへ参加させ、次を自動検証します。
 
@@ -116,7 +153,7 @@ Peer一覧の「Opus受信」が増えていれば、相手からの音声デー
 
 合成音による自動検証に加えて、実マイク入力、スピーカー再生、簡易VADまで実装しています。ゲーム状態に応じた近接音量計算は後続段階で追加します。
 
-## 実マイク・スピーカーで確認
+### 実マイク・スピーカーで確認
 
 利用可能なデバイス番号を表示します。
 
@@ -142,7 +179,7 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 同じ部屋で2台を試す場合は、ハウリング防止のため両方でヘッドホンを使用してください。
 
-## Among Us状態の読み取り
+### Among Us状態の読み取り
 
 起動中の全Among Usプロセスを読み取り専用でスキャンします。
 
@@ -171,7 +208,7 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- --scan-game `
 
 `Tasks`中に全員が近距離であることも検証する場合は `--expect-nearby` を追加します。
 
-## 5クライアント音声統合テスト
+### 5クライアント音声統合テスト
 
 起動中の5つのAmong Usプロセスへ仮想音声クライアントを1つずつ対応させ、同じ実ロビーへ接続します。
 
@@ -228,7 +265,7 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 オフセットはTanukiBCL v3.2.5と同様にBetterCrewLink offsetsから取得し、GameAssemblyのシグネチャで現在の実アドレスを解決します。プロセスメモリへの書き込みは行いません。
 
-## ゲーム状態と音声を連動
+### ゲーム状態と音声を連動
 
 対象のAmong Usプロセスを指定すると、ロビーコード、player ID、client ID、ホスト状態を自動取得してボイスサーバーへ参加します。
 
@@ -252,10 +289,16 @@ dotnet run --project src/TanukiBCL.VoiceProbe -- `
 
 複数peerのPCMはpeer別バッファから同じタイムライン上でミックスしてスピーカーへ出力します。
 
-## 旧実装
+### 旧実装
 
 作り直し前の.NET/WPF実装は、次のGit参照に保存しています。
 
 - branch: `backup/pre-v3.2.5-rewrite`
 - tag: `backup-pre-v3.2.5-rewrite-20260927`
 - commit: `09f225c`
+
+## 元プロジェクトとライセンス
+
+このプロジェクトは[タヌキのベタクル](https://github.com/kuretoshi/TanukiBCL)、[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)、[CrewLink](https://github.com/ottomated/CrewLink)を基にしています。元プロジェクトの開発者、協力者、翻訳者に感謝します。ライセンスは[GNU GPL v3.0](LICENSE)です。
+
+TanukiBCL.NetはAmong UsまたはInnersloth LLCと関係ありません。Innersloth LLCによる承認、支援、提供を受けたものではなく、Among Usに関する権利はInnersloth LLCに帰属します。
