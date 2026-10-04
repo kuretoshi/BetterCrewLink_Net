@@ -60,9 +60,12 @@ internal static class TanukiVoiceActivityDetectorSelfTest
             !MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToTalk, true, false) ||
             !MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToMute, false, false) ||
             MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToMute, true, false) ||
-            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.Voice, true, true))
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.Voice, true, true) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.Voice, false, false, true) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToTalk, true, false, true) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToMute, false, false, true))
         {
-            Console.Error.WriteLine("[FAIL] Microphone activation mode or manual mute policy.");
+            Console.Error.WriteLine("[FAIL] Microphone activation, manual mute, or deafen policy.");
             return 1;
         }
 

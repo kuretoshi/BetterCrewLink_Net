@@ -741,7 +741,19 @@ public partial class MainWindow : Window
     private void ToggleMicrophoneMute()
     {
         if (sessions.Current is { AcceptsCallbacks: false }) return;
-        microphoneMuted = !microphoneMuted;
+        if (deafened)
+        {
+            // Released 3.2.8 treats a click on the crossed-out mic while
+            // deafened as leaving deafen with both microphone and speaker on.
+            deafened = false;
+            microphoneMuted = false;
+            probe?.SetDeafened(false);
+            DeafenButton.Content = "スピーカーをミュート";
+        }
+        else
+        {
+            microphoneMuted = !microphoneMuted;
+        }
         probe?.SetMicrophoneMuted(microphoneMuted);
         MuteButton.Content = microphoneMuted ? "マイクミュート解除" : "マイクをミュート";
         VadText.Text = microphoneMuted ? "マイク: ミュート中" : "マイク: 待機中";

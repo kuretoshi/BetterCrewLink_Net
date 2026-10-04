@@ -126,21 +126,26 @@ internal sealed class AudioDeviceSession : IDisposable
     public void SetMicrophoneMuted(bool muted)
     {
         microphoneMuted = muted;
-        if (muted)
-        {
-            lock (voiceDetector) voiceDetector.ResetActivity();
-        }
-        if (muted && lastVadState != false)
-        {
-            lastVadState = false;
-            onVadChanged(false);
-        }
+        if (muted) ResetVoiceActivity();
     }
 
     public void SetDeafened(bool value)
     {
         deafened = value;
+        if (value)
+        {
+            pushToTalkPressed = false;
+            ResetVoiceActivity();
+        }
         masterMix.Volume = value ? 0f : masterVolume;
+    }
+
+    private void ResetVoiceActivity()
+    {
+        lock (voiceDetector) voiceDetector.ResetActivity();
+        if (lastVadState == false) return;
+        lastVadState = false;
+        onVadChanged(false);
     }
 
     public void SetMasterVolume(double volumePercent)
@@ -275,7 +280,8 @@ internal sealed class AudioDeviceSession : IDisposable
                 BitConverter.TryWriteBytes(buffer.AsSpan(index, sizeof(short)), adjusted);
             }
         }
-        var audioAllowed = MicrophoneActivationPolicy.AllowsAudio(activationMode, pushToTalkPressed, microphoneMuted);
+        var audioAllowed = MicrophoneActivationPolicy.AllowsAudio(activationMode, pushToTalkPressed,
+            microphoneMuted, deafened);
         if (!audioAllowed || (sensitivityEnabled && !talking))
         {
             Array.Clear(buffer);

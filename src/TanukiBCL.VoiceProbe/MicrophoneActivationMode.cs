@@ -10,8 +10,9 @@ internal enum MicrophoneActivationMode
 
 internal static class MicrophoneActivationPolicy
 {
-    public static bool AllowsAudio(MicrophoneActivationMode mode, bool shortcutPressed, bool manuallyMuted) =>
-        !manuallyMuted && (mode switch
+    public static bool AllowsAudio(MicrophoneActivationMode mode, bool shortcutPressed, bool manuallyMuted,
+        bool deafened = false) =>
+        !manuallyMuted && !deafened && (mode switch
         {
             MicrophoneActivationMode.Voice => true,
             MicrophoneActivationMode.PushToTalk => shortcutPressed,
