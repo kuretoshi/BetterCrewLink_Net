@@ -413,6 +413,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             mobileRunning = false;
         }
         currentGameState = state;
+        UpdateLocalJamming();
         SyncNosRadioReports(state);
         SyncTohReports(state);
         if (state.HostId > 0)
@@ -450,6 +451,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         microphoneMuted = muted;
         audioSession?.SetMicrophoneMuted(muted);
     }
+
+    private void UpdateLocalJamming() =>
+        audioSession?.SetJammed(LocalJammingPolicy.IsJammed(currentGameState, activeLobbySettings));
 
     public void SetMasterVolume(double volumePercent)
     {
@@ -697,6 +701,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 options.OldSampleDebug);
             audioSession.SetMicrophoneMuted(microphoneMuted);
             audioSession.SetDeafened(deafened);
+            UpdateLocalJamming();
             audioSession.SetMasterVolume(masterVolume);
             audioSession.SetMicrophoneGain(microphoneGain);
             audioSession.SetMicrophoneSensitivity(microphoneSensitivityEnabled, microphoneSensitivity);
@@ -1344,6 +1349,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
         activeLobbySettings = next;
         hasActiveLobbySettings = true;
+        UpdateLocalJamming();
         spatialVoiceSettings = spatialVoiceSettings with
         {
             MaxDistance = next.MaxDistance,
@@ -1646,6 +1652,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             GhostVolumeAsImpostor: ghostVolumeAsImpostor);
         activeLobbySettings = new LobbySettings();
         hasActiveLobbySettings = false;
+        UpdateLocalJamming();
         LobbySettingsChanged?.Invoke(null);
         hostClientId = state.HostId > 0 ? state.HostId : null;
         impostorRadioStates.Clear();

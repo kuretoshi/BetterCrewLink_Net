@@ -22,6 +22,7 @@ internal sealed class AudioDeviceSession : IDisposable
     private bool? lastVadState;
     private volatile bool microphoneMuted;
     private volatile bool deafened;
+    private volatile bool jammed;
     private volatile float masterVolume = 1f;
     private volatile float microphoneGain = 1f;
     private volatile bool microphoneSensitivityEnabled;
@@ -126,7 +127,11 @@ internal sealed class AudioDeviceSession : IDisposable
     public void SetMicrophoneMuted(bool muted)
     {
         microphoneMuted = muted;
-        if (muted) ResetVoiceActivity();
+        if (muted)
+        {
+            pushToTalkPressed = false;
+            ResetVoiceActivity();
+        }
     }
 
     public void SetDeafened(bool value)
@@ -138,6 +143,14 @@ internal sealed class AudioDeviceSession : IDisposable
             ResetVoiceActivity();
         }
         masterMix.Volume = value ? 0f : masterVolume;
+    }
+
+    public void SetJammed(bool value)
+    {
+        jammed = value;
+        if (!value) return;
+        pushToTalkPressed = false;
+        ResetVoiceActivity();
     }
 
     private void ResetVoiceActivity()
@@ -174,7 +187,11 @@ internal sealed class AudioDeviceSession : IDisposable
         pushToTalkPressed = false;
     }
 
-    public void SetPushToTalkPressed(bool pressed) => pushToTalkPressed = pressed;
+    public void SetPushToTalkPressed(bool pressed)
+    {
+        if (pressed && (microphoneMuted || deafened || jammed)) return;
+        pushToTalkPressed = pressed;
+    }
 
     public void SubmitPlayback(string peerId, ReadOnlySpan<short> stereoPcm)
     {
@@ -281,7 +298,7 @@ internal sealed class AudioDeviceSession : IDisposable
             }
         }
         var audioAllowed = MicrophoneActivationPolicy.AllowsAudio(activationMode, pushToTalkPressed,
-            microphoneMuted, deafened);
+            microphoneMuted, deafened, jammed);
         if (!audioAllowed || (sensitivityEnabled && !talking))
         {
             Array.Clear(buffer);

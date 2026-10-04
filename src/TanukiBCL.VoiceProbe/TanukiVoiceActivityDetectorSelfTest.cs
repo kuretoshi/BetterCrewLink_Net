@@ -1,3 +1,5 @@
+using TanukiBCL.VoiceProbe.GameMemory;
+
 namespace TanukiBCL.VoiceProbe;
 
 internal static class TanukiVoiceActivityDetectorSelfTest
@@ -63,13 +65,48 @@ internal static class TanukiVoiceActivityDetectorSelfTest
             MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.Voice, true, true) ||
             MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.Voice, false, false, true) ||
             MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToTalk, true, false, true) ||
-            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToMute, false, false, true))
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToMute, false, false, true) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.Voice, false, false, false, true) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToTalk, true, false, false, true) ||
+            MicrophoneActivationPolicy.AllowsAudio(MicrophoneActivationMode.PushToMute, false, false, false, true))
         {
-            Console.Error.WriteLine("[FAIL] Microphone activation, manual mute, or deafen policy.");
+            Console.Error.WriteLine("[FAIL] Microphone activation, manual mute, deafen, or jam policy.");
             return 1;
         }
 
-        Console.WriteLine("[PASS] 3.2.7 frequency-band VAD and push-to-talk/mute policy");
+        var nosState = new AmongUsState
+        {
+            Mod = AmongUsModType.NebulaOnTheShip,
+            Players =
+            [
+                new Player { IsLocal = true, NosPlayer = new NosPlayerData { IsJammed = true } },
+                new Player { NosPlayer = new NosPlayerData { IsJammed = true } }
+            ]
+        };
+        var jamBlockOn = new LobbySettings { NosFixerJammingVoiceBlock = true };
+        var jamBlockOff = new LobbySettings { NosFixerJammingVoiceBlock = false };
+        if (!LocalJammingPolicy.IsJammed(nosState, jamBlockOn) ||
+            LocalJammingPolicy.IsJammed(nosState, jamBlockOff))
+        {
+            Console.Error.WriteLine("[FAIL] NoS local jamming transmit policy.");
+            return 1;
+        }
+        nosState.Mod = AmongUsModType.None;
+        if (LocalJammingPolicy.IsJammed(nosState, jamBlockOn))
+        {
+            Console.Error.WriteLine("[FAIL] Non-NoS local jamming incorrectly blocked the microphone.");
+            return 1;
+        }
+        nosState.Mod = AmongUsModType.NebulaOnTheShip;
+        nosState.Players[0].NosPlayer!.IsJammed = false;
+        if (LocalJammingPolicy.IsJammed(nosState, jamBlockOn) ||
+            LocalJammingPolicy.IsJammed(null, jamBlockOn))
+        {
+            Console.Error.WriteLine("[FAIL] Remote NoS jamming incorrectly blocked the local microphone.");
+            return 1;
+        }
+
+        Console.WriteLine("[PASS] 3.2.8 frequency-band VAD, activation, deafen, and NoS local jamming policy");
         return 0;
     }
 
