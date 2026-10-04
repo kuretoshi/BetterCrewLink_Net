@@ -12,6 +12,7 @@ namespace TanukiBCL.Client;
 internal static class AvatarImageFactory
 {
     internal const int RainbowColorId = -99234;
+    private const int MaxRecoloredAvatars = 128;
     private static readonly (Color Main, Color Shadow)[] DefaultColors =
     [
         (Rgb(0xC5, 0x11, 0x11), Rgb(0x7A, 0x08, 0x38)),
@@ -28,7 +29,8 @@ internal static class AvatarImageFactory
         (Rgb(0x50, 0xEF, 0x39), Rgb(0x15, 0xA7, 0x42))
     ];
 
-    private static readonly ConcurrentDictionary<(bool Dead, uint Main, uint Shadow), BitmapSource> Cache = new();
+    private static readonly Dictionary<(bool Dead, uint Main, uint Shadow), BitmapSource> Cache = [];
+    private static readonly object RecolorCacheGate = new();
     private static readonly ConcurrentDictionary<(bool Dead, uint Color), BitmapSource> NosCache = new();
     private static readonly Lazy<BitmapSource> PlayerTemplate = new(() => Load("player.png"));
     private static readonly Lazy<BitmapSource> GhostTemplate = new(() => Load("ghost.png"));
@@ -43,8 +45,15 @@ internal static class AvatarImageFactory
         }
 
         var (main, shadow) = ResolveColors(colorId, playerColors);
-        return Cache.GetOrAdd((isDead, Pack(main), Pack(shadow)), key =>
-            Recolor(key.Dead ? GhostTemplate.Value : PlayerTemplate.Value, main, shadow));
+        var key = (Dead: isDead, Main: Pack(main), Shadow: Pack(shadow));
+        lock (RecolorCacheGate)
+        {
+            if (Cache.TryGetValue(key, out var existing)) return existing;
+            if (Cache.Count >= MaxRecoloredAvatars) Cache.Clear();
+            var image = Recolor(key.Dead ? GhostTemplate.Value : PlayerTemplate.Value, main, shadow);
+            Cache.Add(key, image);
+            return image;
+        }
     }
 
     public static (Color Main, Color Shadow) GetSwatchColors(int colorId,
@@ -220,6 +229,26 @@ internal static class AvatarImageFactory
             throw new InvalidOperationException("Lobby-only RGB must not change cosmetic palette selection");
         Console.WriteLine("[PASS] NoS avatar published RGB, visor, shadow, alpha and alive/ghost caching");
         Console.WriteLine("[PASS] NoS cosmetic palette byte tolerance, first match, MOD isolation and outfit fallbacks");
+    }
+
+    internal static void VerifyRecolorCacheBound()
+    {
+        Cache.Clear();
+        var palette = new PlayerColorPair[1];
+        BitmapSource? first = null;
+        for (var color = 0; color <= MaxRecoloredAvatars + 2; color++)
+        {
+            palette[0] = new PlayerColorPair { Main = 0xff000000u | (uint)color };
+            var image = Get(0, false, palette);
+            if (color == 0) first = image;
+            if (!image.IsFrozen || Cache.Count > MaxRecoloredAvatars)
+                throw new InvalidOperationException("Recolored avatar cache exceeded its bound.");
+            if (!ReferenceEquals(image, Get(0, false, palette)))
+                throw new InvalidOperationException("Recolored avatar was not reused from cache.");
+        }
+        if (first is null || !first.IsFrozen || first.PixelWidth <= 0)
+            throw new InvalidOperationException("Eviction invalidated an active avatar image.");
+        Console.WriteLine("[PASS] Recolored avatar cache remains bounded without invalidating displayed images");
     }
 
     private static Color FromGameColor(uint packed) =>

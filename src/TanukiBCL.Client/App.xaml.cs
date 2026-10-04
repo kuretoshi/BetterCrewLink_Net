@@ -42,7 +42,11 @@ public partial class App : Application
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
             {
-                if (e.Args.Contains("--nos-avatar-self-test")) AvatarImageFactory.VerifyNosColors();
+                if (e.Args.Contains("--nos-avatar-self-test"))
+                {
+                    AvatarImageFactory.VerifyNosColors();
+                    AvatarImageFactory.VerifyRecolorCacheBound();
+                }
                 if (e.Args.Contains("--voice-view-self-test"))
                 {
                     TanukiBCL.Client.MainWindow.VerifyAutomaticProcessSelection();
