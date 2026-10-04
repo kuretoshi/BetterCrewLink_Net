@@ -273,7 +273,9 @@ internal sealed class AudioDeviceSession : IDisposable
             return;
         }
 
-        captureConverter.Push(args.Buffer.AsSpan(0, args.BytesRecorded), ProcessCaptureFrame);
+        // ProcessCaptureFrame and its network callback consume the frame synchronously.
+        // Reuse the capture frame rather than allocating one 20 ms array per callback.
+        captureConverter.Push(args.Buffer.AsSpan(0, args.BytesRecorded), ProcessCaptureFrame, reuseFrame: true);
     }
 
     private void ProcessCaptureFrame(byte[] buffer)
@@ -438,7 +440,7 @@ internal sealed class Pcm16CaptureFramer
     private byte[] pending = new byte[MicrophoneProcessor.BytesPerFrame];
     private int pendingLength;
 
-    public void Push(ReadOnlySpan<byte> input, Action<byte[]> onFrame)
+    public void Push(ReadOnlySpan<byte> input, Action<byte[]> onFrame, bool reuseFrame = false)
     {
         while (!input.IsEmpty)
         {
@@ -447,10 +449,18 @@ internal sealed class Pcm16CaptureFramer
             pendingLength += copied;
             input = input[copied..];
             if (pendingLength != pending.Length) continue;
-            var complete = pending;
-            pending = new byte[MicrophoneProcessor.BytesPerFrame];
             pendingLength = 0;
-            onFrame(complete);
+            if (reuseFrame)
+            {
+                // The callback must finish with this buffer before Push continues.
+                onFrame(pending);
+            }
+            else
+            {
+                var complete = pending;
+                pending = new byte[MicrophoneProcessor.BytesPerFrame];
+                onFrame(complete);
+            }
         }
     }
 }

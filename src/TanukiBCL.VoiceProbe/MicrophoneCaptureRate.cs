@@ -43,11 +43,16 @@ internal static class MicrophoneCaptureRate
 // to the 960-sample/20ms mono frames expected by DSP, VAD and Opus.
 internal sealed class MicrophoneCaptureConverter
 {
+    private const int MaxReusableInputBytes = 16 * 1024;
     private readonly int inputRate;
     private readonly Pcm16CaptureFramer framer = new();
     private readonly BufferedWaveProvider? input;
     private readonly WdlResamplingSampleProvider? resampler;
     private readonly float[] output = new float[4096];
+    private byte[]? inputCopyBuffer;
+    private byte[]? convertedBuffer;
+
+    internal int RetainedInputCopyBufferBytes => inputCopyBuffer?.Length ?? 0;
 
     internal MicrophoneCaptureConverter(int inputRate)
     {
@@ -64,17 +69,30 @@ internal sealed class MicrophoneCaptureConverter
         resampler = new WdlResamplingSampleProvider(input.ToSampleProvider(), MicrophoneCaptureRate.OutputRate);
     }
 
-    internal void Push(ReadOnlySpan<byte> pcm16, Action<byte[]> onFrame)
+    internal void Push(ReadOnlySpan<byte> pcm16, Action<byte[]> onFrame, bool reuseFrame = false)
     {
         if ((pcm16.Length & 1) != 0)
             throw new ArgumentException("PCM16 input must contain complete samples", nameof(pcm16));
         if (resampler is null)
         {
-            framer.Push(pcm16, onFrame);
+            framer.Push(pcm16, onFrame, reuseFrame);
             return;
         }
-        var bytes = pcm16.ToArray();
-        input!.AddSamples(bytes, 0, bytes.Length);
+        byte[] inputBytes;
+        if (pcm16.Length > MaxReusableInputBytes)
+        {
+            // An abnormal callback should not pin a huge buffer for the session lifetime.
+            inputBytes = pcm16.ToArray();
+        }
+        else
+        {
+            if (inputCopyBuffer is null || inputCopyBuffer.Length < pcm16.Length)
+                inputCopyBuffer = new byte[pcm16.Length];
+            pcm16.CopyTo(inputCopyBuffer);
+            inputBytes = inputCopyBuffer;
+        }
+        // BufferedWaveProvider copies into its own circular buffer before returning.
+        input!.AddSamples(inputBytes, 0, pcm16.Length);
         // A 20ms capture callback should produce roughly 20ms of output.
         // Bound the reads in case a device/provider unexpectedly returns
         // synthesized samples after its real input is exhausted.
@@ -86,13 +104,14 @@ internal sealed class MicrophoneCaptureConverter
             var count = resampler.Read(output, 0, Math.Min(output.Length, outputLimit - produced));
             if (count <= 0) break;
             produced += count;
-            var converted = new byte[count * 2];
+            if (convertedBuffer is null || convertedBuffer.Length < count * sizeof(short))
+                convertedBuffer = new byte[count * sizeof(short)];
             for (var i = 0; i < count; i++)
             {
                 var sample = (short)Math.Clamp((int)Math.Round(output[i] * 32768f), short.MinValue, short.MaxValue);
-                BitConverter.TryWriteBytes(converted.AsSpan(i * 2, 2), sample);
+                BitConverter.TryWriteBytes(convertedBuffer.AsSpan(i * sizeof(short), sizeof(short)), sample);
             }
-            framer.Push(converted, onFrame);
+            framer.Push(convertedBuffer.AsSpan(0, count * sizeof(short)), onFrame, reuseFrame);
         }
     }
 }

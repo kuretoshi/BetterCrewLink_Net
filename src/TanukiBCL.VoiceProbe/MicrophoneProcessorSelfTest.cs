@@ -1,3 +1,5 @@
+using NAudio.Wave;
+
 namespace TanukiBCL.VoiceProbe;
 
 public static class MicrophoneProcessorSelfTest
@@ -105,10 +107,45 @@ public static class MicrophoneProcessorSelfTest
             "capture framer changed the 20 ms frame size");
         Require(frames.SelectMany(frame => frame).SequenceEqual(source),
             "capture framer lost, repeated or reordered PCM bytes");
+
+        // The live device callback consumes frames synchronously; this mode may
+        // reuse the same backing array but must preserve each completed frame.
+        var transientFramer = new Pcm16CaptureFramer();
+        byte[]? firstBuffer = null;
+        var transientFrames = 0;
+        transientFramer.Push(source, frame =>
+        {
+            firstBuffer ??= frame;
+            Require(ReferenceEquals(firstBuffer, frame), "transient capture allocated a new frame");
+            Require(frame.AsSpan().SequenceEqual(source.AsSpan(transientFrames * frame.Length, frame.Length)),
+                "transient capture changed PCM frame contents");
+            transientFrames++;
+        }, reuseFrame: true);
+        Require(transientFrames == 4, "transient capture missed a completed frame");
+        var singleFrame = source.AsSpan(0, MicrophoneProcessor.BytesPerFrame);
+        for (var i = 0; i < 1_000; i++) transientFramer.Push(singleFrame, static _ => { }, reuseFrame: true);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 10_000; i++) transientFramer.Push(singleFrame, static _ => { }, reuseFrame: true);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Require(allocated <= 8_192, $"transient capture allocated {allocated} bytes per 10,000 frames");
+        Console.WriteLine($"[PASS] Transient 20 ms capture reuses one frame ({allocated} bytes / 10,000 warmed frames)");
     }
 
     private static void VerifyCaptureRateConversion()
     {
+        var waveBuffer = new BufferedWaveProvider(new WaveFormat(48_000, 16, 1)) { ReadFully = false };
+        byte[] addSamplesInput = [0x34, 0x12, 0x78, 0x56];
+        waveBuffer.AddSamples(addSamplesInput, 0, addSamplesInput.Length);
+        Array.Clear(addSamplesInput);
+        var copiedSamples = new byte[4];
+        Require(waveBuffer.Read(copiedSamples, 0, copiedSamples.Length) == copiedSamples.Length &&
+            copiedSamples.SequenceEqual(new byte[] { 0x34, 0x12, 0x78, 0x56 }),
+            "NAudio BufferedWaveProvider did not copy the supplied input bytes");
+        var oversizedConverter = new MicrophoneCaptureConverter(44_100);
+        oversizedConverter.Push(new byte[16 * 1024 + 2], static _ => { }, reuseFrame: true);
+        Require(oversizedConverter.RetainedInputCopyBufferBytes == 0,
+            "an oversized microphone callback was retained for the session lifetime");
+
         foreach (var inputRate in new[] { 44_100, 48_000, 96_000 })
         {
             const int durationMs = 1_000;
@@ -135,6 +172,20 @@ public static class MicrophoneProcessorSelfTest
             Require(frames.All(frame => frame.Length == MicrophoneProcessor.BytesPerFrame),
                 $"{inputRate} Hz capture emitted a partial DSP frame");
             var decoded = frames.SelectMany(frame => frame).ToArray();
+            var transientConverter = new MicrophoneCaptureConverter(inputRate);
+            var transientBytes = new List<byte>(decoded.Length);
+            offset = 0;
+            while (offset < source.Length)
+            {
+                var chunk = Math.Min(source.Length - offset,
+                    new[] { 176, 2_048, 3_522, 7_680 }[(offset / 2) % 4]);
+                chunk &= ~1;
+                transientConverter.Push(source.AsSpan(offset, chunk), frame => transientBytes.AddRange(frame),
+                    reuseFrame: true);
+                offset += chunk;
+            }
+            Require(transientBytes.SequenceEqual(decoded),
+                $"{inputRate} Hz transient capture changed the converted PCM bytes");
             var zeroCrossings = 0;
             double energy = 0;
             var previous = (short)0;
