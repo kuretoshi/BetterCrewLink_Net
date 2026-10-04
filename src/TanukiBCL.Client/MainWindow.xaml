@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:TanukiBCL.Client"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="TanukiBCL" Width="280" Height="390" MinWidth="280" MinHeight="390"
+        Title="TanukiBCL" Icon="Assets/AppIcon.ico" Width="280" Height="390" MinWidth="280" MinHeight="390"
         WindowStyle="None" Background="#25232A" Foreground="#F5F7FA" WindowStartupLocation="CenterScreen">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"

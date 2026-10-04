@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
-    [string]$DebugAuthFile
+    [string]$DebugAuthFile,
+    [switch]$RebuildPreliminary
 )
 
 $ErrorActionPreference = 'Stop'
@@ -27,8 +28,18 @@ if (-not [string]::IsNullOrWhiteSpace($DebugAuthFile)) {
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $destination = Join-Path $repoRoot (Join-Path 'dist' $Version)
+$archivePath = Join-Path $destination 'TanukiBCL.Net-win-x64.zip'
 if (Test-Path -LiteralPath $destination) {
-    throw "Release output already exists: $destination"
+    if (-not $RebuildPreliminary -or $Version -notmatch '-net-beta\.' -or
+        -not (Test-Path -LiteralPath (Join-Path $destination 'publish') -PathType Container) -or
+        -not (Test-Path -LiteralPath $archivePath -PathType Leaf) -or
+        @((Get-ChildItem -LiteralPath $destination -Force).Name | Where-Object {
+            $_ -notin @('publish', 'TanukiBCL.Net-win-x64.zip')
+        }).Count -ne 0) {
+        throw "Release output already exists or is not a preliminary beta package: $destination"
+    }
+} elseif ($RebuildPreliminary) {
+    throw "No preliminary beta package to rebuild: $destination"
 }
 
 $publishDirectory = Join-Path $destination 'publish'
@@ -57,10 +68,10 @@ foreach ($item in $required) {
     }
 }
 
-$archivePath = Join-Path $destination 'TanukiBCL.Net-win-x64.zip'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type -AssemblyName System.IO.Compression
-$zipStream = [System.IO.File]::Open($archivePath, [System.IO.FileMode]::CreateNew)
+$zipMode = if ($RebuildPreliminary) { [System.IO.FileMode]::Create } else { [System.IO.FileMode]::CreateNew }
+$zipStream = [System.IO.File]::Open($archivePath, $zipMode)
 try {
     $zip = [System.IO.Compression.ZipArchive]::new($zipStream, [System.IO.Compression.ZipArchiveMode]::Create, $true)
     try {

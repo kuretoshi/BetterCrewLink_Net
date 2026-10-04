@@ -464,6 +464,18 @@ public partial class MainWindow : Window
         Console.WriteLine("[PASS] Startup selects an available game without opening developer controls");
     }
 
+    internal static void VerifyAppIcon()
+    {
+        var window = new MainWindow();
+        try
+        {
+            if (window.Icon is null || window.DiagnosticsGrid.Visibility != Visibility.Collapsed)
+                throw new InvalidOperationException("The beta window lost its icon or opened developer controls");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[PASS] Main window loads the released icon and starts compact");
+    }
+
     private void RefreshProcesses()
     {
         var selectedPid = (ProcessChoice?)ProcessCombo.SelectedItem is { } selected ? selected.Id : (int?)null;

@@ -46,6 +46,7 @@ public partial class App : Application
                 if (e.Args.Contains("--voice-view-self-test"))
                 {
                     TanukiBCL.Client.MainWindow.VerifyAutomaticProcessSelection();
+                    TanukiBCL.Client.MainWindow.VerifyAppIcon();
                     TanukiBCL.Client.MainWindow.VerifyPeerConnectionRecovery();
                     RecentPcmLevelTracker.Verify();
                     VoiceView.VerifyNameLayout();

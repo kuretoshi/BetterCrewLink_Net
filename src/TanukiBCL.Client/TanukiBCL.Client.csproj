@@ -7,9 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Version>3.2.8-netdev.38</Version>
+    <ApplicationIcon>..\..\tools\installer-icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TanukiBCL.VoiceProbe\TanukiBCL.VoiceProbe.csproj" />
+    <Resource Include="..\..\tools\installer-icon.ico" Link="Assets\AppIcon.ico" />
     <Resource Include="Assets\Avatar\*.png" />
     <Resource Include="Assets\Fonts\SourceCodePro-Medium.otf" />
     <Content Include="Assets\Audio\chime.mp3" CopyToOutputDirectory="PreserveNewest"
