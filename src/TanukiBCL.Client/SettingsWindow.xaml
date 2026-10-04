@@ -1130,7 +1130,8 @@
                         </Border>
                     </StackPanel>
                     <StackPanel x:Name="StreamingPanel" Visibility="Collapsed">
-                        <TextBlock Text="配信設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
+                        <TextBlock Text="配信設定" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="#B7AABD" Margin="4,0,0,13" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
                                 <Border Padding="16,5" BorderBrush="#3F3944" BorderThickness="0,0,0,1">
@@ -1142,7 +1143,7 @@
                                               Style="{StaticResource OverlaySwitchStyle}" FontSize="14" FontWeight="SemiBold"
                                               Checked="ObsOverlayCheck_Changed" Unchecked="ObsOverlayCheck_Changed" />
                                 </Border>
-                                <StackPanel x:Name="ObsUrlPanel" Visibility="Collapsed" Margin="16,10,16,16">
+                                <StackPanel x:Name="ObsUrlPanel" Visibility="Collapsed" Margin="16,10,16,10">
                                     <TextBlock Text="OBSブラウザソースURL" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8" />
                                     <Grid>
                                         <TextBox x:Name="ObsUrlBox" IsReadOnly="True" Height="40"
