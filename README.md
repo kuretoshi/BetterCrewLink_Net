@@ -1,6 +1,6 @@
 # TanukiBCL.Net
 
-初回公開は **ベータ版** を予定しています。TanukiBCL v3.2.8 は互換性の目標であり、.NET版が正式版として完成したという意味ではありません。開発中の最新ローカル検証版は `3.2.8-netdev.37`、初回ベータ配布は `3.2.8-net-beta.1`（GitHub Releaseのタグは `v3.2.8-net-beta.1`、公開時は Pre-release を有効化）を使用します。以後は `net-beta.2` などと進め、互換性の検証が完了してから正式版の番号を決めます。配布ZIPの作成だけではReleaseは公開されません。
+初回公開は **ベータ版** を予定しています。TanukiBCL v3.2.8 は互換性の目標であり、.NET版が正式版として完成したという意味ではありません。開発中の最新ローカル検証版は `3.2.8-netdev.38`、初回ベータ配布は `3.2.8-net-beta.1`（GitHub Releaseのタグは `v3.2.8-net-beta.1`、公開時は Pre-release を有効化）を使用します。以後は `net-beta.2` などと進め、互換性の検証が完了してから正式版の番号を決めます。配布ZIPの作成だけではReleaseは公開されません。
 
 ## WPFクライアント
 
@@ -30,7 +30,7 @@ dotnet build TanukiBCL.Net.sln
 Windows向けのself-contained配布ZIPは、バージョンを指定してローカルで作成できます。
 
 ```powershell
-& tools/package-release.ps1 -Version 3.2.8-netdev.37
+& tools/package-release.ps1 -Version 3.2.8-netdev.38
 ```
 
 `dist/<version>/TanukiBCL.Net-win-x64.zip`とSHA-256が生成・表示されます。配布物にはNoS/SNR補助リーダーと更新補助ツールが入ります。このコマンドはGitHub Releaseを公開しません。アプリ内の「アップデート」は、このリポジトリに同名のZIPを含む新しいReleaseがある場合にだけ有効になります。公開Releaseからの実更新、新規Windows環境での起動、完全互換はまだ未検証です。

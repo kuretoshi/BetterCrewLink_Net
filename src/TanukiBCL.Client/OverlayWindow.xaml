@@ -11,6 +11,8 @@
             <TextBlock x:Name="WatermarkServer" Foreground="#997BA4" FontWeight="SemiBold"
                        FontSize="11" TextAlignment="Center" />
         </StackPanel>
+        <Border x:Name="AlternateSideBackground" Canvas.ZIndex="1"
+                Background="#C025232A" Visibility="Collapsed" IsHitTestVisible="False" />
         <Border x:Name="AvatarBackground" Canvas.ZIndex="2" CornerRadius="8"
                 Background="#8025232A" Padding="8" Visibility="Collapsed">
             <Border x:Name="AvatarPanelBackground">

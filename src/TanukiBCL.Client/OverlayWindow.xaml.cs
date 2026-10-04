@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
@@ -241,6 +242,7 @@ public partial class OverlayWindow : Window
             AvatarPanel.Children.Clear();
             avatarRows.Clear();
             AvatarBackground.Visibility = Visibility.Collapsed;
+            AlternateSideBackground.Visibility = Visibility.Collapsed;
             return;
         }
         var currentIds = selected.Select(entry => entry.Player.Id).ToHashSet();
@@ -250,6 +252,7 @@ public partial class OverlayWindow : Window
             avatarRows.Remove(oldId);
         }
         var side = position is "left" or "left1" or "right" or "right1";
+        var alternateSide = position is "left1" or "right1";
         var compact = settings.CompactOverlay || position is "left1" or "right1";
         var showName = !state.MixupSabotaged && side && (!settings.CompactOverlay || position is "left1" or "right1");
         // Overlay.tsx sets --size to 7.5 * (10 / rendered avatars) vh;
@@ -258,19 +261,20 @@ public partial class OverlayWindow : Window
         var sideRegionWidth = compact ? avatarSize + 24d : 300d;
         AvatarPanel.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
         AvatarPanel.MaxHeight = side ? Height : double.PositiveInfinity;
-        AvatarPanel.MaxWidth = side ? sideRegionWidth : 800d;
+        AvatarPanel.MaxWidth = alternateSide ? Width : side ? sideRegionWidth : 800d;
         AvatarBackground.Background = compact || side ? Brushes.Transparent
             : new SolidColorBrush(Color.FromArgb(position == "bottom_left" ? (byte)0x59 : (byte)0x80,
                 0, 0, 0));
         // The compact side background belongs to the inner player container,
         // not the outer overlay wrapper. The edge against the screen is square.
-        AvatarPanelBackground.Background = side && compact
+        AvatarPanelBackground.Background = side && compact && !alternateSide
             ? new SolidColorBrush(Color.FromArgb(0xc0, 0x25, 0x23, 0x2a)) : Brushes.Transparent;
-        AvatarPanelBackground.CornerRadius = side && compact
+        AvatarPanelBackground.CornerRadius = side && compact && !alternateSide
             ? position.StartsWith("left", StringComparison.Ordinal)
                 ? new CornerRadius(0, 25, 25, 0) : new CornerRadius(25, 0, 0, 25)
             : new CornerRadius(0);
-        AvatarBackground.Padding = compact ? new Thickness(3) : new Thickness(8);
+        AvatarBackground.Padding = alternateSide ? new Thickness(0)
+            : compact ? new Thickness(3) : new Thickness(8);
         for (var index = 0; index < selected.Count; index++)
         {
             var entry = selected[index];
@@ -282,7 +286,10 @@ public partial class OverlayWindow : Window
             row.Margin = new Thickness(side ? 1d : 5d);
             row.FlowDirection = side && position.StartsWith("right", StringComparison.Ordinal)
                 ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
-            row.Width = side ? sideRegionWidth - (compact ? 8d : 18d) : double.NaN;
+            row.Width = alternateSide ? Width - 2d
+                : side ? sideRegionWidth - (compact ? 8d : 18d) : double.NaN;
+            row.RenderTransform = position == "left1"
+                ? new TranslateTransform(19d, 0d) : Transform.Identity;
             var avatar = item.Avatar;
             avatar.Width = avatarSize;
             avatar.Height = avatarSize;
@@ -304,16 +311,6 @@ public partial class OverlayWindow : Window
                     ? player.Name : player.AppearanceName;
                 if (!row.Children.Contains(item.Name)) row.Children.Add(item.Name);
                 item.SetNameVisible(position is not ("left1" or "right1") || entry.Talking);
-                if (position is "left1" or "right1")
-                {
-                    item.Name.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                    // CSS places alternate-side names outside the narrow 9vh
-                    // background. In WPF, a constrained RTL StackPanel pushes
-                    // the avatar right by the name's width; compensate per row.
-                    row.RenderTransform = new TranslateTransform(position == "left1"
-                        ? 16d : 20d - item.Name.DesiredSize.Width, 0d);
-                }
-                else row.RenderTransform = Transform.Identity;
             }
             else if (row.Children.Contains(item.Name))
             {
@@ -321,7 +318,6 @@ public partial class OverlayWindow : Window
                 item.Name.ApplyAnimationClock(UIElement.OpacityProperty, null);
                 item.NameFade = null;
                 item.NameVisible = null;
-                row.RenderTransform = Transform.Identity;
             }
             if (AvatarPanel.Children.IndexOf(row) != index)
             {
@@ -332,29 +328,44 @@ public partial class OverlayWindow : Window
         AvatarBackground.Visibility = Visibility.Visible;
         AvatarBackground.Width = double.NaN;
         AvatarBackground.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var regionWidth = side ? sideRegionWidth
+        var regionWidth = alternateSide ? Width : side ? sideRegionWidth
             : position == "top" ? Math.Min(800d, Width) :
             Math.Min(AvatarBackground.DesiredSize.Width, Width);
         AvatarBackground.Width = regionWidth;
         AvatarBackground.Measure(new Size(regionWidth, double.PositiveInfinity));
         if (side)
         {
-            Canvas.SetLeft(AvatarBackground, position.StartsWith("right", StringComparison.Ordinal)
-                ? Math.Max(0, Width - regionWidth) : 0d);
+            Canvas.SetLeft(AvatarBackground, alternateSide ? 0d
+                : position.StartsWith("right", StringComparison.Ordinal)
+                    ? Math.Max(0, Width - regionWidth) : 0d);
             // Released overlay.css gives side .otherplayers a full viewport height
             // and centers its players_container with justify-content:center.
             // The WPF panel only occupies its content height, so center that
             // measured panel in the game client area instead of pinning it to top.
             Canvas.SetTop(AvatarBackground,
                 Math.Max(0d, (Height - AvatarBackground.DesiredSize.Height) / 2d));
+            if (alternateSide)
+            {
+                AlternateSideBackground.Width = sideRegionWidth;
+                AlternateSideBackground.Height = AvatarBackground.DesiredSize.Height;
+                AlternateSideBackground.CornerRadius = position == "left1"
+                    ? new CornerRadius(0, 25, 25, 0) : new CornerRadius(25, 0, 0, 25);
+                Canvas.SetLeft(AlternateSideBackground, position == "left1"
+                    ? 0d : Math.Max(0d, Width - sideRegionWidth));
+                Canvas.SetTop(AlternateSideBackground, Canvas.GetTop(AvatarBackground));
+                AlternateSideBackground.Visibility = Visibility.Visible;
+            }
+            else AlternateSideBackground.Visibility = Visibility.Collapsed;
         }
         else if (position == "top")
         {
+            AlternateSideBackground.Visibility = Visibility.Collapsed;
             Canvas.SetLeft(AvatarBackground, Math.Max(0, (Width - regionWidth) / 2d));
             Canvas.SetTop(AvatarBackground, 0d);
         }
         else
         {
+            AlternateSideBackground.Visibility = Visibility.Collapsed;
             Canvas.SetLeft(AvatarBackground, 0d);
             Canvas.SetTop(AvatarBackground, Math.Max(0, Height - AvatarBackground.DesiredSize.Height));
         }
@@ -606,6 +617,26 @@ public partial class OverlayWindow : Window
                 if (Math.Abs(Canvas.GetTop(window.AvatarBackground) + window.AvatarBackground.DesiredSize.Height / 2d
                     - height / 2d) > 1d)
                     throw new InvalidOperationException($"{position} background was not vertically centered");
+                // Geometry alone missed a live regression: an avatar could have
+                // in-bounds coordinates while its narrow ancestor clipped it.
+                var bitmap = new RenderTargetBitmap((int)width, (int)height, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(window.OverlayCanvas);
+                var pixels = new byte[(int)width * (int)height * 4];
+                bitmap.CopyPixels(pixels, (int)width * 4, 0);
+                var local = window.avatarRows[1].Avatar;
+                var origin = local.TransformToAncestor(window.OverlayCanvas).Transform(new Point());
+                var speechRingPixels = 0;
+                for (var y = Math.Max(0, (int)origin.Y); y < Math.Min((int)height, (int)(origin.Y + local.ActualHeight)); y++)
+                for (var x = Math.Max(0, (int)origin.X); x < Math.Min((int)width, (int)(origin.X + local.ActualWidth)); x++)
+                {
+                    var pixel = (y * (int)width + x) * 4;
+                    if (pixels[pixel + 3] > 180 && pixels[pixel + 1] > 130 &&
+                        pixels[pixel + 1] > pixels[pixel + 2] + 40 &&
+                        pixels[pixel + 1] > pixels[pixel] + 30)
+                        speechRingPixels++;
+                }
+                if (speechRingPixels < 8)
+                    throw new InvalidOperationException($"{position} avatar was positioned but visually clipped at {width}x{height}");
             }
             Console.WriteLine("[PASS] Alternate side avatars and labels stay inside 720x576/1280x720 viewport edges");
         }
@@ -735,21 +766,28 @@ public partial class OverlayWindow : Window
                 settings.OverlayPosition = position; settings.CompactOverlay = compact;
                 window.Update(all, statuses, true, false, false);
                 var side = position is "left" or "left1" or "right" or "right1";
+                var alternateSide = position is "left1" or "right1";
                 var compactStyle = compact || position.EndsWith('1');
                 var outer = ((SolidColorBrush)window.AvatarBackground.Background).Color;
                 var inner = ((SolidColorBrush)window.AvatarPanelBackground.Background).Color;
                 var expectedOuter = side || compactStyle ? Colors.Transparent
                     : Color.FromArgb(position == "bottom_left" ? (byte)0x59 : (byte)0x80, 0, 0, 0);
-                if (outer != expectedOuter || inner != (side && compactStyle
+                if (outer != expectedOuter || inner != (side && compactStyle && !alternateSide
                     ? Color.FromArgb(0xc0, 0x25, 0x23, 0x2a) : Colors.Transparent))
                     throw new InvalidOperationException("Overlay wrapper and compact player background colors differ from released CSS");
                 var corners = window.AvatarPanelBackground.CornerRadius;
-                var expectedCorners = side && compactStyle
+                var expectedCorners = side && compactStyle && !alternateSide
                     ? position.StartsWith("left", StringComparison.Ordinal)
                         ? new CornerRadius(0, 25, 25, 0) : new CornerRadius(25, 0, 0, 25)
                     : new CornerRadius(0);
                 if (corners != expectedCorners)
                     throw new InvalidOperationException("Compact side background rounded the screen-facing edge");
+                if (alternateSide && (window.AlternateSideBackground.Visibility != Visibility.Visible ||
+                    ((SolidColorBrush)window.AlternateSideBackground.Background).Color !=
+                    Color.FromArgb(0xc0, 0x25, 0x23, 0x2a) ||
+                    window.AlternateSideBackground.CornerRadius != (position == "left1"
+                        ? new CornerRadius(0, 25, 25, 0) : new CornerRadius(25, 0, 0, 25))))
+                    throw new InvalidOperationException("Alternate side background was not drawn behind the full-width player layer");
                 if (!side && ((PlayerAvatar)((StackPanel)window.AvatarPanel.Children[0]).Children[0]).Width != 60)
                     throw new InvalidOperationException("Horizontal overlay avatar width must remain 60px");
             }
