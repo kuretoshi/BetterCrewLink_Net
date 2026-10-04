@@ -53,7 +53,13 @@ internal static class GhostReverbSelfTest
 
         // Also exercise loading the released, normalized stereo response.
         var releasedSource = new ImpulseSource();
-        var released = new GhostReverbSampleProvider(releasedSource) { Enabled = true };
+        var released = new GhostReverbSampleProvider(releasedSource);
+        if (released.PreparedImpulseBytes != 0) return false;
+        released.Enabled = false;
+        if (released.PreparedImpulseBytes != 0) return false;
+        released.Enabled = true;
+        if (released.PreparedImpulseBytes == 0) return false;
+        Console.WriteLine($"ghost reverb: shared impulse {released.PreparedImpulseBytes / 1024d / 1024d:F1} MiB, prepared only when enabled");
         var releasedOutput = new float[48_000 * 2];
         var timer = Stopwatch.StartNew();
         released.Read(releasedOutput, 0, releasedOutput.Length);

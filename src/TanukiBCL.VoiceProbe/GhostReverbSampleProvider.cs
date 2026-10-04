@@ -15,7 +15,7 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     private static readonly Lazy<ImpulseSpectrum> ReleasedImpulse = new(LoadReleasedImpulse);
 
     private readonly ISampleProvider source;
-    private readonly ImpulseSpectrum impulse;
+    private ImpulseSpectrum? impulse;
     private Complex[][] leftHistory = [];
     private Complex[][] rightHistory = [];
     private readonly Complex[] leftFft = new Complex[FftLength];
@@ -30,11 +30,22 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     private int historyPosition;
     private int disabledFrames;
     private bool wasEnabled;
+    private volatile bool enabled;
 
-    public volatile bool Enabled;
+    public bool Enabled
+    {
+        get => enabled;
+        set
+        {
+            // Prepare the shared response on the game-state thread, before
+            // publishing the enabled flag to the audio callback.
+            if (value) impulse ??= ReleasedImpulse.Value;
+            enabled = value;
+        }
+    }
 
     public GhostReverbSampleProvider(ISampleProvider source)
-        : this(source, ReleasedImpulse.Value)
+        : this(source, (ImpulseSpectrum?)null)
     {
     }
 
@@ -43,7 +54,7 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     {
     }
 
-    private GhostReverbSampleProvider(ISampleProvider source, ImpulseSpectrum impulse)
+    private GhostReverbSampleProvider(ISampleProvider source, ImpulseSpectrum? impulse)
     {
         if (source.WaveFormat.SampleRate != 48_000 || source.WaveFormat.Channels != 2)
             throw new ArgumentException("Ghost reverb requires 48 kHz stereo input.", nameof(source));
@@ -53,6 +64,8 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     }
 
     public WaveFormat WaveFormat => source.WaveFormat;
+    internal long PreparedImpulseBytes => impulse is null ? 0 :
+        (long)(impulse.Left.Length + impulse.Right.Length) * FftLength * sizeof(double) * 2;
 
     internal long RetainedHistoryBytes =>
         (long)(leftHistory.Length + rightHistory.Length) * FftLength * sizeof(double) * 2;
@@ -68,8 +81,9 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
         {
             if (enabled && leftHistory.Length == 0)
             {
-                leftHistory = AllocateHistory(impulse.Left.Length);
-                rightHistory = AllocateHistory(impulse.Right.Length);
+                var response = impulse ?? throw new InvalidOperationException("Ghost impulse was not prepared.");
+                leftHistory = AllocateHistory(response.Left.Length);
+                rightHistory = AllocateHistory(response.Right.Length);
             }
             Reset(clearHistory: enabled);
             disabledFrames = 0;
@@ -108,6 +122,7 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
 
     private void ProcessBlock()
     {
+        var response = impulse!;
         Array.Clear(leftFft);
         Array.Clear(rightFft);
         for (var frame = 0; frame < BlockFrames; frame++)
@@ -122,14 +137,14 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
 
         Array.Clear(leftSum);
         Array.Clear(rightSum);
-        for (var partition = 0; partition < impulse.Left.Length; partition++)
+        for (var partition = 0; partition < response.Left.Length; partition++)
         {
             var index = historyPosition - partition;
-            if (index < 0) index += impulse.Left.Length;
+            if (index < 0) index += response.Left.Length;
             var leftInput = leftHistory[index];
             var rightInput = rightHistory[index];
-            var leftResponse = impulse.Left[partition];
-            var rightResponse = impulse.Right[partition];
+            var leftResponse = response.Left[partition];
+            var rightResponse = response.Right[partition];
             for (var bin = 0; bin < FftLength; bin++)
             {
                 leftSum[bin] += leftInput[bin] * leftResponse[bin];
@@ -145,7 +160,7 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
             leftOverlap[frame] = (float)leftSum[frame + BlockFrames].Real;
             rightOverlap[frame] = (float)rightSum[frame + BlockFrames].Real;
         }
-        if (++historyPosition == impulse.Left.Length) historyPosition = 0;
+        if (++historyPosition == response.Left.Length) historyPosition = 0;
     }
 
     private void Reset(bool clearHistory)
