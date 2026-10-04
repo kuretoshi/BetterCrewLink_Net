@@ -11,8 +11,7 @@ internal static partial class DeveloperDebugAuth
 
     internal static bool Verify(string? password, string? configuration = null)
     {
-        configuration ??= Environment.GetEnvironmentVariable("TANUKI_DEBUG_AUTH")
-            ?? ReadBundledConfiguration();
+        configuration ??= ResolveConfiguration();
         if (string.IsNullOrEmpty(password) || password.Length > 1_024 || string.IsNullOrEmpty(configuration))
             return false;
 
@@ -55,6 +54,11 @@ internal static partial class DeveloperDebugAuth
         catch (UnauthorizedAccessException) { return null; }
     }
 
+    private static string? ResolveConfiguration(string? baseDirectory = null,
+        string? environmentConfiguration = null) =>
+        ReadBundledConfiguration(baseDirectory) ?? environmentConfiguration ??
+        Environment.GetEnvironmentVariable("TANUKI_DEBUG_AUTH");
+
     internal static void VerifyParity()
     {
         // Node.js pbkdf2Sync vector from the released implementation's parameters.
@@ -69,11 +73,13 @@ internal static partial class DeveloperDebugAuth
         {
             var path = Path.Combine(directory, "debug-auth.json");
             File.WriteAllText(path, config);
-            if (!Verify("test-pass", ReadBundledConfiguration(directory)))
-                throw new InvalidOperationException("Bundled debug authentication did not load");
+            if (!Verify("test-pass", ResolveConfiguration(directory, "{}")))
+                throw new InvalidOperationException("Bundled debug authentication did not override the environment");
             File.WriteAllText(path, new string('x', 4_097));
             if (ReadBundledConfiguration(directory) is not null)
                 throw new InvalidOperationException("Oversized debug authentication file was accepted");
+            if (!Verify("test-pass", ResolveConfiguration(directory, config)))
+                throw new InvalidOperationException("Development environment authentication did not fall back");
         }
         finally { Directory.Delete(directory, recursive: true); }
         Console.WriteLine("[PASS] Developer debug PBKDF2 authentication matches released parameters");

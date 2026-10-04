@@ -42,7 +42,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/create-debug-auth.ps1
 & tools/package-release.ps1 -Version 3.2.8-net-beta.1 -DebugAuthFile (Join-Path $env:APPDATA 'TanukiBCL.Net\release-debug-auth.json')
 ```
 
-生成された設定元ファイルはリポジトリ外に保存され、ZIPへはソルト付きPBKDF2-SHA256ハッシュのみを同梱します。共通パスワードのハッシュは配布物から解析できるため、十分長い独自のパスフレーズを使ってください。設定元ファイルがなければベータ／正式版のパッケージ作成は失敗します。既存の `TANUKI_DEBUG_AUTH` 環境変数がある開発環境では、その値を優先します。
+生成された設定元ファイルはリポジトリ外に保存され、ZIPへはソルト付きPBKDF2-SHA256ハッシュのみを同梱します。共通パスワードのハッシュは配布物から解析できるため、十分長い独自のパスフレーズを使ってください。設定元ファイルがなければベータ／正式版のパッケージ作成は失敗します。アプリは同梱設定を優先し、`TANUKI_DEBUG_AUTH` 環境変数は同梱設定のない開発環境でだけ使います。
 
 ## サーバー接続だけを確認
 
