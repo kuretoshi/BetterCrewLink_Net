@@ -190,6 +190,9 @@ internal static class GameProcessScanner
         (state.Mod != AmongUsModType.SuperNewRoles ||
          state.GameState is not (GameState.Tasks or GameState.Discussion) ||
          state.Players.Where(player => !player.Disconnected).All(player => player.SnrRole is not null)) &&
+        (state.Mod != AmongUsModType.NebulaOnTheShip ||
+         state.GameState is not (GameState.Tasks or GameState.Discussion) ||
+         state.Players.Where(player => !player.Disconnected).All(player => player.NosPlayer is not null)) &&
         (state.Mod != AmongUsModType.TownOfHostForE ||
          state.GameState is not (GameState.Tasks or GameState.Discussion) ||
          state.Players.Where(player => !player.Disconnected).All(player => player.TohRole is not null));

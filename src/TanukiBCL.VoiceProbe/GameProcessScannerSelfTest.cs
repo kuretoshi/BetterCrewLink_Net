@@ -65,6 +65,22 @@ internal static class GameProcessScannerSelfTest
         snrState.Players[0].SnrRole = new SnrRoleData(1, "Crewmate", 0, "None", 0, "None");
         Require(GameProcessScanner.IsReady(snrState, GameState.Tasks),
             "SNR scan did not complete after role discovery");
+        var nosState = new AmongUsState
+        {
+            Mod = AmongUsModType.NebulaOnTheShip,
+            GameState = GameState.Tasks,
+            Players = [new Player { Id = 0, Name = "NoS player" }]
+        };
+        Require(!GameProcessScanner.IsReady(nosState, GameState.Tasks),
+            "NoS scan completed before the published role snapshot");
+        nosState.Players[0].NosPlayer = new NosPlayerData { PlayerId = 0, IsImpostor = true };
+        nosState.Players[0].IsImpostor = true;
+        Require(GameProcessScanner.IsReady(nosState, GameState.Tasks),
+            "NoS scan did not complete after the published role snapshot");
+        nosState.Players[0].NosPlayer = null;
+        nosState.GameState = GameState.Lobby;
+        Require(GameProcessScanner.IsReady(nosState, GameState.Lobby),
+            "Explicit NoS lobby scan waited for the game-only role snapshot");
         var tohState = new AmongUsState
         {
             Mod = AmongUsModType.TownOfHostForE,
