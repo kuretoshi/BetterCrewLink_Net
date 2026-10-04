@@ -62,6 +62,21 @@ public partial class SettingsWindow
             RequireLive(settings.MyLobbySettings.MaxDistance == 7, "Leaving lobby category did not flush its draft");
 
             window.CategoryList.SelectedIndex = 1;
+            window.WallsBlockAudioCheck.IsChecked = true;
+            Click(window.WallsBlockAudioCheck);
+            RequireLive(!settings.MyLobbySettings.WallsBlockAudio,
+                "Lobby checkbox change bypassed the draft period");
+            PumpFor(TimeSpan.FromMilliseconds(850));
+            RequireLive(settings.MyLobbySettings.WallsBlockAudio &&
+                writes.Last().MyLobbySettings.WallsBlockAudio,
+                "Lobby checkbox change was not persisted");
+            window.WallsBlockAudioCheck.IsChecked = false;
+            Click(window.WallsBlockAudioCheck);
+            PumpFor(TimeSpan.FromMilliseconds(850));
+            RequireLive(!settings.MyLobbySettings.WallsBlockAudio &&
+                !writes.Last().MyLobbySettings.WallsBlockAudio,
+                "Reversing a lobby checkbox change was not persisted");
+
             window.PublicLobbyOnCheck.IsChecked = true;
             Click(window.PublicLobbyOnCheck);
             RequireLive(!settings.MyLobbySettings.PublicLobbyOn &&
