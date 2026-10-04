@@ -11,6 +11,7 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
 {
     private const int BlockFrames = 1024;
     private const int FftLength = BlockFrames * 2;
+    private const int HistoryRetentionFrames = 48_000 * 10;
     private static readonly Lazy<ImpulseSpectrum> ReleasedImpulse = new(LoadReleasedImpulse);
 
     private readonly ISampleProvider source;
@@ -27,6 +28,7 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     private readonly float[] rightOverlap = new float[BlockFrames];
     private int framePosition;
     private int historyPosition;
+    private int disabledFrames;
     private bool wasEnabled;
 
     public volatile bool Enabled;
@@ -52,6 +54,9 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
 
     public WaveFormat WaveFormat => source.WaveFormat;
 
+    internal long RetainedHistoryBytes =>
+        (long)(leftHistory.Length + rightHistory.Length) * FftLength * sizeof(double) * 2;
+
     public int Read(float[] buffer, int offset, int count)
     {
         var read = source.Read(buffer, offset, count);
@@ -66,10 +71,22 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
                 leftHistory = AllocateHistory(impulse.Left.Length);
                 rightHistory = AllocateHistory(impulse.Right.Length);
             }
-            Reset();
+            Reset(clearHistory: enabled);
+            disabledFrames = 0;
             wasEnabled = enabled;
         }
-        if (!enabled) return read;
+        if (!enabled)
+        {
+            // Retain briefly across distance changes to avoid repeatedly allocating
+            // large convolution buffers when players cross the audible boundary.
+            disabledFrames = Math.Min(HistoryRetentionFrames, disabledFrames + read / 2);
+            if (disabledFrames == HistoryRetentionFrames)
+            {
+                leftHistory = [];
+                rightHistory = [];
+            }
+            return read;
+        }
 
         for (var index = offset; index < offset + read; index += 2)
         {
@@ -131,10 +148,13 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
         if (++historyPosition == impulse.Left.Length) historyPosition = 0;
     }
 
-    private void Reset()
+    private void Reset(bool clearHistory)
     {
-        foreach (var block in leftHistory) Array.Clear(block);
-        foreach (var block in rightHistory) Array.Clear(block);
+        if (clearHistory)
+        {
+            foreach (var block in leftHistory) Array.Clear(block);
+            foreach (var block in rightHistory) Array.Clear(block);
+        }
         Array.Clear(input);
         Array.Clear(output);
         Array.Clear(leftOverlap);

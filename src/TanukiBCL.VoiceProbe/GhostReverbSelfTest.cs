@@ -24,6 +24,7 @@ internal static class GhostReverbSelfTest
             if (reverb.Read(result, offset, chunk) != chunk) return false;
             offset += chunk;
         }
+        if (reverb.RetainedHistoryBytes == 0) return false;
         if (!Near(result[1024 * 2], 1f) ||
             !Near(result[1025 * 2 + 1], 0.5f) ||
             !Near(result[2049 * 2], 0.25f) ||
@@ -35,10 +36,20 @@ internal static class GhostReverbSelfTest
         var bypass = new float[2];
         reverb.Read(bypass, 0, bypass.Length);
         if (!Near(bypass[0], 1f) || !Near(bypass[1], 1f)) return false;
+        if (reverb.RetainedHistoryBytes == 0) return false;
         reverb.Enabled = true;
         var reset = new float[2];
         reverb.Read(reset, 0, reset.Length);
         if (!Near(reset[0], 0f) || !Near(reset[1], 0f)) return false;
+        if (reverb.RetainedHistoryBytes == 0) return false;
+        reverb.Enabled = false;
+        var disabledAudio = new float[48_000 * 2];
+        for (var second = 0; second < 10; second++)
+            reverb.Read(disabledAudio, 0, disabledAudio.Length);
+        if (reverb.RetainedHistoryBytes != 0) return false;
+        reverb.Enabled = true;
+        reverb.Read(reset, 0, reset.Length);
+        if (reverb.RetainedHistoryBytes == 0 || !Near(reset[0], 0f)) return false;
 
         // Also exercise loading the released, normalized stereo response.
         var releasedSource = new ImpulseSource();
@@ -48,8 +59,15 @@ internal static class GhostReverbSelfTest
         released.Read(releasedOutput, 0, releasedOutput.Length);
         timer.Stop();
         Console.WriteLine($"ghost reverb: 1 s stereo DSP {timer.ElapsedMilliseconds} ms");
-        return releasedOutput.Skip(1024 * 2).Any(sample =>
+        var producedAudio = releasedOutput.Skip(1024 * 2).Any(sample =>
             float.IsFinite(sample) && Math.Abs(sample) > 0.000001f);
+        var retainedHistoryBytes = released.RetainedHistoryBytes;
+        released.Enabled = false;
+        for (var second = 0; second < 10; second++)
+            released.Read(releasedOutput, 0, releasedOutput.Length);
+        if (released.RetainedHistoryBytes != 0) return false;
+        Console.WriteLine($"ghost reverb: released {retainedHistoryBytes / 1024d / 1024d:F1} MiB after 10 s inactive");
+        return producedAudio;
     }
 
     private static bool Near(float actual, float expected) => Math.Abs(actual - expected) < 0.0001f;

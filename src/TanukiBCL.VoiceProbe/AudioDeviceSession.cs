@@ -202,7 +202,7 @@ internal sealed class AudioDeviceSession : IDisposable
 
         var peer = GetOrCreatePeerPlayback(peerId);
         var bytes = new byte[stereoPcm.Length * sizeof(short)];
-        Buffer.BlockCopy(stereoPcm.ToArray(), 0, bytes, 0, bytes.Length);
+        MemoryMarshal.AsBytes(stereoPcm).CopyTo(bytes);
         peer.Buffer.AddSamples(bytes, 0, bytes.Length);
     }
 
