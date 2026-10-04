@@ -889,6 +889,23 @@ internal static class SpatialVoicePolicySelfTest
         var wire = lobbySettings.ToWireJson();
         using (var document = JsonDocument.Parse(wire))
         {
+            // TanukiBCL 3.2.8 ILobbySettings, plus its public-lobby MOD wire extension.
+            var releasedWireFields = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "maxDistance", "visionHearing", "haunting", "snrJumboVoice",
+                "jackalHaunting", "jackalHearOutsideVents", "jackalTalkInVents",
+                "jackalRadioEnabled", "sidekickHaunting", "sidekickHearOutsideVents",
+                "sidekickTalkInVents", "nosNeutralKillerHaunting", "nosVoicePositions",
+                "nosSizeVoiceEffect", "nosFixerJammingVoiceBlock", "tohNeutralKillerHaunting",
+                "hearImpostorsInVents", "impostersHearImpostersInvent",
+                "impostorRadioEnabled", "impostorRadioOnlyMode", "commsSabotage",
+                "voiceEffectEnabled", "deadOnly", "meetingGhostOnly", "hearThroughCameras",
+                "wallsBlockAudio", "publicLobby_on", "publicLobby_title",
+                "publicLobby_language", "publicLobby_mods"
+            };
+            Check("lobby wire: released 3.2.8 field set", true,
+                releasedWireFields.SetEquals(document.RootElement.EnumerateObject()
+                    .Select(property => property.Name)));
             Check("lobby wire: publicLobby_on", true,
                 document.RootElement.TryGetProperty("publicLobby_on", out _));
             Check("lobby wire: jackalRadioEnabled", true,
