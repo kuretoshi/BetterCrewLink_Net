@@ -16,7 +16,9 @@ internal static class SpeakerLoopbackTestRunner
         var other = new ToneAnalyzer(format);
         tone.Push(SyntheticTone(440, format));
         other.Push(SyntheticTone(880, format));
-        if (!HasTone(tone.Result) || HasTone(other.Result))
+        if (!HasTone(tone.Result) || HasTone(other.Result) ||
+            Math.Abs(tone.Result.Rms - 0.1 / Math.Sqrt(2)) > 0.005 ||
+            Math.Abs(tone.Result.Peak - 0.1) > 0.005)
             throw new InvalidOperationException("Speaker loopback tone detection failed its synthetic controls.");
         Console.WriteLine("[PASS] Speaker loopback 440 Hz detection and 880 Hz rejection.");
         return 0;
@@ -102,7 +104,8 @@ internal static class SpeakerLoopbackTestRunner
         return bytes;
     }
 
-    internal sealed record ToneResult(double ToneAmplitude, double AdjacentAmplitude, int AnalysisFrames);
+    internal sealed record ToneResult(double ToneAmplitude, double AdjacentAmplitude, int AnalysisFrames,
+        double Rms, double Peak);
 
     internal sealed class ToneAnalyzer
     {
@@ -112,6 +115,9 @@ internal static class SpeakerLoopbackTestRunner
         private double maxTone;
         private double adjacentAtMax;
         private int analysisFrames;
+        private long sampleCount;
+        private double sumSquares;
+        private double peak;
         private readonly object gate = new();
 
         public ToneAnalyzer(WaveFormat format)
@@ -126,7 +132,11 @@ internal static class SpeakerLoopbackTestRunner
 
         public ToneResult Result
         {
-            get { lock (gate) return new ToneResult(maxTone, adjacentAtMax, analysisFrames); }
+            get
+            {
+                lock (gate) return new ToneResult(maxTone, adjacentAtMax, analysisFrames,
+                    sampleCount == 0 ? 0 : Math.Sqrt(sumSquares / sampleCount), peak);
+            }
         }
 
         public void Push(ReadOnlySpan<byte> bytes)
@@ -145,7 +155,11 @@ internal static class SpeakerLoopbackTestRunner
                             ? BitConverter.ToSingle(channelBytes)
                             : BitConverter.ToInt16(channelBytes) / 32768f;
                     }
-                    frame[position++] = sample / format.Channels;
+                    var normalized = sample / format.Channels;
+                    sampleCount++;
+                    sumSquares += normalized * normalized;
+                    peak = Math.Max(peak, Math.Abs(normalized));
+                    frame[position++] = normalized;
                     if (position != frame.Length) continue;
                     var tone = Amplitude(frame, 440, format.SampleRate);
                     var adjacent = Math.Max(Amplitude(frame, 400, format.SampleRate),

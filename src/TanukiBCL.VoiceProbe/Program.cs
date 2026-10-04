@@ -43,7 +43,7 @@ internal static class Program
                     ProbeOptions.Parse(args.Where(arg => arg != "--nos-palette").ToArray()).GameProcessId, palette: true);
             if (args.Contains("--speaker-loopback-test"))
                 return await SpeakerLoopbackTestRunner.RunAsync(args);
-            if (args.Contains("--microphone-tone-test"))
+            if (args.Contains("--microphone-tone-test") || args.Contains("--microphone-level-test"))
                 return await MicrophoneToneTestRunner.RunAsync(args);
             if (args.Contains("--speaker-loopback-self-test"))
                 return SpeakerLoopbackTestRunner.RunSelfTest();
@@ -210,6 +210,7 @@ internal static class Program
               --play-test-tone --output-device <n> --seconds <1-15> --speech-like  音量と基本周波数が変動する440Hz付き診断音を流す（実音声ではない）
               --speaker-loopback-test [--speaker-name name] [--seconds n]  出力デバイスの440Hz成分だけを測定（音声は保存しない）
               --microphone-tone-test [--microphone-name name] [--seconds n]  入力デバイスの440Hz成分だけを測定（音声は保存しない）
+              --microphone-level-test [--microphone-name name] [--seconds n]  入力デバイスのRMS/最大値だけを測定（音声は保存しない）
               --peer-pcm-tone-test --game-process-id PID --expected-peer-client-id ID --seconds N  相手から復号したPCMの440Hz成分を測定（保存なし）
               --independent-opus-self-test  受信診断用の独立Opus復号器を440Hz信号で検証
               --speaker-loopback-self-test 440Hz検出と別周波数の除外を合成音で検証

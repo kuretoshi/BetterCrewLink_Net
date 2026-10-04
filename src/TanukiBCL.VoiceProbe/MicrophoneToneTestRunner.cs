@@ -9,6 +9,7 @@ internal static class MicrophoneToneTestRunner
 {
     public static async Task<int> RunAsync(string[] args)
     {
+        var levelOnly = args.Contains("--microphone-level-test");
         var microphoneName = ReadValue(args, "--microphone-name");
         var secondsText = ReadValue(args, "--seconds");
         var seconds = secondsText is null ? 6 : int.Parse(secondsText);
@@ -53,12 +54,18 @@ internal static class MicrophoneToneTestRunner
             }
 
             var result = analyzer.Result;
-            Console.WriteLine($"Microphone 440 Hz peak={result.ToneAmplitude:0.0000}, " +
+            Console.WriteLine($"Microphone RMS={result.Rms:0.0000}, peak={result.Peak:0.0000}, " +
+                $"440 Hz peak={result.ToneAmplitude:0.0000}, " +
                 $"adjacent={result.AdjacentAmplitude:0.0000}, frames={result.AnalysisFrames}");
-            var passed = result.AnalysisFrames > 0 && result.ToneAmplitude >= 0.003 &&
-                         result.ToneAmplitude >= result.AdjacentAmplitude * 3;
-            Console.WriteLine(passed ? "[PASS] 440 Hz reached the selected microphone endpoint." :
-                "[FAIL] No distinct 440 Hz tone reached the selected microphone endpoint.");
+            var passed = levelOnly
+                ? result.AnalysisFrames > 0 && result.Rms >= 0.002 && result.Peak >= 0.01
+                : result.AnalysisFrames > 0 && result.ToneAmplitude >= 0.003 &&
+                  result.ToneAmplitude >= result.AdjacentAmplitude * 3;
+            Console.WriteLine(levelOnly
+                ? passed ? "[PASS] Audible-level signal reached the selected microphone endpoint." :
+                    "[FAIL] No audible-level signal reached the selected microphone endpoint."
+                : passed ? "[PASS] 440 Hz reached the selected microphone endpoint." :
+                    "[FAIL] No distinct 440 Hz tone reached the selected microphone endpoint.");
             return passed ? 0 : 1;
         }
     }
