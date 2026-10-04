@@ -84,7 +84,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private string lastObsPayload = string.Empty;
     private string lastObsSecret = string.Empty;
 
-    public VoiceServerProbe(ProbeOptions options, string label = "probe", bool receiveOnly = false)
+    public VoiceServerProbe(ProbeOptions options, string label = "probe", bool receiveOnly = false,
+        bool sendDiagnosticProbe = true)
     {
         this.options = options;
         this.label = label;
@@ -100,7 +101,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ConnectionTimeout = TimeSpan.FromSeconds(10)
         });
         peerManager = new WebRtcPeerManager(label, SendSignalAsync,
-            sendTestTone: !options.LiveAudio && !options.AutoRadioTone, natFix: options.NatFix,
+            sendTestTone: sendDiagnosticProbe && !options.LiveAudio && !options.AutoRadioTone, natFix: options.NatFix,
             testToneTarget: options.ExpectedPeerClientId is int expectedClientId
                 ? socketId => peerClientIds.TryGetValue(socketId, out var clientId) && clientId == expectedClientId
                 : null,

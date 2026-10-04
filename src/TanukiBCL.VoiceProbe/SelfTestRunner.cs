@@ -148,12 +148,60 @@ internal static class SelfTestRunner
             cancellation.Cancel();
             await IgnoreCancellationAsync(firstRun);
             await IgnoreCancellationAsync(secondRun);
+            await VerifyInitialSettingsWithoutDiagnosticProbeAsync(baseOptions, timeout);
             return 0;
         }
         catch (Exception exception) when (exception is OperationCanceledException or TimeoutException)
         {
             Console.Error.WriteLine("[FAIL] 制限時間内にP2P接続を確認できませんでした。");
             return 1;
+        }
+    }
+
+    private static async Task VerifyInitialSettingsWithoutDiagnosticProbeAsync(
+        ProbeOptions baseOptions, TimeSpan timeout)
+    {
+        var seed = Random.Shared.Next(100_000, 900_000);
+        var lobby = CreateLobbyCode();
+        var hostOptions = baseOptions with
+        {
+            LobbyCode = lobby, PlayerId = 0, ClientId = seed, IsHost = true,
+            Duration = null, SelfTest = false, LiveAudio = false, AutoRadioTone = false,
+            GameProcessId = null
+        };
+        var guestOptions = hostOptions with { PlayerId = 1, ClientId = seed + 1, IsHost = false };
+        var settings = new LobbySettings { MaxDistance = 6.7d, VisionHearing = true };
+        using var cancellation = new CancellationTokenSource(timeout);
+        await using var host = new VoiceServerProbe(hostOptions, "settings-host", sendDiagnosticProbe: false);
+        await using var guest = new VoiceServerProbe(guestOptions, "settings-guest", sendDiagnosticProbe: false);
+        var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        host.SetOwnLobbySettings(settings);
+        guest.SetExpectedHostClientId(seed);
+        guest.LobbySettingsChanged += value =>
+        {
+            if (value == settings) received.TrySetResult();
+        };
+
+        Task? hostRun = null;
+        Task? guestRun = null;
+        try
+        {
+            hostRun = host.RunAsync(cancellation.Token);
+            await host.Connected.WaitAsync(TimeSpan.FromSeconds(10), cancellation.Token);
+            await Task.Delay(500, cancellation.Token);
+            guestRun = guest.RunAsync(cancellation.Token);
+            await received.Task.WaitAsync(timeout, cancellation.Token);
+            if (host.PeerVerified.IsCompleted || guest.PeerVerified.IsCompleted ||
+                guest.CurrentLobbySettings != settings)
+                throw new InvalidOperationException(
+                    "Initial live-style lobby settings depended on the diagnostic probe/ack.");
+            Console.WriteLine("[PASS] Initial host lobby settings arrived without a diagnostic probe/ack.");
+        }
+        finally
+        {
+            cancellation.Cancel();
+            if (hostRun is not null) await IgnoreCancellationAsync(hostRun);
+            if (guestRun is not null) await IgnoreCancellationAsync(guestRun);
         }
     }
 
