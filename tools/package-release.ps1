@@ -69,6 +69,11 @@ try {
 }
 finally { $archive.Dispose() }
 
+# The updater also rejects traversal, duplicate or Windows-incompatible entry
+# names, so validate the exact archive through its real staging path.
+& dotnet (Join-Path $publishDirectory 'TanukiBCL.Net.dll') --update-package-file-test $archivePath
+if ($LASTEXITCODE -ne 0) { throw 'Update package staging validation failed.' }
+
 $digest = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 Write-Output "Release ZIP: $archivePath"
 Write-Output "Size: $((Get-Item -LiteralPath $archivePath).Length) bytes"
