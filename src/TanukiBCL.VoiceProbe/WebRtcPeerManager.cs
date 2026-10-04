@@ -195,6 +195,11 @@ internal sealed class WebRtcPeerManager : IDisposable
     public bool HasOpenDataChannel(string remoteSocketId) =>
         peers.TryGetValue(remoteSocketId, out var peer) && Volatile.Read(ref peer.DataChannelOpen) == 1;
 
+    public bool HasReadyPeer(string remoteSocketId) =>
+        peers.TryGetValue(remoteSocketId, out var peer) &&
+        peer.Connection.connectionState == RTCPeerConnectionState.connected &&
+        Volatile.Read(ref peer.DataChannelOpen) == 1;
+
     public bool HasPeer(string remoteSocketId) => peers.ContainsKey(remoteSocketId);
 
     public bool IsCurrentPeer(string remoteSocketId, Guid peerInstanceId) =>

@@ -262,6 +262,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public bool IsPeerPresent(int clientId) =>
         peerClientIds.Any(peer => peer.Value == clientId);
 
+    public bool IsPeerDataReady(int clientId) =>
+        peerClientIds.Any(peer => peer.Value == clientId && peerManager.HasReadyPeer(peer.Key));
+
     internal static bool IsOwnClientPeer(AmongUsState state, int peerClientId) =>
         state.ClientId == peerClientId;
 

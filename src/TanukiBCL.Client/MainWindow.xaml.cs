@@ -589,9 +589,9 @@ public partial class MainWindow : Window
                 var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
                 var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
                 var firstFrame = !row.HasReceivedFrames;
-                row.IncrementReceived();
+                var connectionRecovered = row.IncrementReceived();
                 row.RecordDecodedPcm(level, receivedAt);
-                if (firstFrame) UpdateCompactView();
+                if (firstFrame || connectionRecovered) UpdateCompactView();
             });
         };
         activeProbe.LocalAudioFrameSent += peerCount => Dispatch(session, () =>
@@ -790,6 +790,10 @@ public partial class MainWindow : Window
         {
             var row = FindOrCreatePeer(player.ClientId, player.Name);
             row.Name = player.Name;
+            // The game can briefly publish no roster between a round and the
+            // lobby. Recreated rows must reflect peers that never disconnected.
+            if (probe?.IsPeerDataReady(player.ClientId) == true)
+                row.Connection = "data-ready";
             row.Talking = row.VadActive && row.Audible && !player.InVent;
         }
         foreach (var stale in peers.Where(row => remotePlayers.All(player => player.ClientId != row.ClientId)).ToArray())
@@ -962,6 +966,19 @@ public partial class MainWindow : Window
             radioTransmitting, CompactVoiceView.RemoteDeadForDisplay);
     }
 
+    internal static void VerifyPeerConnectionRecovery()
+    {
+        var row = new PeerRow(1, "peer") { Connection = "切断" };
+        if (!row.IncrementReceived() || row.Connection != "接続済み" || !row.HasReceivedFrames)
+            throw new InvalidOperationException("Received voice did not clear a stale disconnected peer state.");
+        if (row.IncrementReceived())
+            throw new InvalidOperationException("An already connected peer was reported as recovered again.");
+        row.Connection = "再接続中";
+        row.ResetReceived();
+        if (!row.IncrementReceived() || row.Connection != "接続済み")
+            throw new InvalidOperationException("Received voice did not recover after a reconnect reset.");
+    }
+
     private void ShowDiagnostics()
     {
         CompactVoiceView.DismissPlayerConfigPopup();
@@ -1123,10 +1140,15 @@ public partial class MainWindow : Window
 
         public void RecordDecodedPcm(PcmLevelFrame level, DateTimeOffset at) => decodedPcm.Add(level, at);
 
-        public void IncrementReceived()
+        public bool IncrementReceived()
         {
+            // Decoded audio is direct evidence of an active voice path even if
+            // the earlier connection callback was missed during roster churn.
+            var connectionRecovered = Connection is not ("data-ready" or "接続済み");
+            if (connectionRecovered) Connection = "接続済み";
             receivedFrames++;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Received)));
+            return connectionRecovered;
         }
 
         public void ResetReceived()
