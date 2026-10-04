@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Windows;
 using TanukiBCL.VoiceProbe;
 
@@ -35,7 +36,8 @@ public partial class App : Application
             e.Args.Contains("--support-log-self-test") || e.Args.Contains("--update-catalog-self-test") ||
             e.Args.Contains("--update-catalog-live-test") ||
             e.Args.Contains("--update-package-live-test") ||
-            e.Args.Contains("--update-package-self-test") || e.Args.Contains("--update-package-file-test"))
+            e.Args.Contains("--update-package-self-test") || e.Args.Contains("--update-package-file-test") ||
+            e.Args.Contains("--registration-self-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
@@ -110,6 +112,7 @@ public partial class App : Application
                 }
                 if (e.Args.Contains("--update-package-self-test"))
                     Task.Run(UpdatePackage.VerifyAsync).GetAwaiter().GetResult();
+                if (e.Args.Contains("--registration-self-test")) InstalledAppRegistration.Verify();
                 var livePackageIndex = Array.IndexOf(e.Args, "--update-package-live-test");
                 if (livePackageIndex >= 0)
                 {
@@ -143,6 +146,11 @@ public partial class App : Application
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             Trace.TraceWarning($"Support log could not be opened: {error.Message}");
+        }
+        try { InstalledAppRegistration.Refresh(UpdateCatalog.CurrentVersion, AppContext.BaseDirectory); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or SecurityException or ArgumentException)
+        {
+            Trace.TraceWarning($"Installed app registration could not be refreshed: {error.Message}");
         }
         new MainWindow().Show();
     }
