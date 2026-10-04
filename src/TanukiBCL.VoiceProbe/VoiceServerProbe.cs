@@ -812,9 +812,27 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (clients.ValueKind != JsonValueKind.Object) return;
             stalledReconnectAttempts.Clear();
             failedReconnectAttempts.Clear();
-            var incomingSocketIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var client in clients.EnumerateObject())
+            var roster = clients.EnumerateObject().ToArray();
+            var advertisedSocketIds = roster.Select(client => client.Name).ToHashSet(StringComparer.Ordinal);
+            var preferredSocketByClient = new Dictionary<int, string>();
+            // A full roster can briefly contain two sockets for one game client.
+            // Preserve the socket already selected by a newer setClient event,
+            // regardless of the JSON property order in this snapshot.
+            foreach (var existing in peerClientIds)
             {
+                if (advertisedSocketIds.Contains(existing.Key))
+                    preferredSocketByClient.TryAdd(existing.Value, existing.Key);
+            }
+            var incomingSocketIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var client in roster)
+            {
+                if (client.Value.TryGetProperty("clientId", out var idElement) &&
+                    idElement.TryGetInt32(out var clientId))
+                {
+                    if (preferredSocketByClient.TryGetValue(clientId, out var preferredSocketId) &&
+                        preferredSocketId != client.Name) continue;
+                    preferredSocketByClient[clientId] = client.Name;
+                }
                 incomingSocketIds.Add(client.Name);
                 RegisterPeerClient(client.Name, client.Value);
                 ScheduleOfferFallback(client.Name);

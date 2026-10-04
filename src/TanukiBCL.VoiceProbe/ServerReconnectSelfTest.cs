@@ -73,8 +73,17 @@ internal static class ServerReconnectSelfTest
             if (probe.IsPeerSocketPresent("old-peer") || !probe.IsPeerSocketPresent("replacement-peer"))
                 throw new InvalidOperationException("a refreshed client kept its stale socket peer");
             Console.WriteLine("[PASS] a refreshed player retires its previous socket and clears the old status");
-            await server.SendEventAsync(1, "setClient", "retained-peer", new { clientId = 22 });
+            await server.SendEventAsync(1, "setClients", new Dictionary<string, object>
+            {
+                ["replacement-peer"] = new { clientId = 20 },
+                ["old-peer"] = new { clientId = 20 },
+                ["retained-peer"] = new { clientId = 22 }
+            });
             await retainedPeerKnown.Task.WaitAsync(timeout.Token);
+            if (!probe.IsPeerSocketPresent("replacement-peer") || probe.IsPeerSocketPresent("old-peer") ||
+                replacementCleared.Task.IsCompleted)
+                throw new InvalidOperationException("a duplicate roster replaced the current socket with a stale peer");
+            Console.WriteLine("[PASS] duplicate roster entries preserve the refreshed socket regardless of property order");
             await server.SendEventAsync(1, "setClients", new Dictionary<string, object>
             {
                 ["retained-peer"] = new { clientId = 22 }
