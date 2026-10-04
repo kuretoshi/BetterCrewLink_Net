@@ -246,7 +246,8 @@ internal static class GameProcessScanner
                         ? !item.Mix.Audible && item.Mix.Reason == "living-cannot-hear-ghost"
                         : item.Mix.Audible && item.Mix.Reason == "proximity"),
                 GameState.Tasks => mixes.All(item => me.IsDead || !item.Player.IsDead
-                    ? item.Mix.Reason is "proximity" or "out-of-range"
+                    ? item.Mix.Reason is "proximity" or "out-of-range" ||
+                      item.Mix.Reason is "peer-in-vent" or "nos-fixer-jamming" && !item.Mix.Audible
                     : !item.Mix.Audible && item.Mix.Reason == "living-cannot-hear-ghost"),
                 GameState.Lobby => mixes.All(item => item.Mix.Reason switch
                 {

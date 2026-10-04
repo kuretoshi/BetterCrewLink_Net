@@ -109,6 +109,27 @@ internal static class GameProcessScannerSelfTest
         Require(GameProcessScanner.Validate(hostOnlyToh,
             new GameScanExpectation("Tasks", 4, 0, 1, false, 4), GameState.Tasks),
             "TOH host-only scan rejected client-specific vanilla self roles");
+        var ventResults = Enumerable.Range(0, 2).Select(local =>
+            new GameProcessScanner.ProcessReadResult(local + 20, true, new AmongUsState
+            {
+                Mod = AmongUsModType.NebulaOnTheShip,
+                GameState = GameState.Tasks,
+                LobbyCode = "NOS123",
+                Players = Enumerable.Range(0, 2).Select(id => new Player
+                {
+                    Id = id, ClientId = id + 40, IsLocal = id == local,
+                    Name = $"NoS{id}", X = id, InVent = id == 1,
+                    IsImpostor = id == 1,
+                    NosPlayer = new NosPlayerData { PlayerId = id, IsImpostor = id == 1 }
+                }).ToList()
+            }, "", null)).ToArray();
+        var nosExpectation = new GameScanExpectation("Tasks", 2, 0, 1, false, 2);
+        Require(GameProcessScanner.Validate(ventResults, nosExpectation, GameState.Tasks),
+            "A correctly blocked NoS vent speaker failed the task voice scan");
+        foreach (var result in ventResults)
+            result.State!.Players[0].NosPlayer!.IsJammed = true;
+        Require(GameProcessScanner.Validate(ventResults, nosExpectation, GameState.Tasks),
+            "A correctly blocked NoS Fixer-jammed speaker failed the task voice scan");
         Require(GameProcessScanner.Validate(results, expectation, GameState.Lobby), "Four-player lobby failed");
         var departed = Enumerable.Range(0, 2).Select(local =>
             new GameProcessScanner.ProcessReadResult(local + 30, true, new AmongUsState
