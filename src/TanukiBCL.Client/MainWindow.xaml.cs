@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using TanukiBCL.VoiceProbe;
 using TanukiBCL.VoiceProbe.GameMemory;
 
@@ -23,6 +24,7 @@ public partial class MainWindow : Window
 
     private readonly ClientSessionCoordinator sessions = new();
     private readonly CoalescedSessionRestart settingsRestarts = new();
+    private readonly DispatcherTimer gameDetectionTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
     private InquiryWindow? inquiryWindow;
@@ -44,6 +46,7 @@ public partial class MainWindow : Window
     private bool reloadInProgress;
     private bool processSwitchInProgress;
     private bool isClosing;
+    private int? lastAutomaticPid;
     private long connectionIntentVersion;
     private ConnectionQuality? serverQuality;
     private long sentAudioFrames;
@@ -63,6 +66,7 @@ public partial class MainWindow : Window
             _ = DwmSetWindowAttribute(new WindowInteropHelper(this).Handle,
                 DwmwaBorderColor, ref borderColor, sizeof(int));
         };
+#if DEBUG
         PreviewKeyDown += (_, eventArgs) =>
         {
             if (eventArgs.Key != Key.D ||
@@ -70,13 +74,14 @@ public partial class MainWindow : Window
             ShowDiagnostics();
             eventArgs.Handled = true;
         };
+#endif
         Topmost = settings.AlwaysOnTop;
         PeerGrid.ItemsSource = peers;
         InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
         OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
         SelectConfiguredDevices();
         RefreshProcesses();
-        var explicitProcess = SelectProcessFromCommandLine();
+        SelectProcessFromCommandLine();
         CompactVoiceView.SettingsRequested += (_, _) => SettingsButton_Click(this, new RoutedEventArgs());
         CompactVoiceView.ReloadRequested += CompactVoiceView_ReloadRequested;
         CompactVoiceView.CloseRequested += (_, _) => Close();
@@ -104,17 +109,16 @@ public partial class MainWindow : Window
         CompactVoiceView.SetLanguage(settings.Language);
         CompactVoiceView.PlayerConfigChanged += ApplyPlayerConfig;
         UpdateCompactView();
+        gameDetectionTimer.Tick += (_, _) =>
+        {
+            if (!processSwitchInProgress && settingsWindow is null) TryAutomaticConnection();
+        };
         Loaded += (_, _) =>
         {
-            if (explicitProcess || ProcessCombo.Items.Count == 1)
-            {
-                StartButton_Click(this, new RoutedEventArgs());
-            }
-            else if (ProcessCombo.Items.Count > 1)
-            {
-                ShowDiagnostics();
-            }
+            TryAutomaticConnection();
+            gameDetectionTimer.Start();
         };
+        Closed += (_, _) => gameDetectionTimer.Stop();
     }
 
     private void RefreshGameLaunchers()
@@ -390,7 +394,8 @@ public partial class MainWindow : Window
         Trace.TraceError($"Settings could not be applied to the active session: {error}");
         if (isClosing || Dispatcher.HasShutdownStarted) return;
         StatusText.Text = $"設定の反映に失敗しました: {error.Message}";
-        ShowDiagnostics();
+        CompactVoiceView.SetError(error.Message);
+        ShowCompactView();
     }
 
     private void SelectConfiguredDevices()
@@ -421,6 +426,44 @@ public partial class MainWindow : Window
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e) => RefreshProcesses();
 
+    private void TryAutomaticConnection(bool force = false)
+    {
+        if (isClosing || Dispatcher.HasShutdownStarted || sessions.Current is not null || reloadInProgress)
+            return;
+        RefreshProcesses();
+        if (ProcessCombo.SelectedItem is not ProcessChoice choice)
+        {
+            lastAutomaticPid = null;
+            UpdateCompactView();
+            return;
+        }
+        if (!ShouldStartAutomatically(choice, lastAutomaticPid, force)) return;
+        lastAutomaticPid = choice.Id;
+        StartButton_Click(this, new RoutedEventArgs());
+    }
+
+    private static ProcessChoice? ChooseProcess(ProcessChoice[] choices, int? selectedPid) =>
+        choices.FirstOrDefault(choice => choice.Id == selectedPid) ?? choices.FirstOrDefault();
+
+    private static bool ShouldStartAutomatically(ProcessChoice? choice, int? lastPid, bool force) =>
+        choice is not null && (force || choice.Id != lastPid);
+
+    internal static void VerifyAutomaticProcessSelection()
+    {
+        var choices = new[] { new ProcessChoice(10), new ProcessChoice(20) };
+        if (ChooseProcess(choices, null)?.Id != 10 ||
+            ChooseProcess(choices, 20)?.Id != 20 ||
+            ChooseProcess(choices, 99)?.Id != 10 ||
+            ChooseProcess([], null) is not null ||
+            !ShouldStartAutomatically(choices[0], null, false) ||
+            ShouldStartAutomatically(choices[0], 10, false) ||
+            !ShouldStartAutomatically(choices[0], 10, true) ||
+            !ShouldStartAutomatically(choices[1], 10, false) ||
+            ShouldStartAutomatically(null, null, true))
+            throw new InvalidOperationException("Automatic Among Us selection differs from released 3.2.8");
+        Console.WriteLine("[PASS] Startup selects an available game without opening developer controls");
+    }
+
     private void RefreshProcesses()
     {
         var selectedPid = (ProcessChoice?)ProcessCombo.SelectedItem is { } selected ? selected.Id : (int?)null;
@@ -436,7 +479,7 @@ public partial class MainWindow : Window
             process.Dispose();
         }
         ProcessCombo.ItemsSource = choices;
-        ProcessCombo.SelectedItem = choices.FirstOrDefault(choice => choice.Id == selectedPid) ?? choices.FirstOrDefault();
+        ProcessCombo.SelectedItem = ChooseProcess(choices, selectedPid);
         StatusText.Text = choices.Length == 0
             ? "Among Usが見つかりません"
             : $"Among Usを{choices.Length}件検出しました";
@@ -453,6 +496,7 @@ public partial class MainWindow : Window
             return;
         }
         if (!sessions.TryStart(out var session)) return;
+        lastAutomaticPid = process.Id;
         CompactVoiceView.SetError(null);
         connectionIntentVersion++;
         await session.RunAsync(() => RunSessionAsync(session, process, input, output), result =>
@@ -658,16 +702,13 @@ public partial class MainWindow : Window
         var session = sessions.Current;
         if (activeProbe is null || session is null || !session.AcceptsCallbacks)
         {
-            RefreshProcesses();
-            if (ProcessCombo.Items.Count == 1) StartButton_Click(this, new RoutedEventArgs());
-            else if (ProcessCombo.Items.Count > 1) ShowDiagnostics();
-            else UpdateCompactView();
+            TryAutomaticConnection(force: true);
             return;
         }
 
         // Reload cannot revive a voice session attached to an Among Us PID that
-        // has exited. Release its socket/audio devices before selecting another
-        // process, and do not silently choose one when several games are open.
+        // has exited. Release its socket/audio devices before selecting the
+        // first remaining process, matching the released client's default.
         if (activeGamePid is { } gamePid && !IsGameProcessAlive(gamePid))
         {
             processSwitchInProgress = true;
@@ -679,13 +720,7 @@ public partial class MainWindow : Window
                 if (isClosing || Dispatcher.HasShutdownStarted) return;
                 currentState = null;
                 peers.Clear();
-                RefreshProcesses();
-                if (ProcessCombo.Items.Count == 1)
-                    StartButton_Click(this, new RoutedEventArgs());
-                else if (ProcessCombo.Items.Count > 1)
-                    ShowDiagnostics();
-                else
-                    UpdateCompactView();
+                TryAutomaticConnection(force: true);
             }
             finally { processSwitchInProgress = false; }
             return;
@@ -903,13 +938,13 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(session.Guard(action));
     }
 
-    private bool SelectProcessFromCommandLine()
+    private void SelectProcessFromCommandLine()
     {
         var args = Environment.GetCommandLineArgs();
         var optionIndex = Array.IndexOf(args, "--game-process-id");
         if (optionIndex < 0 || optionIndex + 1 >= args.Length || !int.TryParse(args[optionIndex + 1], out var processId))
         {
-            return false;
+            return;
         }
 
         if (ProcessCombo.ItemsSource is IEnumerable<ProcessChoice> choices &&
@@ -917,9 +952,7 @@ public partial class MainWindow : Window
         {
             ProcessCombo.SelectedItem = choice;
             StatusText.Text = $"Among Us PID {processId}を選択しました";
-            return true;
         }
-        return false;
     }
 
     private void UpdateCompactView()

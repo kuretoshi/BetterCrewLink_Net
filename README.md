@@ -2,7 +2,7 @@
 
 TanukiBCL.Netは、[タヌキのベタクル v3.2.8](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.8)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
 
-現在の配布版は **`3.2.8-net-beta.3`（プレリリース）** です。公式TanukiBCL v3.2.8との通信・音声・ゲーム連動の主要経路は実機で相互確認していますが、完全互換を宣言する段階ではありません。追加役職・細部のGUI・環境ごとの再接続などはベータテストを続けます。64ビット版Among Usのみ対応します。
+現在の配布版は **`3.2.8-net-beta.4`（プレリリース）** です。公式TanukiBCL v3.2.8との通信・音声・ゲーム連動の主要経路は実機で相互確認していますが、完全互換を宣言する段階ではありません。追加役職・細部のGUI・環境ごとの再接続などはベータテストを続けます。64ビット版Among Usのみ対応します。
 
 ## 主な機能
 
@@ -14,14 +14,14 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.8](https://github.com/kuretosh
 
 ## ダウンロード
 
-[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-Setup-3.2.8-net-beta.3.exe` をダウンロードして実行してください。ユーザー別のフォルダーへインストールされ、スタートメニューから起動・アンインストールできます。持ち運び用には `TanukiBCL.Net-win-x64.zip` も用意しています。ZIP版は任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。どちらも.NETランタイムを同梱しています。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
+[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-Setup-3.2.8-net-beta.4.exe` をダウンロードして実行してください。ユーザー別のフォルダーへインストールされ、スタートメニューから起動・アンインストールできます。持ち運び用には `TanukiBCL.Net-win-x64.zip` も用意しています。ZIP版は任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。どちらも.NETランタイムを同梱しています。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
 
 公式TanukiBCLのインストーラーやLite版とは別の配布物です。公式版は[こちら](https://github.com/kuretoshi/TanukiBCL/releases)から入手できます。
 
 ## 使い方
 
-1. Among UsとTanukiBCL.Netを起動します。Among Usを複数起動している場合は、接続するプロセスを選びます。
-2. マイクとスピーカーを選び、「接続開始」を押します。
+1. Among UsとTanukiBCL.Netを起動します。ゲームを検出すると自動で接続します。ゲームが未起動ならコンパクト画面で待機します。複数起動している場合は、公式版と同様に最小PIDのゲームを選びます。
+2. 必要に応じて設定画面からマイクとスピーカーを変更します。
 3. 同じロビーの相手もTanukiBCL.Netまたは互換の公式TanukiBCLを起動し、同じボイスサーバーへ接続します。
 4. 必要に応じてマイク、スピーカー、音量、ボイスエフェクト、オーバーレイを設定します。
 
@@ -49,7 +49,7 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.8](https://github.com/kuretosh
 dotnet run --project src/TanukiBCL.Client
 ```
 
-起動時に実行中のAmong Usを自動検出します。複数プロセスがある場合は対象PIDを選択し、`接続開始`を押すとゲーム状態からロビー情報を読み取ってボイスサーバーへ接続します。画面には接続状態、ゲーム状態、ロビー、参加人数、マイク発話状態に加え、参加者ごとのPeer状態、音声ルール、現在の音量を表示します。接続中はマイクとスピーカーを個別にミュートできます。マイクミュート時は音声送信を止め、VADも即座にOFFにします。他プレイヤーの役職や未発見の死亡情報は表示しません。設定画面から接続先、入出力デバイス、マスター音量、マイクゲインなどを保存できます（3.2.7設定項目の移植は継続中）。
+起動時またはゲーム起動後にAmong Usを自動検出し、ゲーム状態からロビー情報を読み取ってボイスサーバーへ接続します。複数プロセスの開発検証では`--game-process-id <PID>`で対象を明示できます。通常の配布版には手動の「接続開始」診断画面を表示しません。画面には接続状態、ゲーム状態、ロビー、参加人数、マイク発話状態を表示します。開発者用の詳細情報は設定から共通パスワードで開けます。接続中はマイクとスピーカーを個別にミュートできます。マイクミュート時は音声送信を止め、VADも即座にOFFにします。他プレイヤーの役職や未発見の死亡情報は表示しません。設定画面から接続先、入出力デバイス、マスター音量、マイクゲインなどを保存できます。
 
 Socket.IO、WebRTC、Opus音声、音声デバイス、ゲームメモリ読み取り、ゲーム状態に応じた音声ミックスまで段階的に実装しています。
 
@@ -76,8 +76,8 @@ Windows向けのself-contained配布ZIPは、バージョンを指定してロ�
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/create-debug-auth.ps1
-& tools/package-release.ps1 -Version 3.2.8-net-beta.3 -DebugAuthFile (Join-Path $env:APPDATA 'TanukiBCL.Net\release-debug-auth.json')
-& tools/build-installer.ps1 -Version 3.2.8-net-beta.3
+& tools/package-release.ps1 -Version 3.2.8-net-beta.4 -DebugAuthFile (Join-Path $env:APPDATA 'TanukiBCL.Net\release-debug-auth.json')
+& tools/build-installer.ps1 -Version 3.2.8-net-beta.4
 ```
 
 生成された設定元ファイルはリポジトリ外に保存され、ZIPへはソルト付きPBKDF2-SHA256ハッシュのみを同梱します。共通パスワードのハッシュは配布物から解析できるため、十分長い独自のパスフレーズを使ってください。設定元ファイルがなければベータ／正式版のパッケージ作成は失敗します。アプリは同梱設定を優先し、`TANUKI_DEBUG_AUTH` 環境変数は同梱設定のない開発環境でだけ使います。これは公式版と同様にローカルアプリの操作制限であり、アプリや配布ファイルを改変する利用者を防ぐ仕組みではありません。
