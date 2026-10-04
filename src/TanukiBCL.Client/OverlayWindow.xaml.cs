@@ -304,6 +304,16 @@ public partial class OverlayWindow : Window
                     ? player.Name : player.AppearanceName;
                 if (!row.Children.Contains(item.Name)) row.Children.Add(item.Name);
                 item.SetNameVisible(position is not ("left1" or "right1") || entry.Talking);
+                if (position is "left1" or "right1")
+                {
+                    item.Name.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    // CSS places alternate-side names outside the narrow 9vh
+                    // background. In WPF, a constrained RTL StackPanel pushes
+                    // the avatar right by the name's width; compensate per row.
+                    row.RenderTransform = new TranslateTransform(position == "left1"
+                        ? 16d : 20d - item.Name.DesiredSize.Width, 0d);
+                }
+                else row.RenderTransform = Transform.Identity;
             }
             else if (row.Children.Contains(item.Name))
             {
@@ -311,6 +321,7 @@ public partial class OverlayWindow : Window
                 item.Name.ApplyAnimationClock(UIElement.OpacityProperty, null);
                 item.NameFade = null;
                 item.NameVisible = null;
+                row.RenderTransform = Transform.Identity;
             }
             if (AvatarPanel.Children.IndexOf(row) != index)
             {
@@ -410,6 +421,7 @@ public partial class OverlayWindow : Window
         VerifyMeetingSnapshot();
         VerifyAvatarSizingAndBackground();
         VerifyAvatarRowPersistence();
+        VerifyAlternateSidePlacement();
         VerifySidePlacement();
         VerifyRemoteDeathDisplay();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
@@ -553,6 +565,49 @@ public partial class OverlayWindow : Window
                     throw new InvalidOperationException($"{position} failed to center the avatar vertically");
             }
             Console.WriteLine("[PASS] Left/right side avatars, names and vertical centering at normal and alternate positions");
+        }
+        finally { window.Close(); }
+    }
+
+    private static void VerifyAlternateSidePlacement()
+    {
+        var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = false };
+        var window = new OverlayWindow(0, settings) { Width = 720, Height = 576 };
+        try
+        {
+            var state = new AmongUsState { GameState = GameState.Tasks,
+                Players = [
+                    new Player { Id = 1, ClientId = 11, IsLocal = true, Name = "開発者くれとし" },
+                    new Player { Id = 2, ClientId = 22, Name = "開発者くれとし 1" }
+                ] };
+            var peers = new Dictionary<int, OverlayPeerStatus> { [22] = new(true, false, false) };
+            foreach (var (width, height) in new[] { (720d, 576d), (1280d, 720d) })
+            foreach (var position in new[] { "left1", "right1" })
+            {
+                window.Width = width;
+                window.Height = height;
+                settings.OverlayPosition = position;
+                window.Update(state, peers, true, false, false);
+                window.OverlayCanvas.Measure(new Size(width, height));
+                window.OverlayCanvas.Arrange(new Rect(0, 0, width, height));
+                window.OverlayCanvas.UpdateLayout();
+                foreach (var row in window.avatarRows.Values)
+                {
+                    var avatar = row.Avatar.TransformToAncestor(window.OverlayCanvas).Transform(new Point());
+                    var name = row.Name.TransformToAncestor(window.OverlayCanvas).Transform(new Point());
+                    if (position == "left1" ? Math.Abs(avatar.X - 20d) > 2d
+                        : Math.Abs(avatar.X + row.Avatar.ActualWidth - width) > 2d)
+                        throw new InvalidOperationException($"{position} avatar was clipped at {width}x{height}: {avatar.X}");
+                    if (name.X < 0d || name.X + row.Name.ActualWidth > width ||
+                        (position == "left1" ? name.X <= avatar.X + row.Avatar.ActualWidth
+                            : name.X + row.Name.ActualWidth >= avatar.X))
+                        throw new InvalidOperationException($"{position} name was clipped or on the wrong side at {width}x{height}: {name.X}");
+                }
+                if (Math.Abs(Canvas.GetTop(window.AvatarBackground) + window.AvatarBackground.DesiredSize.Height / 2d
+                    - height / 2d) > 1d)
+                    throw new InvalidOperationException($"{position} background was not vertically centered");
+            }
+            Console.WriteLine("[PASS] Alternate side avatars and labels stay inside 720x576/1280x720 viewport edges");
         }
         finally { window.Close(); }
     }

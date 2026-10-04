@@ -1,3 +1,4 @@
+using System.IO;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -10,7 +11,8 @@ internal static partial class DeveloperDebugAuth
 
     internal static bool Verify(string? password, string? configuration = null)
     {
-        configuration ??= Environment.GetEnvironmentVariable("TANUKI_DEBUG_AUTH");
+        configuration ??= Environment.GetEnvironmentVariable("TANUKI_DEBUG_AUTH")
+            ?? ReadBundledConfiguration();
         if (string.IsNullOrEmpty(password) || password.Length > 1_024 || string.IsNullOrEmpty(configuration))
             return false;
 
@@ -40,6 +42,19 @@ internal static partial class DeveloperDebugAuth
         catch (ArgumentException) { return false; }
     }
 
+    private static string? ReadBundledConfiguration(string? baseDirectory = null)
+    {
+        try
+        {
+            var path = Path.Combine(baseDirectory ?? AppContext.BaseDirectory, "debug-auth.json");
+            var file = new FileInfo(path);
+            return file.Exists && file.Length is > 0 and <= 4_096
+                ? File.ReadAllText(path) : null;
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
     internal static void VerifyParity()
     {
         // Node.js pbkdf2Sync vector from the released implementation's parameters.
@@ -48,6 +63,19 @@ internal static partial class DeveloperDebugAuth
             Verify("test-pass", "{\"salt\":\"00\",\"hash\":\"ff\"}") ||
             Verify(new string('x', 1_025), config) || Verify("test-pass", "{}"))
             throw new InvalidOperationException("Developer debug authentication differs from TanukiBCL 3.2.8");
+        var directory = Path.Combine(Path.GetTempPath(), $"tanuki-debug-auth-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "debug-auth.json");
+            File.WriteAllText(path, config);
+            if (!Verify("test-pass", ReadBundledConfiguration(directory)))
+                throw new InvalidOperationException("Bundled debug authentication did not load");
+            File.WriteAllText(path, new string('x', 4_097));
+            if (ReadBundledConfiguration(directory) is not null)
+                throw new InvalidOperationException("Oversized debug authentication file was accepted");
+        }
+        finally { Directory.Delete(directory, recursive: true); }
         Console.WriteLine("[PASS] Developer debug PBKDF2 authentication matches released parameters");
     }
 

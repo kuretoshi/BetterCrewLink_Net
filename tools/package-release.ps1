@@ -1,11 +1,28 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Version
+    [string]$Version,
+    [string]$DebugAuthFile
 )
 
 $ErrorActionPreference = 'Stop'
 if ($Version -notmatch '^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') {
     throw 'Version must be a semantic version such as 3.2.8-net-beta.1.'
+}
+if ($Version -notmatch '-netdev\.' -and [string]::IsNullOrWhiteSpace($DebugAuthFile)) {
+    throw 'Beta and stable packages require -DebugAuthFile. Run tools/create-debug-auth.ps1 locally first.'
+}
+
+$resolvedDebugAuthFile = $null
+if (-not [string]::IsNullOrWhiteSpace($DebugAuthFile)) {
+    $resolvedDebugAuthFile = (Resolve-Path -LiteralPath $DebugAuthFile -ErrorAction Stop).Path
+    $authFile = Get-Item -LiteralPath $resolvedDebugAuthFile
+    if ($authFile.PSIsContainer -or $authFile.Length -le 0 -or $authFile.Length -gt 4096) {
+        throw 'Debug auth configuration must be a small nonempty JSON file.'
+    }
+    $auth = Get-Content -LiteralPath $resolvedDebugAuthFile -Raw | ConvertFrom-Json
+    if ($auth.salt -cnotmatch '^[a-f0-9]{32}$' -or $auth.hash -cnotmatch '^[a-f0-9]{64}$') {
+        throw 'Debug auth configuration must contain a 16-byte salt and a 32-byte PBKDF2 hash as lowercase hex.'
+    }
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -23,6 +40,9 @@ if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 foreach ($document in @('README.md', 'LICENSE')) {
     Copy-Item -LiteralPath (Join-Path $repoRoot $document) -Destination (Join-Path $publishDirectory $document)
 }
+if ($resolvedDebugAuthFile) {
+    Copy-Item -LiteralPath $resolvedDebugAuthFile -Destination (Join-Path $publishDirectory 'debug-auth.json')
+}
 
 $required = @(
     'TanukiBCL.Net.exe', 'TanukiBCL.Net.deps.json', 'update-manifest.json',
@@ -30,6 +50,7 @@ $required = @(
     'RoleReaders/SnrRoleReader.exe', 'README.md', 'LICENSE',
     'Licenses/SourceCodePro-OFL.md'
 )
+if ($resolvedDebugAuthFile) { $required += 'debug-auth.json' }
 foreach ($item in $required) {
     if (-not (Test-Path -LiteralPath (Join-Path $publishDirectory $item))) {
         throw "Package is missing $item"
