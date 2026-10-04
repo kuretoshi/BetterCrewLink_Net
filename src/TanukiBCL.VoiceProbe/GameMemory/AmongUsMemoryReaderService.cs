@@ -754,6 +754,42 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             $"({initialized.GameAssemblySize / 1024d / 1024d:F1} MiB; {initialized.ModuleReadSummary})");
     }
 
+    internal static void VerifyScalarReadAllocations()
+    {
+        var address = Marshal.AllocHGlobal(sizeof(long));
+        try
+        {
+            var handle = OpenProcess(ProcessVmRead | ProcessQueryInformation, false, Environment.ProcessId);
+            if (handle == IntPtr.Zero) throw new InvalidOperationException("Could not open the current process for scalar read test.");
+            using var reader = new ReaderContext(handle, 0, 0, is64Bit: true);
+            Marshal.WriteInt64(address, 0x123456789abcdef0);
+            if (reader.ReadPointer(address.ToInt64()) != 0x123456789abcdef0 ||
+                reader.ReadInt32(address.ToInt64()) != unchecked((int)0x9abcdef0) ||
+                reader.ReadUInt32(address.ToInt64()) != 0x9abcdef0 ||
+                reader.ReadByte(address.ToInt64(), []) != 0xf0)
+                throw new InvalidOperationException("Reusable scalar reads returned incorrect values.");
+            var handle32 = OpenProcess(ProcessVmRead | ProcessQueryInformation, false, Environment.ProcessId);
+            if (handle32 == IntPtr.Zero) throw new InvalidOperationException("Could not open the current process for 32-bit pointer test.");
+            using (var reader32 = new ReaderContext(handle32, 0, 0, is64Bit: false))
+            {
+                if (reader32.ReadPointer(address.ToInt64()) != 0x9abcdef0)
+                    throw new InvalidOperationException("Reusable 32-bit pointer read returned an incorrect value.");
+            }
+            Marshal.WriteInt32(address, BitConverter.SingleToInt32Bits(1.25f));
+            if (reader.ReadFloat(address.ToInt64(), []) != 1.25f)
+                throw new InvalidOperationException("Reusable scalar float read returned an incorrect value.");
+            Marshal.WriteInt64(address, 0x123456789abcdef0);
+            for (var i = 0; i < 100; i++) reader.ReadPointer(address.ToInt64());
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < 10_000; i++) reader.ReadPointer(address.ToInt64());
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            if (allocated > 8_192)
+                throw new InvalidOperationException($"Scalar pointer reads allocated {allocated} bytes for 10,000 calls.");
+            Console.WriteLine($"[PASS] Scalar game memory reads preserve values and allocate {allocated} bytes / 10,000 pointer reads");
+        }
+        finally { Marshal.FreeHGlobal(address); }
+    }
+
     private static void AddOffsetCandidate(List<string> candidateFiles, JsonElement versionElement)
     {
         var offsetFile = versionElement.GetProperty("file").GetString();
@@ -1047,6 +1083,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     private sealed class ReaderContext : IDisposable
     {
         private byte[]? moduleBytes;
+        // A context is read by one monitor iteration at a time; avoid a new array for every scalar poll.
+        private readonly byte[] scalarBuffer = new byte[sizeof(long)];
 
         public ReaderContext(IntPtr handle, long gameAssemblyBase, int gameAssemblySize, bool is64Bit)
         {
@@ -1067,20 +1105,32 @@ public sealed class AmongUsMemoryReaderService : IDisposable
 
         public void ReleaseModuleSnapshot() => moduleBytes = null;
 
-        public int ReadInt32(long address) => BitConverter.ToInt32(ReadBytes(address, 4));
+        public int ReadInt32(long address)
+        {
+            ReadBytesInto(address, scalarBuffer, sizeof(int));
+            return BitConverter.ToInt32(scalarBuffer);
+        }
 
-        public uint ReadUInt32(long address) => BitConverter.ToUInt32(ReadBytes(address, 4));
+        public uint ReadUInt32(long address)
+        {
+            ReadBytesInto(address, scalarBuffer, sizeof(uint));
+            return BitConverter.ToUInt32(scalarBuffer);
+        }
 
         public byte ReadByte(long address, IReadOnlyList<int> offsets)
         {
             var resolved = ResolveAddress(address, offsets);
-            return resolved.Address == 0 ? (byte)0 : ReadBytes(resolved.Address + resolved.Last, 1)[0];
+            if (resolved.Address == 0) return 0;
+            ReadBytesInto(resolved.Address + resolved.Last, scalarBuffer, sizeof(byte));
+            return scalarBuffer[0];
         }
 
         public float ReadFloat(long address, IReadOnlyList<int> offsets)
         {
             var resolved = ResolveAddress(address, offsets);
-            return resolved.Address == 0 ? 0 : BitConverter.ToSingle(ReadBytes(resolved.Address + resolved.Last, 4));
+            if (resolved.Address == 0) return 0;
+            ReadBytesInto(resolved.Address + resolved.Last, scalarBuffer, sizeof(float));
+            return BitConverter.ToSingle(scalarBuffer);
         }
 
         public long ReadPointer(long address, IReadOnlyList<int> offsets)
@@ -1491,7 +1541,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
 
         public long ReadPointer(long address)
         {
-            return Is64Bit ? BitConverter.ToInt64(ReadBytes(address, 8)) : BitConverter.ToUInt32(ReadBytes(address, 4));
+            ReadBytesInto(address, scalarBuffer, Is64Bit ? sizeof(long) : sizeof(uint));
+            return Is64Bit ? BitConverter.ToInt64(scalarBuffer) : BitConverter.ToUInt32(scalarBuffer);
         }
 
         public long ReadPointerOrZero(long address)
@@ -1523,6 +1574,12 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         public byte[] ReadBytes(long address, int size)
         {
             var buffer = new byte[size];
+            ReadBytesInto(address, buffer, size);
+            return buffer;
+        }
+
+        private void ReadBytesInto(long address, byte[] buffer, int size)
+        {
             if (!IsReadableAddress(address, size))
             {
                 throw new InvalidOperationException($"Among Us memory address is not readable at 0x{address:X}.");
@@ -1533,8 +1590,6 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             {
                 throw new InvalidOperationException($"Failed to read Among Us memory at 0x{address:X}.");
             }
-
-            return buffer;
         }
 
         public bool IsReadableAddress(long address, int size)

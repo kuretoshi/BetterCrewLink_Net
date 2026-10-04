@@ -23,6 +23,11 @@ internal static class Program
             {
                 return GameProcessScannerSelfTest.Run();
             }
+            if (args.Contains("--scalar-read-self-test"))
+            {
+                GameMemory.AmongUsMemoryReaderService.VerifyScalarReadAllocations();
+                return 0;
+            }
             if (args.Contains("--module-snapshot-self-test"))
             {
                 var parsed = ProbeOptions.Parse(args.Where(arg => arg != "--module-snapshot-self-test").ToArray());
@@ -224,6 +229,7 @@ internal static class Program
               --scan-game         起動中の全Among Usプロセスを読み取り検証
               --expected-players  検証するプロセス数・ロビー人数（既定5）
               --game-scan-self-test ゲーム読取検証コマンドの回帰テスト
+              --scalar-read-self-test ゲーム状態の数値読取と割り当て量を検証
               --module-snapshot-self-test --game-process-id <pid>  Check GameAssembly snapshot release after offset initialization
               --nos-palette       NoSロビー色を取得（--game-process-id 必須）
               --nos-palette-self-test NoS色パレットの読取回帰テスト
