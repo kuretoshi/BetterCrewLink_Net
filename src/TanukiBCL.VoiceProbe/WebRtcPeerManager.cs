@@ -21,6 +21,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         NatFixIceServers.Select(server => server with { Url = $"{server.Url}?transport=tcp" }).ToArray();
     private const int SamplesPerChannel = 960;
     private const int PlaybackChannels = 2;
+    private const int MaxReusableStereoSamples = 8_192;
     private readonly string owner;
     private readonly bool sendTestTone;
     private readonly Func<string, bool>? testToneTarget;
@@ -886,7 +887,11 @@ internal sealed class WebRtcPeerManager : IDisposable
             return;
         }
 
-        PcmReceived?.Invoke(peer.RemoteSocketId, MonoToStereo(pcm));
+        // All current listeners consume the frame synchronously (the playback
+        // ring copies it). Serialize callbacks so a second packet cannot
+        // overwrite this peer's reusable frame while a listener reads it.
+        lock (peer.StereoGate)
+            PcmReceived?.Invoke(peer.RemoteSocketId, MonoToStereo(pcm, ref peer.StereoFrame));
 
         AudioTestResult? result;
         lock (peer.AudioGate)
@@ -933,15 +938,54 @@ internal sealed class WebRtcPeerManager : IDisposable
         AudioVerified?.Invoke(peer.RemoteSocketId, result);
     }
 
-    private static short[] MonoToStereo(short[] pcm)
+    private static short[] MonoToStereo(short[] pcm, ref short[]? reusableFrame)
     {
-        var stereo = new short[pcm.Length * PlaybackChannels];
+        var length = checked(pcm.Length * PlaybackChannels);
+        var stereo = length > MaxReusableStereoSamples
+            ? new short[length]
+            : reusableFrame is { } existing && existing.Length == length
+                ? existing
+                : reusableFrame = new short[length];
         for (var index = 0; index < pcm.Length; index++)
         {
             stereo[index * 2] = pcm[index];
             stereo[index * 2 + 1] = pcm[index];
         }
         return stereo;
+    }
+
+    internal static void VerifyStereoFrameReuse()
+    {
+        short[]? reusable = null;
+        short[] firstMono = [1234, -2345];
+        var firstStereo = MonoToStereo(firstMono, ref reusable);
+        if (!firstStereo.AsSpan().SequenceEqual(new short[] { 1234, 1234, -2345, -2345 }))
+            throw new InvalidOperationException("The received stereo samples changed during conversion.");
+
+        short[] secondMono = [-3210, 0];
+        var secondStereo = MonoToStereo(secondMono, ref reusable);
+        if (!ReferenceEquals(firstStereo, secondStereo) ||
+            !secondStereo.AsSpan().SequenceEqual(new short[] { -3210, -3210, 0, 0 }))
+            throw new InvalidOperationException("A normal received frame did not reuse and overwrite its stereo buffer.");
+
+        short[] shorterMono = [42];
+        var shorterStereo = MonoToStereo(shorterMono, ref reusable);
+        if (shorterStereo.Length != 2 || !shorterStereo.AsSpan().SequenceEqual(new short[] { 42, 42 }))
+            throw new InvalidOperationException("A shorter received frame included stale samples.");
+
+        short[] oversizedMono = new short[MaxReusableStereoSamples / PlaybackChannels + 1];
+        MonoToStereo(oversizedMono, ref reusable);
+        if (!ReferenceEquals(reusable, shorterStereo))
+            throw new InvalidOperationException("An abnormal received frame was retained for the peer lifetime.");
+
+        MonoToStereo(secondMono, ref reusable);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < 10_000; index++)
+            MonoToStereo(secondMono, ref reusable);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        if (allocated > 8_192)
+            throw new InvalidOperationException($"Received stereo conversion allocated {allocated} bytes per 10,000 frames.");
+        Console.WriteLine($"[PASS] Received stereo conversion reuses per-peer frames ({allocated} bytes / 10,000 warmed frames)");
     }
 
     private Task SendSignalAsync(Peer peer, object signal)
@@ -1203,6 +1247,8 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int LocalCandidateFallbackElapsed;
         public bool LocalDescriptionSent { get; set; }
         public object AudioGate { get; } = new();
+        public object StereoGate { get; } = new();
+        public short[]? StereoFrame;
         public int AudioFrames { get; set; }
         public long SampleCount { get; set; }
         public double SumSquares { get; set; }
