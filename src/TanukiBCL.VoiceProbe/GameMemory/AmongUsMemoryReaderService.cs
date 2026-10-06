@@ -271,12 +271,15 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         foreach (var player in players)
             player.NosLobbyColor = !player.Disconnected && nosLobbyColors is not null &&
                 player.Id >= 0 && player.Id < nosLobbyColors.Length ? nosLobbyColors[player.Id] : null;
+        // 3.2.12 also reads the snapshot in the lobby so NoS skins, hats, visors and colors show there.
         if (mod == AmongUsModType.NebulaOnTheShip &&
-            gameState is GameState.Tasks or GameState.Discussion)
+            gameState is GameState.Tasks or GameState.Discussion or GameState.Lobby)
         {
-            if (previousGameState is GameState.Menu or GameState.Lobby or GameState.Unknown)
+            var nosInGame = gameState != GameState.Lobby;
+            if (nosInGame && previousGameState is GameState.Menu or GameState.Lobby or GameState.Unknown)
                 nosRound++;
-            nos = nosReader.Update(currentProcess.ProcessId, $"{lobbyCode}:{nosRound}",
+            nos = nosReader.Update(currentProcess.ProcessId,
+                $"{lobbyCode}:{nosRound}:{(nosInGame ? "game" : "lobby")}",
                 nosPointerSize, currentContext.ReadBytes);
             foreach (var player in players)
             {

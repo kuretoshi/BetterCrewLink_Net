@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using TanukiBCL.VoiceProbe;
@@ -13,7 +13,6 @@ public partial class PlayerAvatar : UserControl
     private string? currentName;
     private bool hideAvatar;
     private bool renderedDead;
-    private bool clipCosmetics;
     private Brush idleBorder = Brushes.Transparent;
     // Material icon paths used by the upstream Avatar.tsx status badges.
     private static readonly Geometry WifiOff = Geometry.Parse(
@@ -34,20 +33,19 @@ public partial class PlayerAvatar : UserControl
         Unloaded += (_, _) => { cosmeticGeneration++; cosmeticKey = null; };
     }
 
-    public void SetOverlayMode(bool lookLeft = false, bool clipEquipment = false, bool showBorder = false)
+    public void SetOverlayMode(bool lookLeft = false, bool showBorder = false)
     {
         QualityBadge.Visibility = Visibility.Collapsed;
         AvatarVisual.RenderTransform = new ScaleTransform(lookLeft ? -1 : 1, 1);
-        clipCosmetics = clipEquipment;
         idleBorder = showBorder ? new SolidColorBrush(Color.FromArgb(0x86, 0xcc, 0xbd, 0xcc)) : Brushes.Transparent;
         LayoutCosmetics();
     }
 
-    internal void VerifyOverlayAppearance(bool left, bool clipped, bool bordered)
+    internal void VerifyOverlayAppearance(bool left, bool bordered)
     {
         if (AvatarVisual.RenderTransform is not ScaleTransform transform || transform.ScaleX != (left ? -1 : 1) ||
-            transform.ScaleY != 1 || (CosmeticBack.Clip is EllipseGeometry) != clipped ||
-            (CosmeticFront.Clip is EllipseGeometry) != clipped || BodyCanvas.Clip is not EllipseGeometry ||
+            transform.ScaleY != 1 || CosmeticBack.Clip is not EllipseGeometry ||
+            CosmeticFront.Clip is not EllipseGeometry || BodyCanvas.Clip is not EllipseGeometry ||
             QualityBadge.Visibility != Visibility.Collapsed)
             throw new InvalidOperationException("Overlay avatar direction/clip differs from release");
         if (StateBadge.Parent == AvatarVisual || RadioBadge.Parent != AvatarVisual || AvatarVisual.Parent != StateBadge.Parent)

@@ -127,9 +127,7 @@ internal static class SpatialVoicePolicy
             case GameState.Discussion:
         if (otherUsingImpostorRadio)
         {
-            return CanHearImpostorRadio(me, other, settings) ||
-                   CanHearNosJackalRadio(state, settings, nosJackalRadioHearable) ||
-                   CanHearSnrJackalRadio(me, other, settings, isSnr)
+            return CanHearRadio(state, me, other, settings, nosJackalRadioHearable, isSnr)
                 ? ApplyListenerVolume(new PeerVoiceMix(1d, 0d, distance, "impostor-radio",
                     RadioHighPass: true, RadioEcho: true), me, other, settings)
                         : Muted(0, distance, "radio-private");
@@ -156,9 +154,7 @@ internal static class SpatialVoicePolicy
 
         if (otherUsingImpostorRadio && !deadOnlyGhostConversation)
         {
-            return CanHearImpostorRadio(me, other, settings) ||
-                   CanHearNosJackalRadio(state, settings, nosJackalRadioHearable) ||
-                   CanHearSnrJackalRadio(me, other, settings, isSnr)
+            return CanHearRadio(state, me, other, settings, nosJackalRadioHearable, isSnr)
                 ? ApplyListenerVolume(CreateTaskRadioMix(me, other, distance), me, other, settings)
                 : Muted(0, distance, "radio-private");
         }
@@ -305,6 +301,18 @@ internal static class SpatialVoicePolicy
         spatialAudio && maxDistance > 0d
             ? Math.Clamp(deltaX / maxDistance, -1d, 1d)
             : 0d;
+
+    private static bool CanHearRadio(AmongUsState state, Player me, Player other, SpatialVoiceSettings settings,
+        bool nosJackalRadioHearable, bool isSnr) =>
+        CanHearImpostorRadio(me, other, settings) ||
+        CanHearJackalRadioAsGhost(me, other, settings) ||
+        CanHearNosJackalRadio(state, settings, nosJackalRadioHearable) ||
+        CanHearSnrJackalRadio(me, other, settings, isSnr);
+
+    // 3.2.12: ghosts hear a living non-impostor's radio (SNR/NoS jackal) like impostor radio.
+    internal static bool CanHearJackalRadioAsGhost(Player me, Player other, SpatialVoiceSettings settings) =>
+        settings.JackalRadioEnabled && !settings.ImpostorRadioOnlyMode &&
+        me.IsDead && !other.IsDead && !other.IsImpostor;
 
     private static bool CanHearImpostorRadio(Player me, Player other, SpatialVoiceSettings settings) =>
         (settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&

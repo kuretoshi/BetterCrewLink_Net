@@ -348,10 +348,32 @@ internal static class SpatialVoicePolicySelfTest
         Check("SNR radio: crewmate cannot hear Sidekick", false,
             SpatialVoicePolicy.Calculate(snrTasks, new Player(), snrSidekick,
                 new SpatialVoiceSettings(JackalRadioEnabled: true), true).Audible);
-        Check("SNR radio: ghost cannot hear Jackal channel", false,
+        // 3.2.12: radio voices reach only the same team's living players and ghosts.
+        Check("3.2.12 SNR radio: ghost hears Jackal channel", true,
             SpatialVoicePolicy.Calculate(snrTasks, new Player { IsDead = true,
                 SnrRole = snrJackal.SnrRole }, snrSidekick,
                 new SpatialVoiceSettings(JackalRadioEnabled: true), true).Audible);
+        Check("3.2.12 SNR radio: crew ghost hears Jackal channel", true,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player { IsDead = true }, snrSidekick,
+                new SpatialVoiceSettings(JackalRadioEnabled: true), true).Audible);
+        Check("3.2.12 SNR radio: ghost does not hear disabled Jackal channel", false,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player { IsDead = true }, snrSidekick,
+                new SpatialVoiceSettings(), true).Audible);
+        Check("3.2.12 SNR radio: radio-only mode keeps Jackal channel from ghosts", false,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player { IsDead = true }, snrSidekick,
+                new SpatialVoiceSettings(JackalRadioEnabled: true, ImpostorRadioOnlyMode: true), true).Audible);
+        Check("3.2.12 SNR radio: nearby crewmate does not hear Sidekick on radio", false,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player { X = 20d }, snrSidekick,
+                new SpatialVoiceSettings(JackalRadioEnabled: true), true).Audible);
+        Check("3.2.12 SNR radio: nearby crewmate still hears Sidekick off radio", true,
+            SpatialVoicePolicy.Calculate(snrTasks, new Player { X = 20d }, snrSidekick,
+                new SpatialVoiceSettings(JackalRadioEnabled: true)).Audible);
+        Check("3.2.12 NoS radio: ghost outside mask hears sender", true,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player { IsDead = true }, distantNosSender,
+                nosRadioPolicy, true, false).Audible);
+        Check("3.2.12 radio: nearby crewmate does not hear impostor on radio", false,
+            SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks }, new Player(),
+                new Player { IsImpostor = true }, new SpatialVoiceSettings(ImpostorRadioEnabled: true), true).Audible);
         Check("SNR vent: Jackal hears Sidekick inside vent when enabled", true,
             SpatialVoicePolicy.Calculate(snrTasks, new Player { InVent = true,
                 SnrRole = snrJackal.SnrRole }, new Player { InVent = true,

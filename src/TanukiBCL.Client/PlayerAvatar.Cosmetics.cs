@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using TanukiBCL.VoiceProbe.GameMemory;
@@ -157,8 +157,8 @@ public partial class PlayerAvatar
         var size = ActualWidth > 0 ? ActualWidth : Width;
         if (!double.IsFinite(size) || size <= 0) return;
         BodyCanvas.Clip = new EllipseGeometry(new Point(size / 2, size / 2), size / 2, size / 2);
-        CosmeticBack.Clip = CosmeticFront.Clip = clipCosmetics
-            ? new EllipseGeometry(new Point(size / 2, size / 2), size / 2, size / 2) : null;
+        // 3.2.12: hats and visors are cut by the same circle as the speech border in every view.
+        CosmeticBack.Clip = CosmeticFront.Clip = new EllipseGeometry(new Point(size / 2, size / 2), size / 2, size / 2);
         AvatarBody.Width = size * 1.05;
         if (nosBodyMask is not null)
         {

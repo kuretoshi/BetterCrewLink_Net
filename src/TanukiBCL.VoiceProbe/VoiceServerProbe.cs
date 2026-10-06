@@ -1564,12 +1564,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var listener = state?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
         if (state is null || sender is null || listener is null) return false;
         if (IsOwnClientPeer(state, clientId)) return false;
+        // 3.2.12: jackal radio also reaches ghosts, matching SpatialVoicePolicy on the receiver.
+        var jackalGhost = SpatialVoicePolicy.CanHearJackalRadioAsGhost(listener, sender, spatialVoiceSettings);
         if (HasNosJackalRadio(state, sender))
             return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode &&
-                CanHearNosJackalRadio(state, sender, listener);
+                (CanHearNosJackalRadio(state, sender, listener) || jackalGhost);
         if (state.Mod == AmongUsModType.SuperNewRoles && sender.SnrRole?.IsJackalTeam == true)
             return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode &&
-                listener.SnrRole?.IsJackalTeam == true && !listener.IsDead;
+                (listener.SnrRole?.IsJackalTeam == true && !listener.IsDead || jackalGhost);
         return listener is { IsImpostor: true, IsDead: false } or { IsDead: true };
     }
 

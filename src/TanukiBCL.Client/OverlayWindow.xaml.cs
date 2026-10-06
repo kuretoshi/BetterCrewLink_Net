@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -307,7 +307,7 @@ public partial class OverlayWindow : Window
                 : remoteDeadForDisplay.TryGetValue(player.ClientId, out var dead) && dead;
             avatar.SetPlayer(player, state.PlayerColors, false, state.Mod, state.GameExecutablePath, displayDead);
             avatar.SetOverlayMode(lookLeft: position is not ("left" or "left1" or "bottom_left"),
-                clipEquipment: side && !showName, showBorder: side && !settings.CompactOverlay);
+                showBorder: side && !settings.CompactOverlay);
             avatar.SetVisualState(entry.Talking,
                 player.IsLocal && microphoneMuted,
                 player.IsLocal && deafened, "connected", entry.UsingRadio,
@@ -506,7 +506,7 @@ public partial class OverlayWindow : Window
                 window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, true, false) }, true, false, false);
                 if (window.AvatarPanel.Children.Count != 2) throw new InvalidOperationException("Overlay avatar selection changed");
                 foreach (StackPanel row in window.AvatarPanel.Children)
-                    ((PlayerAvatar)row.Children[0]).VerifyOverlayAppearance(mirrored, side && compact && !alternate, side && !compact);
+                    ((PlayerAvatar)row.Children[0]).VerifyOverlayAppearance(mirrored, side && !compact);
             }
             Console.WriteLine("[PASS] Overlay direction, equipment clipping and idle/active border across seven positions and compact modes");
             settings.OverlayPosition = "left";

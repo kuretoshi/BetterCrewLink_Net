@@ -192,7 +192,7 @@ internal static class Program
     private static void PrintHelp()
     {
         Console.WriteLine("""
-            TanukiBCL v3.2.9 互換性・ボイスサーバー疎通確認
+            TanukiBCL v3.2.12 互換性・ボイスサーバー疎通確認
 
             dotnet run --project src/TanukiBCL.VoiceProbe -- [options]
 

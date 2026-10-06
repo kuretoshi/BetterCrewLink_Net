@@ -139,7 +139,8 @@ internal static partial class UpdateCatalog
             CompareVersions("v3.2.8-net.1", "3.2.8-net.0") <= 0 ||
             CompareVersions("v3.2.8", "3.2.8-net.99") <= 0 ||
             CompareVersions("v3.2.8-other.99", "3.2.8-netdev.0") >= 0 ||
-            CompareVersions("v3.2.9-net-beta.1", "3.2.8-net-beta.4") <= 0)
+            CompareVersions("v3.2.9-net-beta.1", "3.2.8-net-beta.4") <= 0 ||
+            CompareVersions("v3.2.12-net-beta.1", "3.2.9-net-beta.1") <= 0)
             throw new InvalidOperationException("Development, beta and stable version ordering is incorrect");
         handler.Body = json.Replace("v3.2.7-net.2", "v3.2.8-net-beta.1");
         if ((await CheckAsync(client, "3.2.8-netdev.0", new Uri("https://example.invalid/releases")))?.Version !=
