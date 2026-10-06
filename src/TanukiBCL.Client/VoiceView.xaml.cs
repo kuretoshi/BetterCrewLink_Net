@@ -130,6 +130,25 @@ public partial class VoiceView : UserControl
         view.popupCloseTimer.Stop();
         Console.WriteLine("[PASS] VoiceView long name retains 20px nowrap text beyond 115px box");
     }
+    internal static void VerifyModAndVersionNotices()
+    {
+        var view = new VoiceView();
+        view.SetDetectedMod("Nebula on the Ship", new NosReadStatus(true, "NoS未取得: test", null));
+        if (view.DetectedMod.Text != "MOD: Nebula on the Ship" || view.DetectedModStatus.Text != "NoS未取得: test" ||
+            view.DetectedModStatus.Visibility != Visibility.Visible ||
+            view.DetectedModBadge.Background is not SolidColorBrush { Color: { R: 0x58, G: 0x1e, B: 0x24 } })
+            throw new InvalidOperationException("NoS read failure MOD badge differs from 3.2.9");
+        view.SetDetectedMod("Nebula on the Ship", new NosReadStatus(false, "NoSスナップショットを自動更新中", 20261005));
+        if (view.DetectedModStatus.Visibility != Visibility.Collapsed ||
+            view.DetectedModBadge.ToolTip as string != "NoSスナップショットを自動更新中")
+            throw new InvalidOperationException("Recovered NoS MOD badge kept the failure style");
+        view.SetVersionWarning("ホストはv3.2.10です。");
+        if (view.VersionWarningText.Visibility != Visibility.Visible) throw new InvalidOperationException("Version warning hidden");
+        view.SetVersionWarning("");
+        if (view.VersionWarningText.Visibility != Visibility.Collapsed) throw new InvalidOperationException("Version warning stayed visible");
+        Console.WriteLine("[PASS] 3.2.9 NoS failure MOD badge and app-version notice");
+    }
+
     internal static void VerifyLaunchControls()
     {
         var view = new VoiceView();
@@ -599,10 +618,25 @@ public partial class VoiceView : UserControl
         SecondWarningText.Visibility = string.IsNullOrWhiteSpace(second) ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    public void SetDetectedMod(string? mod)
+    public void SetDetectedMod(string? mod, NosReadStatus? nosStatus = null)
     {
         DetectedMod.Text = string.IsNullOrWhiteSpace(mod) ? string.Empty : $"MOD: {mod}";
         DetectedModBadge.Visibility = string.IsNullOrWhiteSpace(mod) ? Visibility.Collapsed : Visibility.Visible;
+        // 3.2.9: a NoS match without player data turns the badge dark red and shows the reason.
+        var failed = nosStatus?.Failed == true;
+        DetectedModBadge.Background = failed
+            ? new SolidColorBrush(Color.FromRgb(0x58, 0x1e, 0x24))
+            : new SolidColorBrush(Color.FromArgb(0x59, 0, 0, 0));
+        DetectedModBadge.MaxWidth = failed ? 360 : 268;
+        DetectedModBadge.ToolTip = nosStatus?.Message;
+        DetectedModStatus.Text = failed ? nosStatus!.Message : string.Empty;
+        DetectedModStatus.Visibility = failed ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public void SetVersionWarning(string? warning)
+    {
+        VersionWarningText.Text = warning ?? string.Empty;
+        VersionWarningText.Visibility = string.IsNullOrWhiteSpace(warning) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);

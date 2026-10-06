@@ -9,11 +9,32 @@
         <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"
                             CornerRadius="0" UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
+    <Window.Resources>
+        <Style x:Key="DebugTextStyle" TargetType="TextBox">
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Padding" Value="10" />
+            <Setter Property="MaxHeight" Value="420" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="AcceptsReturn" Value="True" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Background" Value="#1D1A23" />
+            <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style TargetType="Expander">
+            <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="BorderBrush" Value="#44404A" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="30" />
-            <RowDefinition Height="36" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
@@ -33,131 +54,95 @@
                         Click="CloseDebugButton_Click" ToolTip="閉じる" />
             </StackPanel>
         </Grid>
-        <DockPanel Grid.Row="2" Margin="16,8,16,4">
-            <Button x:Name="SaveLogButton" DockPanel.Dock="Right" Content="ログを保存"
+        <DockPanel Grid.Row="1" Margin="16,8,16,4">
+            <Button x:Name="SaveLogButton" DockPanel.Dock="Right" Content="ログを保存" VerticalAlignment="Top"
                     Padding="12,6" Click="SaveLogButton_Click" />
-            <TextBlock x:Name="ModNameText" VerticalAlignment="Center" FontSize="13" />
+            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                <TextBlock x:Name="ModNameText" FontSize="13" />
+                <TextBlock x:Name="LiveSummaryText" Foreground="#B7AABD" FontSize="12" TextWrapping="Wrap" />
+            </StackPanel>
         </DockPanel>
-        <TextBlock x:Name="HelpText" Grid.Row="3" Margin="16,0,16,8"
-                   Foreground="#B7AABD" FontSize="12" Text="ゲーム・音声の状態を自動更新します。" />
-        <TabControl x:Name="DebugTabs" Grid.Row="1" Height="36" Margin="12,0,12,0"
-                    SelectionChanged="DebugTabs_SelectionChanged">
-            <TabItem Header="リアルタイム" />
-            <TabItem Header="SNR役職" />
-            <TabItem Header="ゲーム状態" />
-            <TabItem Header="音声接続" />
-            <TabItem Header="ログ" />
-        </TabControl>
-        <Grid x:Name="LivePanel" Grid.Row="4" Margin="16,0,16,16">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <TextBlock x:Name="LiveSummaryText" Margin="0,0,0,8" TextWrapping="Wrap" />
-            <Border x:Name="NosRadioPanel" Grid.Row="1" Visibility="Collapsed"
-                    Background="#1D1A23" CornerRadius="6" Padding="10" Margin="0,0,0,8">
-                <StackPanel>
-                    <TextBlock Text="RadioData（各プレイヤーが話せるチャンネル）" FontWeight="SemiBold" />
-                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Auto">
-                        <TextBlock x:Name="NosRadioText" Margin="0,6,0,0" FontSize="12"
-                                   TextWrapping="Wrap" FontFamily="Consolas" />
-                    </ScrollViewer>
-                </StackPanel>
-            </Border>
-            <DataGrid x:Name="LivePlayersGrid" Grid.Row="2" AutoGenerateColumns="False"
-                      CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
-                      IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                      Background="#1D1A23" Foreground="#F5F1F7" BorderBrush="#44404A"
-                      RowBackground="#1D1A23" AlternatingRowBackground="#25232A"
-                      HorizontalGridLinesBrush="#44404A" VerticalGridLinesBrush="#44404A">
-                <DataGrid.RowStyle>
-                    <Style TargetType="DataGridRow">
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsLocal}" Value="True">
-                                <Setter Property="Background" Value="#393044" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </DataGrid.RowStyle>
-                <DataGrid.Resources>
-                    <Style TargetType="DataGridColumnHeader">
-                        <Setter Property="Background" Value="#25232A" />
-                        <Setter Property="Foreground" Value="#F5F1F7" />
-                        <Setter Property="Padding" Value="8,6" />
-                    </Style>
-                    <Style TargetType="DataGridCell">
-                        <Setter Property="Foreground" Value="#F5F1F7" />
-                        <Setter Property="Padding" Value="8,5" />
-                    </Style>
-                    <Style TargetType="TextBlock">
-                        <Setter Property="TextWrapping" Value="Wrap" />
-                    </Style>
-                </DataGrid.Resources>
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="名前 / ID" Binding="{Binding NameId}" Width="160" />
-                    <DataGridTextColumn Header="役職 / 本体陣営値" Binding="{Binding RoleTeam}" Width="190" />
-                    <DataGridTextColumn Header="状態" Binding="{Binding Status}" Width="100" />
-                    <DataGridTextColumn Header="会話状態" Binding="{Binding Conversation}" Width="160" />
-                    <DataGridTextColumn Header="変身 / 外見" Binding="{Binding Appearance}" Width="250" />
-                    <DataGridTextColumn Header="サイズ" Binding="{Binding Size}" Width="140" />
-                    <DataGridTextColumn Header="座標" Binding="{Binding Position}" Width="105" />
-                </DataGrid.Columns>
-            </DataGrid>
-        </Grid>
-        <Grid x:Name="SnrPanel" Grid.Row="4" Margin="16,0,16,16" Visibility="Collapsed">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="180" />
-            </Grid.RowDefinitions>
-            <Button x:Name="SnrReadButton" Grid.Row="0" Content="SNR役職を取得"
-                    HorizontalAlignment="Left" Padding="12,6" Click="SnrReadButton_Click" />
-            <TextBlock Grid.Row="1" Margin="0,8,0,3" TextWrapping="Wrap"
-                       Text="取得ボタンを押した時点の管理メモリを読み取ります。音声の陣営判定には反映しません。取得後はリアルタイムタブの役職表示も自動更新します。" />
-            <TextBlock x:Name="SnrStatusText" Grid.Row="2" Margin="0,0,0,8"
-                       TextWrapping="Wrap" Foreground="#B7AABD"
-                       Text="スナップショット作成時にゲームが一瞬停止する場合があります。試合中の連続取得は避けてください。" />
-            <DataGrid x:Name="SnrPlayersGrid" Grid.Row="3" AutoGenerateColumns="False"
-                      CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
-                      IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
-                      Background="#1D1A23" Foreground="#F5F1F7" BorderBrush="#44404A"
-                      RowBackground="#1D1A23" AlternatingRowBackground="#25232A"
-                      HorizontalGridLinesBrush="#44404A" VerticalGridLinesBrush="#44404A">
-                <DataGrid.Resources>
-                    <Style TargetType="DataGridColumnHeader">
-                        <Setter Property="Background" Value="#25232A" />
-                        <Setter Property="Foreground" Value="#F5F1F7" />
-                        <Setter Property="Padding" Value="8,6" />
-                    </Style>
-                    <Style TargetType="DataGridCell">
-                        <Setter Property="Foreground" Value="#F5F1F7" />
-                        <Setter Property="Padding" Value="8,5" />
-                    </Style>
-                </DataGrid.Resources>
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="Player ID" Binding="{Binding PlayerId}" Width="75" />
-                    <DataGridTextColumn Header="SNR役職" Binding="{Binding Role}" Width="*" />
-                    <DataGridTextColumn Header="割り当て陣営" Binding="{Binding AssignedTeam}" Width="*" />
-                    <DataGridTextColumn Header="勝利陣営" Binding="{Binding WinnerTeam}" Width="*" />
-                    <DataGridTextColumn Header="チーム" Binding="{Binding TeamTag}" Width="*" />
-                    <DataGridTextColumn Header="追加属性" Binding="{Binding Modifier}" Width="*" />
-                    <DataGridTextColumn Header="幽霊役職" Binding="{Binding GhostRole}" Width="*" />
-                </DataGrid.Columns>
-            </DataGrid>
-            <TextBox x:Name="SnrJsonText" Grid.Row="4" Margin="0,8,0,0" Padding="10"
-                     IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
-                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                     FontFamily="Consolas" FontSize="12" Background="#1D1A23" Foreground="#F5F1F7"
-                     BorderThickness="0" />
-        </Grid>
-        <TextBox x:Name="DebugText" Grid.Row="4" Margin="16,0,16,16" Padding="10"
-                 IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
-                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                 FontFamily="Consolas" FontSize="12" Background="#1D1A23" Foreground="#F5F1F7"
-                 BorderThickness="0" />
+        <ScrollViewer x:Name="DebugScroll" Grid.Row="2" Margin="16,4,4,12" Padding="0,0,12,0"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <Border x:Name="ModStatusPanel" CornerRadius="4" Padding="10,6" Margin="0,0,0,8"
+                        Background="#1D3047" Visibility="Collapsed">
+                    <TextBlock x:Name="ModStatusText" TextWrapping="Wrap" FontSize="12" />
+                </Border>
+                <Border x:Name="NosNoticePanel" CornerRadius="4" Padding="10,6" Margin="0,0,0,8"
+                        Background="#1D3047" Visibility="Collapsed">
+                    <TextBlock TextWrapping="Wrap" FontSize="12"
+                               Text="NoSが公開する情報は陣営・判定値です。TBCLFieldsには役職名が含まれないため、個別の役職名は表示できません。" />
+                </Border>
+                <Grid Margin="0,0,0,6">
+                    <TextBox x:Name="SearchBox" Padding="8,6" Background="#1D1A23" Foreground="#F5F1F7"
+                             BorderBrush="#5C565F" CaretBrush="#F5F1F7" TextChanged="SearchBox_TextChanged" />
+                    <TextBlock x:Name="SearchPlaceholder" Text="プレイヤー名・ID・役職名で検索" Margin="11,0,0,0"
+                               VerticalAlignment="Center" Foreground="#8D8392" IsHitTestVisible="False" />
+                </Grid>
+                <WrapPanel Margin="0,4,0,8">
+                    <TextBlock x:Name="PlayerCountText" Margin="0,0,16,0" VerticalAlignment="Center" />
+                    <Border CornerRadius="10" BorderThickness="1" BorderBrush="#66BB6A" Padding="8,1" Margin="0,0,6,0">
+                        <TextBlock Text="true / はい" FontSize="11" Foreground="#66BB6A" />
+                    </Border>
+                    <Border CornerRadius="10" BorderThickness="1" BorderBrush="#8D8392" Padding="8,1" Margin="0,0,6,0">
+                        <TextBlock Text="false / いいえ" FontSize="11" Foreground="#C9C0CC" />
+                    </Border>
+                    <Border CornerRadius="10" BorderThickness="1" BorderBrush="#FFA726" Padding="8,1">
+                        <TextBlock Text="未取得" FontSize="11" Foreground="#FFA726" />
+                    </Border>
+                </WrapPanel>
+                <StackPanel x:Name="PlayerCards" />
+                <TextBlock x:Name="EmptyPlayersText" Margin="0,8" Visibility="Collapsed" />
+                <TextBlock x:Name="SnrHintText" Margin="0,4,0,8" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
+                           Text="SNRの詳細な割り当て陣営・勝利陣営は下の「SNR：役職・割り当て陣営・勝利陣営」で自動更新されます。" />
+                <Expander x:Name="NosExpander" Header="NoS：コスチューム・無線・一覧ファイル" Visibility="Collapsed"
+                          Expanded="Section_Expanded">
+                    <TextBox x:Name="NosContentsText" Style="{StaticResource DebugTextStyle}" />
+                </Expander>
+                <Expander x:Name="SnrExpander" Header="SNR：役職・割り当て陣営・勝利陣営" Visibility="Collapsed"
+                          Expanded="Section_Expanded">
+                    <StackPanel Margin="0,6,0,0">
+                        <TextBlock x:Name="SnrStatusText" Margin="0,0,0,6" TextWrapping="Wrap" Foreground="#B7AABD" />
+                        <DataGrid x:Name="SnrPlayersGrid" AutoGenerateColumns="False" MaxHeight="320"
+                                  CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
+                                  IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                                  Background="#1D1A23" Foreground="#F5F1F7" BorderBrush="#44404A"
+                                  RowBackground="#1D1A23" AlternatingRowBackground="#25232A"
+                                  HorizontalGridLinesBrush="#44404A" VerticalGridLinesBrush="#44404A">
+                            <DataGrid.Resources>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background" Value="#25232A" />
+                                    <Setter Property="Foreground" Value="#F5F1F7" />
+                                    <Setter Property="Padding" Value="8,6" />
+                                </Style>
+                                <Style TargetType="DataGridCell">
+                                    <Setter Property="Foreground" Value="#F5F1F7" />
+                                    <Setter Property="Padding" Value="8,5" />
+                                </Style>
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Player ID" Binding="{Binding PlayerId}" Width="75" />
+                                <DataGridTextColumn Header="SNR役職" Binding="{Binding Role}" Width="*" />
+                                <DataGridTextColumn Header="割り当て陣営" Binding="{Binding AssignedTeam}" Width="*" />
+                                <DataGridTextColumn Header="勝利陣営" Binding="{Binding WinnerTeam}" Width="*" />
+                                <DataGridTextColumn Header="チーム" Binding="{Binding TeamTag}" Width="*" />
+                                <DataGridTextColumn Header="追加属性" Binding="{Binding Modifier}" Width="*" />
+                                <DataGridTextColumn Header="幽霊役職" Binding="{Binding GhostRole}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Expander>
+                <Expander x:Name="GameExpander" Header="ゲーム状態" Expanded="Section_Expanded">
+                    <TextBox x:Name="GameStateText" Style="{StaticResource DebugTextStyle}" />
+                </Expander>
+                <Expander x:Name="VoiceExpander" Header="音声接続" Expanded="Section_Expanded">
+                    <TextBox x:Name="VoiceText" Style="{StaticResource DebugTextStyle}" />
+                </Expander>
+                <Expander x:Name="LogExpander" Header="ログ（最新64KB）" Expanded="Section_Expanded">
+                    <TextBox x:Name="LogText" Style="{StaticResource DebugTextStyle}" />
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Window>

@@ -81,6 +81,7 @@ internal static class Program
                 return await AudioCaptureDeviceSelfTest.RunAsync(options);
             if (options.PolicySelfTest)
             {
+                AppVersionPolicy.Verify();
                 return SpatialVoicePolicySelfTest.Run();
             }
 
@@ -191,7 +192,7 @@ internal static class Program
     private static void PrintHelp()
     {
         Console.WriteLine("""
-            TanukiBCL v3.2.8 互換性・ボイスサーバー疎通確認
+            TanukiBCL v3.2.9 互換性・ボイスサーバー疎通確認
 
             dotnet run --project src/TanukiBCL.VoiceProbe -- [options]
 

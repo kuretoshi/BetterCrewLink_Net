@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -24,6 +25,7 @@ public partial class SettingsWindow : Window
     private readonly DispatcherTimer lobbyCommitTimer = new() { Interval = TimeSpan.FromMilliseconds(750) };
     private bool settingsReady;
     private DateTimeOffset nextDebugAuthAttempt;
+    private Func<string, Task<DebugAuthResult>> debugAuthenticator = password => DeveloperDebugAuth.VerifyAsync(password);
     private bool debugAuthBusy;
     internal event Action? DebugOpenRequested;
     private bool lobbyPending;
@@ -411,7 +413,7 @@ public partial class SettingsWindow : Window
     private void OpenDebugButton_Click(object sender, RoutedEventArgs e)
     {
         DebugPasswordInput.Clear();
-        DebugPasswordMessage.Text = "開発者用パスワードを入力してください。";
+        DebugPasswordMessage.Text = "開発者または確認担当者用のデバッグパスワードを入力してください。";
         DebugPasswordMessage.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0xAA, 0xBD));
         SettingsNavigation.IsEnabled = false;
         SettingsContent.IsEnabled = false;
@@ -429,7 +431,7 @@ public partial class SettingsWindow : Window
     private void DebugPasswordInput_PasswordChanged(object sender, RoutedEventArgs e)
     {
         SubmitDebugAuthButton.IsEnabled = !debugAuthBusy && DebugPasswordInput.Password.Length > 0;
-        DebugPasswordMessage.Text = "開発者用パスワードを入力してください。";
+        DebugPasswordMessage.Text = "開発者または確認担当者用のデバッグパスワードを入力してください。";
         DebugPasswordMessage.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0xAA, 0xBD));
     }
 
@@ -460,7 +462,7 @@ public partial class SettingsWindow : Window
         OpenDebugButton.Focus();
     }
 
-    private void SubmitDebugAuthButton_Click(object sender, RoutedEventArgs e)
+    private async void SubmitDebugAuthButton_Click(object sender, RoutedEventArgs e)
     {
         if (debugAuthBusy || DebugPasswordInput.Password.Length == 0 ||
             DateTimeOffset.UtcNow < nextDebugAuthAttempt) return;
@@ -468,24 +470,37 @@ public partial class SettingsWindow : Window
         debugAuthBusy = true;
         SubmitDebugAuthButton.IsEnabled = false;
         CancelDebugAuthButton.IsEnabled = false;
-        var authenticated = false;
-        try { authenticated = DeveloperDebugAuth.Verify(DebugPasswordInput.Password); }
+        DebugPasswordInput.IsEnabled = false;
+        var password = DebugPasswordInput.Password;
+        DebugAuthResult? result = null;
+        try { result = await debugAuthenticator(password); }
+        catch (Exception error) when (error is IOException or InvalidOperationException or HttpRequestException)
+        {
+            result = null;
+        }
         finally
         {
+            password = null;
             DebugPasswordInput.Clear();
+            DebugPasswordInput.IsEnabled = true;
             debugAuthBusy = false;
             CancelDebugAuthButton.IsEnabled = true;
         }
-        if (authenticated)
+        if (DebugAuthBackdrop.Visibility != Visibility.Visible) return;
+        if (result == DebugAuthResult.Authorized)
         {
             CloseDebugAuthDialog();
             OpenAuthenticatedDebugInfo();
+            return;
         }
-        else
+        DebugPasswordMessage.Text = result switch
         {
-            DebugPasswordMessage.Text = "認証できませんでした。パスワードと開発者用の設定を確認してください。";
-            DebugPasswordMessage.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x80));
-        }
+            DebugAuthResult.Unavailable => "認証サーバーに接続できないか、混雑しています。時間をおいて再試行してください。",
+            DebugAuthResult.Denied => "認証できませんでした。配布されたデバッグ用パスワードを確認してください。",
+            _ => "認証処理に失敗しました。再試行してください。"
+        };
+        DebugPasswordMessage.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x80));
+        DebugPasswordInput.Focus();
     }
 
     private void OpenAuthenticatedDebugInfo() => DebugOpenRequested?.Invoke();
@@ -1132,7 +1147,7 @@ public partial class SettingsWindow : Window
                 !StreamingSettings.IsValidSecret(window.obsSecretDraft) ||
                 window.ObsUrlPanel.Visibility != Visibility.Visible ||
                 window.ObsToggleBorder.BorderThickness.Bottom != 1 ||
-                !window.ObsUrlBox.Text.Contains("version=3.2.8&compact=0&position=right&meeting=1&secret=") ||
+                !window.ObsUrlBox.Text.Contains($"version={UpdateCatalog.CurrentVersion.Split('-', 2)[0]}&compact=0&position=right&meeting=1&secret=") ||
                 !window.ObsUrlBox.Text.Contains("&server=https%3A%2F%2Fbettercrewl.ink"))
                 throw new InvalidOperationException("OBS streaming settings did not initialize");
             window.ObsOverlayCheck.IsChecked = false;

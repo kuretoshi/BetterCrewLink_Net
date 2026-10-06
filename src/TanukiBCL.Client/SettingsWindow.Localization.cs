@@ -180,6 +180,21 @@ public partial class SettingsWindow
             window.DebugPasswordInput.Password.Length != 0 ||
             !window.SettingsContent.IsEnabled || !window.SettingsNavigation.IsEnabled)
             throw new InvalidOperationException("Developer authentication did not clear on cancel");
+        window.debugAuthenticator = _ => Task.FromResult(DebugAuthResult.Unavailable);
+        window.OpenDebugButton_Click(window.OpenDebugButton, new System.Windows.RoutedEventArgs());
+        window.DebugPasswordInput.Password = "test";
+        window.SubmitDebugAuthButton_Click(window.SubmitDebugAuthButton, new System.Windows.RoutedEventArgs());
+        if (window.DebugAuthBackdrop.Visibility != System.Windows.Visibility.Visible ||
+            window.DebugPasswordInput.Password.Length != 0 ||
+            !window.DebugPasswordMessage.Text.StartsWith("認証サーバーに接続できないか", StringComparison.Ordinal))
+            throw new InvalidOperationException("Unavailable debug authentication message differs from 3.2.9");
+        window.debugAuthenticator = _ => Task.FromResult(DebugAuthResult.Denied);
+        window.nextDebugAuthAttempt = default;
+        window.DebugPasswordInput.Password = "test";
+        window.SubmitDebugAuthButton_Click(window.SubmitDebugAuthButton, new System.Windows.RoutedEventArgs());
+        if (!window.DebugPasswordMessage.Text.StartsWith("認証できませんでした。配布された", StringComparison.Ordinal))
+            throw new InvalidOperationException("Denied debug authentication message differs from 3.2.9");
+        window.CancelDebugAuthButton_Click(window.CancelDebugAuthButton, new System.Windows.RoutedEventArgs());
         var debugOpened = false;
         var settingsClosed = false;
         window.DebugOpenRequested += () => debugOpened = true;

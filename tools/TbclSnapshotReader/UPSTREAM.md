@@ -1,6 +1,6 @@
-# TbclSnapshotReader (TanukiBCL v3.2.8)
+# TbclSnapshotReader (TanukiBCL v3.2.9)
 
-This helper is an exact source copy of the released upstream v3.2.8 `tools/TbclSnapshotReader/Program.cs`. It resolves and reads NoS `Nebula.Collab.TBCLFields` without writing to the Among Us process. NoS v3.5.3 removed `RequireUpdate` and continuously publishes snapshots.
+This helper is an exact source copy of the released upstream v3.2.9 `tools/TbclSnapshotReader/Program.cs`. It resolves and reads NoS `Nebula.Collab.TBCLFields` without writing to the Among Us process. NoS v3.5.3 removed `RequireUpdate` and continuously publishes snapshots.
 
 ```powershell
 TbclSnapshotReader.exe layout <PID>

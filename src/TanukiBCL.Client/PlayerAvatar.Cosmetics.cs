@@ -13,6 +13,8 @@ public partial class PlayerAvatar
     private Func<Task<CosmeticCatalog>> catalogLoader = CosmeticImages.GetCatalogAsync;
     private Func<Task<SnrCosmeticCatalog>> snrCatalogLoader = CosmeticImages.GetSnrCatalogAsync;
     private Func<Uri, Task<System.Windows.Media.Imaging.BitmapSource>> imageLoader = CosmeticImages.GetImageAsync;
+    private NosCosmeticContents nosContents = NosCosmeticContents.Shared;
+    private ImageBrush? nosBodyMask;
 
     private void UpdateCosmetics(Player player, IReadOnlyList<PlayerColorPair>? palette, AmongUsModType mod, int colorId, string gameExecutable)
     {
@@ -22,22 +24,44 @@ public partial class PlayerAvatar
         var hat = Select(outfit, player.AppearanceHatId, player.HatId, "hat_NoHat");
         var skin = Select(outfit, player.AppearanceSkinId, player.SkinId, "skin_None");
         var visor = Select(outfit, player.AppearanceVisorId, player.VisorId, "visor_EmptyVisor");
+        // 3.2.9: NoS TBCLFields costume names replace the vanilla IDs, and LoadedContents.json
+        // images take priority over the shared catalog for the same part.
+        var nosPlayer = mod == AmongUsModType.NebulaOnTheShip && !player.Disconnected ? player.NosPlayer : null;
+        if (nosPlayer?.Hat is { } nosHat) hat = nosHat.Name == "hat_NoHat" ? "" : nosHat.Name;
+        if (nosPlayer?.Skin is { } nosSkin) skin = nosSkin.Name == "skin_None" ? "" : nosSkin.Name;
+        if (nosPlayer?.Visor is { } nosVisor) visor = nosVisor.Name == "visor_EmptyVisor" ? "" : nosVisor.Name;
+        IReadOnlyDictionary<NosCosmeticPart, string>? nos = null;
+        if (nosPlayer is not null && System.IO.Path.GetDirectoryName(gameExecutable) is { Length: > 0 } gameDirectory)
+        {
+            nosContents.Update(gameDirectory);
+            nos = nosContents.Cosmetics(nosPlayer);
+        }
+        var nosColor = nosPlayer is null ? "" : $"{nosPlayer.ColorR},{nosPlayer.ColorG},{nosPlayer.ColorB}";
+        var nosKeys = nos is null ? "" : string.Join(",", nos.OrderBy(pair => pair.Key).Select(pair => pair.Value));
         var secondary = mod == AmongUsModType.SuperNewRoles && !player.Disconnected ? player.SnrRole : null;
         var hat2 = secondary?.Hat2Id is { } secondHat && secondHat != "hat_NoHat" ? secondHat : "";
         var visor2 = secondary?.Visor2Id is { } secondVisor && secondVisor != "visor_EmptyVisor" ? secondVisor : "";
         var colors = AvatarImageFactory.GetSwatchColors(colorId, palette);
-        var key = $"{gameExecutable}|{player.IsDead}|{mod}|{hat}|{skin}|{visor}|{hat2}|{visor2}|{colors}";
+        var key = $"{gameExecutable}|{player.IsDead}|{mod}|{hat}|{skin}|{visor}|{hat2}|{visor2}|{colors}|{nosKeys}|{nosColor}";
         if (key == cosmeticKey && (cosmeticRetryAt == default || DateTimeOffset.UtcNow < cosmeticRetryAt)) return;
         cosmeticKey = key;
         cosmeticRetryAt = default;
         var generation = ++cosmeticGeneration;
         CosmeticBack.Children.Clear(); CosmeticSkin.Children.Clear(); CosmeticFront.Children.Clear();
-        if (player.IsDead || string.IsNullOrEmpty(hat + skin + visor + hat2 + visor2)) return;
-        _ = LoadCosmeticsAsync(generation, hat, skin, visor, hat2, visor2, mod, colors, gameExecutable);
+        BodyCanvas.OpacityMask = nosBodyMask = null;
+        if (player.IsDead || string.IsNullOrEmpty(hat + skin + visor + hat2 + visor2) && nos is null) return;
+        _ = LoadCosmeticsAsync(generation, hat, skin, visor, hat2, visor2, mod, colors, gameExecutable, nos, nosPlayer);
+    }
+
+    private async Task<System.Windows.Media.Imaging.BitmapSource?> LoadNosImageAsync(string key, NosPlayerData player)
+    {
+        var contents = nosContents;
+        return await Task.Run(() => contents.Image(key, player.ColorR, player.ColorG, player.ColorB));
     }
 
     private async Task LoadCosmeticsAsync(long generation, string hat, string skin, string visor, string hat2, string visor2,
-        AmongUsModType mod, (Color Main, Color Shadow) colors, string gameExecutable)
+        AmongUsModType mod, (Color Main, Color Shadow) colors, string gameExecutable,
+        IReadOnlyDictionary<NosCosmeticPart, string>? nos = null, NosPlayerData? nosPlayer = null)
     {
         try
         {
@@ -59,15 +83,27 @@ public partial class PlayerAvatar
                 AmongUsModType.LasMonjas => "LAS_MONJAS",
                 _ => "NONE"
             };
-            foreach (var (id, part, target) in new[] {
+            foreach (var (id, part, target, nosPart) in new (string, CosmeticPart, Canvas, NosCosmeticPart?)[] {
                 // Upstream z-order: backs 4/5, body 6, skin 7, secondary
                 // hat 10, secondary visor 20, primary hat 30, primary visor 40.
-                (hat, CosmeticPart.HatBack, CosmeticBack), (hat2, CosmeticPart.HatBack, CosmeticBack),
-                (skin, CosmeticPart.Skin, CosmeticSkin),
-                (hat2, CosmeticPart.Hat, CosmeticFront), (visor2, CosmeticPart.Visor, CosmeticFront),
-                (hat, CosmeticPart.Hat, CosmeticFront), (visor, CosmeticPart.Visor, CosmeticFront) })
+                (hat, CosmeticPart.HatBack, CosmeticBack, NosCosmeticPart.HatBack), (hat2, CosmeticPart.HatBack, CosmeticBack, null),
+                (skin, CosmeticPart.Skin, CosmeticSkin, NosCosmeticPart.Skin),
+                (hat2, CosmeticPart.Hat, CosmeticFront, null), (visor2, CosmeticPart.Visor, CosmeticFront, null),
+                (hat, CosmeticPart.Hat, CosmeticFront, NosCosmeticPart.Hat), (visor, CosmeticPart.Visor, CosmeticFront, NosCosmeticPart.Visor) })
             {
                 if (generation != cosmeticGeneration) return;
+                if (nosPart is { } nosLayer && nos?.TryGetValue(nosLayer, out var nosKey) == true)
+                {
+                    // Rendered on the upstream 300x375 canvas; a failed image leaves the layer empty.
+                    var nosImage = await LoadNosImageAsync(nosKey, nosPlayer!);
+                    if (generation != cosmeticGeneration) return;
+                    if (nosImage is null) continue;
+                    target.Children.Add(new Image { Source = nosImage, Stretch = Stretch.Uniform, IsHitTestVisible = false,
+                        Tag = new CosmeticAsset(new Uri($"nos-cosmetic://image/{nosKey}"), false, "-52%", "-18px", "140%") });
+                    LayoutCosmetics();
+                    continue;
+                }
+                if (id.Length == 0) continue;
                 var customSnr = mod == AmongUsModType.SuperNewRoles && id.StartsWith("Modded_", StringComparison.Ordinal);
                 var asset = customSnr ? snr?.Resolve(id, part) ?? SnrLocalCosmetics.Resolve(gameExecutable, id, part)
                     : catalog.Resolve(id, modName, part);
@@ -94,6 +130,13 @@ public partial class PlayerAvatar
                     System.Diagnostics.Trace.TraceWarning($"Cosmetic image unavailable: {error.Message}");
                 }
             }
+            if (nos?.TryGetValue(NosCosmeticPart.BodyMask, out var maskKey) == true &&
+                await LoadNosImageAsync(maskKey, nosPlayer!) is { } mask && generation == cosmeticGeneration)
+            {
+                // A missing mask must leave the normal crewmate visible.
+                nosBodyMask = new ImageBrush(mask) { ViewportUnits = BrushMappingMode.Absolute, Stretch = Stretch.Fill };
+                LayoutCosmetics();
+            }
             if (retrySnr && generation == cosmeticGeneration)
             {
                 cosmeticRetryAt = DateTimeOffset.UtcNow.AddSeconds(30);
@@ -117,6 +160,14 @@ public partial class PlayerAvatar
         CosmeticBack.Clip = CosmeticFront.Clip = clipCosmetics
             ? new EllipseGeometry(new Point(size / 2, size / 2), size / 2, size / 2) : null;
         AvatarBody.Width = size * 1.05;
+        if (nosBodyMask is not null)
+        {
+            // Aligned with the NoS hat image: left -18px, top -52%, width 140% of the avatar.
+            var maskWidth = size * 1.4;
+            nosBodyMask.Viewport = new Rect(-18 + Math.Max(2, size / 40) / 2 - 7, size * 0.22 - size * 0.52,
+                maskWidth, maskWidth * NosCosmeticContents.CanvasHeight / NosCosmeticContents.CanvasWidth);
+            BodyCanvas.OpacityMask = nosBodyMask;
+        }
         Canvas.SetTop(AvatarBody, size * 0.22);
         Canvas.SetLeft(AvatarBody, -7);
         foreach (var canvas in new[] { CosmeticBack, CosmeticSkin, CosmeticFront })
@@ -229,6 +280,68 @@ public partial class PlayerAvatar
         Console.WriteLine("[PASS] NoS adaptive cosmetic rendered pixels and published color changes");
         Console.WriteLine("[PASS] SNR remote layers and visor image-size layout in PlayerAvatar");
         VerifySecondaryCosmetics();
+    }
+
+    internal static void VerifyNosCosmetics()
+    {
+        static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
+        var game = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"tanuki-nos-avatar-{Guid.NewGuid():N}");
+        try
+        {
+            var folder = System.IO.Directory.CreateDirectory(System.IO.Path.Combine(game, "BepInEx", "MoreCosmic", "Local"));
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(System.Windows.Media.Imaging.BitmapSource.Create(
+                2, 2, 96, 96, PixelFormats.Bgra32, null, Enumerable.Repeat((byte)255, 16).ToArray(), 8)));
+            using (var stream = System.IO.File.Create(System.IO.Path.Combine(folder.FullName, "hat.png"))) encoder.Save(stream);
+            System.IO.File.Copy(System.IO.Path.Combine(folder.FullName, "hat.png"), System.IO.Path.Combine(folder.FullName, "mask.png"));
+            System.IO.File.WriteAllText(System.IO.Path.Combine(game, "BepInEx", "MoreCosmic", "LoadedContents.json"), """
+                {"Version":20261005,"Hats":{"H":{"ProductId":"nos_h","RelatedRawLocalPath":"BepInEx/MoreCosmic/Local",
+                 "Images":[{"Layer":"Main","Address":"hat.png","MaskAddress":"mask.png","DivisionX":1,"DivisionY":1}]}}}
+                """);
+            var bitmap = System.Windows.Media.Imaging.BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32,
+                null, new byte[] { 0, 0, 255, 255 }, 4);
+            bitmap.Freeze();
+            var requested = new List<Uri>();
+            var avatar = new PlayerAvatar { Width = 80, Height = 80, nosContents = new NosCosmeticContents(),
+                catalogLoader = () => Task.FromResult(CosmeticCatalog.Parse("""
+                    {"NoS":{"defaultWidth":"100%","hats":{"visor_x":{"image":"v.png"}}}}
+                    """)),
+                imageLoader = uri => { requested.Add(uri); return Task.FromResult(bitmap); } };
+            avatar.Measure(new Size(80, 80)); avatar.Arrange(new Rect(0, 0, 80, 80));
+            var player = new Player { HatId = "hat_vanilla", VisorId = "visor_vanilla",
+                NosPlayer = new NosPlayerData { ColorR = 1, Hat = new NosCostumeData("nos_h"),
+                    Visor = new NosCostumeData("visor_x"), Skin = new NosCostumeData("") } };
+            avatar.SetPlayer(player, null, mod: AmongUsModType.NebulaOnTheShip,
+                gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"));
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while ((avatar.CosmeticFront.Children.Count < 2 || avatar.BodyCanvas.OpacityMask is null) && DateTime.UtcNow < deadline)
+            {
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Background, new Action(() => frame.Continue = false));
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+                Thread.Sleep(10);
+            }
+            Require(avatar.CosmeticFront.Children.Count == 2 &&
+                ((CosmeticAsset)((Image)avatar.CosmeticFront.Children[0]).Tag).Url.Scheme == "nos-cosmetic" &&
+                requested.Count == 1 && requested[0].AbsolutePath.EndsWith("v.png"),
+                "NoS LoadedContents hat or published visor name did not reach the avatar");
+            Require(avatar.BodyCanvas.OpacityMask is ImageBrush { ViewportUnits: BrushMappingMode.Absolute } mask &&
+                Math.Abs(mask.Viewport.Width - 112) < 0.001 && Math.Abs(mask.Viewport.Y - -24) < 0.001,
+                "NoS body mask is not aligned with the hat");
+            Require(avatar.CosmeticBack.Children.Count == 0 && avatar.CosmeticSkin.Children.Count == 0,
+                "Empty NoS skin or missing hat back produced a layer");
+            player.IsDead = true;
+            avatar.SetPlayer(player, null, mod: AmongUsModType.NebulaOnTheShip,
+                gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"));
+            Require(avatar.BodyCanvas.OpacityMask is null && avatar.CosmeticFront.Children.Count == 0,
+                "Dead NoS avatar kept its body mask");
+        }
+        finally
+        {
+            try { System.IO.Directory.Delete(game, recursive: true); } catch (System.IO.IOException) { }
+        }
+        Console.WriteLine("[PASS] NoS costume names, LoadedContents layers and body mask in PlayerAvatar");
     }
 
     private static void VerifySecondaryCosmetics()

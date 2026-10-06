@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace TanukiBCL.VoiceProbe.GameMemory;
 
-// NoS v3.5.3 publishes snapshots continuously. The 3.2.8 reader is read-only
+// NoS v3.5.3 publishes snapshots continuously. The 3.2.9 reader is read-only
 // and uses the x64 helper for the supported 64-bit game architecture.
 internal sealed class NosSnapshotReader
 {
@@ -14,12 +14,17 @@ internal sealed class NosSnapshotReader
     private NosLayout? layout;
     private Task<NosLayout>? resolveTask;
     private DateTimeOffset retryAt;
+    private DateTimeOffset? failureSince;
+    private TimeSpan retryDelay = TimeSpan.FromSeconds(5);
     private string observedSession = string.Empty;
     private ulong publication;
     private DateTimeOffset publishedAt;
     private bool fresh;
+    private string? lastFailure;
 
     public string Status { get; private set; } = "NoSスナップショット未取得";
+
+    public int? SchemaVersion => layout?.SchemaVersion;
 
     public void Reset()
     {
@@ -28,12 +33,46 @@ internal sealed class NosSnapshotReader
         layout = null;
         resolveTask = null;
         retryAt = default;
+        failureSince = null;
+        retryDelay = TimeSpan.FromSeconds(5);
         observedSession = string.Empty;
         publication = 0;
         publishedAt = default;
         fresh = false;
+        lastFailure = null;
         Status = "NoSスナップショット未取得";
     }
+
+    // 3.2.9: five seconds of failed or stalled reads discard the layout and resolve it again.
+    private void FailedRead(string reason)
+    {
+        lastFailure = reason;
+        failureSince ??= DateTimeOffset.UtcNow;
+        Status = $"{reason}（自動再取得中）";
+        if (DateTimeOffset.UtcNow - failureSince < TimeSpan.FromSeconds(5)) return;
+        layout = null;
+        failureSince = null;
+        observedSession = string.Empty;
+        publication = 0;
+        publishedAt = default;
+        fresh = false;
+        retryAt = DateTimeOffset.UtcNow;
+        Status = $"{reason}（読み取り位置を再取得します）";
+    }
+
+    internal static string ReadFailureReason(string raw) => raw switch
+    {
+        "NoS snapshot not published" => $"NoSからデータが公開されていません（{raw}）",
+        "Invalid NoS players" => $"プレイヤー一覧の件数またはメモリ位置が不正です（{raw}）",
+        "Invalid NoS radios" => $"無線情報の件数またはメモリ位置が不正です（{raw}）",
+        "Invalid NoS float" => $"位置または色の数値が不正です（{raw}）",
+        "Invalid NoS flag" => $"役職などの判定値が不正です（{raw}）",
+        "Invalid NoS player identity" => $"プレイヤーIDが重複しているか、名前の長さが不正です（{raw}）",
+        "Invalid NoS costume name" => $"コスチューム名の長さが不正です（{raw}）",
+        "Invalid NoS radio name" => $"無線名の長さが不正です（{raw}）",
+        "NoS snapshot changed during read" => $"読み取り中にNoSのデータが更新されました（{raw}）",
+        _ => raw
+    };
 
     public NosSnapshot? Update(int processId, string session, int targetPointerSize,
         Func<long, int, byte[]> read)
@@ -60,8 +99,11 @@ internal sealed class NosSnapshotReader
             }
             catch (Exception exception)
             {
-                retryAt = DateTimeOffset.UtcNow.AddSeconds(30);
-                Status = $"NoS未取得: {exception.Message}";
+                // 3.2.9 retries helper crashes as well as MOD errors, backing off from 5 to 30 seconds.
+                lastFailure = $"NoS未取得: {exception.Message}";
+                Status = $"{lastFailure}（{retryDelay.TotalSeconds:0}秒後に自動再取得）";
+                retryAt = DateTimeOffset.UtcNow + retryDelay;
+                retryDelay = TimeSpan.FromSeconds(Math.Min(retryDelay.TotalSeconds * 2, 30));
             }
             resolveTask = null;
         }
@@ -71,7 +113,9 @@ internal sealed class NosSnapshotReader
             if (resolveTask is null && DateTimeOffset.UtcNow >= retryAt)
             {
                 resolveTask = ResolveAsync(processId, targetPointerSize);
-                Status = "NoSスナップショットのレイアウト取得中";
+                Status = lastFailure is null
+                    ? "NoSスナップショットの公開を有効化中…"
+                    : $"{lastFailure}（読み取り位置を自動再取得中）";
             }
             return null;
         }
@@ -93,15 +137,18 @@ internal sealed class NosSnapshotReader
             }
             if (!fresh || DateTimeOffset.UtcNow - publishedAt > TimeSpan.FromSeconds(3))
             {
-                Status = "NoSの新しいスナップショットを待機中";
+                FailedRead(fresh ? "NoSデータの更新が3秒以上停止しています" : "NoSの新しいデータがまだ公開されていません");
                 return null;
             }
+            failureSince = null;
+            retryDelay = TimeSpan.FromSeconds(5);
+            lastFailure = null;
             Status = "NoSスナップショットを自動更新中";
             return snapshot;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            Status = "NoSスナップショット待機中";
+            FailedRead($"NoS読み取り失敗: {ReadFailureReason(exception.Message)}");
             return null;
         }
     }
@@ -201,6 +248,14 @@ internal sealed class NosSnapshotReader
             1 => true,
             _ => throw new InvalidDataException("Invalid NoS flag")
         };
+        static NosCostumeData? Costume(byte[] payload, int start, NosCostumeLayout? costume)
+        {
+            if (costume is null) return null;
+            var offset = start + costume.Offset;
+            var length = payload[offset + costume.NameLength];
+            if (length > costume.Capacity) throw new InvalidDataException("Invalid NoS costume name");
+            return new NosCostumeData(Encoding.Unicode.GetString(payload, offset + costume.Name, length * 2));
+        }
         var players = new Dictionary<int, NosPlayerData>();
         for (var i = 0; i < count; i++)
         {
@@ -225,7 +280,10 @@ internal sealed class NosSnapshotReader
                 BodyRateY = p.BodyRateY.HasValue ? Finite(BitConverter.ToSingle(payload, start + p.BodyRateY.Value)) : null,
                 ColorR = Finite(BitConverter.ToSingle(payload, start + p.ColorR)),
                 ColorG = Finite(BitConverter.ToSingle(payload, start + p.ColorG)),
-                ColorB = Finite(BitConverter.ToSingle(payload, start + p.ColorB))
+                ColorB = Finite(BitConverter.ToSingle(payload, start + p.ColorB)),
+                Skin = Costume(payload, start, p.Skin),
+                Hat = Costume(payload, start, p.Hat),
+                Visor = Costume(payload, start, p.Visor)
             });
         }
 
@@ -278,8 +336,8 @@ internal sealed class NosLayout
 
     public void Validate(int pid)
     {
-        static bool Field(int offset, int size, int limit) => offset >= 0 && offset + size <= limit;
-        if (Pid != pid || PointerSize != 8 || SchemaVersion != 20260918 ||
+        static bool Field(int offset, int size, int limit) => size > 0 && offset >= 0 && offset + size <= limit;
+        if (Pid != pid || PointerSize != 8 || SchemaVersion is not (20260918 or 20260928 or 20261005) ||
             LatestSlotAddress is < 0x10000 or > long.MaxValue ||
             LatestSlotAddress % (ulong)PointerSize != 0 ||
             PlayerData.Size is < 96 or > 4096)
@@ -300,6 +358,13 @@ internal sealed class NosLayout
             p.BodyRateX.HasValue && !Field(p.BodyRateX.Value, 4, p.Size) ||
             p.BodyRateY.HasValue && !Field(p.BodyRateY.Value, 4, p.Size))
             throw new InvalidDataException("Invalid NoS field layout");
+        NosCostumeLayout?[] costumes = [p.Skin, p.Hat, p.Visor];
+        var costumeCount = costumes.Count(costume => costume is not null);
+        if (costumeCount is not (0 or 3) || SchemaVersion == 20261005 && costumeCount != 3 ||
+            costumes.Any(c => c is not null && (c.Capacity is <= 0 or > 1024 ||
+                !Field(c.Offset, c.Size, p.Size) || !Field(c.NameLength, 1, c.Size) ||
+                !Field(c.Name, c.Capacity * 2, c.Size))))
+            throw new InvalidDataException("Invalid NoS costume layout");
         if (s.RadiosLength.HasValue != s.Radios.HasValue || s.Radios.HasValue != (RadioData is not null))
             throw new InvalidDataException("Invalid NoS radio layout");
         if (RadioData is { } r && (r.Size is < 76 or > 4096 ||
@@ -339,6 +404,18 @@ internal sealed class NosPlayerLayout
     public int ColorR { get; set; }
     public int ColorG { get; set; }
     public int ColorB { get; set; }
+    public NosCostumeLayout? Skin { get; set; }
+    public NosCostumeLayout? Hat { get; set; }
+    public NosCostumeLayout? Visor { get; set; }
+}
+
+internal sealed class NosCostumeLayout
+{
+    public int Offset { get; set; }
+    public int NameLength { get; set; }
+    public int Name { get; set; }
+    public int Capacity { get; set; }
+    public int Size { get; set; }
 }
 
 internal sealed class NosRadioLayout

@@ -10,6 +10,8 @@
                        FontSize="16" TextAlignment="Center" />
             <TextBlock x:Name="WatermarkServer" Foreground="#997BA4" FontWeight="SemiBold"
                        FontSize="11" TextAlignment="Center" />
+            <TextBlock x:Name="WatermarkNosStatus" Foreground="#F5E9EB" FontSize="11"
+                       TextWrapping="Wrap" Visibility="Collapsed" />
         </StackPanel>
         <Border x:Name="AlternateSideBackground" Canvas.ZIndex="1"
                 Background="#C025232A" Visibility="Collapsed" IsHitTestVisible="False" />

@@ -205,7 +205,7 @@ public partial class MainWindow : Window
             debugInfoWindow.Activate();
             return;
         }
-        var window = new DebugInfoWindow(CaptureDebugInfo, CaptureSnrDebugRolesAsync) { Owner = this };
+        var window = new DebugInfoWindow(CaptureDebugInfo) { Owner = this };
         debugInfoWindow = window;
         window.Closed += (_, _) =>
         {
@@ -223,12 +223,6 @@ public partial class MainWindow : Window
             : $"ゲーム状態: {state.GameState} / プレイヤー: {state.Players.Count}人\n" +
               $"ロビー: {state.LobbyCode} / マップ: {state.Map} / 通信妨害: {(state.CommsSabotaged ? "あり" : "なし")} / " +
               $"ミックスアップ: {(state.MixupSabotaged ? "あり" : "なし")}";
-        var roles = state?.Mod == AmongUsModType.SuperNewRoles
-            ? JsonSerializer.Serialize(state.Players.Select(player => new
-            {
-                player.Name, player.Id, player.ClientId, player.SnrRole
-            }), jsonOptions)
-            : "SuperNewRolesの起動を確認してください。";
         var decodedAt = DateTimeOffset.UtcNow;
         var voice = JsonSerializer.Serialize(new
         {
@@ -244,19 +238,15 @@ public partial class MainWindow : Window
                 DecodedPcm5s = peer.RecentDecodedPcm(decodedAt)
             })
         }, jsonOptions);
-        return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live, roles,
+        var radioClientIds = peers.Where(peer => peer.Radio == "送信中").Select(peer => peer.ClientId).ToHashSet();
+        if (radioTransmitting && state?.Players.FirstOrDefault(player => player.IsLocal) is { } local)
+            radioClientIds.Add(local.ClientId);
+        var nosContents = state?.Mod == AmongUsModType.NebulaOnTheShip &&
+            Path.GetDirectoryName(state.GameExecutablePath) is { Length: > 0 } gameDirectory
+                ? NosCosmeticContents.Shared.Update(gameDirectory) : null;
+        return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live,
             state is null ? "情報を待っています…" : JsonSerializer.Serialize(state, jsonOptions), voice,
-            state, probe?.GetNosRadioReportsSnapshot());
-    }
-
-    private async Task<string> CaptureSnrDebugRolesAsync()
-    {
-        if (currentState?.Mod != AmongUsModType.SuperNewRoles || activeGamePid is not { } pid)
-            throw new InvalidOperationException("SuperNewRolesの起動を確認してください");
-        var result = await SnrDebugRoleReader.ReadAsync(pid);
-        if (activeGamePid != pid || currentState?.Mod != AmongUsModType.SuperNewRoles)
-            throw new InvalidOperationException("取得中にゲームが終了または切り替わりました");
-        return result;
+            state, probe?.GetNosRadioReportsSnapshot(), radioClientIds, nosContents);
     }
 
     private void ShowInquiry()
@@ -572,7 +562,10 @@ public partial class MainWindow : Window
         if (settings.NatFix) optionArgs.Add("--nat-fix");
         if (settings.OldSampleDebug) optionArgs.Add("--old-sample-debug");
         var options = ProbeOptions.Parse([.. optionArgs]);
-        var activeProbe = new VoiceServerProbe(options, "client");
+        var activeProbe = new VoiceServerProbe(options, "client")
+        {
+            AppVersion = AppVersionPolicy.WireVersion(UpdateCatalog.CurrentVersion)
+        };
         probe = activeProbe;
         session.AddCleanup(async () =>
         {
@@ -620,6 +613,7 @@ public partial class MainWindow : Window
             UpdateCompactView();
         });
         activeProbe.GameStateApplied += state => Dispatch(session, () => ShowGameState(state));
+        activeProbe.VersionWarningChanged += _ => Dispatch(session, UpdateCompactView);
         activeProbe.PeerMixChanged += (clientId, mix) => Dispatch(session, () => UpdatePeerMix(clientId, mix));
         activeProbe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(session, () => UpdatePeerConnection(clientId, status));
         activeProbe.PeerQualityChanged += (clientId, quality) => Dispatch(session, () =>
@@ -978,7 +972,10 @@ public partial class MainWindow : Window
             microphoneMuted, deafened, statuses, hideCode: settings.HideCode, localUsingRadio: radioTransmitting,
             playerConfigs: settings.PlayerConfigMap, serverQuality: serverQuality);
         var mod = currentState?.Mod ?? AmongUsModType.None;
-        CompactVoiceView.SetDetectedMod(mod == AmongUsModType.None ? null : AmongUsMod.For(mod).Label);
+        CompactVoiceView.SetDetectedMod(mod == AmongUsModType.None ? null : AmongUsMod.For(mod).Label,
+            mod == AmongUsModType.NebulaOnTheShip ? currentState?.NosReadStatus : null);
+        CompactVoiceView.SetVersionWarning(currentState?.GameState is GameState.Lobby or GameState.Tasks or
+            GameState.Discussion ? probe?.VersionWarning : null);
         var active = probe?.CurrentLobbySettings;
         CompactVoiceView.SetWarnings(
             active?.DeadOnly == true ? "幽霊のみのボイス設定です" : null,

@@ -102,6 +102,8 @@
                        Foreground="#D7D1DA" Margin="4,4,4,0" TextWrapping="Wrap" />
             <TextBlock x:Name="SecondWarningText" Visibility="Collapsed" TextAlignment="Center" FontSize="11"
                        Foreground="#D7D1DA" Margin="4,0,4,0" TextWrapping="Wrap" />
+            <TextBlock x:Name="VersionWarningText" Visibility="Collapsed" TextAlignment="Center" FontSize="11"
+                       Foreground="#FFA726" Margin="8,2,8,2" TextWrapping="Wrap" />
         </StackPanel>
 
         <Border x:Name="HeaderDivider" Grid.Row="2" Background="#5C565F" />
@@ -241,8 +243,12 @@
                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="6,0,6,58"
                 MaxWidth="268" Padding="5,2" CornerRadius="4" Background="#59000000"
                 IsHitTestVisible="False">
-            <TextBlock x:Name="DetectedMod" FontSize="10" Foreground="#B8B8B8"
-                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+            <StackPanel>
+                <TextBlock x:Name="DetectedMod" FontSize="10" Foreground="#B8B8B8"
+                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                <TextBlock x:Name="DetectedModStatus" FontSize="10" Foreground="#E6D5D8"
+                           TextWrapping="Wrap" Visibility="Collapsed" />
+            </StackPanel>
         </Border>
         <Popup x:Name="PlayerConfigPopup" Placement="Top" AllowsTransparency="True"
                StaysOpen="True" PopupAnimation="Fade" IsOpen="False">

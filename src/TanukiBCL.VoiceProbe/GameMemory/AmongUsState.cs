@@ -147,7 +147,19 @@ public sealed class NosPlayerData
     public double ColorG { get; set; }
 
     public double ColorB { get; set; }
+
+    // TBCLFields 20261005 costume names. Null when the published schema has no costume data.
+    public NosCostumeData? Skin { get; set; }
+
+    public NosCostumeData? Hat { get; set; }
+
+    public NosCostumeData? Visor { get; set; }
 }
+
+public sealed record NosCostumeData(string Name);
+
+/// <summary>3.2.9 nosReadStatus: drives the dark-red MOD badge while a match has no NoS data.</summary>
+public sealed record NosReadStatus(bool Failed, string Message, int? SchemaVersion);
 
 public sealed record VoicePosition(double X, double Y);
 
@@ -202,6 +214,11 @@ public sealed class AmongUsState
     public bool OldMeetingHud { get; set; }
 
     public CameraLocation CurrentCamera { get; set; } = CameraLocation.None;
+
+    public NosReadStatus? NosReadStatus { get; set; }
+
+    /// <summary>Automatic SNR/TOH4E role reader status for the debug window.</summary>
+    public string? RoleReaderStatus { get; set; }
 
     public VoicePosition? NosLocalMicPosition { get; set; }
 

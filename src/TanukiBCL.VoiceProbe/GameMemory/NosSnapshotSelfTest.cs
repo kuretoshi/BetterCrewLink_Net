@@ -10,7 +10,7 @@ internal static class NosSnapshotSelfTest
         const long radiosAddress = 0x1_0006_0000;
         var layout = new NosLayout
         {
-            Pid = 42, PointerSize = 8, SchemaVersion = 20260918,
+            Pid = 42, PointerSize = 8, SchemaVersion = 20261005,
             LatestSlotAddress = slot,
             Snapshot = new NosSnapshotLayout
             {
@@ -19,10 +19,13 @@ internal static class NosSnapshotSelfTest
             },
             PlayerData = new NosPlayerLayout
             {
-                Size = 128, PlayerId = 0, IsKiller = 1, IsImpostor = 2,
+                Size = 168, PlayerId = 0, IsKiller = 1, IsImpostor = 2,
                 IsCrewmate = 3, IsNeutral = 4, IsImpostorlike = 5, IsJammed = 6,
                 NameLength = 7, Name = 8, SpeakerPositionX = 72, SpeakerPositionY = 76,
-                BodyRateX = 80, BodyRateY = 84, ColorR = 88, ColorG = 92, ColorB = 96
+                BodyRateX = 80, BodyRateY = 84, ColorR = 88, ColorG = 92, ColorB = 96,
+                Skin = new NosCostumeLayout { Offset = 100, NameLength = 0, Name = 2, Capacity = 8, Size = 20 },
+                Hat = new NosCostumeLayout { Offset = 120, NameLength = 0, Name = 2, Capacity = 8, Size = 20 },
+                Visor = new NosCostumeLayout { Offset = 140, NameLength = 0, Name = 2, Capacity = 8, Size = 20 }
             },
             RadioData = new NosRadioLayout
                 { Size = 80, Kind = 0, HearableMask = 4, NameLength = 8, Name = 12 }
@@ -36,7 +39,7 @@ internal static class NosSnapshotSelfTest
         BitConverter.GetBytes((ulong)playersAddress).CopyTo(header, 16);
         BitConverter.GetBytes(1).CopyTo(header, 24);
         BitConverter.GetBytes((ulong)radiosAddress).CopyTo(header, 32);
-        var player = new byte[128];
+        var player = new byte[168];
         player[0] = 7;
         player[1] = 1;
         player[2] = 1;
@@ -49,6 +52,10 @@ internal static class NosSnapshotSelfTest
         BitConverter.GetBytes(0.1f).CopyTo(player, 88);
         BitConverter.GetBytes(0.2f).CopyTo(player, 92);
         BitConverter.GetBytes(0.3f).CopyTo(player, 96);
+        player[100] = 4;
+        System.Text.Encoding.Unicode.GetBytes("Suit").CopyTo(player, 102);
+        player[120] = 3;
+        System.Text.Encoding.Unicode.GetBytes("Hat").CopyTo(player, 122);
         var radio = new byte[80];
         BitConverter.GetBytes(1).CopyTo(radio, 0);
         BitConverter.GetBytes(5).CopyTo(radio, 4);
@@ -75,6 +82,27 @@ internal static class NosSnapshotSelfTest
             !snapshot.Players.TryGetValue(7, out var published) || published.Name != "NoS" ||
             !published.IsImpostor || snapshot.Radios.Count != 1 || snapshot.Radios[0].Name != "RX")
             throw new InvalidOperationException("64-bit NoS player/radio snapshot changed");
+        if (published.Skin?.Name != "Suit" || published.Hat?.Name != "Hat" || published.Visor?.Name != "")
+            throw new InvalidOperationException("TBCLFields 20261005 costume names were not read");
+        player[100] = 9;
+        try
+        {
+            NosSnapshotReader.ReadSnapshot(layout, Read);
+            throw new InvalidOperationException("Oversized NoS costume name accepted");
+        }
+        catch (InvalidDataException error) when (error.Message == "Invalid NoS costume name") { }
+        player[100] = 4;
+        var visor = layout.PlayerData.Visor;
+        layout.PlayerData.Visor = null;
+        try
+        {
+            layout.Validate(42);
+            throw new InvalidOperationException("Incomplete 20261005 costume layout accepted");
+        }
+        catch (InvalidDataException) { }
+        layout.PlayerData.Visor = visor;
+        if (!NosSnapshotReader.ReadFailureReason("Invalid NoS costume name").StartsWith("コスチューム名の長さが不正です", StringComparison.Ordinal))
+            throw new InvalidOperationException("NoS read failure reason differs from 3.2.9");
         torn = true;
         try
         {
@@ -89,7 +117,7 @@ internal static class NosSnapshotSelfTest
             throw new InvalidOperationException("32-bit NoS layout accepted");
         }
         catch (InvalidDataException) { }
-        Console.WriteLine("[PASS] 64-bit NoS player/radio pointers, publication and torn-read rejection");
+        Console.WriteLine("[PASS] 64-bit NoS player/radio pointers, 20261005 costumes, publication and torn-read rejection");
         return 0;
     }
 }

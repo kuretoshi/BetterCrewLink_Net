@@ -293,6 +293,19 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         {
             nosReader.Reset();
         }
+        NosReadStatus? nosReadStatus = null;
+        if (mod == AmongUsModType.NebulaOnTheShip)
+        {
+            var inGame = gameState is GameState.Tasks or GameState.Discussion;
+            var missing = nos is null ? Array.Empty<int>() : players
+                .Where(player => !player.Disconnected && !nos.Players.ContainsKey(player.Id))
+                .Select(player => player.Id).ToArray();
+            nosReadStatus = new NosReadStatus(inGame && (nos is null || missing.Length > 0),
+                inGame && nos is not null && missing.Length > 0
+                    ? $"NoSプレイヤーデータ未取得: PlayerId {string.Join(", ", missing)}"
+                    : nosReader.Status,
+                nosReader.SchemaVersion);
+        }
 
         if (mod == AmongUsModType.SuperNewRoles &&
             gameState is GameState.Tasks or GameState.Discussion)
@@ -372,6 +385,13 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             Map = map,
             AirshipMeetingByOutfit = airshipMeetingByOutfit,
             OldMeetingHud = currentContext.Offsets.OldMeetingHud,
+            NosReadStatus = nosReadStatus,
+            RoleReaderStatus = mod switch
+            {
+                AmongUsModType.SuperNewRoles => snrReader.Status,
+                AmongUsModType.TownOfHostForE => tohReader.Status,
+                _ => null
+            },
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosRadios = nos?.Radios ?? [],
             CommsSabotaged = taskEnvironment.CommsSabotaged,

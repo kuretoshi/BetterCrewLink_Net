@@ -55,7 +55,8 @@ internal static class NosSnapshotDiagnostic
                 Console.WriteLine($"  id={player.Id} client={player.ClientId} name={nos.Name} " +
                     $"impostor={nos.IsImpostor} neutral={nos.IsNeutral} jammed={nos.IsJammed} " +
                     $"speaker=({nos.SpeakerPositionX:0.000},{nos.SpeakerPositionY:0.000}) " +
-                    $"body=({nos.BodyRateX:0.000},{nos.BodyRateY:0.000})");
+                    $"body=({nos.BodyRateX:0.000},{nos.BodyRateY:0.000}) " +
+                    $"skin={nos.Skin?.Name} hat={nos.Hat?.Name} visor={nos.Visor?.Name}");
             }
             foreach (var radio in state.NosRadios)
                 Console.WriteLine($"  radio kind={radio.Kind} mask=0x{radio.HearableMask:X8} name={radio.Name}");

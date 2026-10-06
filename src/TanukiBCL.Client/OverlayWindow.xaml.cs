@@ -220,8 +220,15 @@ public partial class OverlayWindow : Window
         };
         WatermarkTitle.Text = $"TanukiBCL.Net {VoiceView.FormatVersionLabel(UpdateCatalog.CurrentVersion)}{(mod.Length > 0 ? $" [{mod}]" : "")}";
         WatermarkServer.Text = settings.ServerUrl;
+        // 3.2.9 Overlay.tsx: dark red watermark with the NoS read failure reason.
+        var nosFailed = state.Mod == AmongUsModType.NebulaOnTheShip && state.NosReadStatus?.Failed == true;
+        Watermark.Background = nosFailed ? new SolidColorBrush(Color.FromRgb(0x58, 0x1e, 0x24)) : null;
+        Watermark.MaxWidth = nosFailed ? 360 : double.PositiveInfinity;
+        WatermarkNosStatus.Text = nosFailed ? state.NosReadStatus!.Message : string.Empty;
+        WatermarkNosStatus.Visibility = nosFailed ? Visibility.Visible : Visibility.Collapsed;
+        WatermarkTitle.TextWrapping = WatermarkServer.TextWrapping = nosFailed ? TextWrapping.Wrap : TextWrapping.NoWrap;
         WatermarkTitle.TextAlignment = isTasks ? TextAlignment.Center : TextAlignment.Left;
-        WatermarkServer.TextAlignment = WatermarkTitle.TextAlignment;
+        WatermarkServer.TextAlignment = WatermarkNosStatus.TextAlignment = WatermarkTitle.TextAlignment;
         Watermark.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         Canvas.SetLeft(Watermark, isTasks ? Math.Max(0, (Width - Watermark.DesiredSize.Width) / 2d) : 10d);
         Canvas.SetTop(Watermark, isTasks ? state.Mod == AmongUsModType.NebulaOnTheShip ? 58d : 10d
@@ -454,6 +461,20 @@ public partial class OverlayWindow : Window
                 window.MeetingCanvas.Children.Count != 2 ||
                 window.WatermarkTitle.Text != $"TanukiBCL.Net {VoiceView.FormatVersionLabel(UpdateCatalog.CurrentVersion)}")
                 throw new InvalidOperationException("Overlay render smoke test failed");
+            state.Mod = AmongUsModType.NebulaOnTheShip;
+            state.NosReadStatus = new NosReadStatus(true, "NoS読み取り失敗: test", 20261005);
+            window.Update(state, new Dictionary<int, OverlayPeerStatus>
+                { [2] = new(true, true, false) }, false, false, false);
+            if (window.WatermarkNosStatus.Visibility != Visibility.Visible ||
+                window.WatermarkNosStatus.Text != "NoS読み取り失敗: test" ||
+                window.Watermark.Background is not SolidColorBrush { Color: { R: 0x58, G: 0x1e, B: 0x24 } })
+                throw new InvalidOperationException("Overlay NoS read failure watermark differs from 3.2.9");
+            state.NosReadStatus = state.NosReadStatus with { Failed = false };
+            state.Mod = AmongUsModType.None;
+            window.Update(state, new Dictionary<int, OverlayPeerStatus>
+                { [2] = new(true, true, false) }, false, false, false);
+            if (window.WatermarkNosStatus.Visibility != Visibility.Collapsed || window.Watermark.Background is not null)
+                throw new InvalidOperationException("Overlay NoS failure style remained after recovery");
             var retainedSlot = window.MeetingCanvas.Children[1];
             window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, false, false) }, false, false, false);
             if (!ReferenceEquals(retainedSlot, window.MeetingCanvas.Children[1]))

@@ -7,7 +7,8 @@ namespace TanukiBCL.VoiceProbe.GameMemory;
 public sealed record SnrRoleData(int RoleId, string? RoleName, int? ModifierId,
     string? ModifierName, int? GhostRoleId, string? GhostRoleName,
     bool? IsNeutral = null, bool? CanKill = null, double? JumboCurrentSize = null,
-    double? JumboMaxSize = null, string? Hat2Id = null, string? Visor2Id = null)
+    double? JumboMaxSize = null, string? Hat2Id = null, string? Visor2Id = null,
+    SnrTeamValue? AssignedTeam = null, SnrTeamValue? WinnerTeam = null, SnrTeamValue? TeamTag = null)
 {
     public bool IsJackal => RoleName is "Jackal" or "WaveCannonJackal";
     public bool IsSidekick => RoleName is "Sidekick" or "SidekickWaveCannon";
@@ -15,6 +16,9 @@ public sealed record SnrRoleData(int RoleId, string? RoleName, int? ModifierId,
     public bool IsNeutralKiller => IsJackal || IsNeutral == true && CanKill == true;
     public bool HasJumbo => ModifierName?.Split(" | ").Contains("JumboModifier") == true;
 }
+
+/// <summary>3.2.9 SNR team metadata from the periodic helper discovery; Name may be unknown.</summary>
+public sealed record SnrTeamValue(long Value, string? Name);
 
 internal sealed class SnrLiveRoleReader
 {
@@ -64,8 +68,11 @@ internal sealed class SnrLiveRoleReader
             }
             catch (Exception error)
             {
-                nextDiscoveryAt = DateTimeOffset.UtcNow.AddSeconds(5);
-                Status = $"SNR役職取得待機中: {error.Message}";
+                // 3.2.9 retries a failed initial discovery after 10 seconds.
+                nextDiscoveryAt = DateTimeOffset.UtcNow.AddSeconds(layout is null ? 10 : 5);
+                Status = layout is null
+                    ? $"SNR役職の読み取り位置を取得できませんでした（10秒後に自動再取得）: {error.Message}"
+                    : $"SNR役職取得待機中: {error.Message}";
             }
             discoveryTask = null;
         }
@@ -92,7 +99,10 @@ internal sealed class SnrLiveRoleReader
                         IsNeutral = role.IsJackal ? true : detail.IsNeutral,
                         CanKill = role.IsJackal ? true : detail.CanKill,
                         Hat2Id = detail.Hat2Id,
-                        Visor2Id = detail.Visor2Id
+                        Visor2Id = detail.Visor2Id,
+                        AssignedTeam = detail.AssignedTeam?.ToTeam(),
+                        WinnerTeam = detail.WinnerTeam?.ToTeam(),
+                        TeamTag = detail.TeamTag?.ToTeam()
                     };
                 }
                 else
@@ -111,7 +121,7 @@ internal sealed class SnrLiveRoleReader
         {
             // Managed objects may move between unsuspended reads; never reuse
             // old role values after an inconsistent sample.
-            Status = "SNR役職の更新待ち";
+            Status = "SNR役職未取得（自動更新待ち）";
             return new Dictionary<int, SnrRoleData>();
         }
     }
@@ -312,11 +322,16 @@ internal sealed class SnrLiveRoleReader
         public bool? CanKill { get; set; }
         public string? Hat2Id { get; set; }
         public string? Visor2Id { get; set; }
+        public SnrHelperEnum? AssignedTeam { get; set; }
+        public SnrHelperEnum? WinnerTeam { get; set; }
+        public SnrHelperEnum? TeamTag { get; set; }
     }
 
     private sealed class SnrHelperEnum
     {
         public long Value { get; set; }
+        public string? Name { get; set; }
+        public SnrTeamValue ToTeam() => new(Value, Name);
     }
 }
 

@@ -25,6 +25,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly ConcurrentDictionary<string, byte> pendingOfferFallbacks = new();
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
     private readonly ConcurrentDictionary<int, NosRadioReport> nosRadioReports = new();
+    private readonly ConcurrentDictionary<string, string> peerAppVersions = new();
+    private DateTimeOffset appVersionSentAt;
+    private string appVersionSession = string.Empty;
+    private string versionWarning = string.Empty;
     private readonly AirshipSpawnFallback airshipSpawnFallback = new();
     private AmongUsState? currentGameState;
     private AmongUsMemoryReaderService? gameReader;
@@ -156,6 +160,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (IsCurrentHost)
                 SendLobbySettingsToPeer(remoteSocketId);
             SendNosRadioReportToPeer(remoteSocketId);
+            appVersionSentAt = default;
             if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
             {
                 PeerConnectionStatusChanged?.Invoke(clientId, "data-ready");
@@ -206,6 +211,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public Task<AudioTestResult> AudioVerified => audioVerified.Task;
 
     public event Action<AmongUsState>? GameStateApplied;
+
+    /// <summary>3.2.9 version mismatch and older-side update notice; empty when none.</summary>
+    public event Action<string>? VersionWarningChanged;
+
+    /// <summary>Release version advertised to peers (X.Y.Z). Empty disables the exchange.</summary>
+    public string AppVersion { get; init; } = string.Empty;
+
+    public string VersionWarning => versionWarning;
 
     public event Action<LobbySettings?>? LobbySettingsChanged;
 
@@ -420,6 +433,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         UpdateLocalJamming();
         UpdateLocalVadVisibility();
         SyncNosRadioReports(state);
+        SyncAppVersion(state);
         SyncTohReports(state);
         if (state.HostId > 0)
         {
@@ -658,6 +672,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         stalledReconnectAttempts.Clear();
         failedReconnectAttempts.Clear();
         pendingOfferFallbacks.Clear();
+        peerAppVersions.Clear();
+        appVersionSentAt = default;
+        UpdateVersionWarning();
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -898,6 +915,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 pendingOfferFallbacks.TryRemove(remoteSocketId, out _);
                 impostorRadioStates.TryRemove(departedClientId, out _);
                 nosRadioReports.TryRemove(departedClientId, out _);
+                peerAppVersions.TryRemove(remoteSocketId, out _);
+                UpdateVersionWarning();
                 PeerVadChanged?.Invoke(departedClientId, false);
                 PeerConnectionStatusChanged?.Invoke(departedClientId, "closed");
             }
@@ -1080,7 +1099,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
 
             if (data.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String &&
-                type.GetString() == "nos-radio-data")
+                type.GetString() == "app-version")
+            {
+                ApplyAppVersion(remoteSocketId, clientId, data);
+                return;
+            }
+
+            if (type.ValueKind == JsonValueKind.String && type.GetString() == "nos-radio-data")
             {
                 ApplyNosRadioReport(clientId, data);
                 return;
@@ -1223,6 +1248,70 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         if (local is not null) local.TohRole = parsed;
         TohRoleReportReceived?.Invoke(clientId, parsed);
         RefreshPeerMixes();
+    }
+
+    private void SyncAppVersion(AmongUsState state)
+    {
+        if (AppVersion.Length == 0) return;
+        var inactive = state.GameState is GameState.Menu or GameState.Unknown;
+        var session = $"{state.LobbyCode}|{state.ClientId}";
+        if (inactive || session != appVersionSession)
+        {
+            peerAppVersions.Clear();
+            appVersionSentAt = default;
+            appVersionSession = session;
+        }
+        var now = DateTimeOffset.UtcNow;
+        if (!inactive && now - appVersionSentAt >= TimeSpan.FromSeconds(3))
+        {
+            var payload = JsonSerializer.Serialize(new
+            {
+                type = "app-version", lobbyCode = state.LobbyCode, version = AppVersion
+            });
+            foreach (var socketId in peerClientIds.Keys)
+                peerManager.TrySendPeerData(socketId, payload);
+            appVersionSentAt = now;
+        }
+        UpdateVersionWarning();
+    }
+
+    private void ApplyAppVersion(string remoteSocketId, int clientId, JsonElement data)
+    {
+        var state = currentGameState;
+        if (AppVersion.Length == 0 || state is null ||
+            !data.TryGetProperty("lobbyCode", out var lobbyCode) ||
+            lobbyCode.ValueKind != JsonValueKind.String || lobbyCode.GetString() != state.LobbyCode ||
+            !data.TryGetProperty("version", out var versionElement) ||
+            versionElement.ValueKind != JsonValueKind.String ||
+            versionElement.GetString() is not { } version ||
+            AppVersionPolicy.Compare(version, AppVersion) is null ||
+            !state.Players.Any(player => player.ClientId == clientId && !player.Disconnected))
+            return;
+        peerAppVersions[remoteSocketId] = version;
+        UpdateVersionWarning();
+    }
+
+    private void UpdateVersionWarning()
+    {
+        var state = currentGameState;
+        var warning = string.Empty;
+        if (AppVersion.Length > 0 && state is not null)
+        {
+            string? hostVersion = IsCurrentHost ? AppVersion : null;
+            var participants = new List<(string Name, string Version)>();
+            foreach (var (socketId, version) in peerAppVersions)
+            {
+                if (!peerClientIds.TryGetValue(socketId, out var clientId)) continue;
+                if (!IsCurrentHost && clientId == hostClientId) hostVersion ??= version;
+                var player = state.Players.FirstOrDefault(candidate =>
+                    candidate.ClientId == clientId && !candidate.Disconnected);
+                if (player is not null) participants.Add((player.Name, version));
+            }
+            warning = AppVersionPolicy.Warning(AppVersion, hostVersion, IsCurrentHost, participants);
+        }
+        if (warning == versionWarning) return;
+        versionWarning = warning;
+        VersionWarningChanged?.Invoke(warning);
     }
 
     private void SyncNosRadioReports(AmongUsState state)

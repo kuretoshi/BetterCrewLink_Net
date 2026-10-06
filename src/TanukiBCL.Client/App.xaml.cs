@@ -37,7 +37,7 @@ public partial class App : Application
             e.Args.Contains("--update-catalog-live-test") ||
             e.Args.Contains("--update-package-live-test") ||
             e.Args.Contains("--update-package-self-test") || e.Args.Contains("--update-package-file-test") ||
-            e.Args.Contains("--registration-self-test"))
+            e.Args.Contains("--registration-self-test") || e.Args.Contains("--nos-cosmetics-live-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
@@ -59,6 +59,7 @@ public partial class App : Application
                     VoiceView.VerifyRemoteDeathPresentation();
                     GameLauncher.Verify();
                     VoiceView.VerifyLaunchControls();
+                    VoiceView.VerifyModAndVersionNotices();
                     CustomPlatformWindow.Verify();
                 }
                 if (e.Args.Contains("--cosmetics-self-test"))
@@ -68,6 +69,8 @@ public partial class App : Application
                     SnrLocalCosmetics.Verify();
                     CosmeticImages.VerifyCache();
                     PlayerAvatar.VerifyCosmeticLayers();
+                    NosCosmeticContents.Verify();
+                    PlayerAvatar.VerifyNosCosmetics();
                 }
                 if (e.Args.Contains("--cosmetics-self-test") && e.Args.Contains("--download-cosmetics-catalog"))
                 {
@@ -136,6 +139,15 @@ public partial class App : Application
                         throw new ArgumentException("--update-package-file-test needs a ZIP path");
                     Task.Run(() => UpdatePackage.VerifyPublishedArchiveAsync(e.Args[packageFileIndex + 1]))
                         .GetAwaiter().GetResult();
+                }
+                var nosLiveIndex = Array.IndexOf(e.Args, "--nos-cosmetics-live-test");
+                if (nosLiveIndex >= 0)
+                {
+                    if (nosLiveIndex + 4 >= e.Args.Length)
+                        throw new ArgumentException("--nos-cosmetics-live-test needs a game folder, skin, hat, visor and output folder");
+                    NosCosmeticContents.VerifyLive(e.Args[nosLiveIndex + 1], e.Args[nosLiveIndex + 2],
+                        e.Args[nosLiveIndex + 3], e.Args[nosLiveIndex + 4],
+                        nosLiveIndex + 5 < e.Args.Length ? e.Args[nosLiveIndex + 5] : Path.GetTempPath());
                 }
                 if (e.Args.Contains("--self-test-failure-exit"))
                     throw new InvalidOperationException("Deliberate self-test exit-code verification.");
