@@ -214,10 +214,14 @@ public partial class MainWindow : Window
         window.Show();
     }
 
+    // Reused across the debug window's one-second refreshes: a new options instance would
+    // rebuild the serializer's reflection metadata and accessors every time.
+    private static readonly JsonSerializerOptions DebugJsonOptions = new() { WriteIndented = true };
+
     private DebugInfoSnapshot CaptureDebugInfo()
     {
         var state = currentState;
-        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        var jsonOptions = DebugJsonOptions;
         var live = state is null
             ? "ゲーム情報を待っています…"
             : $"ゲーム状態: {state.GameState} / プレイヤー: {state.Players.Count}人\n" +

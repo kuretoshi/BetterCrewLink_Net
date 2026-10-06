@@ -11,7 +11,11 @@ namespace TanukiBCL.Client;
 
 internal enum NosCosmeticPart { Skin, Hat, HatBack, Visor, BodyMask }
 
-internal sealed record NosLoadedContentsStatus(string Path, string Status, string? Json = null);
+/// <summary>
+/// Revision is set when the file was parsed. The JSON text itself is not retained; the debug
+/// window reads Path again only while it is open.
+/// </summary>
+internal sealed record NosLoadedContentsStatus(string Path, string Status, string? Revision = null);
 
 /// <summary>
 /// Port of TanukiBCL 3.2.9 main/nosContents.ts and nosAddonImages.ts: reads the game's
@@ -34,7 +38,11 @@ internal sealed class NosCosmeticContents
     private readonly object gate = new();
     private readonly Dictionary<string, Asset> assets = [];
     private readonly Dictionary<string, Dictionary<NosCosmeticPart, string>> costumes = [];
-    private readonly Dictionary<string, BitmapSource> images = [];
+    // Each rendered layer is a 300x375 BGRA canvas (~440 KiB). Avatars keep the images they show,
+    // so this LRU only needs the recent ones that the main window and overlay share.
+    internal const long MaxCachedImageBytes = 24L * 1024 * 1024;
+    private readonly Dictionary<string, LinkedListNode<(string Key, BitmapSource Image)>> images = [];
+    private readonly LinkedList<(string Key, BitmapSource Image)> imageOrder = new();
     private Dictionary<string, Dictionary<string, ZipImage>> addonImages = [];
     private DateTimeOffset nextRead;
     private string signature = string.Empty;
@@ -58,21 +66,22 @@ internal sealed class NosCosmeticContents
                 Clear();
                 root = RealPath(gameDirectory);
                 addonImages = IndexAddonImages(root);
-                var json = File.ReadAllText(file, Encoding.UTF8).TrimStart('﻿');
-                using var document = JsonDocument.Parse(json);
-                var data = document.RootElement;
-                var supported = data.ValueKind == JsonValueKind.Object &&
-                    data.TryGetProperty("Version", out var version) && version.TryGetInt32(out var number) &&
-                    number == ManifestVersion;
+                // Stream one costume at a time: the whole file as a string or JsonDocument would
+                // land on the large object heap and its pooled buffers stay committed afterwards.
+                Manifest? manifest;
+                using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 16 * 1024))
+                    manifest = JsonSerializer.Deserialize<Manifest>(stream);
+                var supported = manifest is not null && manifest.Version.ValueKind == JsonValueKind.Number &&
+                    manifest.Version.TryGetInt32(out var number) && number == ManifestVersion;
                 if (supported)
                 {
-                    Register(data, "Hats", "hat", current);
-                    Register(data, "Visors", "visor", current);
-                    Register(data, "Skins", "skin", current);
+                    Register(manifest!.Hats, "hat", current);
+                    Register(manifest.Visors, "visor", current);
+                    Register(manifest.Skins, "skin", current);
                 }
                 signature = current;
                 result = new NosLoadedContentsStatus(file,
-                    supported ? "読み取り成功" : "画像表示は未対応の定義バージョンです", json);
+                    supported ? "読み取り成功" : "画像表示は未対応の定義バージョンです", current);
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or
                 JsonException or InvalidDataException or ArgumentException or NotSupportedException)
@@ -103,7 +112,12 @@ internal sealed class NosCosmeticContents
         lock (gate)
         {
             if (!assets.TryGetValue(key, out asset)) return null;
-            if (images.TryGetValue($"{key}:{red},{green},{blue}", out var cached)) return cached;
+            if (images.TryGetValue($"{key}:{red},{green},{blue}", out var cached))
+            {
+                imageOrder.Remove(cached);
+                imageOrder.AddFirst(cached);
+                return cached.Value.Image;
+            }
         }
         BitmapSource? image;
         try { image = Render(asset, [red, green, blue]); }
@@ -117,11 +131,21 @@ internal sealed class NosCosmeticContents
         {
             // Another manifest revision may have replaced the asset while rendering.
             if (!assets.TryGetValue(key, out var current) || !ReferenceEquals(current, asset)) return null;
-            if (images.Count >= 128) images.Clear();
-            images[$"{key}:{red},{green},{blue}"] = image;
+            var cacheKey = $"{key}:{red},{green},{blue}";
+            if (images.Remove(cacheKey, out var stale)) imageOrder.Remove(stale);
+            images[cacheKey] = imageOrder.AddFirst((cacheKey, image));
+            while (images.Count * ImageBytes > MaxCachedImageBytes && imageOrder.Last is { } oldest)
+            {
+                imageOrder.RemoveLast();
+                images.Remove(oldest.Value.Key);
+            }
         }
         return image;
     }
+
+    private const long ImageBytes = CanvasWidth * CanvasHeight * 4;
+
+    internal int CachedImageCount { get { lock (gate) return images.Count; } }
 
     private void Clear()
     {
@@ -129,6 +153,7 @@ internal sealed class NosCosmeticContents
         assets.Clear();
         costumes.Clear();
         images.Clear();
+        imageOrder.Clear();
     }
 
     private static string RealPath(string path)
@@ -164,15 +189,21 @@ internal sealed class NosCosmeticContents
         }
     }
 
-    private void Register(JsonElement data, string property, string kind, string revision)
+    private sealed class Manifest
     {
-        if (!data.TryGetProperty(property, out var collection) || collection.ValueKind != JsonValueKind.Object) return;
-        foreach (var entry in collection.EnumerateObject())
+        public JsonElement Version { get; set; }
+        public Dictionary<string, JsonElement>? Hats { get; set; }
+        public Dictionary<string, JsonElement>? Visors { get; set; }
+        public Dictionary<string, JsonElement>? Skins { get; set; }
+    }
+
+    private void Register(Dictionary<string, JsonElement>? collection, string kind, string revision)
+    {
+        if (collection is null) return;
+        foreach (var (id, costume) in collection)
         {
-            var costume = entry.Value;
             if (costume.ValueKind != JsonValueKind.Object || !costume.TryGetProperty("Images", out var imageList) ||
                 imageList.ValueKind != JsonValueKind.Array) continue;
-            var id = entry.Name;
             string? related = costume.TryGetProperty("RelatedRawLocalPath", out var relatedValue) &&
                 relatedValue.ValueKind == JsonValueKind.String ? relatedValue.GetString() : null;
             var adaptive = costume.TryGetProperty("Adaptive", out var adaptiveValue) &&
@@ -314,22 +345,25 @@ internal sealed class NosCosmeticContents
                 (long)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16)) *
                 System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20)) > MaxImageBytes)
                 throw new InvalidDataException("Image too large");
-            var decoder = new PngBitmapDecoder(new MemoryStream(bytes),
-                BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+            // Only the top-left sprite frame is drawn. Without a load cache WIC decodes just the
+            // rows of that frame instead of keeping the whole sheet (often several MiB) decoded.
+            using var stream = new MemoryStream(bytes, writable: false);
+            var decoder = new PngBitmapDecoder(stream,
+                BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.None);
             var frame = new FormatConvertedBitmap(decoder.Frames[0], PixelFormats.Bgra32, null, 0);
             int width = frame.PixelWidth, height = frame.PixelHeight;
             if (width % asset.Columns != 0 || height % asset.Rows != 0)
                 throw new InvalidDataException("Invalid sprite divisions");
-            var data = new byte[width * height * 4];
-            frame.CopyPixels(data, width * 4, 0);
             int w = width / asset.Columns, h = height / asset.Rows;
+            var data = new byte[w * h * 4];
+            frame.CopyPixels(new System.Windows.Int32Rect(0, 0, w, h), data, w * 4, 0);
             int left = Round((CanvasWidth - w) * 0.53), top = Round((CanvasHeight - h) * 0.425);
             for (var y = 0; y < h; y++)
                 for (var x = 0; x < w; x++)
                 {
                     int dx = left + x, dy = top + y;
                     if (dx < 0 || dy < 0 || dx >= CanvasWidth || dy >= CanvasHeight) continue;
-                    int source = (y * width + x) * 4, target = (dy * CanvasWidth + dx) * 4;
+                    int source = (y * w + x) * 4, target = (dy * CanvasWidth + dx) * 4;
                     // data is BGRA; output is RGBA like the upstream Jimp bitmap.
                     double r = data[source + 2], g = data[source + 1], b = data[source];
                     double a = data[source + 3] / 255d, oldA = output[target + 3] / 255d;
@@ -444,10 +478,12 @@ internal sealed class NosCosmeticContents
                  "Skins":{"Suit":{"Adaptive":true,"RelatedRawLocalPath":"BepInEx/MoreCosmic/Local/MyHat",
                    "Images":[{"Layer":"Main","Address":"adaptive.png","DivisionX":1,"DivisionY":1}]}}}
                 """;
-            File.WriteAllText(Path.Combine(game, "BepInEx", "MoreCosmic", "LoadedContents.json"), manifest);
+            // The game writes a UTF-8 BOM; the streaming reader must accept it like the old TrimStart.
+            File.WriteAllText(Path.Combine(game, "BepInEx", "MoreCosmic", "LoadedContents.json"), manifest,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             var contents = new NosCosmeticContents();
             var status = contents.Update(game);
-            Require(status.Status == "読み取り成功" && status.Json?.Contains("MyHat") == true,
+            Require(status.Status == "読み取り成功" && status.Revision is not null,
                 "LoadedContents.json was not read");
             var player = new NosPlayerData
             {
@@ -474,6 +510,21 @@ internal sealed class NosCosmeticContents
             // Adaptive: R*rgb + G*tint + B*rgb*.55 with source (200,0,0) -> (100, 0, 200).
             Require(Pixel(skin, 158, 159) == (200, 0, 100, 255), "Adaptive NoS recolor differs from 3.2.9");
             Require(contents.Image(parts[NosCosmeticPart.Skin], 2, 0, 0) is null, "Invalid NoS color was rendered");
+            // Rendered layers stay within the byte budget, keeping the most recently used ones.
+            var budget = (int)(MaxCachedImageBytes / ImageBytes);
+            var first = contents.Image(parts[NosCosmeticPart.Skin], 0, 0, 0)!;
+            BitmapSource? recent = null;
+            for (var i = 1; i <= budget + 5; i++)
+            {
+                recent = contents.Image(parts[NosCosmeticPart.Skin], i / 1000d, 0, 0);
+                if (i == budget / 2) Require(ReferenceEquals(contents.Image(parts[NosCosmeticPart.Skin], 0.5, 0, 1), skin),
+                    "Recently used NoS image was not reused");
+            }
+            Require(contents.CachedImageCount == budget &&
+                ReferenceEquals(contents.Image(parts[NosCosmeticPart.Skin], (budget + 5) / 1000d, 0, 0), recent) &&
+                ReferenceEquals(contents.Image(parts[NosCosmeticPart.Skin], 0.5, 0, 1), skin) &&
+                !ReferenceEquals(contents.Image(parts[NosCosmeticPart.Skin], 0, 0, 0), first),
+                "NoS image cache exceeded its budget or evicted the wrong image");
             File.WriteAllText(Path.Combine(game, "BepInEx", "MoreCosmic", "LoadedContents.json"), "{\"Version\":1}");
             contents.nextRead = default;
             Require(contents.Update(game).Status == "画像表示は未対応の定義バージョンです" &&

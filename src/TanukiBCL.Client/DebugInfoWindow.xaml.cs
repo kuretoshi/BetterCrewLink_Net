@@ -32,6 +32,8 @@ public partial class DebugInfoWindow : Window
     private readonly Func<DebugInfoSnapshot> capture;
     private readonly DispatcherTimer refreshTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly HashSet<string> collapsedPlayers = [];
+    // Formatted LoadedContents.json for the revision last shown; dropped with this window.
+    private (string Revision, string Text)? loadedContents;
 
     internal DebugInfoWindow(Func<DebugInfoSnapshot> capture)
     {
@@ -402,7 +404,7 @@ public partial class DebugInfoWindow : Window
         }).ToArray();
     }
 
-    private static string FormatNos(AmongUsState state,
+    private string FormatNos(AmongUsState state,
         IReadOnlyDictionary<int, VoiceServerProbe.NosRadioReport>? reports, NosLoadedContentsStatus? contents)
     {
         var lines = new List<string>
@@ -428,17 +430,31 @@ public partial class DebugInfoWindow : Window
         lines.Add("");
         lines.Add("■ 一覧ファイル（LoadedContents.json）");
         lines.Add(contents is null ? "未取得" : $"{contents.Path}\n状態: {contents.Status}");
-        if (contents?.Json is { } json)
+        if (contents?.Revision is { } revision)
         {
-            try
-            {
-                using var document = JsonDocument.Parse(json);
-                var formatted = JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
-                lines.Add(formatted.Length > 64 * 1024 ? formatted[..(64 * 1024)] + "\n…（64KB以降は省略）" : formatted);
-            }
-            catch (JsonException) { }
+            if (loadedContents?.Revision != revision)
+                loadedContents = (revision, FormatLoadedContents(contents.Path));
+            if (loadedContents.Value.Text.Length > 0) lines.Add(loadedContents.Value.Text);
         }
         return string.Join("\n", lines);
+    }
+
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
+    private static string FormatLoadedContents(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (stream.Length > 4 * 1024 * 1024) return string.Empty;
+            using var document = JsonDocument.Parse(stream);
+            var formatted = JsonSerializer.Serialize(document.RootElement, IndentedJson);
+            return formatted.Length > 64 * 1024 ? formatted[..(64 * 1024)] + "\n…（64KB以降は省略）" : formatted;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     private static string ReadLogTail()
@@ -507,9 +523,12 @@ public partial class DebugInfoWindow : Window
             }]
         };
         var radioReports = new Dictionary<int, VoiceServerProbe.NosRadioReport>();
+        var contentsFile = Path.Combine(Path.GetTempPath(), $"tanuki-debug-contents-{Guid.NewGuid():N}.json");
+        File.WriteAllText(contentsFile, "{\"Version\":20261005}");
+        var contentsRevision = "1";
         var window = new DebugInfoWindow(() => new DebugInfoSnapshot(
             state.Mod.ToString(), "live-state", "game-json", "voice-json", state, radioReports, [9],
-            new NosLoadedContentsStatus("C:\\Game\\BepInEx\\MoreCosmic\\LoadedContents.json", "読み取り成功", "{\"Version\":20261005}")));
+            new NosLoadedContentsStatus(contentsFile, "読み取り成功", contentsRevision)));
         try
         {
             Require(window.SaveLogButton is not null && window.WindowStyle == WindowStyle.None &&
@@ -571,11 +590,24 @@ public partial class DebugInfoWindow : Window
                 window.NosContentsText.Text.Contains("状態: 読み取り成功") &&
                 window.NosContentsText.Text.Contains("\"Version\": 20261005"),
                 "NoS costume, schema or LoadedContents section is incomplete");
+            // The file is formatted once per revision, not re-read on every one-second refresh.
+            File.WriteAllText(contentsFile, "{\"Version\":20261006}");
+            window.Refresh();
+            Require(window.NosContentsText.Text.Contains("\"Version\": 20261005"),
+                "LoadedContents.json was re-read without a new revision");
+            contentsRevision = "2";
+            window.Refresh();
+            Require(window.NosContentsText.Text.Contains("\"Version\": 20261006"),
+                "LoadedContents.json was not re-read for a new revision");
             radioReports[8] = radioReports[8] with { ClientId = 11 };
             window.Refresh();
             Require(window.CardText(1, "相手から未受信"), "Debug NoS radio accepted a mismatched client");
         }
-        finally { window.Close(); }
+        finally
+        {
+            window.Close();
+            File.Delete(contentsFile);
+        }
         Console.WriteLine("[PASS] 3.2.9 debug player cards, search, collapse, SNR teams, NoS radio and contents");
     }
 }

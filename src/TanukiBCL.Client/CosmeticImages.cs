@@ -11,7 +11,9 @@ internal static class CosmeticImages
         MaxResponseContentBufferSize = 8 * 1024 * 1024 };
     private static Task<CosmeticCatalog>? catalog;
     private static Task<SnrCosmeticCatalog>? snrCatalog;
-    private static readonly CosmeticImageCache Images = new(256, 64L * 1024 * 1024, LoadAsync);
+    // One lobby shows at most 15 players x a few layers; the LRU keeps them while a long
+    // session through many public lobbies no longer grows toward 64 MiB of decoded images.
+    private static readonly CosmeticImageCache Images = new(128, 32L * 1024 * 1024, LoadAsync);
 
     public static async Task<CosmeticCatalog> GetCatalogAsync()
     {
