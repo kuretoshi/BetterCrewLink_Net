@@ -542,6 +542,7 @@ internal sealed class NosCosmeticContents
             var skin = contents.Image(parts[NosCosmeticPart.Skin], 0.5, 0, 1)!;
             // Adaptive: R*rgb + G*tint + B*rgb*.55 with source (200,0,0) -> (100, 0, 200).
             Require(Pixel(skin, 158, 159) == (200, 0, 100, 255), "Adaptive NoS recolor differs from 3.2.9");
+            MobileCosmetics.VerifyTransfer(contents, game, player);
             Require(contents.Image(parts[NosCosmeticPart.Skin], 2, 0, 0) is null, "Invalid NoS color was rendered");
             // Rendered layers stay within the byte budget, keeping the most recently used ones.
             var budget = (int)(MaxCachedImageBytes / ImageBytes);

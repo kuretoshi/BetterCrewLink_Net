@@ -71,6 +71,7 @@ public partial class App : Application
                     CosmeticImages.VerifyCache();
                     PlayerAvatar.VerifyCosmeticLayers();
                     NosCosmeticContents.Verify();
+                    MobileCosmetics.VerifyEncoding();
                     PlayerAvatar.VerifyNosCosmetics();
                 }
                 if (e.Args.Contains("--cosmetics-self-test") && e.Args.Contains("--download-cosmetics-catalog"))

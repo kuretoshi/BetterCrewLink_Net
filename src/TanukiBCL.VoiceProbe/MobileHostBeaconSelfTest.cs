@@ -45,9 +45,33 @@ internal static class MobileHostBeaconSelfTest
         if (MobileHostBeacon.IsResponseForLobby(response.RootElement, state))
             return Fail("different lobby mobile client was detected");
 
+        state.LobbyCode = "ABCDEF";
+        state.Mod = AmongUsModType.NebulaOnTheShip;
+        state.Players = [new Player { Id = 4, Name = "tester", IsLocal = true }];
+        var id = new string('a', 64);
+        var parts = new Dictionary<int, IReadOnlyDictionary<string, string>>
+        {
+            [4] = new Dictionary<string, string> { ["hatBack"] = "nos-web://" + id }
+        };
+        var frame = MobileGameStateWire.Create(state, new LobbySettings(),
+            new MobileCosmeticFrame(parts, new Dictionary<string, string> { [id] = "data:image/png;base64,aGVsbG8=" }));
+        var wire = JsonSerializer.SerializeToElement(frame);
+        if (wire.GetProperty("gameState").GetProperty("mod").GetString() != "NoS" ||
+            wire.GetProperty("gameState").GetProperty("players")[0].GetProperty("nosCosmetics")
+                .GetProperty("hatBack").GetString() != "nos-web://" + id ||
+            wire.GetProperty("nosCosmeticAssets").GetProperty(id).GetString() != "data:image/png;base64,aGVsbG8=")
+            return Fail("3.2.14 Web NoS cosmetic frame differs");
+        var request = JsonSerializer.SerializeToElement(new
+        {
+            mobilePlayerInfo = new { code = "ABCDEF", nosCosmeticIds = new[] { id, "invalid" } }
+        });
+        if (MobileGameStateWire.RequestedIds(request, state) is not { Count: 1 } asked ||
+            asked[0] != id || MobileGameStateWire.RequestedIds(response.RootElement, state) is not null)
+            return Fail("3.2.14 Web NoS missing-image request differs");
+
         await VerifySchedulerAsync();
         await VerifyCancellationAsync();
-        Console.WriteLine("[PASS] 3.2.7 mobile host payload, live 5-second scheduler, failed-send recovery, cancellation and lobby detection");
+        Console.WriteLine("[PASS] mobile host beacon, 3.2.14 game frame and NoS image requests, scheduler and recovery");
         return 0;
     }
 

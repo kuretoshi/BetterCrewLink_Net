@@ -566,9 +566,12 @@ public partial class MainWindow : Window
         if (settings.NatFix) optionArgs.Add("--nat-fix");
         if (settings.OldSampleDebug) optionArgs.Add("--old-sample-debug");
         var options = ProbeOptions.Parse([.. optionArgs]);
+        var mobileCosmetics = new MobileCosmetics();
         var activeProbe = new VoiceServerProbe(options, "client")
         {
-            AppVersion = AppVersionPolicy.WireVersion(UpdateCatalog.CurrentVersion)
+            AppVersion = AppVersionPolicy.WireVersion(UpdateCatalog.CurrentVersion),
+            MobileFrameProvider = mobileCosmetics.Frame,
+            MobileCosmeticsRequested = mobileCosmetics.Resend
         };
         probe = activeProbe;
         session.AddCleanup(async () =>
@@ -576,6 +579,7 @@ public partial class MainWindow : Window
             try { await activeProbe.DisposeAsync(); }
             finally { if (ReferenceEquals(probe, activeProbe)) probe = null; }
         });
+        session.AddCleanup(() => { mobileCosmetics.Reset(); return ValueTask.CompletedTask; });
         session.AddCleanup(async () =>
         {
             try

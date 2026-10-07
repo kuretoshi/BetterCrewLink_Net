@@ -47,6 +47,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private bool spatialAudioEnabled = true;
     private volatile bool mobileHostEnabled = true;
     private volatile bool mobileRunning;
+    private DateTimeOffset lastMobileFrameSentAt;
     private IReadOnlyDictionary<int, PlayerAudioConfig> playerConfigs = new Dictionary<int, PlayerAudioConfig>();
     private LobbySettings ownLobbySettings = new();
     private LobbySettings activeLobbySettings = new();
@@ -217,6 +218,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     /// <summary>Release version advertised to peers (X.Y.Z). Empty disables the exchange.</summary>
     public string AppVersion { get; init; } = string.Empty;
+
+    /// <summary>Optional WPF renderer for v3.2.14 NoS images sent to the browser.</summary>
+    public Func<AmongUsState, MobileCosmeticFrame>? MobileFrameProvider { get; init; }
+    public Action<IReadOnlyList<string>?>? MobileCosmeticsRequested { get; init; }
 
     public string VersionWarning => versionWarning;
 
@@ -428,6 +433,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             state.GameState is GameState.Menu or GameState.Unknown)
         {
             mobileRunning = false;
+            lastMobileFrameSentAt = default;
         }
         currentGameState = state;
         UpdateLocalJamming();
@@ -957,6 +963,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (MobileHostBeacon.IsResponseForLobby(data, currentGameState))
             {
                 mobileRunning = true;
+                MobileCosmeticsRequested?.Invoke(MobileGameStateWire.RequestedIds(data, currentGameState));
                 return;
             }
             if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("mobilePlayerInfo", out _))
@@ -1731,6 +1738,22 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var wasHost = currentGameState?.IsHost == true;
         ApplyGameState(state);
         if (!socket.Connected) return;
+        if (mobileHostEnabled && mobileRunning && state.GameState is not (GameState.Menu or GameState.Unknown) &&
+            DateTimeOffset.UtcNow - lastMobileFrameSentAt >= TimeSpan.FromMilliseconds(100))
+        {
+            try
+            {
+                var frame = MobileGameStateWire.Create(state, activeLobbySettings, MobileFrameProvider?.Invoke(state));
+                await socket.EmitAsync("signal", new { to = state.LobbyCode + "_mobile", data = frame })
+                    .WaitAsync(lifetimeToken);
+                lastMobileFrameSentAt = DateTimeOffset.UtcNow;
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                lastMobileFrameSentAt = DateTimeOffset.UtcNow;
+                Log("WARN", $"Web版へのゲーム状態送信失敗: {error.Message}");
+            }
+        }
         var local = state.Players.FirstOrDefault(player => player.IsLocal);
         // The released controller remains in the known lobby when the
         // end-game screen temporarily has no local PlayerControl. It uses
