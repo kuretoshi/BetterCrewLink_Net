@@ -37,7 +37,8 @@ public partial class App : Application
             e.Args.Contains("--update-catalog-live-test") ||
             e.Args.Contains("--update-package-live-test") ||
             e.Args.Contains("--update-package-self-test") || e.Args.Contains("--update-package-file-test") ||
-            e.Args.Contains("--registration-self-test") || e.Args.Contains("--nos-cosmetics-live-test"))
+            e.Args.Contains("--registration-self-test") || e.Args.Contains("--nos-cosmetics-live-test") ||
+            e.Args.Contains("--snr-cosmetics-live-test"))
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             try
@@ -123,6 +124,13 @@ public partial class App : Application
                 if (e.Args.Contains("--update-package-self-test"))
                     Task.Run(UpdatePackage.VerifyAsync).GetAwaiter().GetResult();
                 if (e.Args.Contains("--registration-self-test")) InstalledAppRegistration.Verify();
+                var snrLiveIndex = Array.IndexOf(e.Args, "--snr-cosmetics-live-test");
+                if (snrLiveIndex >= 0)
+                {
+                    if (snrLiveIndex + 1 >= e.Args.Length)
+                        throw new ArgumentException("--snr-cosmetics-live-test needs a game folder");
+                    SnrLocalCosmetics.VerifyLive(e.Args[snrLiveIndex + 1]);
+                }
                 var livePackageIndex = Array.IndexOf(e.Args, "--update-package-live-test");
                 if (livePackageIndex >= 0)
                 {

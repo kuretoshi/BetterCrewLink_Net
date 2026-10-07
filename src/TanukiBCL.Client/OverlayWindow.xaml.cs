@@ -305,7 +305,8 @@ public partial class OverlayWindow : Window
             var displayDead = player.IsLocal ? player.IsDead
                 : remoteDeadForDisplay is null ? player.IsDead
                 : remoteDeadForDisplay.TryGetValue(player.ClientId, out var dead) && dead;
-            avatar.SetPlayer(player, state.PlayerColors, false, state.Mod, state.GameExecutablePath, displayDead);
+            avatar.SetPlayer(player, state.PlayerColors, false, state.Mod, state.GameExecutablePath, displayDead,
+                state.GameState);
             avatar.SetOverlayMode(lookLeft: position is not ("left" or "left1" or "bottom_left"),
                 showBorder: side && !settings.CompactOverlay);
             avatar.SetVisualState(entry.Talking,

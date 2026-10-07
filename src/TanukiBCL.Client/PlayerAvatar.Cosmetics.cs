@@ -16,7 +16,8 @@ public partial class PlayerAvatar
     private NosCosmeticContents nosContents = NosCosmeticContents.Shared;
     private ImageBrush? nosBodyMask;
 
-    private void UpdateCosmetics(Player player, IReadOnlyList<PlayerColorPair>? palette, AmongUsModType mod, int colorId, string gameExecutable)
+    private void UpdateCosmetics(Player player, IReadOnlyList<PlayerColorPair>? palette, AmongUsModType mod, int colorId,
+        string gameExecutable, GameState gameState)
     {
         var outfit = player.CurrentOutfit is > 0 and <= 10;
         static string Select(bool outfit, string appearance, string normal, string empty) =>
@@ -26,7 +27,12 @@ public partial class PlayerAvatar
         var visor = Select(outfit, player.AppearanceVisorId, player.VisorId, "visor_EmptyVisor");
         // 3.2.9: NoS TBCLFields costume names replace the vanilla IDs, and LoadedContents.json
         // images take priority over the shared catalog for the same part.
-        var nosPlayer = mod == AmongUsModType.NebulaOnTheShip && !player.Disconnected ? player.NosPlayer : null;
+        var colors = AvatarImageFactory.GetSwatchColors(colorId, palette);
+        var lobbyFallback = palette is not null && player.AppearanceColorId >= 0 &&
+            player.AppearanceColorId < palette.Count
+            ? AvatarImageFactory.GetSwatchColors(player.AppearanceColorId, palette).Main : Colors.White;
+        var nosPlayer = mod != AmongUsModType.NebulaOnTheShip || player.Disconnected ? null
+            : gameState == GameState.Lobby ? NosCosmeticContents.LobbyPlayer(player, lobbyFallback) : player.NosPlayer;
         if (nosPlayer?.Hat is { } nosHat) hat = nosHat.Name == "hat_NoHat" ? "" : nosHat.Name;
         if (nosPlayer?.Skin is { } nosSkin) skin = nosSkin.Name == "skin_None" ? "" : nosSkin.Name;
         if (nosPlayer?.Visor is { } nosVisor) visor = nosVisor.Name == "visor_EmptyVisor" ? "" : nosVisor.Name;
@@ -41,8 +47,7 @@ public partial class PlayerAvatar
         var secondary = mod == AmongUsModType.SuperNewRoles && !player.Disconnected ? player.SnrRole : null;
         var hat2 = secondary?.Hat2Id is { } secondHat && secondHat != "hat_NoHat" ? secondHat : "";
         var visor2 = secondary?.Visor2Id is { } secondVisor && secondVisor != "visor_EmptyVisor" ? secondVisor : "";
-        var colors = AvatarImageFactory.GetSwatchColors(colorId, palette);
-        var key = $"{gameExecutable}|{player.IsDead}|{mod}|{hat}|{skin}|{visor}|{hat2}|{visor2}|{colors}|{nosKeys}|{nosColor}";
+        var key = $"{gameExecutable}|{player.IsDead}|{mod}|{gameState}|{hat}|{skin}|{visor}|{hat2}|{visor2}|{colors}|{nosKeys}|{nosColor}";
         if (key == cosmeticKey && (cosmeticRetryAt == default || DateTimeOffset.UtcNow < cosmeticRetryAt)) return;
         cosmeticKey = key;
         cosmeticRetryAt = default;
@@ -65,13 +70,38 @@ public partial class PlayerAvatar
     {
         try
         {
-            var catalog = await catalogLoader();
+            var customSnrPresent = mod == AmongUsModType.SuperNewRoles &&
+                new[] { hat, skin, visor, hat2, visor2 }.Any(id => id.StartsWith("Modded_", StringComparison.Ordinal));
+            var catalogTask = catalogLoader();
+            // 3.2.13 does not wait for the remote hat list before showing SNR's local PNGs.
+            CosmeticCatalog? catalog = customSnrPresent && !catalogTask.IsCompletedSuccessfully
+                ? null : await catalogTask;
             SnrCosmeticCatalog? snr = null;
-            var retrySnr = false;
-            if (mod == AmongUsModType.SuperNewRoles && new[] { hat, skin, visor, hat2, visor2 }.Any(id => id.StartsWith("Modded_", StringComparison.Ordinal)))
+            var retrySnr = customSnrPresent && catalog is null;
+            var retryDelaySeconds = catalogTask.IsFaulted ? 30 : 1;
+            if (catalogTask.IsFaulted) _ = catalogTask.Exception;
+            if (customSnrPresent)
             {
-                try { snr = await snrCatalogLoader(); }
-                catch (Exception error) { retrySnr = true; System.Diagnostics.Trace.TraceWarning($"SNR definitions unavailable: {error.Message}"); }
+                try
+                {
+                    var definitions = snrCatalogLoader();
+                    if (definitions.IsCompletedSuccessfully) snr = definitions.Result;
+                    else
+                    {
+                        retrySnr = true;
+                        if (definitions.IsFaulted)
+                        {
+                            _ = definitions.Exception;
+                            retryDelaySeconds = 30;
+                        }
+                    }
+                }
+                catch (Exception error)
+                {
+                    retrySnr = true;
+                    retryDelaySeconds = 30;
+                    System.Diagnostics.Trace.TraceWarning($"SNR definitions unavailable: {error.Message}");
+                }
             }
             var modName = mod switch
             {
@@ -105,11 +135,11 @@ public partial class PlayerAvatar
                 }
                 if (id.Length == 0) continue;
                 var customSnr = mod == AmongUsModType.SuperNewRoles && id.StartsWith("Modded_", StringComparison.Ordinal);
-                var asset = customSnr ? snr?.Resolve(id, part) ?? SnrLocalCosmetics.Resolve(gameExecutable, id, part)
-                    : catalog.Resolve(id, modName, part);
-                // Image selection prioritizes SNR remote definitions, but dimensions
-                // still use a shared catalog entry when one exists in 3.2.7.
-                if (customSnr && asset is not null && catalog.Dimensions(id, modName) is { } shared)
+                var asset = customSnr ? SnrLocalCosmetics.Resolve(gameExecutable, id, part)
+                    : catalog?.Resolve(id, modName, part);
+                if (customSnr && asset is not null && snr is not null)
+                    asset = snr.ApplyLocalMetadata(id, part, asset);
+                if (customSnr && asset is not null && catalog?.Dimensions(id, modName) is { } shared)
                     asset = asset with { Top = shared.Top, Left = shared.Left, Width = shared.Width, SnrVisorLayout = false };
                 if (asset is null) continue;
                 try
@@ -139,7 +169,7 @@ public partial class PlayerAvatar
             }
             if (retrySnr && generation == cosmeticGeneration)
             {
-                cosmeticRetryAt = DateTimeOffset.UtcNow.AddSeconds(30);
+                cosmeticRetryAt = DateTimeOffset.UtcNow.AddSeconds(retryDelaySeconds);
             }
         }
         catch (Exception error)
@@ -185,19 +215,38 @@ public partial class PlayerAvatar
         var bitmap = System.Windows.Media.Imaging.BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32,
             null, new byte[] { 0, 0, 255, 255 }, 4);
         bitmap.Freeze();
+        var pendingCatalog = new TaskCompletionSource<CosmeticCatalog>();
+        var pendingSnr = new TaskCompletionSource<SnrCosmeticCatalog>();
+        var requested = new List<Uri>();
         var avatar = new PlayerAvatar {
-            catalogLoader = () => Task.FromResult(CosmeticCatalog.Parse("{}")),
-            snrCatalogLoader = () => Task.FromException<SnrCosmeticCatalog>(new System.IO.IOException("Simulated offline definitions")),
-            imageLoader = _ => Task.FromResult(bitmap) };
+            catalogLoader = () => pendingCatalog.Task,
+            snrCatalogLoader = () => pendingSnr.Task,
+            imageLoader = uri => { requested.Add(uri); return Task.FromResult(bitmap); } };
         avatar.SetPlayer(new Player { HatId = "Modded_Pack_Name", VisorId = "Modded_Pack_Name" }, null,
             mod: AmongUsModType.SuperNewRoles, gameExecutable: executable);
-        if (avatar.CosmeticBack.Children.Count != 1 || avatar.CosmeticFront.Children.Count != 2)
-            throw new InvalidOperationException("Offline SNR definitions blocked local avatar layers");
+        if (avatar.CosmeticBack.Children.Count != 1 || avatar.CosmeticFront.Children.Count != 2 ||
+            requested.Any(uri => !uri.IsFile))
+            throw new InvalidOperationException("SNR local images waited for remote definitions or used CDN images.");
+        pendingCatalog.SetResult(CosmeticCatalog.Parse("{}"));
+        pendingSnr.SetResult(SnrCosmeticCatalog.Parse("{}", """
+            {"Visors":[{"name":"Name","package":"Pack","resource":"Name_idle.png","IsSNR":true}]}
+            """));
+        avatar.cosmeticRetryAt = DateTimeOffset.UtcNow.AddSeconds(-1);
+        avatar.SetPlayer(new Player { HatId = "Modded_Pack_Name", VisorId = "Modded_Pack_Name" }, null,
+            mod: AmongUsModType.SuperNewRoles, gameExecutable: executable);
+        var visor = (Image)avatar.CosmeticFront.Children[1];
+        if (((CosmeticAsset)visor.Tag).Url.IsFile != true ||
+            Math.Abs(visor.Width - CosmeticCatalog.ResolveLength(
+                SnrCosmeticCatalog.WithImageSize(new CosmeticAsset(new Uri("https://example.invalid/test.png"),
+                    false, "-52%", "-18px", "140%", true), 1, 1).Width, avatar.Width)) > 0.001)
+            throw new InvalidOperationException($"SNR local visor lost definition-based image layout: " +
+                $"file={((CosmeticAsset)visor.Tag).Url.IsFile} width={visor.Width} " +
+                $"asset={((CosmeticAsset)visor.Tag).Width} avatar={avatar.Width}.");
         avatar.SetPlayer(new Player { HatId = "Modded_Pack_Name" }, null, mod: AmongUsModType.SuperNewRoles,
             gameExecutable: System.IO.Path.Combine(System.IO.Path.GetDirectoryName(executable)!, "other", "Among Us.exe"));
         if (avatar.CosmeticBack.Children.Count != 0 || avatar.CosmeticFront.Children.Count != 0)
-            throw new InvalidOperationException("Definition retry delay retained another game's local cosmetics");
-        Console.WriteLine("[PASS] Offline SNR definitions fall back to local avatar layers");
+            throw new InvalidOperationException("SNR images were loaded outside the selected game folder.");
+        Console.WriteLine("[PASS] SNR local-only PNGs render before remote catalogs and preserve visor metadata");
     }
 
     internal static void VerifyCosmeticLayers()
@@ -262,23 +311,13 @@ public partial class PlayerAvatar
             .CopyPixels(painted, 4, 0);
         Require(painted.SequenceEqual(new byte[] { 0, 0, 255, 255 }), "Published color change did not refresh cosmetic");
         avatar.catalogLoader = () => Task.FromResult(CosmeticCatalog.Parse("{}"));
-        avatar.snrCatalogLoader = () => Task.FromResult(SnrCosmeticCatalog.Parse("""
-            {"hats":[{"name":"H","resource":"h.png","backresource":"back.png"}]}
-            """, """
-            {"Visors":[{"name":"V","resource":"v.png","IsSNR":true}]}
-            """));
         avatar.SetPlayer(new Player { HatId = "Modded_NONE_PACKAGE_H", VisorId = "Modded_NONE_PACKAGE_V" },
             null, mod: AmongUsModType.SuperNewRoles);
-        Require(avatar.CosmeticBack.Children.Count == 1 && avatar.CosmeticFront.Children.Count == 2,
-            "SNR remote layers did not reach rendered avatar");
-        var snrVisor = (Image)avatar.CosmeticFront.Children[1];
-        var expectedVisor = SnrCosmeticCatalog.WithImageSize(new CosmeticAsset(new Uri("https://example.com/v.png"),
-            false, "-52%", "-18px", "140%", true), 1, 1);
-        Require(Math.Abs(snrVisor.Width - CosmeticCatalog.ResolveLength(expectedVisor.Width, 80)) < 0.0001,
-            "SNR natural image size was not applied to rendering");
+        Require(avatar.CosmeticBack.Children.Count == 0 && avatar.CosmeticFront.Children.Count == 0,
+            "SNR images must not fall back to remote images without a local game file");
         Console.WriteLine("[PASS] Cosmetic layers, placement, base clip, death and stale asynchronous results");
         Console.WriteLine("[PASS] NoS adaptive cosmetic rendered pixels and published color changes");
-        Console.WriteLine("[PASS] SNR remote layers and visor image-size layout in PlayerAvatar");
+        Console.WriteLine("[PASS] SNR custom layers never fall back to GitHub images");
         VerifySecondaryCosmetics();
     }
 
@@ -296,7 +335,11 @@ public partial class PlayerAvatar
             System.IO.File.Copy(System.IO.Path.Combine(folder.FullName, "hat.png"), System.IO.Path.Combine(folder.FullName, "mask.png"));
             System.IO.File.WriteAllText(System.IO.Path.Combine(game, "BepInEx", "MoreCosmic", "LoadedContents.json"), """
                 {"Version":20261005,"Hats":{"H":{"ProductId":"nos_h","RelatedRawLocalPath":"BepInEx/MoreCosmic/Local",
-                 "Images":[{"Layer":"Main","Address":"hat.png","MaskAddress":"mask.png","DivisionX":1,"DivisionY":1}]}}}
+                 "Images":[{"Layer":"Main","Address":"hat.png","MaskAddress":"mask.png","DivisionX":1,"DivisionY":1}]}},
+                 "Visors":{"V":{"ProductId":"nos_v","RelatedRawLocalPath":"BepInEx/MoreCosmic/Local",
+                 "Images":[{"Layer":"Main","Address":"hat.png","DivisionX":1,"DivisionY":1}]}},
+                 "Skins":{"S":{"ProductId":"nos_s","RelatedRawLocalPath":"BepInEx/MoreCosmic/Local",
+                 "Images":[{"Layer":"Main","Address":"hat.png","DivisionX":1,"DivisionY":1}]}}}
                 """);
             var bitmap = System.Windows.Media.Imaging.BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32,
                 null, new byte[] { 0, 0, 255, 255 }, 4);
@@ -336,12 +379,38 @@ public partial class PlayerAvatar
                 gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"));
             Require(avatar.BodyCanvas.OpacityMask is null && avatar.CosmeticFront.Children.Count == 0,
                 "Dead NoS avatar kept its body mask");
+            var lobbyPlayer = new Player { AppearanceHatId = "nos_h", AppearanceVisorId = "nos_v",
+                AppearanceSkinId = "nos_s", NosLobbyColor = "#ff8000" };
+            avatar.SetPlayer(lobbyPlayer, null, mod: AmongUsModType.NebulaOnTheShip,
+                gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"), gameState: GameState.Lobby);
+            deadline = DateTime.UtcNow.AddSeconds(10);
+            while ((avatar.CosmeticFront.Children.Count < 2 || avatar.CosmeticSkin.Children.Count < 1 ||
+                    avatar.BodyCanvas.OpacityMask is null) &&
+                DateTime.UtcNow < deadline)
+            {
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Background, new Action(() => frame.Continue = false));
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+                Thread.Sleep(10);
+            }
+            Require(avatar.CosmeticFront.Children.Count == 2 && avatar.CosmeticSkin.Children.Count == 1 &&
+                avatar.BodyCanvas.OpacityMask is not null,
+                $"NoS lobby equipment was not rendered without round PlayerData: " +
+                $"front={avatar.CosmeticFront.Children.Count} skin={avatar.CosmeticSkin.Children.Count} " +
+                $"mask={avatar.BodyCanvas.OpacityMask is not null}.");
+            lobbyPlayer.AppearanceHatId = lobbyPlayer.AppearanceSkinId = lobbyPlayer.AppearanceVisorId = "";
+            avatar.SetPlayer(lobbyPlayer, null, mod: AmongUsModType.NebulaOnTheShip,
+                gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"), gameState: GameState.Lobby);
+            Require(avatar.CosmeticBack.Children.Count == 0 && avatar.CosmeticFront.Children.Count == 0 &&
+                avatar.CosmeticSkin.Children.Count == 0 && avatar.BodyCanvas.OpacityMask is null,
+                "Unequipping in the NoS lobby left stale layers.");
         }
         finally
         {
             try { System.IO.Directory.Delete(game, recursive: true); } catch (System.IO.IOException) { }
         }
-        Console.WriteLine("[PASS] NoS costume names, LoadedContents layers and body mask in PlayerAvatar");
+        Console.WriteLine("[PASS] NoS round/lobby costume layers, unequipping and body mask in PlayerAvatar");
     }
 
     private static void VerifySecondaryCosmetics()
@@ -391,17 +460,22 @@ public partial class PlayerAvatar
             new Action(() => frame.Continue = false));
         System.Windows.Threading.Dispatcher.PushFrame(frame);
         Require(Names(avatar.CosmeticFront).SequenceEqual(new[] { "hat.png", "visor.png" }), "Late secondary image survived metadata removal");
-        avatar.snrCatalogLoader = () => Task.FromResult(SnrCosmeticCatalog.Parse("""
-            {"hats":[{"name":"Extra","resource":"extra.png","backresource":"extra_back.png"}]}
-            """, """
-            {"Visors":[{"name":"Extra","resource":"extra_visor.png"}]}
-            """));
-        avatar.SetPlayer(new Player { SnrRole = new SnrRoleData(0, null, null, null, null, null,
-            Hat2Id: "Modded_NONE_PACKAGE_Extra", Visor2Id: "Modded_NONE_PACKAGE_Extra") }, null,
-            mod: AmongUsModType.SuperNewRoles);
-        Require(Names(avatar.CosmeticBack).SequenceEqual(new[] { "extra_back.png" }) &&
-            Names(avatar.CosmeticFront).SequenceEqual(new[] { "extra.png", "extra_visor.png" }),
-            "Secondary-only outfit did not request SNR remote definitions");
+        var fixture = System.IO.Directory.CreateTempSubdirectory("tanuki-snr-secondary-");
+        try
+        {
+            var pack = System.IO.Directory.CreateDirectory(System.IO.Path.Combine(fixture.FullName,
+                "SuperNewRolesNext", "CustomCosmetics", "NONE_PACKAGE"));
+            foreach (var suffix in new[] { "front", "back", "idle" })
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(pack.FullName, $"Extra_{suffix}.png"), [1]);
+            avatar.SetPlayer(new Player { SnrRole = new SnrRoleData(0, null, null, null, null, null,
+                Hat2Id: "Modded_NONE_PACKAGE_Extra", Visor2Id: "Modded_NONE_PACKAGE_Extra") }, null,
+                mod: AmongUsModType.SuperNewRoles,
+                gameExecutable: System.IO.Path.Combine(fixture.FullName, "Among Us.exe"));
+            Require(Names(avatar.CosmeticBack).SequenceEqual(new[] { "Extra_back.png" }) &&
+                Names(avatar.CosmeticFront).SequenceEqual(new[] { "Extra_front.png", "Extra_idle.png" }),
+                "Secondary-only SNR outfit did not use the selected game's local images");
+        }
+        finally { fixture.Delete(recursive: true); }
         Console.WriteLine("[PASS] SNR secondary layer order, disguise, empty IDs, MOD isolation, death, disconnect and stale response removal");
     }
 }

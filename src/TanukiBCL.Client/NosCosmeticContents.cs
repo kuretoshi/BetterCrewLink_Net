@@ -106,6 +106,26 @@ internal sealed class NosCosmeticContents
         return parts.Count > 0 ? parts : null;
     }
 
+    // v3.2.13: lobby outfits are available before NoS publishes round PlayerData.
+    internal static NosPlayerData? LobbyPlayer(Player player, Color fallbackColor)
+    {
+        if (player.Disconnected) return null;
+        var color = player.NosLobbyColor is { Length: 7 } hex && hex[0] == '#' &&
+            uint.TryParse(hex.AsSpan(1), System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture, out var rgb)
+            ? Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb)
+            : fallbackColor;
+        return new NosPlayerData
+        {
+            Skin = new NosCostumeData(player.AppearanceSkinId),
+            Hat = new NosCostumeData(player.AppearanceHatId),
+            Visor = new NosCostumeData(player.AppearanceVisorId),
+            ColorR = color.R / 255d,
+            ColorG = color.G / 255d,
+            ColorB = color.B / 255d
+        };
+    }
+
     public BitmapSource? Image(string key, double red, double green, double blue)
     {
         Asset? asset;
@@ -497,6 +517,19 @@ internal sealed class NosCosmeticContents
                 !parts.ContainsKey(NosCosmeticPart.HatBack), "NoS ProductId, addon ZIP or skin lookup differs from 3.2.9");
             Require(contents.Cosmetics(new NosPlayerData { Hat = new NosCostumeData("Escape") }) is null,
                 "A path outside the game folder was registered");
+            var lobby = LobbyPlayer(new Player { AppearanceHatId = "nos_hat", AppearanceVisorId = "nosvisor_Me_Shade",
+                AppearanceSkinId = "Suit", NosLobbyColor = "#ff8000" }, Colors.White)!;
+            var lobbyParts = contents.Cosmetics(lobby);
+            Require(lobbyParts is not null && lobbyParts.ContainsKey(NosCosmeticPart.Hat) &&
+                lobbyParts.ContainsKey(NosCosmeticPart.Visor) && lobbyParts.ContainsKey(NosCosmeticPart.Skin) &&
+                lobby.ColorR == 1d && lobby.ColorG == 128d / 255d && lobby.ColorB == 0d,
+                "NoS lobby outfits or dynamic palette color were lost before PlayerData.");
+            Require(LobbyPlayer(new Player { Disconnected = true }, Colors.White) is null &&
+                contents.Cosmetics(LobbyPlayer(new Player(), Colors.White)) is null &&
+                LobbyPlayer(new Player { NosLobbyColor = "invalid" }, Color.FromRgb(12, 34, 56)) is
+                    { ColorR: var red, ColorG: var green, ColorB: var blue } &&
+                red == 12d / 255d && green == 34d / 255d && blue == 56d / 255d,
+                "NoS lobby disconnect, unequip or fallback color differs from v3.2.13.");
             var hat = contents.Image(parts[NosCosmeticPart.Hat], 0.5, 0, 1)!;
             // A 2x2 frame lands at round((300-2)*.53)=158, round((375-2)*.425)=159.
             Require(hat.PixelWidth == CanvasWidth && hat.PixelHeight == CanvasHeight &&

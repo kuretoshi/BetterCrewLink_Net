@@ -5,7 +5,7 @@ namespace TanukiBCL.Client;
 
 internal static class SnrLocalCosmetics
 {
-    // v3.2.7 main/snrCosmetics.ts. Search only the selected game's cosmetics folder.
+    // v3.2.13 main/snrCosmetics.ts. Search only the selected game's cosmetics folder.
     internal static CosmeticAsset? Resolve(string executable, string id, CosmeticPart part)
     {
         if (!Path.IsPathFullyQualified(executable) || !id.StartsWith("Modded_", StringComparison.Ordinal)) return null;
@@ -37,6 +37,28 @@ internal static class SnrLocalCosmetics
 
     internal static string Sanitize(string value) => new(value.Replace("...", ".", StringComparison.Ordinal)
         .Where(c => c >= 32 && !"<>:\"/\\|?*".Contains(c)).ToArray());
+
+    internal static void VerifyLive(string gameDirectory)
+    {
+        var root = Path.Combine(gameDirectory, "SuperNewRolesNext", "CustomCosmetics");
+        var executable = Path.Combine(gameDirectory, "Among Us.exe");
+        var checkedImages = 0;
+        foreach (var directory in Directory.EnumerateDirectories(root))
+        {
+            var package = Path.GetFileName(directory);
+            if (package.EndsWith(".bundle", StringComparison.OrdinalIgnoreCase)) continue;
+            foreach (var file in Directory.EnumerateFiles(directory, "*_front.png"))
+            {
+                var name = Path.GetFileName(file)[..^"_front.png".Length];
+                var resolved = Resolve(executable, $"Modded_{package}_{name}", CosmeticPart.Hat);
+                if (resolved?.Url.LocalPath != file)
+                    throw new InvalidOperationException($"Real SNR local image did not resolve: {file}");
+                checkedImages++;
+            }
+        }
+        if (checkedImages == 0) throw new InvalidOperationException("No real SNR local images were found.");
+        Console.WriteLine($"[PASS] Real SNR CustomCosmetics: {checkedImages} local hat images resolved");
+    }
 
     internal static void Verify()
     {

@@ -39,19 +39,38 @@ internal sealed class SnrCosmeticCatalog
 
     internal CosmeticAsset? Resolve(string id, CosmeticPart part)
     {
-        if (!id.StartsWith("Modded_", StringComparison.Ordinal)) return null;
-        var definitions = part == CosmeticPart.Visor ? visors : hats;
-        var plain = Plain(id);
-        var definition = definitions.FirstOrDefault(x => plain == $"Modded_{x.Package}_{x.Name}");
-        var normalized = Normalize(plain);
-        definition ??= definitions.FirstOrDefault(x => Normalize(x.Resource) is { Length: > 0 } resource &&
-            normalized.EndsWith(resource, StringComparison.Ordinal));
+        var definition = FindDefinition(id, part);
         if (definition is null) return null;
         var resource = part == CosmeticPart.HatBack ? definition.Back : definition.Resource;
         if (string.IsNullOrEmpty(resource)) return null;
         var url = new Uri(BaseUri, (part == CosmeticPart.Visor ? "Visors/" : "hats/") + Uri.EscapeDataString(resource));
         return new CosmeticAsset(url, definition.Adaptive || Regex.IsMatch(resource, @"_adaptive(?:_|\.)", RegexOptions.IgnoreCase),
             "-52%", "-18px", "140%", part == CosmeticPart.Visor && definition.SnrLayout);
+    }
+
+    internal CosmeticAsset ApplyLocalMetadata(string id, CosmeticPart part, CosmeticAsset local)
+    {
+        // v3.2.13 retains optional definitions for layout/tint, never for the PNG URL.
+        if (part == CosmeticPart.Skin) return local;
+        var definition = FindDefinition(id, part);
+        if (definition is null) return local;
+        return local with
+        {
+            Adaptive = local.Adaptive || definition.Adaptive ||
+                Regex.IsMatch(definition.Resource, @"_adaptive(?:_|\.)", RegexOptions.IgnoreCase),
+            SnrVisorLayout = part == CosmeticPart.Visor && definition.SnrLayout
+        };
+    }
+
+    private Definition? FindDefinition(string id, CosmeticPart part)
+    {
+        if (!id.StartsWith("Modded_", StringComparison.Ordinal)) return null;
+        var definitions = part == CosmeticPart.Visor ? visors : hats;
+        var plain = Plain(id);
+        var definition = definitions.FirstOrDefault(x => plain == $"Modded_{x.Package}_{x.Name}");
+        var normalized = Normalize(plain);
+        return definition ?? definitions.FirstOrDefault(x => Normalize(x.Resource) is { Length: > 0 } resource &&
+            normalized.EndsWith(resource, StringComparison.Ordinal));
     }
 
     internal static CosmeticAsset WithImageSize(CosmeticAsset asset, int width, int height)
@@ -99,6 +118,12 @@ internal sealed class SnrCosmeticCatalog
             Math.Abs(CosmeticCatalog.ResolveLength(layout.Left, 100) - 29.75) < 0.000001 &&
             Math.Abs(CosmeticCatalog.ResolveLength(layout.Top, 100) + 30.5) < 0.000001, "Small visor natural size failed");
         Require(!catalog.Resolve("Modded_P_Lower", CosmeticPart.Visor)!.SnrVisorLayout, "Lowercase string flag must not count as boolean");
+        var local = new CosmeticAsset(new Uri("file:///C:/game/local.png"), false, "-52%", "-18px", "140%");
+        Require(catalog.ApplyLocalMetadata("Modded_P_Exact", CosmeticPart.Hat, local) is { Adaptive: true } adapted &&
+            adapted.Url == local.Url &&
+            catalog.ApplyLocalMetadata("Modded_P_V", CosmeticPart.Visor, local).SnrVisorLayout &&
+            !catalog.ApplyLocalMetadata("Modded_P_Exact", CosmeticPart.Skin, local).Adaptive,
+            "SNR local PNG metadata replaced the URL or tinted a skin");
         Console.WriteLine("[PASS] SNR remote IDs, suffixes, front/back, adaptive flags and natural-size visor layout");
     }
 
