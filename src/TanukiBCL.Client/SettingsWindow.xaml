@@ -939,6 +939,18 @@
                                                  PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
                                     </Grid>
                                 </Border>
+                                <Border x:Name="JackalRadioShortcutRow" Padding="16,11" BorderBrush="#3F3944" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="200" /></Grid.ColumnDefinitions>
+                                        <TextBlock x:Name="JackalRadioShortcutLabel" Text="ジャッカル無線（NoS）" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBox x:Name="JackalRadioShortcutBox" Grid.Column="1" IsReadOnly="True"
+                                                 Style="{StaticResource ShortcutFieldStyle}"
+                                                 GotKeyboardFocus="ShortcutBox_GotKeyboardFocus"
+                                                 LostKeyboardFocus="ShortcutBox_LostKeyboardFocus"
+                                                 PreviewKeyDown="ShortcutBox_PreviewKeyDown"
+                                                 PreviewMouseDown="ShortcutBox_PreviewMouseDown" />
+                                    </Grid>
+                                </Border>
                                 <Border Padding="16,11" BorderBrush="#3F3944" BorderThickness="0,0,0,1">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="200" /></Grid.ColumnDefinitions>

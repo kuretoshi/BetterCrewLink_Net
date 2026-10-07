@@ -3,16 +3,16 @@ using System.Windows.Input;
 
 namespace TanukiBCL.Client;
 
-// Poll only the four user-selected shortcuts. No keyboard text is captured or logged.
+// Poll only the five user-selected shortcuts. No keyboard text is captured or logged.
 internal sealed class GlobalHotkeyMonitor(
     Action<bool> onPushToTalk,
-    Action onRadio,
+    Action<int, bool> onRadio,
     Action onMute,
     Action onDeafen,
     Func<bool> suspended)
 {
     private readonly object bindingsGate = new();
-    private BindingSet bindings = new(0, 0, 0, 0, 0);
+    private BindingSet bindings = new(0, 0, 0, 0, 0, 0);
     private int bindingVersion;
 
     [DllImport("user32.dll")]
@@ -22,41 +22,24 @@ internal sealed class GlobalHotkeyMonitor(
     {
         TryResolve(settings.PushToTalkShortcut, out var pushToTalk);
         TryResolve(settings.ImpostorRadioShortcut, out var radio);
+        TryResolve(settings.JackalRadioShortcut, out var jackalRadio);
         TryResolve(settings.MuteShortcut, out var mute);
         TryResolve(settings.DeafenShortcut, out var deafen);
         lock (bindingsGate)
         {
-            bindings = new BindingSet(pushToTalk, radio, mute, deafen, ++bindingVersion);
+            bindings = new BindingSet(pushToTalk, radio, jackalRadio, mute, deafen, ++bindingVersion);
         }
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        var previous = new PressedSet(false, false, false, false);
+        var previous = new PressedSet(false, false, false, false, false);
         var observedVersion = -1;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                BindingSet current;
-                lock (bindingsGate) current = bindings;
-                if (current.Version != observedVersion)
-                {
-                    onPushToTalk(false);
-                    previous = new PressedSet(false, false, false, false);
-                    observedVersion = current.Version;
-                }
-
-                var paused = suspended();
-                var pressed = paused
-                    ? new PressedSet(false, false, false, false)
-                    : new PressedSet(IsPressed(current.PushToTalk), IsPressed(current.Radio),
-                        IsPressed(current.Mute), IsPressed(current.Deafen));
-                if (pressed.PushToTalk != previous.PushToTalk) onPushToTalk(pressed.PushToTalk);
-                if (pressed.Radio && !previous.Radio) onRadio();
-                if (pressed.Mute && !previous.Mute) onMute();
-                if (pressed.Deafen && !previous.Deafen) onDeafen();
-                previous = pressed;
+                PollOnce(ref previous, ref observedVersion);
                 await Task.Delay(20, cancellationToken);
             }
         }
@@ -66,7 +49,36 @@ internal sealed class GlobalHotkeyMonitor(
         finally
         {
             onPushToTalk(false);
+            if (previous.Radio) onRadio(0, false);
+            if (previous.JackalRadio) onRadio(1, false);
         }
+    }
+
+    private void PollOnce(ref PressedSet previous, ref int observedVersion)
+    {
+        BindingSet current;
+        lock (bindingsGate) current = bindings;
+        if (current.Version != observedVersion)
+        {
+            onPushToTalk(false);
+            if (previous.Radio) onRadio(0, false);
+            if (previous.JackalRadio) onRadio(1, false);
+            previous = new PressedSet(false, false, false, false, false);
+            observedVersion = current.Version;
+        }
+
+        var pressed = suspended()
+            ? new PressedSet(false, false, false, false, false)
+            : new PressedSet(IsPressed(current.PushToTalk), IsPressed(current.Radio),
+                IsPressed(current.JackalRadio), IsPressed(current.Mute), IsPressed(current.Deafen));
+        var speaking = pressed.PushToTalk || pressed.Radio || pressed.JackalRadio;
+        var wasSpeaking = previous.PushToTalk || previous.Radio || previous.JackalRadio;
+        if (speaking != wasSpeaking) onPushToTalk(speaking);
+        if (pressed.Radio != previous.Radio) onRadio(0, pressed.Radio);
+        if (pressed.JackalRadio != previous.JackalRadio) onRadio(1, pressed.JackalRadio);
+        if (pressed.Mute && !previous.Mute) onMute();
+        if (pressed.Deafen && !previous.Deafen) onDeafen();
+        previous = pressed;
     }
 
     private static bool IsPressed(int virtualKey) => virtualKey != 0 &&
@@ -152,6 +164,6 @@ internal sealed class GlobalHotkeyMonitor(
         };
     }
 
-    private sealed record BindingSet(int PushToTalk, int Radio, int Mute, int Deafen, int Version);
-    private sealed record PressedSet(bool PushToTalk, bool Radio, bool Mute, bool Deafen);
+    private sealed record BindingSet(int PushToTalk, int Radio, int JackalRadio, int Mute, int Deafen, int Version);
+    private sealed record PressedSet(bool PushToTalk, bool Radio, bool JackalRadio, bool Mute, bool Deafen);
 }

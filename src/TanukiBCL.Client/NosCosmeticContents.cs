@@ -306,16 +306,19 @@ internal sealed class NosCosmeticContents
                         if (!contents.RootElement.TryGetProperty(category, out var list) ||
                             list.ValueKind != JsonValueKind.Array) continue;
                         var folder = $"{prefix}{category}/";
+                        // All costumes in this category share the image directory.
+                        // Index it once instead of rescanning every ZIP entry per costume.
+                        var images = all.Keys
+                            .Where(file => file.StartsWith(folder, StringComparison.Ordinal) &&
+                                file.EndsWith(".png", StringComparison.Ordinal))
+                            .ToDictionary(file => file[folder.Length..], file => new ZipImage(archivePath, file));
                         foreach (var costume in list.EnumerateArray())
                         {
                             if (costume.ValueKind != JsonValueKind.Object ||
                                 !costume.TryGetProperty("Author", out var author) || author.ValueKind != JsonValueKind.String ||
                                 !costume.TryGetProperty("Name", out var costumeName) || costumeName.ValueKind != JsonValueKind.String)
                                 continue;
-                            result[$"{idPrefix}{author.GetString()}_{costumeName.GetString()}"] = all.Keys
-                                .Where(file => file.StartsWith(folder, StringComparison.Ordinal) &&
-                                    file.EndsWith(".png", StringComparison.Ordinal))
-                                .ToDictionary(file => file[folder.Length..], file => new ZipImage(archivePath, file));
+                            result[$"{idPrefix}{author.GetString()}_{costumeName.GetString()}"] = images;
                         }
                     }
                 }

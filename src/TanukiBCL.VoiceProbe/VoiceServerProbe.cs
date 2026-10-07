@@ -69,7 +69,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private MicrophoneActivationMode microphoneActivationMode;
     private bool pushToTalkPressed;
     private readonly object radioTransmitGate = new();
+    private readonly HeldNosRadio heldNosRadio = new();
     private volatile bool impostorRadioTransmitting;
+    private int? localRadioKind;
     private volatile bool localVadTalking;
     private volatile bool localVadHidden;
     private long impostorRadioVersion;
@@ -263,13 +265,17 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         currentGameState is { GameState: GameState.Tasks or GameState.Discussion } state &&
         state.Players.Any(player => player.IsLocal && !player.IsDead && CanUseRadio(state, player));
 
+    public int? CurrentNosRadioKind
+    {
+        get { lock (radioTransmitGate) return localRadioKind; }
+    }
+
     public bool IsRemoteRadioVisible(int clientId)
     {
         var state = currentGameState;
         return state is not null && RadioVisibilityPolicy.IsVisible(state, activeLobbySettings,
             clientId, IsImpostorRadioActive(clientId),
-            player => HasNosJackalRadio(state, player),
-            (sender, listener) => CanHearNosJackalRadio(state, sender, listener));
+            (sender, listener) => CanHearNosRadio(state, sender, listener));
     }
 
     public LobbySettings? CurrentLobbySettings =>
@@ -350,20 +356,24 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         lastPublishedPublicLobbySignature = signature;
     }
 
-    public bool SetImpostorRadioTransmitting(bool active)
+    public bool SetImpostorRadioTransmitting(bool active, int kind = NosRadioRules.ImpostorKind)
     {
-        if (active && !CanUseImpostorRadio)
+        var state = currentGameState;
+        if (active && (!CanUseImpostorRadio || !CanUseLocalRadioKind(state, kind)))
         {
             return false;
         }
 
         lock (radioTransmitGate)
         {
-            if (impostorRadioTransmitting == active)
+            var selected = active && state?.Mod == AmongUsModType.NebulaOnTheShip ? kind : (int?)null;
+            if (impostorRadioTransmitting == active && localRadioKind == selected)
             {
                 return true;
             }
             impostorRadioTransmitting = active;
+            localRadioKind = selected;
+            if (!active) heldNosRadio.Clear();
             impostorRadioVersion = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), impostorRadioVersion + 1);
         }
 
@@ -374,6 +384,21 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
         ImpostorRadioTransmitChanged?.Invoke(active);
         return true;
+    }
+
+    public void SetNosRadioPressed(int kind, bool pressed)
+    {
+        if (currentGameState?.Mod != AmongUsModType.NebulaOnTheShip) return;
+        if (pressed && !CanUseLocalRadioKind(currentGameState, kind)) return;
+        int? next;
+        lock (radioTransmitGate)
+        {
+            heldNosRadio.Set(kind, pressed);
+            next = heldNosRadio.Kind;
+            if (impostorRadioTransmitting == next.HasValue && localRadioKind == next) return;
+        }
+        if (next.HasValue && !CanUseLocalRadioKind(currentGameState, next.Value)) next = null;
+        SetImpostorRadioTransmitting(next.HasValue, next ?? NosRadioRules.ImpostorKind);
     }
 
     public void ApplyGameState(AmongUsState state)
@@ -449,7 +474,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             SetImpostorRadioTransmitting(true);
         }
-        if (impostorRadioTransmitting && !CanUseImpostorRadio)
+        if (impostorRadioTransmitting && (!CanUseImpostorRadio ||
+            !CanUseLocalRadioKind(state, localRadioKind ?? NosRadioRules.ImpostorKind)))
         {
             SetImpostorRadioTransmitting(false);
         }
@@ -1345,7 +1371,6 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 nosRadioReports.TryRemove(playerId, out _);
         }
 
-        if (state.NosLocalMicPosition is null) return;
         var signature = JsonSerializer.Serialize(state.NosRadios);
         if (signature == lastNosRadioSignature && now - lastNosRadioSentAt < TimeSpan.FromSeconds(3)) return;
         foreach (var socketId in peerClientIds.Keys)
@@ -1360,7 +1385,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var local = state?.Players.FirstOrDefault(player => player.IsLocal);
         if (state is null || local is null || state.Mod != AmongUsModType.NebulaOnTheShip ||
             state.GameState is not (GameState.Tasks or GameState.Discussion) ||
-            state.NosLocalMicPosition is null || !peerClientIds.ContainsKey(remoteSocketId))
+            !peerClientIds.ContainsKey(remoteSocketId))
             return;
         var payload = JsonSerializer.Serialize(new
         {
@@ -1418,7 +1443,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private IReadOnlyList<NosRadioData>? GetNosRadios(AmongUsState state, Player player)
     {
         if (state.Mod != AmongUsModType.NebulaOnTheShip) return null;
-        if (player.IsLocal) return state.NosLocalMicPosition is null ? null : state.NosRadios;
+        if (player.IsLocal) return state.NosRadios;
         if (!nosRadioReports.TryGetValue(player.Id, out var report) || report.ClientId != player.ClientId ||
             DateTimeOffset.UtcNow - report.ReceivedAt >= TimeSpan.FromSeconds(10)) return null;
         return report.Radios;
@@ -1435,16 +1460,34 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             });
     }
 
-    private bool HasNosJackalRadio(AmongUsState state, Player player) =>
-        NosRadioRules.HasJackalChannel(GetNosRadios(state, player));
+    private int? SenderNosRadioKind(AmongUsState state, Player sender)
+    {
+        int? selected = sender.IsLocal ? localRadioKind :
+            impostorRadioStates.TryGetValue(sender.ClientId, out var status) ? status.NosKind : null;
+        return NosRadioRules.ResolveKind(GetNosRadios(state, sender), selected);
+    }
 
-    private bool CanHearNosJackalRadio(AmongUsState state, Player sender, Player listener) =>
-        NosRadioRules.CanHearJackalChannel(GetNosRadios(state, sender), listener.Id);
+    private bool CanHearNosRadio(AmongUsState state, Player sender, Player listener)
+    {
+        var kind = SenderNosRadioKind(state, sender);
+        return kind.HasValue && NosRadioRules.IsEnabled(kind.Value, activeLobbySettings) &&
+            NosRadioRules.CanHearChannel(GetNosRadios(state, sender), listener.Id, kind.Value);
+    }
+
+    private bool CanUseLocalRadioKind(AmongUsState? state, int kind)
+    {
+        if (state is null || kind is not (NosRadioRules.ImpostorKind or NosRadioRules.JackalKind)) return false;
+        if (state.Mod != AmongUsModType.NebulaOnTheShip) return kind == NosRadioRules.ImpostorKind;
+        var local = state.Players.FirstOrDefault(player => player.IsLocal);
+        if (local is null) return false;
+        return NosRadioRules.IsEnabled(kind, activeLobbySettings) &&
+            NosRadioRules.HasChannel(GetNosRadios(state, local), kind);
+    }
 
     private bool CanUseRadio(AmongUsState state, Player player)
     {
-        if (HasNosJackalRadio(state, player))
-            return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode;
+        if (state.Mod == AmongUsModType.NebulaOnTheShip)
+            return NosRadioRules.HasEnabledChannel(GetNosRadios(state, player), activeLobbySettings);
         if (state.Mod == AmongUsModType.SuperNewRoles && player.SnrRole?.IsJackalTeam == true)
             return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode;
         return player.IsImpostor &&
@@ -1493,7 +1536,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             SetImpostorRadioTransmitting(true);
         }
-        if (impostorRadioTransmitting && !CanUseImpostorRadio)
+        if (impostorRadioTransmitting && (!CanUseImpostorRadio ||
+            !CanUseLocalRadioKind(currentGameState, localRadioKind ?? NosRadioRules.ImpostorKind)))
         {
             SetImpostorRadioTransmitting(false);
         }
@@ -1538,21 +1582,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
         bool active;
         long version;
+        int? kind;
         lock (radioTransmitGate)
         {
             active = impostorRadioTransmitting;
             version = impostorRadioVersion;
+            kind = localRadioKind;
             lastRadioStatusSentAt = DateTimeOffset.UtcNow;
         }
 
-        var payload = JsonSerializer.Serialize(new { impostorRadio = active, impostorRadioVersion = version });
+        var payload = NosRadioStatusWire.Build(active, version,
+            state.Mod == AmongUsModType.NebulaOnTheShip ? kind : null);
         foreach (var socketId in peerClientIds.Keys)
         {
-            if (active && !CanReceiveRadioAudio(socketId))
-            {
-                continue;
-            }
-
             peerManager.TrySendPeerData(socketId, payload);
             _ = RunPeerOperationAsync(() => SendSignalAsync(socketId, new { type = "bcl-control", payload }));
         }
@@ -1571,11 +1613,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var listener = state?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
         if (state is null || sender is null || listener is null) return false;
         if (IsOwnClientPeer(state, clientId)) return false;
-        // 3.2.12: jackal radio also reaches ghosts, matching SpatialVoicePolicy on the receiver.
+        if (state.Mod == AmongUsModType.NebulaOnTheShip)
+            return CanHearNosRadio(state, sender, listener);
+        // 3.2.12: SNR jackal radio also reaches ghosts.
         var jackalGhost = SpatialVoicePolicy.CanHearJackalRadioAsGhost(listener, sender, spatialVoiceSettings);
-        if (HasNosJackalRadio(state, sender))
-            return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode &&
-                (CanHearNosJackalRadio(state, sender, listener) || jackalGhost);
         if (state.Mod == AmongUsModType.SuperNewRoles && sender.SnrRole?.IsJackalTeam == true)
             return spatialVoiceSettings.JackalRadioEnabled && !spatialVoiceSettings.ImpostorRadioOnlyMode &&
                 (listener.SnrRole?.IsJackalTeam == true && !listener.IsDead || jackalGhost);
@@ -1623,9 +1664,17 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private void ApplyImpostorRadioStatus(int clientId, JsonElement data, bool active)
     {
+        int? kind = null;
+        if (data.TryGetProperty("nosRadioKind", out var kindElement) &&
+            kindElement.ValueKind != JsonValueKind.Null)
+        {
+            if (!kindElement.TryGetInt32(out var parsedKind) ||
+                parsedKind is not (NosRadioRules.ImpostorKind or NosRadioRules.JackalKind)) return;
+            kind = parsedKind;
+        }
         var sender = currentGameState?.Players.FirstOrDefault(player => player.ClientId == clientId);
         if (active && (sender is null || sender.IsDead || currentGameState is null ||
-            !CanUseRadio(currentGameState, sender)))
+            currentGameState.Mod != AmongUsModType.NebulaOnTheShip && !CanUseRadio(currentGameState, sender)))
         {
             return;
         }
@@ -1639,8 +1688,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             return;
         }
 
-        impostorRadioStates[clientId] = new RadioStatus(version, active, DateTimeOffset.UtcNow);
-        if (previous?.Active != active)
+        impostorRadioStates[clientId] = new RadioStatus(version, active, DateTimeOffset.UtcNow,
+            active ? kind : null);
+        if (previous?.Active != active || previous?.NosKind != kind)
         {
             Log("INFO", $"インポスターラジオ: client={clientId} active={active}");
             RefreshPeerMixes();
@@ -1689,7 +1739,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
 
         var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings,
-            IsImpostorRadioActive(clientId), CanHearNosJackalRadio(currentGameState, other, me),
+            IsImpostorRadioActive(clientId), CanHearNosRadio(currentGameState, other, me),
             airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
         mix = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs)).Apply(mix);
         var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
@@ -1865,7 +1915,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 var mix = player is null
                     ? new PeerVoiceMix(0d, 0d, 0d, "unmapped-player")
                     : SpatialVoicePolicy.Calculate(currentGameState, me, player, spatialVoiceSettings,
-                        IsImpostorRadioActive(pair.Value), CanHearNosJackalRadio(currentGameState, player, me),
+                        IsImpostorRadioActive(pair.Value), CanHearNosRadio(currentGameState, player, me),
                         airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
                 return $"{pair.Value}:{mix.Gain:0.000}:{mix.Pan:0.00}:{mix.Reason}";
             })
@@ -2056,7 +2106,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss.fff} [{label}/{level}] {message}");
     }
 
-    private sealed record RadioStatus(long Version, bool Active, DateTimeOffset SeenAt);
+    private sealed record RadioStatus(long Version, bool Active, DateTimeOffset SeenAt, int? NosKind);
 
     public sealed record NosRadioReport(int ClientId, IReadOnlyList<NosRadioData> Radios, DateTimeOffset ReceivedAt);
 }

@@ -104,6 +104,7 @@
 			"deafen": "スピーカーミュート",
 			"impostor_radio": "インポスターラジオ",
 			"impostor_jackal_radio": "インポスターラジオ/ジャッカルラジオ",
+			"nos_jackal_radio": "ジャッカル無線（NoS）",
 			"hint": "ショートカットをクリックし、キーかマウスボタンを押してください。Escapeで無効にできます。",
 			"press_key": "キーを押してください…",
 			"disabled": "無効"

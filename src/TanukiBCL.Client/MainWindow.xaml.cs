@@ -352,6 +352,7 @@ public partial class MainWindow : Window
             activeProbe.SetMicrophoneActivationMode(current.PushToTalkMode);
         if (previous.PushToTalkShortcut != current.PushToTalkShortcut ||
             previous.ImpostorRadioShortcut != current.ImpostorRadioShortcut ||
+            previous.JackalRadioShortcut != current.JackalRadioShortcut ||
             previous.MuteShortcut != current.MuteShortcut || previous.DeafenShortcut != current.DeafenShortcut)
             hotkeys?.UpdateBindings(current);
         if (previous.MyLobbySettings != current.MyLobbySettings)
@@ -670,16 +671,18 @@ public partial class MainWindow : Window
         activeProbe.ImpostorRadioTransmitChanged += active => Dispatch(session, () =>
         {
             radioTransmitting = active;
-            RadioButton.Content = active ? "インポスターラジオ: ON" : "インポスターラジオ: OFF";
+            UpdateRadioButtonLabel();
             RadioButton.Background = active ? System.Windows.Media.Brushes.DarkOrange : null;
             UpdateCompactView();
         });
         hotkeys = new GlobalHotkeyMonitor(
             pressed => { if (session.AcceptsCallbacks) activeProbe.SetPushToTalkPressed(pressed); },
-            () => Dispatch(session, () =>
+            (kind, pressed) => Dispatch(session, () =>
             {
-                if (activeProbe.CanUseImpostorRadio)
-                    activeProbe.SetImpostorRadioTransmitting(!radioTransmitting);
+                if (currentState?.Mod == AmongUsModType.NebulaOnTheShip)
+                    activeProbe.SetNosRadioPressed(kind, pressed);
+                else if (kind == 0 && (!pressed || activeProbe.CanUseImpostorRadio))
+                    activeProbe.SetImpostorRadioTransmitting(pressed);
             }),
             () => Dispatch(session, ToggleMicrophoneMute),
             () => Dispatch(session, ToggleDeafen),
@@ -827,9 +830,17 @@ public partial class MainWindow : Window
             probe?.SetImpostorRadioTransmitting(!radioTransmitting);
     }
 
+    private void UpdateRadioButtonLabel()
+    {
+        var channel = currentState?.Mod == AmongUsModType.NebulaOnTheShip &&
+            probe?.CurrentNosRadioKind == 1 ? "ジャッカル無線" : "インポスターラジオ";
+        RadioButton.Content = $"{channel}: {(radioTransmitting ? "ON" : "OFF")}";
+    }
+
     private void ShowGameState(AmongUsState state)
     {
         currentState = state;
+        UpdateRadioButtonLabel();
         settingsWindow?.UpdateCurrentGameState(state);
         GameText.Text = $"ゲーム状態: {state.GameState}";
         LobbyText.Text = $"ロビー: {(state.GameState == GameState.Menu ? "—" : state.LobbyCode)}";

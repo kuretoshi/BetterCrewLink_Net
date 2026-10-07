@@ -26,14 +26,19 @@ public partial class SettingsWindow
         KeybindHintText.Text = UiLocalization.Translate(language, "settings.keyboard.hint");
         KeybindsTitleText.Text = UiLocalization.Translate(language, "settings.keyboard.title");
         PushToTalkShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.push_to_talk");
-        var jackalRadio = currentGameState?.Mod is AmongUsModType.SuperNewRoles or AmongUsModType.NebulaOnTheShip;
+        var nosRadio = currentGameState?.Mod == AmongUsModType.NebulaOnTheShip;
+        var jackalRadio = currentGameState?.Mod == AmongUsModType.SuperNewRoles;
         ImpostorRadioShortcutLabel.Text = UiLocalization.Translate(language,
+            nosRadio ? "settings.keyboard.impostor_radio" :
             jackalRadio ? "settings.keyboard.impostor_jackal_radio" : "settings.keyboard.impostor_radio");
+        JackalRadioShortcutRow.Visibility = nosRadio ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        JackalRadioShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.nos_jackal_radio");
         MuteShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.mute");
         DeafenShortcutLabel.Text = UiLocalization.Translate(language, "settings.keyboard.deafen");
         var prompt = UiLocalization.Translate(language, "settings.keyboard.press_key");
         PushToTalkShortcutBox.ToolTip = prompt;
         ImpostorRadioShortcutBox.ToolTip = prompt;
+        JackalRadioShortcutBox.ToolTip = prompt;
         MuteShortcutBox.ToolTip = prompt;
         DeafenShortcutBox.ToolTip = prompt;
     }

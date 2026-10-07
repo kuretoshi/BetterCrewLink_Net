@@ -104,6 +104,7 @@
 			"deafen": "Deafen",
 			"impostor_radio": "Impostor Radio",
 			"impostor_jackal_radio": "Impostor Radio / Jackal Radio",
+			"nos_jackal_radio": "Jackal Radio (NoS)",
 			"hint": "Click a shortcut, then press a key or mouse button. Press Escape to disable it.",
 			"press_key": "Press a key…",
 			"disabled": "Disabled"

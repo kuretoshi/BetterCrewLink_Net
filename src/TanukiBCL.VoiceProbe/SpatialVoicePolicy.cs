@@ -304,9 +304,9 @@ internal static class SpatialVoicePolicy
 
     private static bool CanHearRadio(AmongUsState state, Player me, Player other, SpatialVoiceSettings settings,
         bool nosJackalRadioHearable, bool isSnr) =>
+        state.Mod == AmongUsModType.NebulaOnTheShip ? nosJackalRadioHearable :
         CanHearImpostorRadio(me, other, settings) ||
         CanHearJackalRadioAsGhost(me, other, settings) ||
-        CanHearNosJackalRadio(state, settings, nosJackalRadioHearable) ||
         CanHearSnrJackalRadio(me, other, settings, isSnr);
 
     // 3.2.12: ghosts hear a living non-impostor's radio (SNR/NoS jackal) like impostor radio.
@@ -318,11 +318,6 @@ internal static class SpatialVoicePolicy
         (settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&
         other.IsImpostor && !other.IsDead &&
         ((me.IsImpostor && !me.IsDead) || me.IsDead);
-
-    private static bool CanHearNosJackalRadio(AmongUsState state, SpatialVoiceSettings settings,
-        bool hearable) =>
-        state.Mod == AmongUsModType.NebulaOnTheShip && settings.JackalRadioEnabled &&
-        !settings.ImpostorRadioOnlyMode && hearable;
 
     private static bool CanHearSnrJackalRadio(Player me, Player other,
         SpatialVoiceSettings settings, bool isSnr) =>

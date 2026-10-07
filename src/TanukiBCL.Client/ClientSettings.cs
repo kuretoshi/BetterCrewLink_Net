@@ -52,6 +52,7 @@ internal sealed class ClientSettings
     public MicrophoneActivationMode PushToTalkMode { get; set; } = MicrophoneActivationMode.Voice;
     public string PushToTalkShortcut { get; set; } = "V";
     public string ImpostorRadioShortcut { get; set; } = "F";
+    public string JackalRadioShortcut { get; set; } = "G";
     public string MuteShortcut { get; set; } = "RAlt";
     public string DeafenShortcut { get; set; } = "RControl";
     public LobbySettings MyLobbySettings { get; set; } = new();
@@ -116,6 +117,7 @@ internal sealed class ClientSettings
             .ToDictionary(pair => pair.Key, pair => pair.Value);
         PushToTalkShortcut = GlobalHotkeyMonitor.NormalizeShortcut(PushToTalkShortcut, "V");
         ImpostorRadioShortcut = GlobalHotkeyMonitor.NormalizeShortcut(ImpostorRadioShortcut, "F");
+        JackalRadioShortcut = GlobalHotkeyMonitor.NormalizeShortcut(JackalRadioShortcut, "G");
         MuteShortcut = GlobalHotkeyMonitor.NormalizeShortcut(MuteShortcut, "RAlt");
         DeafenShortcut = GlobalHotkeyMonitor.NormalizeShortcut(DeafenShortcut, "RControl");
         MyLobbySettings = (MyLobbySettings ?? new LobbySettings()).Normalize();

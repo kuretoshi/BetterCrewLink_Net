@@ -62,7 +62,7 @@ internal static class SpatialVoicePolicySelfTest
             Players = [radioLocal, radioRemote] };
         var radioSettings = new LobbySettings { ImpostorRadioEnabled = true };
         bool Visible(bool active) => RadioVisibilityPolicy.IsVisible(radioState, radioSettings, 2,
-            active, _ => false, (_, _) => false);
+            active, (_, _) => false);
         Check("radio badge: visible partner remains marked without audio-mix input", true, Visible(true));
         Check("radio badge: inactive partner is unmarked", false, Visible(false));
         radioLocal.IsImpostor = false;
@@ -85,11 +85,10 @@ internal static class SpatialVoicePolicySelfTest
         radioSettings = new LobbySettings { JackalRadioEnabled = true, ImpostorRadioEnabled = true };
         Check("radio badge: NoS jackal receiver mask", true,
             RadioVisibilityPolicy.IsVisible(radioState, radioSettings, 2, true,
-                player => player.ClientId == 2,
                 (sender, listener) => sender.ClientId == 2 && listener.ClientId == 1));
         Check("radio badge: NoS jackal receiver outside mask", false,
             RadioVisibilityPolicy.IsVisible(radioState, radioSettings, 2, true,
-                player => player.ClientId == 2, (_, _) => false));
+                (_, _) => false));
         var obsState = new AmongUsState
         {
             Mod = AmongUsModType.NebulaOnTheShip,
@@ -327,10 +326,10 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS radio: ghost in mask hears sender", true,
             SpatialVoicePolicy.Calculate(nosTasks, new Player { IsDead = true }, distantNosSender,
                 nosRadioPolicy, true, true).Audible);
-        Check("NoS radio: disabled Jackal option blocks channel", false,
+        Check("NoS radio: prevalidated sender mask is authoritative", true,
             SpatialVoicePolicy.Calculate(nosTasks, new Player(), distantNosSender,
                 nosRadioPolicy with { JackalRadioEnabled = false }, true, true).Audible);
-        Check("NoS radio: impostor-radio-only blocks Jackal channel", false,
+        Check("NoS radio: policy uses prevalidated channel eligibility", true,
             SpatialVoicePolicy.Calculate(nosTasks, new Player(), distantNosSender,
                 nosRadioPolicy with { ImpostorRadioOnlyMode = true }, true, true).Audible);
         Check("NoS radio: non-NoS game ignores recipient mask", false,
@@ -368,7 +367,7 @@ internal static class SpatialVoicePolicySelfTest
         Check("3.2.12 SNR radio: nearby crewmate still hears Sidekick off radio", true,
             SpatialVoicePolicy.Calculate(snrTasks, new Player { X = 20d }, snrSidekick,
                 new SpatialVoiceSettings(JackalRadioEnabled: true)).Audible);
-        Check("3.2.12 NoS radio: ghost outside mask hears sender", true,
+        Check("3.2.16 NoS radio: ghost outside mask cannot hear sender", false,
             SpatialVoicePolicy.Calculate(nosTasks, new Player { IsDead = true }, distantNosSender,
                 nosRadioPolicy, true, false).Audible);
         Check("3.2.12 radio: nearby crewmate does not hear impostor on radio", false,
@@ -414,6 +413,62 @@ internal static class SpatialVoicePolicySelfTest
             NosRadioRules.CanHearJackalChannel(nosJackalChannels, 32));
         Check("NoS radio mask: impostor channel cannot impersonate Jackal", false,
             NosRadioRules.CanHearJackalChannel([new NosRadioData(0, -1, "impostor")], 1));
+        var bothNosChannels = new List<NosRadioData>
+        {
+            new(0, 1 << 2, "impostor"), new(1, 1 << 3, "jackal")
+        };
+        var bothNosSettings = new LobbySettings
+            { ImpostorRadioEnabled = true, JackalRadioEnabled = true };
+        Check("NoS radio: enabled channel does not require sender's own bit", true,
+            NosRadioRules.HasEnabledChannel(bothNosChannels, bothNosSettings));
+        Check("NoS radio: impostor channel reaches only its mask", true,
+            NosRadioRules.CanHearChannel(bothNosChannels, 2, 0));
+        Check("NoS radio: impostor channel cannot leak to jackal receiver", false,
+            NosRadioRules.CanHearChannel(bothNosChannels, 3, 0));
+        Check("NoS radio: jackal channel cannot leak to impostor receiver", false,
+            NosRadioRules.CanHearChannel(bothNosChannels, 2, 1));
+        Check("NoS radio: legacy dual-channel sender fails closed", true,
+            NosRadioRules.ResolveKind(bothNosChannels, null) is null);
+        Check("NoS radio: legacy single-channel sender resolves", true,
+            NosRadioRules.ResolveKind([new NosRadioData(1, 0, "jackal")], null) == 1);
+        Check("NoS radio: radio-only mode disables jackal", false,
+            NosRadioRules.IsEnabled(1, bothNosSettings with { ImpostorRadioOnlyMode = true }));
+        for (var id = 0; id < 32; id++)
+        {
+            var singleBit = new List<NosRadioData> { new(0, unchecked((int)(1u << id)), "impostor") };
+            Check($"NoS radio: mask accepts listener {id}", true,
+                NosRadioRules.CanHearChannel(singleBit, id, 0));
+            Check($"NoS radio: mask rejects adjacent listener {id}", false,
+                NosRadioRules.CanHearChannel(singleBit, (id + 1) % 32, 0));
+        }
+        var heldNosRadio = new HeldNosRadio();
+        heldNosRadio.Set(0, true);
+        heldNosRadio.Set(1, true);
+        Check("NoS radio: last pressed channel wins", true, heldNosRadio.Kind == 1);
+        heldNosRadio.Set(0, true);
+        Check("NoS radio: repeated keydown does not reorder", true, heldNosRadio.Kind == 1);
+        heldNosRadio.Set(1, false);
+        Check("NoS radio: releasing priority key restores held channel", true, heldNosRadio.Kind == 0);
+        heldNosRadio.Clear();
+        Check("NoS radio: death or lobby cleanup clears held keys", true, heldNosRadio.Kind is null);
+        using (var activeStatus = JsonDocument.Parse(NosRadioStatusWire.Build(true, 42, 1)))
+            Check("NoS radio: active wire status selects Jackal channel", true,
+                activeStatus.RootElement.GetProperty("nosRadioKind").GetInt32() == 1);
+        using (var releasedStatus = JsonDocument.Parse(NosRadioStatusWire.Build(false, 43, null)))
+            Check("NoS radio: release omits kind for official 3.2.16", false,
+                releasedStatus.RootElement.TryGetProperty("nosRadioKind", out _));
+
+        var nosPrivateState = new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
+            GameState = GameState.Tasks };
+        var nosPrivateMe = new Player { Id = 3, IsImpostor = true, X = 0 };
+        var nosPrivateOther = new Player { Id = 2, IsImpostor = true, X = 0 };
+        var nosPrivateSettings = new SpatialVoiceSettings(ImpostorRadioEnabled: true);
+        Check("NoS radio: missing mask mutes nearby impostor", false,
+            SpatialVoicePolicy.Calculate(nosPrivateState, nosPrivateMe, nosPrivateOther,
+                nosPrivateSettings, otherUsingImpostorRadio: true).Audible);
+        Check("NoS radio: matching mask reaches listener", true,
+            SpatialVoicePolicy.Calculate(nosPrivateState, nosPrivateMe, nosPrivateOther,
+                nosPrivateSettings, otherUsingImpostorRadio: true, nosJackalRadioHearable: true).Audible);
 
         var sizedSpeaker = new Player
         {

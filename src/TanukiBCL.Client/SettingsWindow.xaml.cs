@@ -96,6 +96,7 @@ public partial class SettingsWindow : Window
         PushToMuteModeRadio.IsChecked = settings.PushToTalkMode == MicrophoneActivationMode.PushToMute;
         PushToTalkShortcutBox.Text = settings.PushToTalkShortcut;
         ImpostorRadioShortcutBox.Text = settings.ImpostorRadioShortcut;
+        JackalRadioShortcutBox.Text = settings.JackalRadioShortcut;
         MuteShortcutBox.Text = settings.MuteShortcut;
         DeafenShortcutBox.Text = settings.DeafenShortcut;
         foreach (var url in settings.ServerUrls.Append(settings.ServerUrl).Distinct(StringComparer.Ordinal))
@@ -932,6 +933,7 @@ public partial class SettingsWindow : Window
                     : MicrophoneActivationMode.Voice,
             PushToTalkShortcut = PushToTalkShortcutBox.Text,
             ImpostorRadioShortcut = ImpostorRadioShortcutBox.Text,
+            JackalRadioShortcut = JackalRadioShortcutBox.Text,
             MuteShortcut = MuteShortcutBox.Text,
             DeafenShortcut = DeafenShortcutBox.Text,
             MyLobbySettings = lobbyDraft,
@@ -1055,10 +1057,13 @@ public partial class SettingsWindow : Window
                 throw new InvalidOperationException("MOD lobby cards did not use the released switch layout");
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.TownOfHostForE });
             if (window.TohControlsPanel.Visibility != Visibility.Visible ||
-                window.SnrControlsPanel.Visibility != Visibility.Collapsed)
+                window.SnrControlsPanel.Visibility != Visibility.Collapsed ||
+                window.JackalRadioShortcutRow.Visibility != Visibility.Collapsed)
                 throw new InvalidOperationException("TOH lobby settings are not visible");
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip });
-            if (window.NosControlsPanel.Visibility != Visibility.Visible)
+            if (window.NosControlsPanel.Visibility != Visibility.Visible ||
+                window.JackalRadioShortcutRow.Visibility != Visibility.Visible ||
+                window.JackalRadioShortcutBox.Text != "G")
                 throw new InvalidOperationException("NoS lobby settings are not visible");
             window.UpdateCurrentLobbySettings(new LobbySettings());
             window.UpdateCurrentGameState(new AmongUsState
