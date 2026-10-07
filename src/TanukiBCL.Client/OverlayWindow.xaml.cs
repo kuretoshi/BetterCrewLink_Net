@@ -495,20 +495,7 @@ public partial class OverlayWindow : Window
                     Math.Abs(box.Height - expectedBox.Height) > 0.000001)
                     throw new InvalidOperationException("Meeting HUD layout was not applied to WPF slots");
             }
-            foreach (var (position, mirrored, side, alternate) in new[] {
-                ("left", false, true, false), ("left1", false, true, true),
-                ("right", true, true, false), ("right1", true, true, true),
-                ("top", true, false, false), ("bottom", true, false, false),
-                ("bottom_left", false, false, false) })
-            foreach (var compact in new[] { false, true })
-            {
-                settings.OverlayPosition = position;
-                settings.CompactOverlay = compact;
-                window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, true, false) }, true, false, false);
-                if (window.AvatarPanel.Children.Count != 2) throw new InvalidOperationException("Overlay avatar selection changed");
-                foreach (StackPanel row in window.AvatarPanel.Children)
-                    ((PlayerAvatar)row.Children[0]).VerifyOverlayAppearance(mirrored, side && !compact);
-            }
+            VerifyOverlayDirectionStyles(window, settings, state);
             Console.WriteLine("[PASS] Overlay direction, equipment clipping and idle/active border across seven positions and compact modes");
             settings.OverlayPosition = "left";
             settings.CompactOverlay = false;
@@ -560,6 +547,24 @@ public partial class OverlayWindow : Window
         finally
         {
             window.Close();
+        }
+    }
+
+    private static void VerifyOverlayDirectionStyles(OverlayWindow window, ClientSettings settings, AmongUsState state)
+    {
+        foreach (var (position, mirrored, side, alternate) in new[] {
+                ("left", false, true, false), ("left1", false, true, true),
+                ("right", true, true, false), ("right1", true, true, true),
+                ("top", true, false, false), ("bottom", true, false, false),
+                ("bottom_left", false, false, false) })
+        foreach (var compact in new[] { false, true })
+        {
+            settings.OverlayPosition = position;
+            settings.CompactOverlay = compact;
+            window.Update(state, new Dictionary<int, OverlayPeerStatus> { [2] = new(true, true, false) }, true, false, false);
+            if (window.AvatarPanel.Children.Count != 2) throw new InvalidOperationException("Overlay avatar selection changed");
+            foreach (StackPanel row in window.AvatarPanel.Children)
+                ((PlayerAvatar)row.Children[0]).VerifyOverlayAppearance(mirrored, side && !compact);
         }
     }
 
@@ -616,6 +621,9 @@ public partial class OverlayWindow : Window
             var peers = new Dictionary<int, OverlayPeerStatus> { [22] = new(true, false, false) };
             foreach (var (width, height) in new[] { (720d, 576d), (1280d, 720d) })
             foreach (var position in new[] { "left1", "right1" })
+                VerifyCase(width, height, position);
+
+            void VerifyCase(double width, double height, string position)
             {
                 window.Width = width;
                 window.Height = height;
@@ -684,17 +692,22 @@ public partial class OverlayWindow : Window
                 {
                     var label = row.Name;
                     var labelOrigin = label.TransformToAncestor(window.OverlayCanvas).Transform(new Point());
-                    var trailingGlyphPixels = 0;
+                    var trailingGlyphPixels = CountTrailingGlyphPixels(labelOrigin, label, visiblePixels, hiddenPixels);
+                    if (trailingGlyphPixels < 4)
+                        throw new InvalidOperationException($"{position} name bounds were valid but its trailing text was visually clipped at {width}x{height}");
+                }
+
+                int CountTrailingGlyphPixels(Point labelOrigin, TextBlock label, byte[] visible, byte[] hidden)
+                {
+                    var count = 0;
                     for (var y = Math.Max(0, (int)labelOrigin.Y); y < Math.Min((int)height, (int)(labelOrigin.Y + label.ActualHeight)); y++)
                     for (var x = Math.Max(0, (int)(labelOrigin.X + label.ActualWidth * 0.75d));
                         x < Math.Min((int)width, (int)(labelOrigin.X + label.ActualWidth)); x++)
                     {
                         var pixel = (y * (int)width + x) * 4;
-                        if (visiblePixels[pixel + 3] > hiddenPixels[pixel + 3] + 20)
-                            trailingGlyphPixels++;
+                        if (visible[pixel + 3] > hidden[pixel + 3] + 20) count++;
                     }
-                    if (trailingGlyphPixels < 4)
-                        throw new InvalidOperationException($"{position} name bounds were valid but its trailing text was visually clipped at {width}x{height}");
+                    return count;
                 }
             }
             Console.WriteLine("[PASS] Alternate side avatars and full labels render inside 720x576/1280x720 viewport edges");
@@ -819,8 +832,8 @@ public partial class OverlayWindow : Window
             if (window.AvatarPanel.Children.Count != 5 ||
                 ((PlayerAvatar)((StackPanel)window.AvatarPanel.Children[0]).Children[0]).Width != 81d)
                 throw new InvalidOperationException("Compact avatar sizing used lobby count instead of rendered VAD count");
-            foreach (var position in new[] { "left", "left1", "right", "right1", "top", "bottom_left" })
-            foreach (var compact in new[] { false, true })
+            foreach (var (position, compact) in new[] { "left", "left1", "right", "right1", "top", "bottom_left" }
+                .SelectMany(position => new[] { false, true }.Select(compact => (position, compact))))
             {
                 settings.OverlayPosition = position; settings.CompactOverlay = compact;
                 window.Update(all, statuses, true, false, false);

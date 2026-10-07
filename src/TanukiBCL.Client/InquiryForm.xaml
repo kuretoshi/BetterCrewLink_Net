@@ -1,15 +1,8 @@
-<Window x:Class="TanukiBCL.Client.InquiryWindow"
+<UserControl x:Class="TanukiBCL.Client.InquiryForm"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="TanukiBCL Inquiry" Width="620" Height="640" MinWidth="460" MinHeight="480"
-        Background="#25232A" Foreground="#F5F1F7" WindowStartupLocation="CenterOwner"
-        WindowStyle="None" ResizeMode="CanResize">
-    <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0"
-                            CornerRadius="0" UseAeroCaptionButtons="False" />
-    </shell:WindowChrome.WindowChrome>
-    <Window.Resources>
+        Background="#25232A" Foreground="#F5F1F7">
+    <UserControl.Resources>
         <Style x:Key="InquiryFieldStyle" TargetType="TextBox">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="#F5F1F7" />
@@ -118,33 +111,15 @@
             <Setter Property="Foreground" Value="#CE93D8" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
-    </Window.Resources>
+    </UserControl.Resources>
     <Grid Background="#25232A">
         <Grid.RowDefinitions>
-            <RowDefinition Height="24" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <Grid Background="#1D1A23" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-            <StackPanel Orientation="Horizontal" Margin="10,0,68,0" VerticalAlignment="Center">
-                <Border Width="14" Height="14" CornerRadius="7" BorderBrush="#CE93D8"
-                        BorderThickness="1" Margin="0,0,6,0">
-                    <TextBlock Text="?" FontSize="10" FontWeight="Bold" Foreground="#CE93D8"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                </Border>
-                <TextBlock Text="問い合わせ" Foreground="#CE93D8" FontSize="13" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="MinimizeInquiryButton" Width="34" Height="24" Padding="0" BorderThickness="0"
-                        Background="Transparent" Foreground="#777" FontSize="16" Content="−"
-                        Click="MinimizeInquiryButton_Click" ToolTip="最小化" />
-                <Button x:Name="CloseInquiryButton" Width="34" Height="24" Padding="0" BorderThickness="0"
-                        Background="Transparent" Foreground="#777" FontSize="16" Content="×"
-                        Click="CloseInquiryButton_Click" ToolTip="閉じる" />
-            </StackPanel>
-        </Grid>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="24,16">
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="16,8">
+                <TextBlock Text="問い合わせ" Foreground="#B7AABD" FontSize="13" Margin="0,0,0,13" />
                 <Border x:Name="ResultBanner" Visibility="Collapsed" CornerRadius="4" Padding="12"
                         BorderThickness="1" Margin="0,0,0,16">
                     <TextBlock x:Name="ResultText" TextWrapping="Wrap" FontSize="14" />
@@ -200,11 +175,8 @@
                            Foreground="#B7AABD" FontSize="12" TextWrapping="Wrap" Margin="0,12,0,0" />
             </StackPanel>
         </ScrollViewer>
-        <Border Grid.Row="2" BorderBrush="#3D3942" BorderThickness="0,1,0,0" Padding="24,16">
+        <Border Grid.Row="1" BorderBrush="#3D3942" BorderThickness="0,1,0,0" Padding="16,12">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="CancelButton" Content="キャンセル" Style="{StaticResource InquiryTextActionStyle}"
-                        Margin="0,0,8,0"
-                        Click="CancelButton_Click" />
                 <Button x:Name="SendButton" IsEnabled="False"
                         Style="{StaticResource InquirySendStyle}" Click="SendButton_Click">
                     <StackPanel Orientation="Horizontal">
@@ -217,4 +189,4 @@
             </StackPanel>
         </Border>
     </Grid>
-</Window>
+</UserControl>

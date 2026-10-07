@@ -16,29 +16,34 @@ internal static class MobileHostBeacon
             do
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (createBeacon() is { } beacon)
-                {
-                    try
-                    {
-                        // SocketIOClient 3.1.2 has no cancellation parameter for EmitAsync.
-                        // A blocked transport must not hold up Stop or a settings restart.
-                        await send(beacon).WaitAsync(cancellationToken);
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        return;
-                    }
-                    catch (Exception error)
-                    {
-                        if (cancellationToken.IsCancellationRequested) return;
-                        reportError(error);
-                    }
-                }
+                if (createBeacon() is { } beacon &&
+                    !await SendBeaconAsync(beacon, send, reportError, cancellationToken)) return;
             } while (await timer.WaitForNextTickAsync(cancellationToken));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+    }
+
+    private static async Task<bool> SendBeaconAsync(object beacon, Func<object, Task> send,
+        Action<Exception> reportError, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // SocketIOClient 3.1.2 has no cancellation parameter for EmitAsync.
+            // A blocked transport must not hold up Stop or a settings restart.
+            await send(beacon).WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception error)
+        {
+            if (cancellationToken.IsCancellationRequested) return false;
+            reportError(error);
+        }
+        return true;
     }
 
     public static object? Create(AmongUsState? state, bool enabled)

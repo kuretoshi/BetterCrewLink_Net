@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
@@ -11,13 +10,12 @@ using Microsoft.Win32;
 
 namespace TanukiBCL.Client;
 
-public partial class InquiryWindow : Window
+public partial class InquiryForm : UserControl
 {
     private readonly ObservableCollection<InquiryAttachment> attachments = [];
     private bool sending;
-    private bool shuttingDown;
 
-    public InquiryWindow()
+    public InquiryForm()
     {
         InitializeComponent();
         AttachmentsList.ItemsSource = attachments;
@@ -64,7 +62,7 @@ public partial class InquiryWindow : Window
     {
         ResultBanner.Visibility = Visibility.Collapsed;
         var picker = new OpenFileDialog { Multiselect = true, Title = "添付ファイルを選択" };
-        if (picker.ShowDialog(this) != true) return;
+        if (picker.ShowDialog(Window.GetWindow(this)) != true) return;
         foreach (var path in picker.FileNames)
         {
             if (attachments.Any(file => string.Equals(file.Path, path, StringComparison.OrdinalIgnoreCase))) continue;
@@ -85,46 +83,13 @@ public partial class InquiryWindow : Window
         if (sender is Button { Tag: InquiryAttachment attachment }) attachments.Remove(attachment);
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e) => Close();
-
-    private void MinimizeInquiryButton_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-
-    private void CloseInquiryButton_Click(object sender, RoutedEventArgs e) => Close();
-
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        for (var node = e.OriginalSource as DependencyObject; node is not null;
-             node = VisualTreeHelper.GetParent(node))
-            if (node is Button) return;
-        if (e.ClickCount == 2)
-            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
-        else if (e.LeftButton == MouseButtonState.Pressed)
-            DragMove();
-    }
-
-    protected override void OnClosing(CancelEventArgs e)
-    {
-        if (!shuttingDown)
-        {
-            e.Cancel = true;
-            Hide();
-        }
-        base.OnClosing(e);
-    }
-
-    internal void CloseForShutdown()
-    {
-        shuttingDown = true;
-        Close();
-    }
-
     private async void SendButton_Click(object sender, RoutedEventArgs e)
     {
         if (sending) return;
         sending = true;
         UpdateSendAvailability();
         TagCombo.IsEnabled = SubjectBox.IsEnabled = BodyBox.IsEnabled = SelectFilesButton.IsEnabled =
-            AttachmentsList.IsEnabled = CancelButton.IsEnabled = false;
+            AttachmentsList.IsEnabled = false;
         ResultBanner.Visibility = Visibility.Collapsed;
         try
         {
@@ -150,7 +115,7 @@ public partial class InquiryWindow : Window
         {
             sending = false;
             TagCombo.IsEnabled = SubjectBox.IsEnabled = BodyBox.IsEnabled = SelectFilesButton.IsEnabled =
-                AttachmentsList.IsEnabled = CancelButton.IsEnabled = true;
+                AttachmentsList.IsEnabled = true;
             UpdateSendAvailability();
         }
     }
@@ -169,67 +134,46 @@ public partial class InquiryWindow : Window
 
     internal static void VerifyForm()
     {
-        var window = new InquiryWindow();
-        try
-        {
-            if (window.WindowStyle != WindowStyle.None || window.MinimizeInquiryButton.Content?.ToString() != "−" ||
-                window.CloseInquiryButton.Content?.ToString() != "×" ||
-                window.Width != 620 || window.Height != 640)
-                throw new InvalidOperationException("Inquiry window frame differs from v3.2.8");
-            if (window.TagCombo.Height != 56 || window.SubjectBox.Height != 56 ||
-                window.SubjectBox.Foreground is not SolidColorBrush fieldForeground ||
+        var form = new InquiryForm();
+        if (form.TagCombo.Height != 56 || form.SubjectBox.Height != 56 ||
+                form.SubjectBox.Foreground is not SolidColorBrush fieldForeground ||
                 fieldForeground.Color != Color.FromRgb(0xF5, 0xF1, 0xF7) ||
-                window.SelectFilesButton.BorderBrush is not SolidColorBrush attachBorder ||
+                form.SelectFilesButton.BorderBrush is not SolidColorBrush attachBorder ||
                 attachBorder.Color != Color.FromRgb(0xF4, 0x43, 0x36))
                 throw new InvalidOperationException("Inquiry form retained native-theme controls");
-            if (window.SendButton.IsEnabled || window.TagCombo.Items.Count != 3)
+        if (form.SendButton.IsEnabled || form.TagCombo.Items.Count != 3)
                 throw new InvalidOperationException("Inquiry form initial state differs from v3.2.7");
-            if (window.SubjectLabel.FontSize != 16 || window.BodyLabel.FontSize != 16)
+        if (form.SubjectLabel.FontSize != 16 || form.BodyLabel.FontSize != 16)
                 throw new InvalidOperationException("Empty inquiry field labels did not rest inside their fields");
-            window.SubjectBox.Text = "件名";
-            window.BodyBox.Text = "本文";
-            if (window.SubjectLabel.FontSize != 12 || window.BodyLabel.FontSize != 12 ||
-                window.SubjectLabel.VerticalAlignment != VerticalAlignment.Top)
+        form.SubjectBox.Text = "件名";
+        form.BodyBox.Text = "本文";
+        if (form.SubjectLabel.FontSize != 12 || form.BodyLabel.FontSize != 12 ||
+                form.SubjectLabel.VerticalAlignment != VerticalAlignment.Top)
                 throw new InvalidOperationException("Filled inquiry field labels did not float above their borders");
-            if (!window.SendButton.IsEnabled)
+        if (!form.SendButton.IsEnabled)
                 throw new InvalidOperationException("Valid inquiry did not enable Send");
-            window.BodyBox.Text = " ";
-            if (window.SendButton.IsEnabled)
+        form.BodyBox.Text = " ";
+        if (form.SendButton.IsEnabled)
                 throw new InvalidOperationException("Blank inquiry body enabled Send");
-            window.Show();
-            window.ShowResult("Failure", true);
-            if (window.ResultBanner.Visibility != Visibility.Visible ||
-                window.ResultText.Text != "Failure")
+        form.ShowResult("Failure", true);
+        if (form.ResultBanner.Visibility != Visibility.Visible ||
+                form.ResultText.Text != "Failure")
                 throw new InvalidOperationException("Inquiry error alert is missing");
-            window.Close();
-            if (window.IsVisible || window.SubjectBox.Text != "件名")
-                throw new InvalidOperationException("Inquiry close did not hide and preserve its form");
-            window.Show();
-            if (!window.IsVisible || window.SubjectBox.Text != "件名")
-                throw new InvalidOperationException("Inquiry reopen did not restore its form");
-        }
-        finally { window.CloseForShutdown(); }
-        Console.WriteLine("[PASS] 3.2.8 inquiry frame, dark form controls, alerts and hide/reopen state");
+        Console.WriteLine("[PASS] 3.2.17 settings inquiry form, dark controls and alerts");
     }
 
     internal static void RenderPreview(string outputPath)
     {
-        var window = new InquiryWindow();
-        try
-        {
-            if (window.Content is not FrameworkElement root)
-                throw new InvalidOperationException("Inquiry root visual is missing");
-            var size = new Size(620, 640);
-            root.Measure(size);
-            root.Arrange(new Rect(size));
-            root.UpdateLayout();
-            var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(root);
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            using var output = File.Create(outputPath);
-            encoder.Save(output);
-        }
-        finally { window.CloseForShutdown(); }
+        var form = new InquiryForm();
+        var size = new Size(500, 640);
+        form.Measure(size);
+        form.Arrange(new Rect(size));
+        form.UpdateLayout();
+        var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(form);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var output = File.Create(outputPath);
+        encoder.Save(output);
     }
 }

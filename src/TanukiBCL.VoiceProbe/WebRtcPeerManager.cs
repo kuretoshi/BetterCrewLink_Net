@@ -450,55 +450,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             peer.IceRoundTripEstimator.ObserveSent(message, iceChannel.NominatedEntry, Stopwatch.GetTimestamp());
         iceChannel.OnStunMessageReceived += (message, _, _) =>
             peer.IceRoundTripEstimator.ObserveReceived(message, iceChannel.NominatedEntry, Stopwatch.GetTimestamp());
-        connection.GetRtpChannel().OnRTPDataReceived += (_, _, packet) =>
-        {
-            // RFC 5764 DTLS demultiplexing range. Count only, never retain packets.
-            if (packet.Length > 0 && packet[0] is >= 20 and < 64)
-            {
-                Interlocked.Increment(ref peer.DtlsPacketsReceived);
-                lock (peer.DtlsHeaderGate)
-                {
-                    if (peer.DtlsHeaderSequence.Count < 32)
-                        peer.DtlsHeaderSequence.Add(DtlsRecordHeaderTrace.Describe(packet));
-                    else
-                        peer.DtlsHeaderSequenceOmitted++;
-                }
-                switch (packet[0])
-                {
-                    case 20: Interlocked.Increment(ref peer.DtlsChangeCipherDatagrams); break;
-                    case 21: Interlocked.Increment(ref peer.DtlsAlertDatagrams); break;
-                    case 22:
-                        Interlocked.Increment(ref peer.DtlsHandshakeDatagrams);
-                        // DTLS record header: epoch at bytes 3-4, handshake type at 13.
-                        // Classify only plaintext epoch zero; later flights are encrypted.
-                        if (packet.Length > 13 && packet[3] == 0 && packet[4] == 0)
-                        {
-                            switch (packet[13])
-                            {
-                                case 1: Interlocked.Increment(ref peer.DtlsClientHelloDatagrams); break;
-                                case 2: Interlocked.Increment(ref peer.DtlsServerHelloDatagrams); break;
-                                case 3: Interlocked.Increment(ref peer.DtlsHelloVerifyDatagrams); break;
-                                case 11: Interlocked.Increment(ref peer.DtlsCertificateDatagrams); break;
-                                case 12: Interlocked.Increment(ref peer.DtlsServerKeyExchangeDatagrams); break;
-                                case 14: Interlocked.Increment(ref peer.DtlsServerHelloDoneDatagrams); break;
-                                default: Interlocked.Increment(ref peer.DtlsOtherPlainHandshakeDatagrams); break;
-                            }
-                            if (packet.Length > 24)
-                            {
-                                var messageLength = packet[14] << 16 | packet[15] << 8 | packet[16];
-                                var fragmentOffset = packet[19] << 16 | packet[20] << 8 | packet[21];
-                                var fragmentLength = packet[22] << 16 | packet[23] << 8 | packet[24];
-                                if (fragmentOffset != 0 || fragmentLength < messageLength)
-                                    Interlocked.Increment(ref peer.DtlsFragmentedHandshakeDatagrams);
-                            }
-                        }
-                        else if (packet.Length > 4)
-                            Interlocked.Increment(ref peer.DtlsEncryptedHandshakeDatagrams);
-                        break;
-                    case 23: Interlocked.Increment(ref peer.DtlsApplicationDatagrams); break;
-                }
-            }
-        };
+        connection.GetRtpChannel().OnRTPDataReceived += (_, _, packet) => ObserveDtlsDatagram(peer, packet);
 
         connection.onicecandidate += candidate =>
         {
@@ -1145,6 +1097,56 @@ internal sealed class WebRtcPeerManager : IDisposable
         return result.ToString();
     }
 
+    private static void ObserveDtlsDatagram(Peer peer, byte[] packet)
+    {
+        // RFC 5764 DTLS demultiplexing range. Count only, never retain packets.
+        if (packet.Length == 0 || packet[0] is < 20 or >= 64) return;
+        Interlocked.Increment(ref peer.DtlsPacketsReceived);
+        lock (peer.DtlsHeaderGate)
+        {
+            if (peer.DtlsHeaderSequence.Count < 32)
+                peer.DtlsHeaderSequence.Add(DtlsRecordHeaderTrace.Describe(packet));
+            else
+                peer.DtlsHeaderSequenceOmitted++;
+        }
+        switch (packet[0])
+        {
+            case 20: Interlocked.Increment(ref peer.DtlsChangeCipherDatagrams); break;
+            case 21: Interlocked.Increment(ref peer.DtlsAlertDatagrams); break;
+            case 22:
+                Interlocked.Increment(ref peer.DtlsHandshakeDatagrams);
+                ObserveDtlsHandshake(peer, packet);
+                break;
+            case 23: Interlocked.Increment(ref peer.DtlsApplicationDatagrams); break;
+        }
+    }
+
+    private static void ObserveDtlsHandshake(Peer peer, byte[] packet)
+    {
+        // DTLS record header: epoch at bytes 3-4, handshake type at 13.
+        if (packet.Length <= 13 || packet[3] != 0 || packet[4] != 0)
+        {
+            if (packet.Length > 4) Interlocked.Increment(ref peer.DtlsEncryptedHandshakeDatagrams);
+            return;
+        }
+        switch (packet[13])
+        {
+            case 1: Interlocked.Increment(ref peer.DtlsClientHelloDatagrams); break;
+            case 2: Interlocked.Increment(ref peer.DtlsServerHelloDatagrams); break;
+            case 3: Interlocked.Increment(ref peer.DtlsHelloVerifyDatagrams); break;
+            case 11: Interlocked.Increment(ref peer.DtlsCertificateDatagrams); break;
+            case 12: Interlocked.Increment(ref peer.DtlsServerKeyExchangeDatagrams); break;
+            case 14: Interlocked.Increment(ref peer.DtlsServerHelloDoneDatagrams); break;
+            default: Interlocked.Increment(ref peer.DtlsOtherPlainHandshakeDatagrams); break;
+        }
+        if (packet.Length <= 24) return;
+        var messageLength = packet[14] << 16 | packet[15] << 8 | packet[16];
+        var fragmentOffset = packet[19] << 16 | packet[20] << 8 | packet[21];
+        var fragmentLength = packet[22] << 16 | packet[23] << 8 | packet[24];
+        if (fragmentOffset != 0 || fragmentLength < messageLength)
+            Interlocked.Increment(ref peer.DtlsFragmentedHandshakeDatagrams);
+    }
+
     private void DeferNonRelayCandidate(Peer peer, RTCIceCandidateInit candidate)
     {
         lock (peer.DeferredCandidates)
@@ -1170,15 +1172,7 @@ internal sealed class WebRtcPeerManager : IDisposable
                 peer.DeferredCandidates.Clear();
             }
             foreach (var candidate in candidates)
-            {
-                try { peer.Connection.addIceCandidate(candidate); }
-                catch (Exception exception)
-                {
-                    if (IsCurrentPeer(peer.RemoteSocketId, peer.InstanceId))
-                        Log($"non-relay ICE fallback failed: {Short(peer.RemoteSocketId)} {exception.GetType().Name}");
-                    continue;
-                }
-            }
+                AddDeferredCandidate(peer, candidate);
             if (candidates.Length > 0)
                 Log($"peer {Short(peer.RemoteSocketId)} non-relay ICE fallback candidates={candidates.Length}");
         }
@@ -1193,21 +1187,28 @@ internal sealed class WebRtcPeerManager : IDisposable
         }
     }
 
+    private void AddDeferredCandidate(Peer peer, RTCIceCandidateInit candidate)
+    {
+        try { peer.Connection.addIceCandidate(candidate); }
+        catch (Exception exception)
+        {
+            if (IsCurrentPeer(peer.RemoteSocketId, peer.InstanceId))
+                Log($"non-relay ICE fallback failed: {Short(peer.RemoteSocketId)} {exception.GetType().Name}");
+        }
+    }
+
     private static IEnumerable<string> ReadUrls(JsonElement urls)
     {
         if (urls.ValueKind == JsonValueKind.String && urls.GetString() is { Length: > 0 } url)
         {
             yield return url;
+            yield break;
         }
-        else if (urls.ValueKind == JsonValueKind.Array)
+        if (urls.ValueKind != JsonValueKind.Array) yield break;
+        foreach (var item in urls.EnumerateArray())
         {
-            foreach (var item in urls.EnumerateArray())
-            {
-                if (item.GetString() is { Length: > 0 } itemUrl)
-                {
-                    yield return itemUrl;
-                }
-            }
+            if (item.GetString() is { Length: > 0 } itemUrl)
+                yield return itemUrl;
         }
     }
 

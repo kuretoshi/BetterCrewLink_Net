@@ -40,9 +40,27 @@ public partial class App : Application
             e.Args.Contains("--registration-self-test") || e.Args.Contains("--nos-cosmetics-live-test") ||
             e.Args.Contains("--snr-cosmetics-live-test"))
         {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            try
-            {
+            RunSelfTests(e);
+            return;
+        }
+        try { supportLog = SupportLog.Install(e.Args); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            Trace.TraceWarning($"Support log could not be opened: {error.Message}");
+        }
+        try { InstalledAppRegistration.Refresh(UpdateCatalog.CurrentVersion, AppContext.BaseDirectory); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or SecurityException or ArgumentException)
+        {
+            Trace.TraceWarning($"Installed app registration could not be refreshed: {error.Message}");
+        }
+        new MainWindow().Show();
+    }
+
+    private void RunSelfTests(StartupEventArgs e)
+    {
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        try
+        {
                 if (e.Args.Contains("--nos-avatar-self-test"))
                 {
                     AvatarImageFactory.VerifyNosColors();
@@ -101,7 +119,7 @@ public partial class App : Application
                     throw new InvalidOperationException("Input processing self-test failed.");
                 if (e.Args.Contains("--inquiry-self-test"))
                 {
-                    InquiryWindow.VerifyForm();
+                    InquiryForm.VerifyForm();
                     Task.Run(InquirySubmission.VerifyAsync).GetAwaiter().GetResult();
                 }
                 var inquiryPreviewIndex = Array.IndexOf(e.Args, "--inquiry-preview");
@@ -109,7 +127,7 @@ public partial class App : Application
                 {
                     if (inquiryPreviewIndex + 1 >= e.Args.Length)
                         throw new ArgumentException("--inquiry-preview needs a PNG path");
-                    InquiryWindow.RenderPreview(e.Args[inquiryPreviewIndex + 1]);
+                    InquiryForm.RenderPreview(e.Args[inquiryPreviewIndex + 1]);
                 }
                 if (e.Args.Contains("--support-log-self-test")) SupportLog.Verify();
                 if (e.Args.Contains("--update-catalog-self-test"))
@@ -168,19 +186,6 @@ public partial class App : Application
                 Console.Error.WriteLine($"Client self-test failed: {error}");
                 Shutdown(1);
             }
-            return;
-        }
-        try { supportLog = SupportLog.Install(e.Args); }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-        {
-            Trace.TraceWarning($"Support log could not be opened: {error.Message}");
-        }
-        try { InstalledAppRegistration.Refresh(UpdateCatalog.CurrentVersion, AppContext.BaseDirectory); }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or SecurityException or ArgumentException)
-        {
-            Trace.TraceWarning($"Installed app registration could not be refreshed: {error.Message}");
-        }
-        new MainWindow().Show();
     }
 
     protected override void OnExit(ExitEventArgs e)

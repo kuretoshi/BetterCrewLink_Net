@@ -285,51 +285,64 @@ internal sealed class NosCosmeticContents
         foreach (var path in Directory.EnumerateFiles(directory))
         {
             if (!path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) continue;
-            try
-            {
-                var archivePath = RealPath(path);
-                if (Path.GetRelativePath(gameDirectory, archivePath).StartsWith("..", StringComparison.Ordinal)) continue;
-                if (new FileInfo(archivePath).Length > 512L * 1024 * 1024) continue;
-                using var archive = ZipFile.OpenRead(archivePath);
-                var all = archive.Entries
-                    .Where(entry => !entry.FullName.EndsWith('/') && !entry.FullName.Split('/').Contains(".."))
-                    .GroupBy(entry => entry.FullName).ToDictionary(group => group.Key, group => group.Last());
-                foreach (var (name, entry) in all)
-                {
-                    if (!name.EndsWith("MoreCosmic/Contents.json", StringComparison.Ordinal) ||
-                        entry.Length > 4 * 1024 * 1024) continue;
-                    using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
-                    using var contents = JsonDocument.Parse(reader.ReadToEnd().TrimStart('﻿'));
-                    var prefix = name[..^"Contents.json".Length];
-                    foreach (var (category, idPrefix) in new[] { ("hats", "noshat_"), ("visors", "nosvisor_") })
-                    {
-                        if (!contents.RootElement.TryGetProperty(category, out var list) ||
-                            list.ValueKind != JsonValueKind.Array) continue;
-                        var folder = $"{prefix}{category}/";
-                        // All costumes in this category share the image directory.
-                        // Index it once instead of rescanning every ZIP entry per costume.
-                        var images = all.Keys
-                            .Where(file => file.StartsWith(folder, StringComparison.Ordinal) &&
-                                file.EndsWith(".png", StringComparison.Ordinal))
-                            .ToDictionary(file => file[folder.Length..], file => new ZipImage(archivePath, file));
-                        foreach (var costume in list.EnumerateArray())
-                        {
-                            if (costume.ValueKind != JsonValueKind.Object ||
-                                !costume.TryGetProperty("Author", out var author) || author.ValueKind != JsonValueKind.String ||
-                                !costume.TryGetProperty("Name", out var costumeName) || costumeName.ValueKind != JsonValueKind.String)
-                                continue;
-                            result[$"{idPrefix}{author.GetString()}_{costumeName.GetString()}"] = images;
-                        }
-                    }
-                }
-            }
-            catch (Exception error) when (error is IOException or UnauthorizedAccessException or
-                InvalidDataException or JsonException or NotSupportedException or ArgumentException)
-            {
-                // Ignore an unavailable or unsupported addon; folder cosmetics still work.
-            }
+            IndexAddonArchive(gameDirectory, path, result);
         }
         return result;
+    }
+
+    private static void IndexAddonArchive(string gameDirectory, string path,
+        Dictionary<string, Dictionary<string, ZipImage>> result)
+    {
+        try
+        {
+            var archivePath = RealPath(path);
+            if (Path.GetRelativePath(gameDirectory, archivePath).StartsWith("..", StringComparison.Ordinal)) return;
+            if (new FileInfo(archivePath).Length > 512L * 1024 * 1024) return;
+            using var archive = ZipFile.OpenRead(archivePath);
+            var all = archive.Entries
+                .Where(entry => !entry.FullName.EndsWith('/') && !entry.FullName.Split('/').Contains(".."))
+                .GroupBy(entry => entry.FullName).ToDictionary(group => group.Key, group => group.Last());
+            foreach (var (name, entry) in all)
+                IndexAddonContents(archivePath, name, entry, all, result);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+            InvalidDataException or JsonException or NotSupportedException or ArgumentException)
+        {
+            // Ignore an unavailable or unsupported addon; folder cosmetics still work.
+        }
+    }
+
+    private static void IndexAddonContents(string archivePath, string name, ZipArchiveEntry entry,
+        Dictionary<string, ZipArchiveEntry> all, Dictionary<string, Dictionary<string, ZipImage>> result)
+    {
+        if (!name.EndsWith("MoreCosmic/Contents.json", StringComparison.Ordinal) ||
+            entry.Length > 4 * 1024 * 1024) return;
+        using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
+        using var contents = JsonDocument.Parse(reader.ReadToEnd().TrimStart('﻿'));
+        var prefix = name[..^"Contents.json".Length];
+        IndexAddonCategory(contents.RootElement, "hats", "noshat_", prefix, archivePath, all, result);
+        IndexAddonCategory(contents.RootElement, "visors", "nosvisor_", prefix, archivePath, all, result);
+    }
+
+    private static void IndexAddonCategory(JsonElement contents, string category, string idPrefix,
+        string prefix, string archivePath, Dictionary<string, ZipArchiveEntry> all,
+        Dictionary<string, Dictionary<string, ZipImage>> result)
+    {
+        if (!contents.TryGetProperty(category, out var list) || list.ValueKind != JsonValueKind.Array) return;
+        var folder = $"{prefix}{category}/";
+        // All costumes in this category share the image directory.
+        var images = all.Keys
+            .Where(file => file.StartsWith(folder, StringComparison.Ordinal) &&
+                file.EndsWith(".png", StringComparison.Ordinal))
+            .ToDictionary(file => file[folder.Length..], file => new ZipImage(archivePath, file));
+        foreach (var costume in list.EnumerateArray())
+        {
+            if (costume.ValueKind != JsonValueKind.Object ||
+                !costume.TryGetProperty("Author", out var author) || author.ValueKind != JsonValueKind.String ||
+                !costume.TryGetProperty("Name", out var costumeName) || costumeName.ValueKind != JsonValueKind.String)
+                continue;
+            result[$"{idPrefix}{author.GetString()}_{costumeName.GetString()}"] = images;
+        }
     }
 
     private byte[] ReadImage(object file)

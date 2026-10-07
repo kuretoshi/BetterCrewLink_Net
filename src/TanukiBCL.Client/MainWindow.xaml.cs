@@ -27,7 +27,6 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer gameDetectionTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
-    private InquiryWindow? inquiryWindow;
     private PublicLobbyBrowserWindow? publicLobbyBrowserWindow;
     private OverlayWindow? overlayWindow;
     private DebugInfoWindow? debugInfoWindow;
@@ -87,7 +86,6 @@ public partial class MainWindow : Window
         CompactVoiceView.CloseRequested += (_, _) => Close();
         CompactVoiceView.MuteRequested += (_, _) => ToggleMicrophoneMute();
         CompactVoiceView.DeafenRequested += (_, _) => ToggleDeafen();
-        CompactVoiceView.HelpRequested += (_, _) => ShowInquiry();
         CompactVoiceView.PublicLobbyRequested += (_, _) => ShowPublicLobbyBrowser();
         CompactVoiceView.LaunchPlatformChanged += key =>
         {
@@ -142,30 +140,35 @@ public partial class MainWindow : Window
         try
         {
             if (dialog.ShowDialog() != true) return;
-            if (dialog.DeleteRequested)
-            {
-                if (original is null) return;
-                settings.CustomPlatforms.Remove(original.Key);
-                if (settings.LaunchPlatform == original.Key) settings.LaunchPlatform = "STEAM";
-            }
-            else if (dialog.ResultPlatform is { } platform)
-            {
-                if (new[] { "STEAM", "EPIC", "MICROSOFT" }.Contains(platform.Key,
-                        StringComparer.OrdinalIgnoreCase) ||
-                    settings.CustomPlatforms.Keys.Any(key =>
-                        key != original?.Key && key.Equals(platform.Key, StringComparison.OrdinalIgnoreCase)))
-                {
-                    MessageBox.Show(this, "その名前は既に起動先に使用されています。", "カスタム起動先");
-                    return;
-                }
-                if (original is not null) settings.CustomPlatforms.Remove(original.Key);
-                settings.CustomPlatforms[platform.Key] = platform;
-                settings.LaunchPlatform = platform.Key;
-            }
+            if (!ApplyCustomGameLauncherEdit(dialog, original)) return;
             ClientSettingsStore.Save(settings);
             RefreshGameLaunchers();
         }
         finally { hotkeysSuspended = false; }
+    }
+
+    private bool ApplyCustomGameLauncherEdit(CustomPlatformWindow dialog, GameLaunchPlatform? original)
+    {
+        if (dialog.DeleteRequested)
+        {
+            if (original is null) return false;
+            settings.CustomPlatforms.Remove(original.Key);
+            if (settings.LaunchPlatform == original.Key) settings.LaunchPlatform = "STEAM";
+            return true;
+        }
+        if (dialog.ResultPlatform is not { } platform) return true;
+        if (new[] { "STEAM", "EPIC", "MICROSOFT" }.Contains(platform.Key,
+                StringComparer.OrdinalIgnoreCase) ||
+            settings.CustomPlatforms.Keys.Any(key =>
+                key != original?.Key && key.Equals(platform.Key, StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show(this, "その名前は既に起動先に使用されています。", "カスタム起動先");
+            return false;
+        }
+        if (original is not null) settings.CustomPlatforms.Remove(original.Key);
+        settings.CustomPlatforms[platform.Key] = platform;
+        settings.LaunchPlatform = platform.Key;
+        return true;
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -251,21 +254,6 @@ public partial class MainWindow : Window
         return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live,
             state is null ? "情報を待っています…" : JsonSerializer.Serialize(state, jsonOptions), voice,
             state, probe?.GetNosRadioReportsSnapshot(), radioClientIds, nosContents);
-    }
-
-    private void ShowInquiry()
-    {
-        if (isClosing) return;
-        if (inquiryWindow is { } open)
-        {
-            if (open.WindowState == WindowState.Minimized) open.WindowState = WindowState.Normal;
-            if (!open.IsVisible) open.Show();
-            open.Activate();
-            return;
-        }
-        inquiryWindow = new InquiryWindow { Owner = this };
-        inquiryWindow.Closed += (_, _) => inquiryWindow = null;
-        inquiryWindow.Show();
     }
 
     private void ShowPublicLobbyBrowser()
@@ -1091,8 +1079,6 @@ public partial class MainWindow : Window
         overlayWindow = null;
         publicLobbyBrowserWindow?.Close();
         publicLobbyBrowserWindow = null;
-        inquiryWindow?.CloseForShutdown();
-        inquiryWindow = null;
         if (relaunch is not null)
         {
             try { Process.Start(relaunch)?.Dispose(); }

@@ -313,6 +313,8 @@ public partial class SettingsWindow : Window
         AdvancedPanel.Visibility = CategoryList.SelectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
         UpdatePanel.Visibility = CategoryList.SelectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
         StreamingPanel.Visibility = CategoryList.SelectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;
+        InquiryPanel.Visibility = CategoryList.SelectedIndex == 9 ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPageScrollViewer.Visibility = CategoryList.SelectedIndex == 9 ? Visibility.Collapsed : Visibility.Visible;
         if (CategoryList.SelectedIndex == 8) UpdateObsUrl();
         if (IsLoaded)
         {

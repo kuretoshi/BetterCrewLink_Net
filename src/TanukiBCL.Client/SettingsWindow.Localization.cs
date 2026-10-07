@@ -49,6 +49,13 @@ public partial class SettingsWindow
         var settings = new ClientSettings();
         var window = new SettingsWindow(settings, true, null, false, null, (_, _, _) => { }, _ => { });
         window.ApplyTemplate();
+        window.CategoryList.SelectedIndex = 9;
+        if (window.InquiryPanel.Visibility != System.Windows.Visibility.Visible ||
+            window.SettingsPageScrollViewer.Visibility != System.Windows.Visibility.Collapsed ||
+            window.StreamingPanel.Visibility != System.Windows.Visibility.Collapsed ||
+            window.CategoryList.Items[9] is not ListBoxItem { Content: "問い合わせ" })
+            throw new InvalidOperationException("3.2.17 inquiry was not embedded in settings navigation");
+        window.CategoryList.SelectedIndex = 0;
         bool OverlayLabelsMatch(string language)
         {
             var locations = window.OverlayPositionCombo.Items.OfType<ComboBoxItem>().ToArray();

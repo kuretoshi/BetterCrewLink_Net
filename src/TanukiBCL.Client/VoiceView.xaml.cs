@@ -206,7 +206,6 @@ public partial class VoiceView : UserControl
     public event EventHandler? CloseRequested;
     public event EventHandler? MuteRequested;
     public event EventHandler? DeafenRequested;
-    public event EventHandler? HelpRequested;
     public event EventHandler? PublicLobbyRequested;
     internal event Action<string>? LaunchPlatformChanged;
     internal event Action<GameLaunchPlatform>? LaunchGameRequested;
@@ -354,7 +353,6 @@ public partial class VoiceView : UserControl
         {
             remoteDeadForDisplay.Clear();
             previousDeathDisplayState = GameState.Unknown;
-            SetFooterVisible(true);
             ClosePlayerConfigPopup();
             OtherPlayersPanel.Children.Clear();
             remoteAvatars.Clear();
@@ -365,15 +363,7 @@ public partial class VoiceView : UserControl
         // Released VoiceController changes otherDead only on a game-state
         // transition: entering Lobby clears it; entering Discussion captures it.
         // Audio policy continues to use the live death bit.
-        if (game.GameState != previousDeathDisplayState)
-        {
-            previousDeathDisplayState = game.GameState;
-            if (game.GameState == GameState.Lobby)
-                remoteDeadForDisplay.Clear();
-            else if (game.GameState != GameState.Tasks)
-                foreach (var player in game.Players)
-                    remoteDeadForDisplay[player.ClientId] = player.IsDead || player.Disconnected;
-        }
+        UpdateDeathDisplayState(game);
 
         var hideAppearance = game.GameState == GameState.Tasks;
         LocalName.Text = CollapseNoWrapWhitespace(
@@ -384,13 +374,31 @@ public partial class VoiceView : UserControl
             connected ? "connected" : "disconnected", localUsingRadio, serverQuality);
 
         var others = game.Players.Where(player => !player.IsLocal).ToArray();
-        SetFooterVisible(others.Length <= 6);
+        UpdateRemoteAvatars(others, game, peers, hideAppearance, serverQuality);
+    }
+
+    private void UpdateDeathDisplayState(AmongUsState game)
+    {
+        if (game.GameState == previousDeathDisplayState) return;
+        previousDeathDisplayState = game.GameState;
+        if (game.GameState == GameState.Lobby)
+        {
+            remoteDeadForDisplay.Clear();
+            return;
+        }
+        if (game.GameState == GameState.Tasks) return;
+        foreach (var player in game.Players)
+            remoteDeadForDisplay[player.ClientId] = player.IsDead || player.Disconnected;
+    }
+
+    private void UpdateRemoteAvatars(Player[] others, AmongUsState game,
+        IReadOnlyDictionary<int, VoicePlayerStatus> peers, bool hideAppearance,
+        ConnectionQuality? serverQuality)
+    {
         if (popupPlayerId is int activePlayerId && others.All(player => player.Id != activePlayerId))
             ClosePlayerConfigPopup();
         displayedPlayers.Clear();
         foreach (var player in others) displayedPlayers[player.Id] = player;
-        var perRow = others.Length <= 9 ? 3 : Math.Min(12, (int)Math.Ceiling(Math.Sqrt(others.Length)));
-        var avatarSize = 225d / perRow - 8d;
         foreach (var stale in remoteAvatars.Keys.Where(id => others.All(player => player.Id != id)).ToArray())
         {
             OtherPlayersPanel.Children.Remove(remoteAvatars[stale]);
@@ -409,8 +417,6 @@ public partial class VoiceView : UserControl
                 OtherPlayersPanel.Children.Add(avatar);
             }
 
-            avatar.Width = avatarSize;
-            avatar.Height = avatarSize;
             avatar.SetPlayer(player, game.PlayerColors, hideAppearance, game.Mod, game.GameExecutablePath,
                 remoteDeadForDisplay.TryGetValue(player.ClientId, out var displayDead) && displayDead,
                 game.GameState);
@@ -424,12 +430,32 @@ public partial class VoiceView : UserControl
                 status.UsingRadio && !player.Disconnected && !player.Bugged,
                 ResolvePeerQuality(status.Quality, serverQuality), bugged: player.Bugged);
         }
+        ApplyPlayerLayout();
     }
 
-    private void SetFooterVisible(bool visible)
+    private static (int Columns, double AvatarSize) CalculatePlayerLayout(double gridWidth, int playerCount)
     {
-        FooterBar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        FooterRow.Height = new GridLength(visible ? 52d : 0d);
+        var columns = Math.Max(1, Math.Min(12, Math.Min(Math.Max(3, playerCount),
+            (int)Math.Floor((gridWidth + 8d) / 72d))));
+        return (columns, Math.Min(100d, Math.Max(1d, gridWidth / columns - 8d)));
+    }
+
+    private void ApplyPlayerLayout()
+    {
+        var viewport = OtherPlayersScroll.ViewportWidth > 0d
+            ? OtherPlayersScroll.ViewportWidth : OtherPlayersScroll.ActualWidth;
+        var gridWidth = viewport > 0d ? Math.Max(72d, viewport - 48d) : 225d;
+        var (columns, avatarSize) = CalculatePlayerLayout(gridWidth, remoteAvatars.Count);
+        OtherPlayersPanel.Width = (avatarSize + 8d) * columns;
+        foreach (var avatar in remoteAvatars.Values)
+            avatar.Width = avatar.Height = avatarSize;
+    }
+
+    private void OtherPlayersScroll_SizeChanged(object sender, SizeChangedEventArgs e) => ApplyPlayerLayout();
+
+    private void OtherPlayersScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (Math.Abs(e.ViewportWidthChange) > 0.5d) ApplyPlayerLayout();
     }
 
     internal static ConnectionQuality? ResolvePeerQuality(ConnectionQuality? peer, ConnectionQuality? server)
@@ -497,13 +523,32 @@ public partial class VoiceView : UserControl
             game.Players.Add(new Player { Id = id, ClientId = id + 10, Name = $"Guest {id}" });
         view.Update(game, true, false, false, false, peers);
         if (view.OtherPlayersPanel.Children.Count != 7 ||
-            view.FooterBar.Visibility != Visibility.Collapsed || view.FooterRow.Height.Value != 0d)
-            throw new InvalidOperationException("Footer still uses space with seven remote players");
+            view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
+            throw new InvalidOperationException("Footer disappeared with seven remote players");
         game.Players.RemoveAt(game.Players.Count - 1);
         view.Update(game, true, false, false, false, peers);
         if (view.OtherPlayersPanel.Children.Count != 6 ||
             view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
             throw new InvalidOperationException("Footer did not return with six remote players");
+        if (CalculatePlayerLayout(225d, 2).Columns != 3 ||
+            CalculatePlayerLayout(225d, 20).Columns != 3 ||
+            CalculatePlayerLayout(800d, 20).Columns != 11 ||
+            CalculatePlayerLayout(2000d, 20) != (12, 100d))
+            throw new InvalidOperationException("Responsive player columns or avatar cap differ from 3.2.17");
+        for (var id = 10; id <= 23; id++)
+            game.Players.Add(new Player { Id = id, ClientId = id + 10, Name = $"Guest {id}" });
+        view.Update(game, true, false, false, false, peers);
+        view.Measure(new Size(280, 260));
+        view.Arrange(new Rect(0, 0, 280, 260));
+        view.UpdateLayout();
+        var narrowWidth = view.OtherPlayersPanel.Width;
+        if (view.FooterBar.Visibility != Visibility.Visible || view.OtherPlayersScroll.ScrollableHeight <= 0d)
+            throw new InvalidOperationException("Twenty-player roster did not scroll above its fixed footer");
+        view.Measure(new Size(600, 260));
+        view.Arrange(new Rect(0, 0, 600, 260));
+        view.UpdateLayout();
+        if (view.OtherPlayersPanel.Width <= narrowWidth || view.remoteAvatars[0].Width > 100d)
+            throw new InvalidOperationException("Player grid did not respond to a wider voice window");
         game.GameState = GameState.Lobby;
         game.Players.Clear();
         view.Update(game, true, false, true, false, peers);
@@ -646,7 +691,6 @@ public partial class VoiceView : UserControl
     private void CloseButton_Click(object sender, RoutedEventArgs e) => CloseRequested?.Invoke(this, EventArgs.Empty);
     private void MuteButton_Click(object sender, RoutedEventArgs e) => MuteRequested?.Invoke(this, EventArgs.Empty);
     private void DeafenButton_Click(object sender, RoutedEventArgs e) => DeafenRequested?.Invoke(this, EventArgs.Empty);
-    private void HelpButton_Click(object sender, RoutedEventArgs e) => HelpRequested?.Invoke(this, EventArgs.Empty);
     private void PublicLobbyButton_Click(object sender, RoutedEventArgs e) => PublicLobbyRequested?.Invoke(this, EventArgs.Empty);
 
     private void PlayerAvatar_MouseEnter(object sender, MouseEventArgs e)

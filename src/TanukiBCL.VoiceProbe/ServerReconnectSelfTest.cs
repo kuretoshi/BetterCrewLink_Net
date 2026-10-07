@@ -280,14 +280,8 @@ internal static class ServerReconnectSelfTest
                 try
                 {
                     var stream = client.GetStream();
-                    var header = new List<byte>();
-                    var single = new byte[1];
-                    while (header.Count < 8192)
-                    {
-                        if (await stream.ReadAsync(single, cancellation.Token) == 0) return;
-                        header.Add(single[0]);
-                        if (header.Count >= 4 && header.TakeLast(4).SequenceEqual(new byte[] { 13, 10, 13, 10 })) break;
-                    }
+                    var header = await ReadHeaderAsync(stream);
+                    if (header is null) return;
                     var key = Encoding.ASCII.GetString(header.ToArray()).Split("\r\n")
                         .Single(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase)).Split(':', 2)[1].Trim();
                     var accept = Convert.ToBase64String(SHA1.HashData(Encoding.ASCII.GetBytes(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
@@ -307,21 +301,44 @@ internal static class ServerReconnectSelfTest
                         if (result.MessageType == WebSocketMessageType.Close) break;
                         if (!result.EndOfMessage) throw new InvalidOperationException("unexpected fragmented self-test packet");
                         var packet = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        if (packet.StartsWith("40", StringComparison.Ordinal))
-                            await SendAsync(socket, "40" + JsonSerializer.Serialize(new { sid = $"socket-{id}" }), cancellation.Token);
-                        else if (packet == "2") await SendAsync(socket, "3", cancellation.Token);
-                        else if (packet.StartsWith("42", StringComparison.Ordinal))
-                        {
-                            var data = JsonSerializer.Deserialize<JsonElement>(packet[2..]);
-                            if (data[0].GetString() == "join") joinCounts.AddOrUpdate(id, 1, (_, count) => count + 1);
-                            await events.Writer.WriteAsync((id, data), cancellation.Token);
-                        }
-                        else if (packet == "41") break;
+                        if (!await HandlePacketAsync(socket, id, packet)) break;
                     }
                 }
                 catch (Exception error) when (error is OperationCanceledException or WebSocketException or IOException or ObjectDisposedException) { }
                 finally { connections.TryRemove(id, out _); }
             }
+        }
+
+        private async Task<List<byte>?> ReadHeaderAsync(NetworkStream stream)
+        {
+            var header = new List<byte>();
+            var single = new byte[1];
+            while (header.Count < 8192)
+            {
+                if (await stream.ReadAsync(single, cancellation.Token) == 0) return null;
+                header.Add(single[0]);
+                if (header.Count >= 4 && header.TakeLast(4).SequenceEqual(new byte[] { 13, 10, 13, 10 })) break;
+            }
+            return header;
+        }
+
+        private async Task<bool> HandlePacketAsync(WebSocket socket, int id, string packet)
+        {
+            if (packet.StartsWith("40", StringComparison.Ordinal))
+            {
+                await SendAsync(socket, "40" + JsonSerializer.Serialize(new { sid = $"socket-{id}" }), cancellation.Token);
+                return true;
+            }
+            if (packet == "2")
+            {
+                await SendAsync(socket, "3", cancellation.Token);
+                return true;
+            }
+            if (!packet.StartsWith("42", StringComparison.Ordinal)) return packet != "41";
+            var data = JsonSerializer.Deserialize<JsonElement>(packet[2..]);
+            if (data[0].GetString() == "join") joinCounts.AddOrUpdate(id, 1, (_, count) => count + 1);
+            await events.Writer.WriteAsync((id, data), cancellation.Token);
+            return true;
         }
 
         private static async Task SendAsync(WebSocket socket, string packet, CancellationToken token) =>

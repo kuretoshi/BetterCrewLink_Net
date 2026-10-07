@@ -46,37 +46,34 @@ internal static class TohRoleLayout
         var killerRoles = ReadKillerRoles(source.module.Name!);
         var manager = source.module.GetTypeByName("TownOfHostForE.Roles.Core.CustomRoleManager");
         var activeSlot = manager?.GetStaticFieldByName("AllActiveRoles");
-        object? killerLayout = null;
-        if (activeSlot != null && activeSlot.GetAddress(source.module.AppDomain) != 0)
+        object? ReadKillerLayout()
         {
+            if (activeSlot == null || activeSlot.GetAddress(source.module.AppDomain) == 0) return null;
             var active = activeSlot.ReadObject(source.module.AppDomain);
-            if (!active.IsNull)
+            if (active.IsNull) return null;
+            var activeEntriesField = Field(active.Type!, "_entries");
+            var activeEntries = activeEntriesField.ReadObject(active.Address, false);
+            if (!activeEntries.IsArray) return null;
+            var activeEntryType = activeEntries.Type!.ComponentType!;
+            var types = new Dictionary<ulong, object>();
+            foreach (var (name, isKiller) in killerRoles)
             {
-                var activeEntriesField = Field(active.Type!, "_entries");
-                var activeEntries = activeEntriesField.ReadObject(active.Address, false);
-                if (activeEntries.IsArray)
-                {
-                    var activeEntryType = activeEntries.Type!.ComponentType!;
-                    var types = new Dictionary<ulong, object>();
-                    foreach (var (name, isKiller) in killerRoles)
-                    {
-                        var type = source.module.GetTypeByName(name);
-                        if (type == null || type.MethodTable == 0) continue;
-                        types[type.MethodTable] = new { isKiller, stateOffset = Offset(Field(type, "MyState")) };
-                    }
-                    killerLayout = new {
-                        dictionarySlot = activeSlot.GetAddress(source.module.AppDomain),
-                        dictionaryType = active.Type!.MethodTable, entriesType = activeEntries.Type.MethodTable,
-                        entriesOffset = Offset(activeEntriesField), countOffset = Offset(Field(active.Type, "_count")),
-                        versionOffset = Offset(Field(active.Type, "_version")),
-                        dataOffset = activeEntries.Type.GetArrayElementAddress(activeEntries.Address, 0) - activeEntries.Address,
-                        stride = activeEntries.Type.ComponentSize,
-                        nextOffset = Field(activeEntryType, "next").Offset, keyOffset = Field(activeEntryType, "key").Offset,
-                        valueOffset = Field(activeEntryType, "value").Offset, types
-                    };
-                }
+                var type = source.module.GetTypeByName(name);
+                if (type == null || type.MethodTable == 0) continue;
+                types[type.MethodTable] = new { isKiller, stateOffset = Offset(Field(type, "MyState")) };
             }
+            return new {
+                dictionarySlot = activeSlot.GetAddress(source.module.AppDomain),
+                dictionaryType = active.Type!.MethodTable, entriesType = activeEntries.Type.MethodTable,
+                entriesOffset = Offset(activeEntriesField), countOffset = Offset(Field(active.Type, "_count")),
+                versionOffset = Offset(Field(active.Type, "_version")),
+                dataOffset = activeEntries.Type.GetArrayElementAddress(activeEntries.Address, 0) - activeEntries.Address,
+                stride = activeEntries.Type.ComponentSize,
+                nextOffset = Field(activeEntryType, "next").Offset, keyOffset = Field(activeEntryType, "key").Offset,
+                valueOffset = Field(activeEntryType, "value").Offset, types
+            };
         }
+        var killerLayout = ReadKillerLayout();
         return new {
             pid, pointerSize, dictionarySlot = source.slot.GetAddress(source.module.AppDomain),
             dictionaryType = dictType.MethodTable, playerType = source.type.MethodTable,

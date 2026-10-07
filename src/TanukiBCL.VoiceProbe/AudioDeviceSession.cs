@@ -413,18 +413,22 @@ internal sealed class AudioDeviceSession : IDisposable
         disposed = true;
         capture.DataAvailable -= OnDataAvailable;
         try { capture.StopRecording(); }
+        finally { DisposePlaybackAndCapture(); }
+    }
+
+    private void DisposePlaybackAndCapture()
+    {
+        try { playback.Stop(); }
+        finally { DisposeCaptureAndPlayback(); }
+    }
+
+    private void DisposeCaptureAndPlayback()
+    {
+        try { capture.Dispose(); }
         finally
         {
-            try { playback.Stop(); }
-            finally
-            {
-                try { capture.Dispose(); }
-                finally
-                {
-                    try { playback.Dispose(); }
-                    finally { microphoneProcessor.Dispose(); }
-                }
-            }
+            try { playback.Dispose(); }
+            finally { microphoneProcessor.Dispose(); }
         }
     }
 

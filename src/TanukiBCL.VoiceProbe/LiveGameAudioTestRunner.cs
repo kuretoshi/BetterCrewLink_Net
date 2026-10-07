@@ -71,23 +71,8 @@ internal static class LiveGameAudioTestRunner
             var reconnectedClientIds = new HashSet<int>();
             while (!IsBidirectionalPathReady(nodes, liveNode))
             {
-                if (waitStarted.Elapsed >= TimeSpan.FromSeconds(10) &&
-                    liveNode.State is { } currentState)
-                {
-                    var liveClientId = currentState.Players.Single(player => player.IsLocal).ClientId;
-                    foreach (var simulatedNode in nodes.Where(node => !node.IsLive))
-                    {
-                        var remoteClientId = simulatedNode.State?.Players.SingleOrDefault(player => player.IsLocal)?.ClientId;
-                        if (remoteClientId is { } id &&
-                            simulatedNode.PcmFrames.GetValueOrDefault(liveClientId) < 10 &&
-                            reconnectedClientIds.Add(id))
-                        {
-                            Console.WriteLine($"[RETRY] client {id}への片方向メディアを再接続します。");
-                            await liveNode.Probe!.ReconnectClientAsync(id);
-                        }
-                    }
-                }
-
+                if (waitStarted.Elapsed >= TimeSpan.FromSeconds(10))
+                    await RetryMissingPathsAsync(nodes, liveNode, reconnectedClientIds);
                 await Task.Delay(250, cancellation.Token);
             }
 
@@ -152,6 +137,22 @@ internal static class LiveGameAudioTestRunner
             }
 
             await Task.WhenAll(nodes.Where(node => node.RunTask is not null).Select(node => IgnoreCancellationAsync(node.RunTask!)));
+        }
+    }
+
+    private static async Task RetryMissingPathsAsync(IReadOnlyCollection<TestNode> nodes, TestNode liveNode,
+        HashSet<int> reconnectedClientIds)
+    {
+        if (liveNode.State is not { } currentState) return;
+        var liveClientId = currentState.Players.Single(player => player.IsLocal).ClientId;
+        foreach (var simulatedNode in nodes.Where(node => !node.IsLive))
+        {
+            var remoteClientId = simulatedNode.State?.Players.SingleOrDefault(player => player.IsLocal)?.ClientId;
+            if (remoteClientId is not { } id ||
+                simulatedNode.PcmFrames.GetValueOrDefault(liveClientId) >= 10 ||
+                !reconnectedClientIds.Add(id)) continue;
+            Console.WriteLine($"[RETRY] client {id}への片方向メディアを再接続します。");
+            await liveNode.Probe!.ReconnectClientAsync(id);
         }
     }
 

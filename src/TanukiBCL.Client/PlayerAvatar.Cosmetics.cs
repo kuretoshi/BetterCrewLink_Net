@@ -76,33 +76,9 @@ public partial class PlayerAvatar
             // 3.2.13 does not wait for the remote hat list before showing SNR's local PNGs.
             CosmeticCatalog? catalog = customSnrPresent && !catalogTask.IsCompletedSuccessfully
                 ? null : await catalogTask;
-            SnrCosmeticCatalog? snr = null;
-            var retrySnr = customSnrPresent && catalog is null;
-            var retryDelaySeconds = catalogTask.IsFaulted ? 30 : 1;
+            var (snr, retrySnr, retryDelaySeconds) = ResolveSnrCatalog(
+                customSnrPresent, catalog is null, catalogTask.IsFaulted);
             if (catalogTask.IsFaulted) _ = catalogTask.Exception;
-            if (customSnrPresent)
-            {
-                try
-                {
-                    var definitions = snrCatalogLoader();
-                    if (definitions.IsCompletedSuccessfully) snr = definitions.Result;
-                    else
-                    {
-                        retrySnr = true;
-                        if (definitions.IsFaulted)
-                        {
-                            _ = definitions.Exception;
-                            retryDelaySeconds = 30;
-                        }
-                    }
-                }
-                catch (Exception error)
-                {
-                    retrySnr = true;
-                    retryDelaySeconds = 30;
-                    System.Diagnostics.Trace.TraceWarning($"SNR definitions unavailable: {error.Message}");
-                }
-            }
             var modName = mod switch
             {
                 AmongUsModType.NebulaOnTheShip => "NoS",
@@ -120,46 +96,8 @@ public partial class PlayerAvatar
                 (skin, CosmeticPart.Skin, CosmeticSkin, NosCosmeticPart.Skin),
                 (hat2, CosmeticPart.Hat, CosmeticFront, null), (visor2, CosmeticPart.Visor, CosmeticFront, null),
                 (hat, CosmeticPart.Hat, CosmeticFront, NosCosmeticPart.Hat), (visor, CosmeticPart.Visor, CosmeticFront, NosCosmeticPart.Visor) })
-            {
-                if (generation != cosmeticGeneration) return;
-                if (nosPart is { } nosLayer && nos?.TryGetValue(nosLayer, out var nosKey) == true)
-                {
-                    // Rendered on the upstream 300x375 canvas; a failed image leaves the layer empty.
-                    var nosImage = await LoadNosImageAsync(nosKey, nosPlayer!);
-                    if (generation != cosmeticGeneration) return;
-                    if (nosImage is null) continue;
-                    target.Children.Add(new Image { Source = nosImage, Stretch = Stretch.Uniform, IsHitTestVisible = false,
-                        Tag = new CosmeticAsset(new Uri($"nos-cosmetic://image/{nosKey}"), false, "-52%", "-18px", "140%") });
-                    LayoutCosmetics();
-                    continue;
-                }
-                if (id.Length == 0) continue;
-                var customSnr = mod == AmongUsModType.SuperNewRoles && id.StartsWith("Modded_", StringComparison.Ordinal);
-                var asset = customSnr ? SnrLocalCosmetics.Resolve(gameExecutable, id, part)
-                    : catalog?.Resolve(id, modName, part);
-                if (customSnr && asset is not null && snr is not null)
-                    asset = snr.ApplyLocalMetadata(id, part, asset);
-                if (customSnr && asset is not null && catalog?.Dimensions(id, modName) is { } shared)
-                    asset = asset with { Top = shared.Top, Left = shared.Left, Width = shared.Width, SnrVisorLayout = false };
-                if (asset is null) continue;
-                try
-                {
-                    var bitmap = await imageLoader(asset.Url);
-                    if (generation != cosmeticGeneration) return;
-                    asset = SnrCosmeticCatalog.WithImageSize(asset, bitmap.PixelWidth, bitmap.PixelHeight);
-                    CosmeticCatalog.ResolveLength(asset.Top, 80);
-                    CosmeticCatalog.ResolveLength(asset.Left, 80);
-                    CosmeticCatalog.ResolveLength(asset.Width, 80);
-                    if (asset.Adaptive) bitmap = AvatarImageFactory.Recolor(bitmap, colors.Main, colors.Shadow);
-                    target.Children.Add(new Image { Source = bitmap, Tag = asset, Stretch = Stretch.Uniform,
-                        IsHitTestVisible = false });
-                    LayoutCosmetics();
-                }
-                catch (Exception error)
-                {
-                    System.Diagnostics.Trace.TraceWarning($"Cosmetic image unavailable: {error.Message}");
-                }
-            }
+                if (!await LoadCosmeticLayerAsync(generation, id, part, target, nosPart, mod, modName,
+                        colors, gameExecutable, catalog, snr, nos, nosPlayer)) return;
             if (nos?.TryGetValue(NosCosmeticPart.BodyMask, out var maskKey) == true &&
                 await LoadNosImageAsync(maskKey, nosPlayer!) is { } mask && generation == cosmeticGeneration)
             {
@@ -180,6 +118,74 @@ public partial class PlayerAvatar
             }
             System.Diagnostics.Trace.TraceWarning($"Cosmetic catalog unavailable: {error.Message}");
         }
+    }
+
+    private (SnrCosmeticCatalog? Catalog, bool Retry, int DelaySeconds) ResolveSnrCatalog(
+        bool customSnrPresent, bool catalogMissing, bool catalogFaulted)
+    {
+        var retry = customSnrPresent && catalogMissing;
+        var delay = catalogFaulted ? 30 : 1;
+        if (!customSnrPresent) return (null, retry, delay);
+        try
+        {
+            var definitions = snrCatalogLoader();
+            if (definitions.IsCompletedSuccessfully) return (definitions.Result, retry, delay);
+            retry = true;
+            if (!definitions.IsFaulted) return (null, retry, delay);
+            _ = definitions.Exception;
+            return (null, retry, 30);
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Trace.TraceWarning($"SNR definitions unavailable: {error.Message}");
+            return (null, true, 30);
+        }
+    }
+
+    private async Task<bool> LoadCosmeticLayerAsync(long generation, string id, CosmeticPart part, Canvas target,
+        NosCosmeticPart? nosPart, AmongUsModType mod, string modName, (Color Main, Color Shadow) colors,
+        string gameExecutable, CosmeticCatalog? catalog, SnrCosmeticCatalog? snr,
+        IReadOnlyDictionary<NosCosmeticPart, string>? nos, NosPlayerData? nosPlayer)
+    {
+        if (generation != cosmeticGeneration) return false;
+        if (nosPart is { } nosLayer && nos?.TryGetValue(nosLayer, out var nosKey) == true)
+        {
+            // Rendered on the upstream 300x375 canvas; a failed image leaves the layer empty.
+            var nosImage = await LoadNosImageAsync(nosKey, nosPlayer!);
+            if (generation != cosmeticGeneration) return false;
+            if (nosImage is null) return true;
+            target.Children.Add(new Image { Source = nosImage, Stretch = Stretch.Uniform, IsHitTestVisible = false,
+                Tag = new CosmeticAsset(new Uri($"nos-cosmetic://image/{nosKey}"), false, "-52%", "-18px", "140%") });
+            LayoutCosmetics();
+            return true;
+        }
+        if (id.Length == 0) return true;
+        var customSnr = mod == AmongUsModType.SuperNewRoles && id.StartsWith("Modded_", StringComparison.Ordinal);
+        var asset = customSnr ? SnrLocalCosmetics.Resolve(gameExecutable, id, part)
+            : catalog?.Resolve(id, modName, part);
+        if (customSnr && asset is not null && snr is not null)
+            asset = snr.ApplyLocalMetadata(id, part, asset);
+        if (customSnr && asset is not null && catalog?.Dimensions(id, modName) is { } shared)
+            asset = asset with { Top = shared.Top, Left = shared.Left, Width = shared.Width, SnrVisorLayout = false };
+        if (asset is null) return true;
+        try
+        {
+            var bitmap = await imageLoader(asset.Url);
+            if (generation != cosmeticGeneration) return false;
+            asset = SnrCosmeticCatalog.WithImageSize(asset, bitmap.PixelWidth, bitmap.PixelHeight);
+            CosmeticCatalog.ResolveLength(asset.Top, 80);
+            CosmeticCatalog.ResolveLength(asset.Left, 80);
+            CosmeticCatalog.ResolveLength(asset.Width, 80);
+            if (asset.Adaptive) bitmap = AvatarImageFactory.Recolor(bitmap, colors.Main, colors.Shadow);
+            target.Children.Add(new Image { Source = bitmap, Tag = asset, Stretch = Stretch.Uniform,
+                IsHitTestVisible = false });
+            LayoutCosmetics();
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Trace.TraceWarning($"Cosmetic image unavailable: {error.Message}");
+        }
+        return true;
     }
 
     private void LayoutCosmetics()

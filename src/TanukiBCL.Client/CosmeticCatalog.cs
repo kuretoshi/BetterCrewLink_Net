@@ -92,17 +92,17 @@ internal sealed class CosmeticCatalog
     {
         var catalog = await DownloadAsync(CancellationToken.None);
         var count = 0;
-        foreach (var (mod, group) in catalog.groups)
-            foreach (var id in group.Entries.Keys)
-                foreach (var part in new[] { CosmeticPart.Hat, CosmeticPart.HatBack })
-                {
-                    var asset = catalog.Resolve(id, mod, part);
-                    if (asset is null) continue;
-                    ResolveLength(asset.Top, 80);
-                    ResolveLength(asset.Left, 80);
-                    ResolveLength(asset.Width, 80);
-                    count++;
-                }
+        var entries = catalog.groups.SelectMany(group => group.Value.Entries.Keys.SelectMany(id =>
+            new[] { CosmeticPart.Hat, CosmeticPart.HatBack }.Select(part => (Mod: group.Key, Id: id, Part: part))));
+        foreach (var (mod, id, part) in entries)
+        {
+            var asset = catalog.Resolve(id, mod, part);
+            if (asset is null) continue;
+            ResolveLength(asset.Top, 80);
+            ResolveLength(asset.Left, 80);
+            ResolveLength(asset.Width, 80);
+            count++;
+        }
         if (count == 0) throw new InvalidDataException("Remote cosmetic catalog contains no resolvable images");
         Console.WriteLine($"[PASS] Live cosmetic catalog: {catalog.groups.Count} groups, {count} resolved front/back entries");
     }

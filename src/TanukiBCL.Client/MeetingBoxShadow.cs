@@ -76,18 +76,22 @@ internal sealed record MeetingBoxShadow(BitmapSource Image, Rect Bounds)
         var output = new double[input.Length];
         for (var y = 0; y < height; y++)
         for (var x = 0; x < width; x++)
-        {
-            var value = 0d;
-            for (var k = -support; k <= support; k++)
-            {
-                var px = horizontal ? x + k : x;
-                var py = horizontal ? y : y + k;
-                if (px >= 0 && px < width && py >= 0 && py < height)
-                    value += input[py * width + px] * kernel[k + support];
-            }
-            output[y * width + x] = value;
-        }
+            output[y * width + x] = BlurPixel(input, kernel, support, x, y, width, height, horizontal);
         return output;
+    }
+
+    private static double BlurPixel(double[] input, double[] kernel, int support,
+        int x, int y, int width, int height, bool horizontal)
+    {
+        var value = 0d;
+        for (var k = -support; k <= support; k++)
+        {
+            var px = horizontal ? x + k : x;
+            var py = horizontal ? y : y + k;
+            if (px >= 0 && px < width && py >= 0 && py < height)
+                value += input[py * width + px] * kernel[k + support];
+        }
+        return value;
     }
 
     internal static void Verify()

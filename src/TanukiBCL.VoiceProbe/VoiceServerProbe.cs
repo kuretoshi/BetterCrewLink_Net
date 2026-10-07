@@ -417,43 +417,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             tohRoleSent.Clear();
         }
         if (state.GameState == GameState.Lobby)
-        {
-            tohGameStartNames.Clear();
-            tohLobbyNames.Clear();
-            if (state.IsHost && state.Mod == AmongUsModType.TownOfHostForE)
-            {
-                foreach (var player in state.Players.Where(player => !player.Disconnected &&
-                    player.ClientId >= 0 && player.Name.Length <= 100))
-                    tohLobbyNames[player.ClientId] = player.Name;
-            }
-        }
+            CaptureTohLobbyNames(state);
         if (state.IsHost && state.Mod == AmongUsModType.TownOfHostForE &&
             state.GameState is GameState.Tasks or GameState.Discussion &&
             tohGameStartNames.Count == 0)
-        {
-            if (tohLobbyNames.Count > 0)
-                foreach (var (id, name) in tohLobbyNames) tohGameStartNames[id] = name;
-            else
-                foreach (var player in state.Players.Where(player => !player.Disconnected &&
-                    player.ClientId >= 0 && player.Name.Length <= 100))
-                    tohGameStartNames[player.ClientId] = player.Name;
-        }
+            CaptureTohStartNames(state);
         if (!state.IsHost && tohLobbyEnabled)
-        {
-            state.Mod = AmongUsModType.TownOfHostForE;
-            if (state.GameState is GameState.Tasks or GameState.Discussion)
-            {
-                foreach (var player in state.Players)
-                {
-                    if (!tohGameStartNames.TryGetValue(player.ClientId, out var name)) continue;
-                    player.Name = name;
-                    player.AppearanceName = name;
-                }
-                var local = state.Players.FirstOrDefault(player => player.IsLocal);
-                if (local is not null && DateTimeOffset.UtcNow - tohRoleReceivedAt < TimeSpan.FromSeconds(5))
-                    local.TohRole = tohRoleOverride;
-            }
-        }
+            ApplyTohClientOverride(state);
         if (currentGameState?.LobbyCode != state.LobbyCode ||
             state.GameState is GameState.Menu or GameState.Unknown)
         {
@@ -486,6 +456,43 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         GameStateApplied?.Invoke(state);
         ImpostorRadioAvailabilityChanged?.Invoke(CanUseImpostorRadio);
         RefreshPeerMixes();
+    }
+
+    private void CaptureTohLobbyNames(AmongUsState state)
+    {
+        tohGameStartNames.Clear();
+        tohLobbyNames.Clear();
+        if (!state.IsHost || state.Mod != AmongUsModType.TownOfHostForE) return;
+        foreach (var player in state.Players.Where(player => !player.Disconnected &&
+            player.ClientId >= 0 && player.Name.Length <= 100))
+            tohLobbyNames[player.ClientId] = player.Name;
+    }
+
+    private void CaptureTohStartNames(AmongUsState state)
+    {
+        if (tohLobbyNames.Count > 0)
+        {
+            foreach (var (id, name) in tohLobbyNames) tohGameStartNames[id] = name;
+            return;
+        }
+        foreach (var player in state.Players.Where(player => !player.Disconnected &&
+            player.ClientId >= 0 && player.Name.Length <= 100))
+            tohGameStartNames[player.ClientId] = player.Name;
+    }
+
+    private void ApplyTohClientOverride(AmongUsState state)
+    {
+        state.Mod = AmongUsModType.TownOfHostForE;
+        if (state.GameState is not (GameState.Tasks or GameState.Discussion)) return;
+        foreach (var player in state.Players)
+        {
+            if (!tohGameStartNames.TryGetValue(player.ClientId, out var name)) continue;
+            player.Name = name;
+            player.AppearanceName = name;
+        }
+        var local = state.Players.FirstOrDefault(player => player.IsLocal);
+        if (local is not null && DateTimeOffset.UtcNow - tohRoleReceivedAt < TimeSpan.FromSeconds(5))
+            local.TohRole = tohRoleOverride;
     }
 
     public void SetExpectedHostClientId(int clientId)
@@ -1634,24 +1641,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             {
                 if (impostorRadioTransmitting)
                 {
-                    for (var sample = 0; sample < samplesPerFrame; sample++)
-                    {
-                        var value = (short)(Math.Sin(2d * Math.PI * 440d *
-                            (frameNumber * samplesPerFrame + sample) / 48_000d) * 6000d);
-                        BitConverter.TryWriteBytes(frame.AsSpan(sample * sizeof(short), sizeof(short)), value);
-                    }
-
-                    var sent = peerManager.BroadcastMonoPcm48k(frame, CanReceiveRadioAudio);
-                    if (frameNumber % 50 == 0)
-                    {
-                        var recipientClients = peerClientIds
-                            .Where(peer => CanReceiveRadioAudio(peer.Key))
-                            .Select(peer => peer.Value)
-                            .Distinct()
-                            .Order()
-                            .ToArray();
-                        Log("RADIO-TEST", $"state={currentGameState?.GameState} recipients={sent} clientIds=[{string.Join(',', recipientClients)}] frame={frameNumber}");
-                    }
+                    SendAutoRadioFrame(frame, frameNumber);
                     frameNumber++;
                 }
                 await Task.Delay(20, cancellationToken);
@@ -1660,6 +1650,27 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+    }
+
+    private void SendAutoRadioFrame(byte[] frame, long frameNumber)
+    {
+        const int samplesPerFrame = 960;
+        for (var sample = 0; sample < samplesPerFrame; sample++)
+        {
+            var value = (short)(Math.Sin(2d * Math.PI * 440d *
+                (frameNumber * samplesPerFrame + sample) / 48_000d) * 6000d);
+            BitConverter.TryWriteBytes(frame.AsSpan(sample * sizeof(short), sizeof(short)), value);
+        }
+
+        var sent = peerManager.BroadcastMonoPcm48k(frame, CanReceiveRadioAudio);
+        if (frameNumber % 50 != 0) return;
+        var recipientClients = peerClientIds
+            .Where(peer => CanReceiveRadioAudio(peer.Key))
+            .Select(peer => peer.Value)
+            .Distinct()
+            .Order()
+            .ToArray();
+        Log("RADIO-TEST", $"state={currentGameState?.GameState} recipients={sent} clientIds=[{string.Join(',', recipientClients)}] frame={frameNumber}");
     }
 
     private void ApplyImpostorRadioStatus(int clientId, JsonElement data, bool active)

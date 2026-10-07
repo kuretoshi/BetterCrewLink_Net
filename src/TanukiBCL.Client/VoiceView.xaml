@@ -167,6 +167,8 @@
             </StackPanel>
             <ScrollViewer x:Name="OtherPlayersScroll" Visibility="Collapsed"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          SizeChanged="OtherPlayersScroll_SizeChanged"
+                          ScrollChanged="OtherPlayersScroll_ScrollChanged"
                           Margin="0,4,0,0">
                 <WrapPanel x:Name="OtherPlayersPanel" Width="225" HorizontalAlignment="Center" />
             </ScrollViewer>
@@ -212,15 +214,6 @@
                         <Path Fill="White" Width="36" Height="36" Stretch="Uniform"
                               Data="M714.163 519.284L1160.89 0H1055.03L667.137 450.887L357.328 0H0L468.492 681.821L0 1226.37H105.866L515.491 750.218L842.672 1226.37H1200L714.137 519.284H714.163ZM569.165 687.828L521.697 619.934L144.011 79.6944H306.615L611.412 515.685L658.88 583.579L1055.08 1150.3H892.476L569.165 687.854V687.828Z" />
                     </Viewbox>
-                </Button>
-                <Button x:Name="HelpButton" Width="44" Height="36" Margin="4,0" ToolTip="お問い合わせ"
-                        Background="Transparent" BorderThickness="0" Foreground="#D0D0D0"
-                        Click="HelpButton_Click">
-                    <Grid Width="28" Height="28">
-                        <Ellipse Fill="White" />
-                        <TextBlock Text="?" Foreground="#25232A" FontSize="21" FontWeight="Bold"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-2,0,0" />
-                    </Grid>
                 </Button>
             </StackPanel>
         </Grid>
