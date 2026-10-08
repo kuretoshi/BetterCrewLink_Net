@@ -2,7 +2,7 @@
 
 TanukiBCL.Netは、[タヌキのベタクル v3.2.17](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.17)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
 
-現在の配布版は **`3.2.17-net-beta.2`（プレリリース）** です。公式タヌキのベタクル v3.2.8との通信・音声・ゲーム連動の主要経路は実機で相互確認しています。公式3.2.17とは同じロビーでの接続表示を確認しましたが、実音声の双方向通話は未確認です。3.2.15–16のNoS無線分離は自動テスト済みで、NoS画像転送のWeb実機表示は未確認です。バグが存在する可能性があります。64ビット版Among Usのみ対応します。
+現在の配布版は **`3.2.17-net-beta.3`（プレリリース）** です。公式タヌキのベタクル v3.2.8との通信・音声・ゲーム連動の主要経路は実機で相互確認しています。公式3.2.17とは同じロビーでの接続表示を確認しましたが、実音声の双方向通話は未確認です。3.2.15–16のNoS無線分離は自動テスト済みで、NoS画像転送のWeb実機表示は未確認です。バグが存在する可能性があります。64ビット版Among Usのみ対応します。
 
 ## 主な機能
 
@@ -16,7 +16,7 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.17](https://github.com/kuretos
 
 ## ダウンロード
 
-[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-Setup-3.2.17-net-beta.2.exe` をダウンロードして実行してください。ユーザー別のフォルダーへインストールされ、スタートメニューから起動・アンインストールできます。持ち運び用には `TanukiBCL.Net-win-x64.zip` も用意しています。ZIP版は任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。どちらも.NETランタイムを同梱しています。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
+[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-Setup-3.2.17-net-beta.3.exe` をダウンロードして実行してください。ユーザー別のフォルダーへインストールされ、スタートメニューから起動・アンインストールできます。持ち運び用には `TanukiBCL.Net-win-x64.zip` も用意しています。ZIP版は任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。どちらも.NETランタイムを同梱しています。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
 
 タヌキのベタクルのインストーラーやLite版とは別の配布物です。公式版は[こちら](https://github.com/kuretoshi/TanukiBCL/releases)から入手できます。
 
