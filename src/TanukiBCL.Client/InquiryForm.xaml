@@ -112,7 +112,8 @@
             <Setter Property="BorderThickness" Value="0" />
         </Style>
     </UserControl.Resources>
-    <Grid Background="#25232A">
+    <Grid x:Name="InquiryLayout" Background="#25232A" HorizontalAlignment="Center" MaxWidth="752"
+          Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=UserControl}}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />

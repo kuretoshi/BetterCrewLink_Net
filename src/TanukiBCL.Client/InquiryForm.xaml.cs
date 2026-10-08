@@ -159,7 +159,26 @@ public partial class InquiryForm : UserControl
         if (form.ResultBanner.Visibility != Visibility.Visible ||
                 form.ResultText.Text != "Failure")
                 throw new InvalidOperationException("Inquiry error alert is missing");
+        VerifyResponsiveLayout();
         Console.WriteLine("[PASS] 3.2.17 settings inquiry form, dark controls and alerts");
+    }
+
+    private static void VerifyResponsiveLayout()
+    {
+        foreach (var width in new[] { 500d, 1800d })
+        {
+            var form = new InquiryForm();
+            var size = new Size(width, 630);
+            form.Measure(size);
+            form.Arrange(new Rect(size));
+            form.UpdateLayout();
+            var expectedWidth = Math.Min(width, 752d);
+            var expectedLeft = (width - expectedWidth) / 2;
+            var actualLeft = form.InquiryLayout.TransformToAncestor(form).Transform(new Point()).X;
+            if (Math.Abs(form.InquiryLayout.ActualWidth - expectedWidth) > 1 ||
+                Math.Abs(actualLeft - expectedLeft) > 1)
+                throw new InvalidOperationException("Inquiry form does not stay centered and width-limited when resized.");
+        }
     }
 
     internal static void RenderPreview(string outputPath)
