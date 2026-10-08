@@ -41,6 +41,12 @@ internal static class Program
                 return await GameReaderAllocationProfile.RunAsync(parsed.GameProcessId,
                     parsed.Duration ?? TimeSpan.FromSeconds(30));
             }
+            if (args.Contains("--audio-capture-profile"))
+            {
+                var parsed = ProbeOptions.Parse(args.Where(arg => arg != "--audio-capture-profile").ToArray());
+                return await AudioCaptureAllocationProfile.RunAsync(parsed.InputDevice, parsed.OutputDevice,
+                    parsed.Duration ?? TimeSpan.FromSeconds(30));
+            }
             if (args.Contains("--audio-processing-self-test"))
             {
                 WebRtcPeerManager.VerifyBroadcastBufferReuse();
@@ -237,6 +243,7 @@ internal static class Program
               --speaker-loopback-self-test 440Hz検出と別周波数の除外を合成音で検証
               --scan-game         起動中の全Among Usプロセスを読み取り検証
               --game-reader-profile --game-process-id PID --seconds N  ゲーム読取単体の割り当て率を計測
+              --audio-capture-profile --seconds N  マイク処理単体の割り当て率を計測（音声は保存・送信しない）
               --expected-players  検証するプロセス数・ロビー人数（既定5）
               --game-scan-self-test ゲーム読取検証コマンドの回帰テスト
               --scalar-read-self-test ゲーム状態の数値読取と割り当て量を検証
