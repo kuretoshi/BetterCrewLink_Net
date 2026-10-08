@@ -752,6 +752,21 @@ public partial class SettingsWindow : Window
         if (target.IsChecked != source.IsChecked) target.IsChecked = source.IsChecked;
     }
 
+    private void TohGhostRoleButton_Click(object sender, RoutedEventArgs e)
+    {
+        var catalog = currentGameState?.TohRoleCatalog ?? [];
+        var value = showingCurrentLobby ? currentLobbySettings : ReadLobbyControls();
+        if (value is null) return;
+        var dialog = new TohGhostRoleWindow(value, catalog,
+            showingCurrentLobby || !lobbySettingsEditable, roles =>
+            {
+                lobbyDraft = ReadLobbyControls() with { TohGhostRoles = roles };
+                QueueLobbyCommit();
+                FlushPendingLobby();
+            }) { Owner = this };
+        dialog.ShowDialog();
+    }
+
     private LobbySettings ReadLobbyControls() => lobbyDraft with
     {
         MaxDistance = DistanceSlider.Value,
@@ -1025,6 +1040,7 @@ public partial class SettingsWindow : Window
 
     internal static void VerifyModControls()
     {
+        TohGhostRoleWindow.VerifyBehavior();
         ServerUrlDialog.VerifyBehavior();
         SettingsConfirmDialog.VerifyBehavior();
         VerifyImmediateSettings();

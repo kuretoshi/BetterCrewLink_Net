@@ -56,6 +56,11 @@ internal static class TohLiveRoleReaderSelfTest
             NextOffset = 4, KeyOffset = 8, ValueOffset = 16,
             IdOffset = 8, RoleOffset = 12, OpportunistCanKillSlot = canKillSlot,
             Names = new Dictionary<string, string> { ["19"] = "Opportunist", ["20"] = "Jackal" },
+            RoleCatalog =
+            [
+                new TohRoleDefinition(19, "Opportunist", "Opportunist", "Neutral", true),
+                new TohRoleDefinition(20, "Jackal", "Jackal", "Neutral", true)
+            ],
             KillerLayout = new TohKillerLayout
             {
                 DictionarySlot = killerSlot, DictionaryType = killerDictionaryType,
@@ -81,7 +86,7 @@ internal static class TohLiveRoleReaderSelfTest
         var roles = TohLiveRoleReader.ReadRoles(layout, Read);
         roles.TryGetValue(5, out var role);
         var roleOk = roles.Count == 1 && role is { RoleId: 19, RoleName: "Opportunist",
-            IsNeutralKiller: true, OpportunistCanKill: true };
+            IsNeutralKiller: true, OpportunistCanKill: true, CustomRoleType: "Neutral" };
         var killerOk = role?.IsKiller == true;
 
         var entriesReads = 0;

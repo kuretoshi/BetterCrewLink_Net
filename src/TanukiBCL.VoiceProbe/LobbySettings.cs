@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
 
@@ -24,6 +25,8 @@ internal sealed record LobbySettings
     public bool NosSizeVoiceEffect { get; init; } = true;
     public bool NosFixerJammingVoiceBlock { get; init; } = true;
     public bool TohNeutralKillerHaunting { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, bool>? TohGhostRoles { get; init; }
     public bool HearImpostorsInVents { get; init; }
     public bool ImpostersHearImpostersInvent { get; init; }
     public bool ImpostorRadioEnabled { get; init; }

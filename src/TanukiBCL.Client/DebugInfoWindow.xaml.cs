@@ -291,6 +291,8 @@ public partial class DebugInfoWindow : Window
             {
                 ("RoleId", Text(toh?.RoleId.ToString() ?? "未取得")),
                 ("RoleName", Text(toh?.RoleName ?? "未取得")),
+                ("CustomRoleType", Text(toh?.CustomRoleType ?? "未取得")),
+                ("TOH Impostor", Flag(player.TohImpostor)),
                 ("IKiller", Flag(toh?.IsKiller)),
                 ("IsNeutralKiller", Flag(toh?.IsNeutralKiller))
             };

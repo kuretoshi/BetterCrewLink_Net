@@ -388,7 +388,7 @@ internal static class SpatialVoicePolicySelfTest
         var tohTasks = new AmongUsState { Mod = AmongUsModType.TownOfHostForE,
             GameState = GameState.Tasks };
         var tohKiller = new Player { TohRole = new TohRoleData(19, "Opportunist", true,
-            true, true) };
+            true, true, "Neutral") };
         Check("TOH haunting: active IKiller hears ghost when enabled", true,
             SpatialVoicePolicy.Calculate(tohTasks, tohKiller, new Player { IsDead = true },
                 new SpatialVoiceSettings(TohNeutralKillerHaunting: true)).Audible);
@@ -396,6 +396,44 @@ internal static class SpatialVoicePolicySelfTest
             SpatialVoicePolicy.Calculate(tohTasks, new Player { TohRole = tohKiller.TohRole with
                 { IsKiller = null } }, new Player { IsDead = true },
                 new SpatialVoiceSettings(TohNeutralKillerHaunting: true)).Audible);
+        var tohRoles = new Dictionary<string, bool> { ["Opportunist"] = false, ["Jackal"] = true };
+        Check("TOH ghost roles: explicit OFF overrides legacy ON", false,
+            SpatialVoicePolicy.Calculate(tohTasks, tohKiller, new Player { IsDead = true },
+                new SpatialVoiceSettings(TohNeutralKillerHaunting: true, TohGhostRoles: tohRoles)).Audible);
+        Check("TOH ghost roles: independent Neutral role ON", true,
+            SpatialVoicePolicy.Calculate(tohTasks,
+                new Player { TohRole = new TohRoleData(20, "Jackal", true, true,
+                    CustomRoleType: "Neutral") }, new Player { IsDead = true },
+                new SpatialVoiceSettings(TohGhostRoles: tohRoles)).Audible);
+        Check("TOH ghost roles: non-killer cannot listen", false,
+            SpatialVoicePolicy.Calculate(tohTasks,
+                new Player { TohRole = new TohRoleData(20, "Jackal", true, false,
+                    CustomRoleType: "Neutral") }, new Player { IsDead = true },
+                new SpatialVoiceSettings(TohGhostRoles: tohRoles)).Audible);
+        Check("TOH team: neutral with vanilla impostor flag is not an impostor", false,
+            TohRoleCatalog.IsImpostor(new Player { IsImpostor = true,
+                TohRole = new TohRoleData(20, "Jackal", true, true, CustomRoleType: "Neutral") }));
+        Check("TOH team: matching vanilla flag and DLL faction are both required", true,
+            TohRoleCatalog.IsImpostor(new Player { IsImpostor = true,
+                TohRole = new TohRoleData(42, "Impostor", false, true, CustomRoleType: "Impostor") }));
+        Check("TOH radio: neutral impostor-like role cannot receive", false,
+            SpatialVoicePolicy.Calculate(tohTasks,
+                new Player { IsImpostor = true, TohRole = new TohRoleData(20, "Jackal", true, true,
+                    CustomRoleType: "Neutral") },
+                new Player { IsImpostor = true, TohRole = new TohRoleData(42, "Impostor", false, true,
+                    CustomRoleType: "Impostor") },
+                new SpatialVoiceSettings(ImpostorRadioEnabled: true), true).Audible);
+        var tohRadioState = new AmongUsState { Mod = AmongUsModType.TownOfHostForE,
+            GameState = GameState.Tasks, Players =
+            [
+                new Player { Id = 1, ClientId = 1, IsLocal = true, IsImpostor = true,
+                    TohRole = new TohRoleData(42, "Impostor", false, true, CustomRoleType: "Impostor") },
+                new Player { Id = 2, ClientId = 2, IsImpostor = true,
+                    TohRole = new TohRoleData(20, "Jackal", true, true, CustomRoleType: "Neutral") }
+            ] };
+        Check("TOH radio indicator: neutral impostor-like peer stays hidden", false,
+            RadioVisibilityPolicy.IsVisible(tohRadioState,
+                new LobbySettings { ImpostorRadioEnabled = true }, 2, true, (_, _) => false));
         var nosJackalChannels = new List<NosRadioData>
         {
             new(0, -1, "impostor"),
@@ -964,6 +1002,17 @@ internal static class SpatialVoicePolicySelfTest
             PublicLobbyTitle = "互換テスト"
         };
         var wire = lobbySettings.ToWireJson();
+        Check("TOH ghost roles: legacy host omits optional map", true,
+            !JsonDocument.Parse(wire).RootElement.TryGetProperty("tohGhostRoles", out _));
+        var perRoleWire = (lobbySettings with { TohGhostRoles = new Dictionary<string, bool>
+        {
+            ["Jackal"] = true, ["Oniichan"] = false
+        } }).ToWireJson();
+        var perRoleImported = JsonSerializer.Deserialize<LobbySettings>(perRoleWire,
+            LobbySettings.WireJsonOptions);
+        Check("TOH ghost roles: host settings round-trip without losing other roles", true,
+            perRoleImported?.TohGhostRoles is { Count: 2 } map &&
+            map.GetValueOrDefault("Jackal") && !map.GetValueOrDefault("Oniichan"));
         using (var document = JsonDocument.Parse(wire))
         {
             // TanukiBCL 3.2.8 ILobbySettings, plus its public-lobby MOD wire extension.

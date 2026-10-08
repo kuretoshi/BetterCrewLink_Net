@@ -44,6 +44,8 @@ internal static class TohRoleLayout
         var canKill = opportunist?.GetStaticFieldByName("CanKill");
         // Read interface inheritance from the actual loaded DLL, without executing MOD code.
         var killerRoles = ReadKillerRoles(source.module.Name!);
+        var roleCatalog = enums.TryGetValue("TownOfHostForE.Roles.Core.CustomRoleTypes", out var teams)
+            ? TohRoleCatalog.Read(source.module, names, teams, killerRoles) : [];
         var manager = source.module.GetTypeByName("TownOfHostForE.Roles.Core.CustomRoleManager");
         var activeSlot = manager?.GetStaticFieldByName("AllActiveRoles");
         object? ReadKillerLayout()
@@ -84,7 +86,7 @@ internal static class TohRoleLayout
             stride = entries.Type.ComponentSize,
             nextOffset = Field(entryType, "next").Offset, keyOffset = Field(entryType, "key").Offset,
             valueOffset = Field(entryType, "value").Offset,
-            idOffset = Offset(Field(source.type, "PlayerId")), roleOffset = Offset(role), names, killerLayout,
+            idOffset = Offset(Field(source.type, "PlayerId")), roleOffset = Offset(role), names, killerLayout, roleCatalog,
             opportunistCanKillSlot = canKill?.ElementType == ClrElementType.Boolean
                 ? canKill.GetAddress(source.module.AppDomain) : 0
         };

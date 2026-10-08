@@ -21,7 +21,11 @@ internal static class RadioVisibilityPolicy
         if (state.Mod == AmongUsModType.SuperNewRoles && sender.SnrRole?.IsJackalTeam == true)
             return jackalEnabled && !local.IsDead && local.SnrRole?.IsJackalTeam == true;
 
-        return sender.IsImpostor && !local.IsDead && local.IsImpostor &&
+        var senderImpostor = state.Mod == AmongUsModType.TownOfHostForE
+            ? TohRoleCatalog.IsImpostor(sender) : sender.IsImpostor;
+        var localImpostor = state.Mod == AmongUsModType.TownOfHostForE
+            ? TohRoleCatalog.IsImpostor(local) : local.IsImpostor;
+        return senderImpostor && !local.IsDead && localImpostor &&
             (settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode);
     }
 }

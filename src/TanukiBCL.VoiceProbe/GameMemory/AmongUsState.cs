@@ -77,6 +77,8 @@ public sealed class Player
 
     public bool IsImpostor { get; set; }
 
+    public bool? TohImpostor { get; set; }
+
     public uint RoleTeam { get; set; }
 
     public bool IsThirdParty { get; set; }
@@ -219,6 +221,8 @@ public sealed class AmongUsState
 
     /// <summary>Automatic SNR/TOH4E role reader status for the debug window.</summary>
     public string? RoleReaderStatus { get; set; }
+
+    public List<TohRoleDefinition> TohRoleCatalog { get; set; } = [];
 
     public VoicePosition? NosLocalMicPosition { get; set; }
 

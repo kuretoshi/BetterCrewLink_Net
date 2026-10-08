@@ -28,7 +28,8 @@ internal sealed record SpatialVoiceSettings(
     bool SidekickTalkInVents = false,
     bool TohNeutralKillerHaunting = false,
     bool NosNeutralKillerHaunting = false,
-    bool VisionHearing = false);
+    bool VisionHearing = false,
+    IReadOnlyDictionary<string, bool>? TohGhostRoles = null);
 
 internal sealed record PeerVoiceMix(
     double Gain,
@@ -59,20 +60,26 @@ internal static class SpatialVoicePolicy
     {
         var isNos = state.Mod == AmongUsModType.NebulaOnTheShip;
         var isSnr = state.Mod == AmongUsModType.SuperNewRoles;
+        var isToh = state.Mod == AmongUsModType.TownOfHostForE;
+        var meImpostor = IsImpostor(state, me);
         var meJackal = isSnr && me.SnrRole?.IsJackal == true;
         var meSidekick = isSnr && me.SnrRole?.IsSidekick == true;
         var meJackalTeam = meJackal || meSidekick;
         var otherJackalTeam = isSnr && other.SnrRole?.IsJackalTeam == true;
         var snrKillerHearingGhosts = isSnr && settings.JackalHaunting &&
             me.SnrRole?.IsNeutralKiller == true;
-        var tohHearingGhosts = state.Mod == AmongUsModType.TownOfHostForE &&
-            settings.TohNeutralKillerHaunting && me.TohRole?.IsKiller == true;
+        var tohHearingGhosts = isToh && me.TohRole is { } role &&
+            (role.CustomRoleType == "Impostor"
+                ? meImpostor && settings.Haunting
+                : role.CustomRoleType is "Neutral" or "Animals" && role.IsKiller == true &&
+                  (settings.TohGhostRoles?.GetValueOrDefault(role.RoleName ?? "") ??
+                   settings.TohNeutralKillerHaunting));
         var nosHearingGhosts = isNos && settings.NosNeutralKillerHaunting &&
             me.NosPlayer is { IsNeutral: true, IsKiller: true, IsImpostor: false };
-        var canHearGhosts = meJackal ? snrKillerHearingGhosts
+        var canHearGhosts = isToh ? tohHearingGhosts : meJackal ? snrKillerHearingGhosts
             : meSidekick ? settings.SidekickHaunting
             : tohHearingGhosts || nosHearingGhosts || snrKillerHearingGhosts ||
-              me.IsImpostor && settings.Haunting;
+              meImpostor && settings.Haunting;
         var airshipMeetingFallback = state.Map == MapType.Airship && state.AirshipMeetingByOutfit;
         var postMeetingSpawnFallback = state.Map == MapType.Airship &&
             state.GameState == GameState.Tasks && airshipSpawnFallback;
@@ -171,7 +178,7 @@ internal static class SpatialVoicePolicy
             return Muted(pan, distance, "radio-only");
         }
 
-        if (settings.CommsSabotage && state.CommsSabotaged && !me.IsDead && !me.IsImpostor)
+        if (settings.CommsSabotage && state.CommsSabotaged && !me.IsDead && !meImpostor)
         {
             return Muted(pan, distance, "comms-sabotage");
         }
@@ -291,7 +298,7 @@ internal static class SpatialVoicePolicy
 
     private static double ResolveMaxDistance(AmongUsState state, Player me, SpatialVoiceSettings settings)
     {
-        var maxDistance = settings.VisionHearing && !me.IsImpostor
+        var maxDistance = settings.VisionHearing && !IsImpostor(state, me)
             ? state.LightRadius + 0.5d : settings.MaxDistance;
         if (!double.IsFinite(maxDistance) || maxDistance <= 0.6d) return 1d;
         return maxDistance;
@@ -305,7 +312,7 @@ internal static class SpatialVoicePolicy
     private static bool CanHearRadio(AmongUsState state, Player me, Player other, SpatialVoiceSettings settings,
         bool nosJackalRadioHearable, bool isSnr) =>
         state.Mod == AmongUsModType.NebulaOnTheShip ? nosJackalRadioHearable :
-        CanHearImpostorRadio(me, other, settings) ||
+        CanHearImpostorRadio(state, me, other, settings) ||
         CanHearJackalRadioAsGhost(me, other, settings) ||
         CanHearSnrJackalRadio(me, other, settings, isSnr);
 
@@ -314,10 +321,14 @@ internal static class SpatialVoicePolicy
         settings.JackalRadioEnabled && !settings.ImpostorRadioOnlyMode &&
         me.IsDead && !other.IsDead && !other.IsImpostor;
 
-    private static bool CanHearImpostorRadio(Player me, Player other, SpatialVoiceSettings settings) =>
+    private static bool CanHearImpostorRadio(AmongUsState state, Player me, Player other, SpatialVoiceSettings settings) =>
         (settings.ImpostorRadioEnabled || settings.ImpostorRadioOnlyMode) &&
-        other.IsImpostor && !other.IsDead &&
-        ((me.IsImpostor && !me.IsDead) || me.IsDead);
+        IsImpostor(state, other) && !other.IsDead &&
+        ((IsImpostor(state, me) && !me.IsDead) || me.IsDead);
+
+    private static bool IsImpostor(AmongUsState state, Player player) =>
+        state.Mod == AmongUsModType.TownOfHostForE
+            ? TohRoleCatalog.IsImpostor(player) : player.IsImpostor;
 
     private static bool CanHearSnrJackalRadio(Player me, Player other,
         SpatialVoiceSettings settings, bool isSnr) =>

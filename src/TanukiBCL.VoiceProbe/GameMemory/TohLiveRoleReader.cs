@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace TanukiBCL.VoiceProbe.GameMemory;
 
 public sealed record TohRoleData(int RoleId, string? RoleName, bool? IsNeutralKiller,
-    bool? IsKiller, bool? OpportunistCanKill = null);
+    bool? IsKiller, bool? OpportunistCanKill = null, string? CustomRoleType = null);
 
 internal sealed class TohLiveRoleReader
 {
@@ -19,6 +19,7 @@ internal sealed class TohLiveRoleReader
     private bool needsKiller;
 
     public string Status { get; private set; } = "TOH4E役職未取得";
+    public IReadOnlyList<TohRoleDefinition> RoleCatalog => layout?.RoleCatalog ?? [];
 
     public void Reset()
     {
@@ -61,7 +62,7 @@ internal sealed class TohLiveRoleReader
             }
             discoveryTask = null;
         }
-        if ((layout is null || needsCanKill || needsKiller) && discoveryTask is null &&
+        if ((layout is null || layout.RoleCatalog.Count == 0 || needsCanKill || needsKiller) && discoveryTask is null &&
             DateTimeOffset.UtcNow >= retryAt)
         {
             discoveryTask = DiscoverAsync(processId);
@@ -172,11 +173,12 @@ internal sealed class TohLiveRoleReader
             var roleId = BitConverter.ToInt32(read(checked((long)(player + (ulong)layout.RoleOffset)), 4));
             layout.Names.TryGetValue(roleId.ToString(CultureInfo.InvariantCulture), out var name);
             var neutralKiller = NeutralKiller(name, canKill);
+            var faction = layout.RoleCatalog.FirstOrDefault(role => role.RoleId == roleId)?.CustomRoleType;
             var killer = name is not null and not "NotAssigned" &&
                 killers.TryGetValue(entry.Id, out var activeRole) && activeRole.State == player
                 ? activeRole.IsKiller : null;
             result.Add(entry.Id, new TohRoleData(roleId, name, neutralKiller, killer,
-                name == "Opportunist" ? canKill : null));
+                name == "Opportunist" ? canKill : null, faction));
         }
         ValidateDictionary(image, layout, read);
         if (killerImage is not null) ValidateDictionary(killerImage, layout.KillerLayout!, read);
@@ -285,6 +287,7 @@ internal sealed class TohLayout : TohDictionaryLayout
     public int RoleOffset { get; set; }
     public ulong OpportunistCanKillSlot { get; set; }
     public Dictionary<string, string> Names { get; set; } = [];
+    public List<TohRoleDefinition> RoleCatalog { get; set; } = [];
     public TohKillerLayout? KillerLayout { get; set; }
 
     public static bool ValidPointer(ulong pointer) =>
@@ -298,6 +301,10 @@ internal sealed class TohLayout : TohDictionaryLayout
             OpportunistCanKillSlot != 0 &&
             (OpportunistCanKillSlot < 0x10000 || OpportunistCanKillSlot > long.MaxValue))
             throw new InvalidDataException("Invalid TOH4E live layout");
+        if (!TohRoleCatalog.IsValid(RoleCatalog) || RoleCatalog.Any(role =>
+            !Names.TryGetValue(role.RoleId.ToString(CultureInfo.InvariantCulture), out var name) ||
+            name != role.RoleName))
+            throw new InvalidDataException("Invalid TOH4E role catalog");
         KillerLayout?.Validate();
     }
 }

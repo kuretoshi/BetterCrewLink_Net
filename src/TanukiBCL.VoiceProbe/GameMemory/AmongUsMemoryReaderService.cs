@@ -395,6 +395,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                 AmongUsModType.TownOfHostForE => tohReader.Status,
                 _ => null
             },
+            TohRoleCatalog = mod == AmongUsModType.TownOfHostForE
+                ? tohReader.RoleCatalog.ToList() : [],
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosRadios = nos?.Radios ?? [],
             CommsSabotaged = taskEnvironment.CommsSabotaged,

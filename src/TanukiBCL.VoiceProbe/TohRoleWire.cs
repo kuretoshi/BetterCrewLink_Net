@@ -5,7 +5,8 @@ namespace TanukiBCL.VoiceProbe;
 
 internal static class TohRoleWire
 {
-    public static string Serialize(string lobbyCode, Player player)
+    public static string Serialize(string lobbyCode, Player player,
+        IReadOnlyList<Player>? impostorPlayers = null)
     {
         Dictionary<string, object?>? role = null;
         if (player.TohRole is { } value)
@@ -15,7 +16,8 @@ internal static class TohRoleWire
                 ["roleId"] = value.RoleId,
                 ["roleName"] = value.RoleName,
                 ["isNeutralKiller"] = value.IsNeutralKiller,
-                ["isKiller"] = value.IsKiller
+                ["isKiller"] = value.IsKiller,
+                ["customRoleType"] = value.CustomRoleType
             };
             if (value.OpportunistCanKill is { } canKill)
                 role["opportunistCanKill"] = canKill;
@@ -23,7 +25,12 @@ internal static class TohRoleWire
         return JsonSerializer.Serialize(new
         {
             type = "toh4e-role", lobbyCode,
-            targetClientId = player.ClientId, targetPlayerId = player.Id, role
+            targetClientId = player.ClientId, targetPlayerId = player.Id, role,
+            impostors = impostorPlayers?.Where(candidate => !candidate.Disconnected).Select(candidate => new
+            {
+                playerId = candidate.Id, clientId = candidate.ClientId,
+                isImpostor = TohRoleCatalog.IsImpostor(candidate)
+            }).ToArray()
         });
     }
 
@@ -42,6 +49,14 @@ internal static class TohRoleWire
             killer.ValueKind is not (JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null))
             return false;
         bool? canKill = null;
+        string? faction = null;
+        if (role.TryGetProperty("customRoleType", out var team))
+        {
+            if (team.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)) return false;
+            faction = team.ValueKind == JsonValueKind.String ? team.GetString() : null;
+            if (faction is not null && faction is not
+                ("Impostor" or "Madmate" or "Crewmate" or "Neutral" or "Animals")) return false;
+        }
         if (role.TryGetProperty("opportunistCanKill", out var opportunist))
         {
             if (opportunist.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
@@ -50,7 +65,7 @@ internal static class TohRoleWire
         parsed = new TohRoleData(roleId,
             name.ValueKind == JsonValueKind.Null ? null : name.GetString(),
             neutral.ValueKind == JsonValueKind.Null ? null : neutral.GetBoolean(),
-            killer.ValueKind == JsonValueKind.Null ? null : killer.GetBoolean(), canKill);
+            killer.ValueKind == JsonValueKind.Null ? null : killer.GetBoolean(), canKill, faction);
         return true;
     }
 }
