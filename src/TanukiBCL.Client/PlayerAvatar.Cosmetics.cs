@@ -380,6 +380,27 @@ public partial class PlayerAvatar
                 "NoS body mask is not aligned with the hat");
             Require(avatar.CosmeticBack.Children.Count == 0 && avatar.CosmeticSkin.Children.Count == 0,
                 "Empty NoS skin or missing hat back produced a layer");
+            player.NosPlayer!.Hat = new NosCostumeData("");
+            player.NosPlayer.Visor = new NosCostumeData("");
+            avatar.SetPlayer(player, null, mod: AmongUsModType.NebulaOnTheShip,
+                gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"));
+            Require(avatar.CosmeticFront.Children.Count == 0 && avatar.BodyCanvas.OpacityMask is null,
+                "NoS appearance change kept the previous costume");
+            player.NosPlayer.Hat = new NosCostumeData("nos_h");
+            player.NosPlayer.Visor = new NosCostumeData("visor_x");
+            avatar.SetPlayer(player, null, mod: AmongUsModType.NebulaOnTheShip,
+                gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"));
+            deadline = DateTime.UtcNow.AddSeconds(10);
+            while (avatar.CosmeticFront.Children.Count < 2 && DateTime.UtcNow < deadline)
+            {
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Background, new Action(() => frame.Continue = false));
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+                Thread.Sleep(10);
+            }
+            Require(avatar.CosmeticFront.Children.Count == 2 && avatar.BodyCanvas.OpacityMask is not null,
+                "NoS costume did not return after the appearance change ended");
             player.IsDead = true;
             avatar.SetPlayer(player, null, mod: AmongUsModType.NebulaOnTheShip,
                 gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"));
@@ -416,7 +437,7 @@ public partial class PlayerAvatar
         {
             try { System.IO.Directory.Delete(game, recursive: true); } catch (System.IO.IOException) { }
         }
-        Console.WriteLine("[PASS] NoS round/lobby costume layers, unequipping and body mask in PlayerAvatar");
+        Console.WriteLine("[PASS] NoS round/lobby costume changes, unequipping and body mask in PlayerAvatar");
     }
 
     private static void VerifySecondaryCosmetics()
