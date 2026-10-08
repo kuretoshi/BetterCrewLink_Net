@@ -19,6 +19,11 @@ public partial class OverlayWindow : Window
     private const int WsExTransparent = 0x20;
     private const int WsExToolWindow = 0x80;
     private const int WsExNoActivate = 0x08000000;
+    private static readonly Brush TopBackground = FrozenBrush(Color.FromArgb(0x80, 0, 0, 0));
+    private static readonly Brush BottomLeftBackground = FrozenBrush(Color.FromArgb(0x59, 0, 0, 0));
+    private static readonly Brush CompactSideBackground = FrozenBrush(Color.FromArgb(0xc0, 0x25, 0x23, 0x2a));
+    private static readonly Brush NosFailureBackground = FrozenBrush(Color.FromRgb(0x58, 0x1e, 0x24));
+    private static readonly Transform AlternateLeftOffset = FrozenOffset(19d);
     private readonly int gameProcessId;
     private readonly ClientSettings settings;
     private readonly DispatcherTimer placementTimer;
@@ -222,7 +227,7 @@ public partial class OverlayWindow : Window
         WatermarkServer.Text = settings.ServerUrl;
         // 3.2.9 Overlay.tsx: dark red watermark with the NoS read failure reason.
         var nosFailed = state.Mod == AmongUsModType.NebulaOnTheShip && state.NosReadStatus?.Failed == true;
-        Watermark.Background = nosFailed ? new SolidColorBrush(Color.FromRgb(0x58, 0x1e, 0x24)) : null;
+        Watermark.Background = nosFailed ? NosFailureBackground : null;
         Watermark.MaxWidth = nosFailed ? 360 : double.PositiveInfinity;
         WatermarkNosStatus.Text = nosFailed ? state.NosReadStatus!.Message : string.Empty;
         WatermarkNosStatus.Visibility = nosFailed ? Visibility.Visible : Visibility.Collapsed;
@@ -270,12 +275,11 @@ public partial class OverlayWindow : Window
         AvatarPanel.MaxHeight = side ? Height : double.PositiveInfinity;
         AvatarPanel.MaxWidth = alternateSide ? Width : side ? sideRegionWidth : 800d;
         AvatarBackground.Background = compact || side ? Brushes.Transparent
-            : new SolidColorBrush(Color.FromArgb(position == "bottom_left" ? (byte)0x59 : (byte)0x80,
-                0, 0, 0));
+            : position == "bottom_left" ? BottomLeftBackground : TopBackground;
         // The compact side background belongs to the inner player container,
         // not the outer overlay wrapper. The edge against the screen is square.
         AvatarPanelBackground.Background = side && compact && !alternateSide
-            ? new SolidColorBrush(Color.FromArgb(0xc0, 0x25, 0x23, 0x2a)) : Brushes.Transparent;
+            ? CompactSideBackground : Brushes.Transparent;
         AvatarPanelBackground.CornerRadius = side && compact && !alternateSide
             ? position.StartsWith("left", StringComparison.Ordinal)
                 ? new CornerRadius(0, 25, 25, 0) : new CornerRadius(25, 0, 0, 25)
@@ -295,8 +299,7 @@ public partial class OverlayWindow : Window
                 ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
             row.Width = alternateSide ? Width - 2d
                 : side ? sideRegionWidth - (compact ? 8d : 18d) : double.NaN;
-            row.RenderTransform = position == "left1"
-                ? new TranslateTransform(19d, 0d) : Transform.Identity;
+            row.RenderTransform = position == "left1" ? AlternateLeftOffset : Transform.Identity;
             var avatar = item.Avatar;
             avatar.Width = avatarSize;
             avatar.Height = avatarSize;
@@ -432,6 +435,20 @@ public partial class OverlayWindow : Window
 
     private static byte ToByte(double value) =>
         (byte)Math.Floor(Math.Clamp(value, 0d, 1d) * 255d + 0.5d);
+
+    private static Brush FrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Transform FrozenOffset(double x)
+    {
+        var transform = new TranslateTransform(x, 0d);
+        transform.Freeze();
+        return transform;
+    }
 
     internal static void VerifyRender()
     {
@@ -848,6 +865,16 @@ public partial class OverlayWindow : Window
                 if (outer != expectedOuter || inner != (side && compactStyle && !alternateSide
                     ? Color.FromArgb(0xc0, 0x25, 0x23, 0x2a) : Colors.Transparent))
                     throw new InvalidOperationException("Overlay wrapper and compact player background colors differ from released CSS");
+                var expectedBackground = side || compactStyle ? Brushes.Transparent
+                    : position == "bottom_left" ? BottomLeftBackground : TopBackground;
+                var expectedInner = side && compactStyle && !alternateSide
+                    ? CompactSideBackground : Brushes.Transparent;
+                if (!ReferenceEquals(window.AvatarBackground.Background, expectedBackground) ||
+                    !ReferenceEquals(window.AvatarPanelBackground.Background, expectedInner) ||
+                    window.AvatarPanel.Children.Cast<StackPanel>().Any(row =>
+                        !ReferenceEquals(row.RenderTransform,
+                            position == "left1" ? AlternateLeftOffset : Transform.Identity)))
+                    throw new InvalidOperationException("Unchanged overlay styles rebuilt brushes or row transforms");
                 var corners = window.AvatarPanelBackground.CornerRadius;
                 var expectedCorners = side && compactStyle && !alternateSide
                     ? position.StartsWith("left", StringComparison.Ordinal)
