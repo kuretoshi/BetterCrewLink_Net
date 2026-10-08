@@ -1,6 +1,6 @@
 # TanukiBCL v3.2.17 compatibility checkpoint
 
-Target: [TanukiBCL v3.2.17](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.17), commit `a7d07de5ef6af73227274125943aa0c453c7fe89`. This checkpoint covers the changes after [v3.2.16](compatibility-3.2.16.md). The corresponding .NET prerelease is `3.2.17-net-beta.1`.
+Target: [TanukiBCL v3.2.17](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.17), commit `a7d07de5ef6af73227274125943aa0c453c7fe89`. This checkpoint covers the changes after [v3.2.16](compatibility-3.2.16.md). The current .NET prerelease is `3.2.17-net-beta.2`.
 
 | Upstream change | .NET/WPF implementation | Verification |
 | --- | --- | --- |
@@ -15,4 +15,4 @@ The upstream 3.2.17 diff changes UI and package version only; it does not change
 
 The installed official 3.2.17 and .NET beta.1 were connected to the same NoS local lobby (`46282`) on separate Among Us processes. With two, three, and four game participants, both compact views showed the peer row and bottom footer without clipping or overlap. The official view reported a good voice connection to the .NET peer, and both clients displayed a connected indicator. This verifies signaling/display, not audible two-way voice: the tester could not speak during this run. The official client also intermittently displayed `Failed to resolve TBCLFields.nextIndex address` for NoS, so in-game distance/role behavior was not verified.
 
-At the normal settings size, the embedded inquiry pages were usable in both clients. Maximized, the official form remained about 720 px wide and centered while beta.1 stretched across the content area. The WPF form now limits its container to 752 px (including 16 px side margins) and centers it; layout tests cover 500 px and 1800 px widths, and a 500 px render preview showed no clipping. The changed build has not yet been compared side by side in the live Settings window. The three extra game processes and both voice clients were closed after testing, leaving the pre-existing one game process running.
+At the normal settings size, the embedded inquiry pages were usable in both clients. Maximized, the official form remained about 720 px wide and centered while beta.1 stretched across the content area. Beta.2 limits the WPF form container to 752 px (including 16 px side margins) and centers it; layout tests cover 500 px and 1800 px widths, and a 500 px render preview showed no clipping. The changed build has not yet been compared side by side in the live Settings window. The three extra game processes and both voice clients were closed after testing, leaving the pre-existing one game process running.
