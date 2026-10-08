@@ -874,6 +874,44 @@ internal static class SpatialVoicePolicySelfTest
         Check("mod: TOH4E path", true,
             AmongUsModDetector.Detect(@"C:\Games\TOH4E_EM\Among Us.exe", [], ["NebulaLoader.dll"])
                 .Id == AmongUsModType.TownOfHostForE);
+        Check("mod: loaded Nebula overrides TOH4E folder", true,
+            AmongUsModDetector.Detect(@"C:\Games\TOH4E_EM\Among Us.exe", ["Nebula.dll"], [])
+                .Id == AmongUsModType.NebulaOnTheShip);
+        foreach (var dll in new[]
+                 {
+                     "TownOfHost_ForE.dll", "TownOfHost_ForE_EM.dll",
+                     "TownOfHostForE.dll", "TownOfHostForE_EM.dll"
+                 })
+        {
+            Check($"mod: loaded {dll} without folder hint", true,
+                AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [dll], [])
+                    .Id == AmongUsModType.TownOfHostForE);
+            Check($"mod: plugin {dll} without folder hint", true,
+                AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], [dll])
+                    .Id == AmongUsModType.TownOfHostForE);
+        }
+        foreach (var dll in new[]
+                 {
+                     "TOWNOFHOSTFORE_EM.DLL", "TownOfHost-ForE-EM.dll",
+                     @"C:\Games\Among Us\BepInEx\plugins\TownOfHostForE_EM.dll"
+                 })
+        {
+            Check($"mod: normalized TOH4E plugin {dll}", true,
+                AmongUsModDetector.IsToh4eDll(dll) &&
+                AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], [dll])
+                    .Id == AmongUsModType.TownOfHostForE);
+        }
+        foreach (var dll in new[]
+                 {
+                     "TownOfHost.dll", "TownOfHostEnhanced.dll", "TownOfHostForElse.dll",
+                     "TownOfHost_ForE_EM.dll.bak"
+                 })
+        {
+            Check($"mod: reject unrelated DLL {dll}", true,
+                !AmongUsModDetector.IsToh4eDll(dll) &&
+                AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], [dll])
+                    .Id == AmongUsModType.None);
+        }
         Check("mod: vanilla", true,
             AmongUsModDetector.Detect(@"C:\Games\Among Us\Among Us.exe", [], [])
                 .Id == AmongUsModType.None);

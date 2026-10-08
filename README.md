@@ -1,8 +1,10 @@
 # タヌキのベタクル .NET ベータ (TanukiBCL.Net)
 
-TanukiBCL.Netは、[タヌキのベタクル v3.2.19](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.19)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
+TanukiBCL.Netは、[タヌキのベタクル v3.2.20](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.20)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
 
 現在の配布版は **`3.2.19-net-beta.1`（プレリリース）** です。公式タヌキのベタクル v3.2.8との通信・音声・ゲーム連動の主要経路は実機で相互確認しています。3.2.19で追加されたTOH4E系の役職一覧取得、陣営判定、役職ごとの幽霊音声設定・同期を取り込みました。TOH4E_EM実プロセスからの149役職取得は確認済みですが、公式3.2.19との実音声の双方向通話は未確認です。NoS画像転送のWeb実機表示も未確認です。バグが存在する可能性があります。64ビット版Among Usのみ対応します。
+
+開発中のソースは `3.2.20-netdev.0` で、3.2.20のMOD検出修正を取り込んでいます。新しいβ版はまだ公開していません。
 
 ## 主な機能
 
@@ -41,7 +43,7 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.19](https://github.com/kuretos
 
 ## 開発・検証
 
-現在の完全移植目標は公式TanukiBCL v3.2.19 (`7a9e2ca1`) です。[3.2.19互換チェックリスト](docs/compatibility-3.2.19.md)、[3.2.17互換チェックリスト](docs/compatibility-3.2.17.md)、[3.2.16互換チェックリスト](docs/compatibility-3.2.16.md)、[3.2.14互換チェックリスト](docs/compatibility-3.2.14.md)、[3.2.13互換チェックリスト](docs/compatibility-3.2.13.md)、[3.2.12互換チェックリスト](docs/compatibility-3.2.12.md)、[3.2.9互換チェックリスト](docs/compatibility-3.2.9.md)に反映内容と実機検証を、[3.2.8互換チェックリスト](docs/compatibility-3.2.8.md)に引き続きの残課題を記録しています。[3.2.7チェックリスト](docs/compatibility-3.2.7.md)は履歴です。
+現在の完全移植目標は公式TanukiBCL v3.2.20 (`88c03952`) です。[3.2.20互換チェックリスト](docs/compatibility-3.2.20.md)、[3.2.19互換チェックリスト](docs/compatibility-3.2.19.md)、[3.2.17互換チェックリスト](docs/compatibility-3.2.17.md)、[3.2.16互換チェックリスト](docs/compatibility-3.2.16.md)、[3.2.14互換チェックリスト](docs/compatibility-3.2.14.md)、[3.2.13互換チェックリスト](docs/compatibility-3.2.13.md)、[3.2.12互換チェックリスト](docs/compatibility-3.2.12.md)、[3.2.9互換チェックリスト](docs/compatibility-3.2.9.md)に反映内容と実機検証を、[3.2.8互換チェックリスト](docs/compatibility-3.2.8.md)に引き続きの残課題を記録しています。[3.2.7チェックリスト](docs/compatibility-3.2.7.md)は履歴です。
 
 以下は開発時の診断コマンドと作り直し初期からの検証メモです。配布版の利用には必要ありません。
 
@@ -71,7 +73,7 @@ dotnet build TanukiBCL.Net.sln
 Windows向けのself-contained配布ZIPは、バージョンを指定してローカルで作成できます。
 
 ```powershell
-& tools/package-release.ps1 -Version 3.2.19-netdev.0
+& tools/package-release.ps1 -Version 3.2.20-netdev.0
 ```
 
 `dist/<version>/TanukiBCL.Net-win-x64.zip`とSHA-256が生成・表示されます。配布物にはNoS/SNR補助リーダーと更新補助ツールが入ります。ベータ版では続けてNSIS 3.04以降で`tools/build-installer.ps1`を実行してください。この工程はインストーラーを作り、そのアンインストーラーを更新ZIPにも加えるため、ZIPの最終SHA-256はここで変わります。NSISのパスは`-NsisPath`でも指定できます。ベータ版ZIPを先の工程だけで公開しないでください。アプリ内の「アップデート」は、このリポジトリに同名のZIPを含む新しいReleaseがある場合にだけ有効になります。公開Releaseの検出・ダウンロード・検証・展開は確認済みですが、更新後の入れ替えと再起動、新規Windows環境での起動、完全互換はまだ未検証です。
