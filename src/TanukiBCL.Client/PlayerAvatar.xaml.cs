@@ -14,6 +14,19 @@ public partial class PlayerAvatar : UserControl
     private bool hideAvatar;
     private bool renderedDead;
     private Brush idleBorder = Brushes.Transparent;
+    private static readonly ScaleTransform FaceLeft = FrozenTransform(-1);
+    private static readonly ScaleTransform FaceRight = FrozenTransform(1);
+    private static readonly SolidColorBrush OverlayIdleBorder = FrozenBrush(0x86, 0xcc, 0xbd, 0xcc);
+    private static readonly SolidColorBrush TalkingBorder = FrozenBrush(0xff, 0x2e, 0xcc, 0x71);
+    private static readonly SolidColorBrush ErrorBadge = FrozenBrush(0xff, 0xff, 0, 0);
+    private static readonly SolidColorBrush DisconnectedBadge = FrozenBrush(0xff, 0xea, 0x3c, 0x2a);
+    private static readonly SolidColorBrush NoVoiceBadge = FrozenBrush(0xff, 0xe6, 0x7e, 0x22);
+    private static readonly SolidColorBrush RedBadgeBorder = FrozenBrush(0xff, 0x69, 0x0a, 0);
+    private static readonly SolidColorBrush AmberBadgeBorder = FrozenBrush(0xff, 0x69, 0x49, 0);
+    private static readonly SolidColorBrush BadQuality = FrozenBrush(0xff, 0xef, 0x53, 0x50);
+    private static readonly SolidColorBrush FairQuality = FrozenBrush(0xff, 0xff, 0xca, 0x28);
+    private static readonly SolidColorBrush GoodQuality = FrozenBrush(0xff, 0x66, 0xbb, 0x6a);
+    private static readonly SolidColorBrush InactiveQuality = FrozenBrush(0xff, 0x72, 0x77, 0x7d);
     // Material icon paths used by the upstream Avatar.tsx status badges.
     private static readonly Geometry WifiOff = Geometry.Parse(
         "M22.99 9C19.15 5.16 13.8 3.76 8.84 4.78l2.52 2.52c3.47-.17 6.99 1.05 9.63 3.7zm-4 4c-1.29-1.29-2.84-2.13-4.49-2.56l3.53 3.53zM2 3.05 5.07 6.1C3.6 6.82 2.22 7.78 1 9l1.99 2c1.24-1.24 2.67-2.16 4.2-2.77l2.24 2.24C7.81 10.89 6.27 11.73 5 13v.01L6.99 15c1.36-1.36 3.14-2.04 4.92-2.06L18.98 20l1.27-1.26L3.29 1.79zM9 17l3 3 3-3c-1.65-1.66-4.34-1.66-6 0");
@@ -36,8 +49,8 @@ public partial class PlayerAvatar : UserControl
     public void SetOverlayMode(bool lookLeft = false, bool showBorder = false)
     {
         QualityBadge.Visibility = Visibility.Collapsed;
-        AvatarVisual.RenderTransform = new ScaleTransform(lookLeft ? -1 : 1, 1);
-        idleBorder = showBorder ? new SolidColorBrush(Color.FromArgb(0x86, 0xcc, 0xbd, 0xcc)) : Brushes.Transparent;
+        AvatarVisual.RenderTransform = lookLeft ? FaceLeft : FaceRight;
+        idleBorder = showBorder ? OverlayIdleBorder : Brushes.Transparent;
         LayoutCosmetics();
     }
 
@@ -56,6 +69,48 @@ public partial class PlayerAvatar : UserControl
         SetVisualState(true, false, false, "connected", false);
         if (SpeechRing.Stroke is not SolidColorBrush active || active.Color != Color.FromRgb(0x2e, 0xcc, 0x71))
             throw new InvalidOperationException("Overlay active border lost after idle border configuration");
+    }
+
+    internal static void VerifySharedVisualResources()
+    {
+        var first = new PlayerAvatar();
+        var second = new PlayerAvatar();
+        first.SetOverlayMode(lookLeft: true, showBorder: true);
+        second.SetOverlayMode(lookLeft: true, showBorder: true);
+        if (!ReferenceEquals(first.AvatarVisual.RenderTransform, second.AvatarVisual.RenderTransform) ||
+            first.AvatarVisual.RenderTransform is not ScaleTransform { IsFrozen: true })
+            throw new InvalidOperationException("Overlay mirror transform is not shared and frozen");
+
+        first.SetVisualState(false, false, false, "connected", false);
+        second.SetVisualState(false, false, false, "connected", false);
+        if (!ReferenceEquals(first.SpeechRing.Stroke, second.SpeechRing.Stroke) ||
+            first.SpeechRing.Stroke is not SolidColorBrush { IsFrozen: true })
+            throw new InvalidOperationException("Overlay idle border is not shared and frozen");
+
+        var quality = new ConnectionQuality(ServerPingMs: 25d);
+        first.SetVisualState(true, true, false, "connected", false, quality);
+        second.SetVisualState(true, true, false, "connected", false, quality);
+        if (!ReferenceEquals(first.SpeechRing.Stroke, second.SpeechRing.Stroke) ||
+            !ReferenceEquals(first.StateBadge.Background, second.StateBadge.Background) ||
+            !ReferenceEquals(first.QualityBar3.Background, second.QualityBar3.Background) ||
+            first.SpeechRing.Stroke is not SolidColorBrush { IsFrozen: true } ||
+            first.StateBadge.Background is not SolidColorBrush { IsFrozen: true } ||
+            first.QualityBar3.Background is not SolidColorBrush { IsFrozen: true })
+            throw new InvalidOperationException("Active status brushes are not shared and frozen");
+
+        var player = new Player { ColorId = 0 };
+        first.SetPlayer(player, null);
+        var normalImage = first.AvatarBody.Source;
+        player.CurrentOutfit = 1;
+        player.AppearanceColorId = 1;
+        first.SetPlayer(player, null);
+        if (ReferenceEquals(normalImage, first.AvatarBody.Source))
+            throw new InvalidOperationException("Camouflaged outfit retained the previous avatar image");
+        player.CurrentOutfit = 0;
+        first.SetPlayer(player, null);
+        if (!ReferenceEquals(normalImage, first.AvatarBody.Source))
+            throw new InvalidOperationException("Avatar image did not return after camouflage ended");
+        Console.WriteLine("[PASS] Status visuals reuse frozen resources while camouflage changes and restores the avatar image");
     }
 
     internal void VerifyDisguisedOverlay()
@@ -108,39 +163,38 @@ public partial class PlayerAvatar : UserControl
         bool usingRadio, ConnectionQuality? quality = null, bool grayTalking = false, bool bugged = false)
     {
         SpeechRing.Stroke = talking && !hideAvatar ?
-            grayTalking ? Brushes.Gray : new SolidColorBrush(Color.FromRgb(0x2e, 0xcc, 0x71)) : idleBorder;
+            grayTalking ? Brushes.Gray : TalkingBorder : idleBorder;
         RadioBadge.Visibility = usingRadio && !hideAvatar ? Visibility.Visible : Visibility.Collapsed;
 
-        var (geometry, badgeColor, borderColor) = bugged
-            ? (ErrorOutline, Color.FromRgb(0xff, 0x00, 0x00), Color.FromRgb(0x69, 0x0a, 0x00))
+        var (geometry, badgeBrush, borderBrush) = bugged
+            ? (ErrorOutline, ErrorBadge, RedBadgeBorder)
             : connectionState switch
         {
-            "disconnected" => (WifiOff, Color.FromRgb(0xea, 0x3c, 0x2a), Color.FromRgb(0x69, 0x0a, 0x00)),
-            "novoice" => (LinkOff, Color.FromRgb(0xe6, 0x7e, 0x22), Color.FromRgb(0x69, 0x49, 0x00)),
-            _ when deafened => (VolumeOff, Color.FromRgb(0xea, 0x3c, 0x2a), Color.FromRgb(0x69, 0x0a, 0x00)),
-            _ when muted => (MicOff, Color.FromRgb(0xea, 0x3c, 0x2a), Color.FromRgb(0x69, 0x0a, 0x00)),
-            _ => (null, default, default)
+            "disconnected" => (WifiOff, DisconnectedBadge, RedBadgeBorder),
+            "novoice" => (LinkOff, NoVoiceBadge, AmberBadgeBorder),
+            _ when deafened => (VolumeOff, DisconnectedBadge, RedBadgeBorder),
+            _ when muted => (MicOff, DisconnectedBadge, RedBadgeBorder),
+            _ => (null, null, null)
         };
         StateBadge.Visibility = geometry is null ? Visibility.Collapsed : Visibility.Visible;
         if (geometry is not null)
         {
             StateIcon.Data = geometry;
-            StateBadge.Background = new SolidColorBrush(badgeColor);
-            StateBadge.BorderBrush = new SolidColorBrush(borderColor);
+            StateBadge.Background = badgeBrush;
+            StateBadge.BorderBrush = borderBrush;
         }
 
         var connected = connectionState == "connected";
         var bars = connected ? quality?.Bars ?? 0 : 0;
-        var active = bars switch
+        var activeBrush = bars switch
         {
-            1 => Color.FromRgb(0xef, 0x53, 0x50),
-            2 => Color.FromRgb(0xff, 0xca, 0x28),
-            _ => Color.FromRgb(0x66, 0xbb, 0x6a)
+            1 => BadQuality,
+            2 => FairQuality,
+            _ => GoodQuality
         };
-        var activeBrush = new SolidColorBrush(active);
-        QualityBar1.Background = bars >= 1 ? activeBrush : new SolidColorBrush(Color.FromRgb(0x72, 0x77, 0x7d));
-        QualityBar2.Background = bars >= 2 ? activeBrush : new SolidColorBrush(Color.FromRgb(0x72, 0x77, 0x7d));
-        QualityBar3.Background = bars >= 3 ? activeBrush : new SolidColorBrush(Color.FromRgb(0x72, 0x77, 0x7d));
+        QualityBar1.Background = bars >= 1 ? activeBrush : InactiveQuality;
+        QualityBar2.Background = bars >= 2 ? activeBrush : InactiveQuality;
+        QualityBar3.Background = bars >= 3 ? activeBrush : InactiveQuality;
         var status = !connected ? "未接続" : bars switch
         {
             0 => "未計測",
@@ -155,5 +209,19 @@ public partial class PlayerAvatar : UserControl
         if (connected && quality?.LossPercent is double lossPercent)
             tooltip += $"\n受信ロス: {lossPercent:0.0}%";
         QualityBadge.ToolTip = tooltip;
+    }
+
+    private static SolidColorBrush FrozenBrush(byte alpha, byte red, byte green, byte blue)
+    {
+        var brush = new SolidColorBrush(Color.FromArgb(alpha, red, green, blue));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static ScaleTransform FrozenTransform(double scaleX)
+    {
+        var transform = new ScaleTransform(scaleX, 1);
+        transform.Freeze();
+        return transform;
     }
 }

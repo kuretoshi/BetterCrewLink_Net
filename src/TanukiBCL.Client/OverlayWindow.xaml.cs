@@ -435,6 +435,7 @@ public partial class OverlayWindow : Window
 
     internal static void VerifyRender()
     {
+        PlayerAvatar.VerifySharedVisualResources();
         MeetingOverlayLayout.Verify();
         MeetingVoiceBorder.Verify();
         VerifyMeetingSnapshot();
