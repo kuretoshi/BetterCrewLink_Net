@@ -13,6 +13,8 @@ public partial class PlayerAvatar : UserControl
     private string? currentName;
     private bool hideAvatar;
     private bool renderedDead;
+    private string? qualityTooltipConnectionState;
+    private ConnectionQuality? qualityTooltipMetrics;
     private Brush idleBorder = Brushes.Transparent;
     private static readonly ScaleTransform FaceLeft = FrozenTransform(-1);
     private static readonly ScaleTransform FaceRight = FrozenTransform(1);
@@ -110,7 +112,19 @@ public partial class PlayerAvatar : UserControl
         first.SetPlayer(player, null);
         if (!ReferenceEquals(normalImage, first.AvatarBody.Source))
             throw new InvalidOperationException("Avatar image did not return after camouflage ended");
-        Console.WriteLine("[PASS] Status visuals reuse frozen resources while camouflage changes and restores the avatar image");
+
+        var unchangedTooltip = first.QualityBadge.ToolTip;
+        first.SetVisualState(true, true, false, "connected", false, new ConnectionQuality(ServerPingMs: 25d));
+        if (!ReferenceEquals(unchangedTooltip, first.QualityBadge.ToolTip))
+            throw new InvalidOperationException("Unchanged connection quality rebuilt its tooltip");
+        first.SetVisualState(true, true, false, "connected", false, new ConnectionQuality(ServerPingMs: 180d));
+        if (ReferenceEquals(unchangedTooltip, first.QualityBadge.ToolTip) ||
+            first.QualityBadge.ToolTip is not string changedTooltip || !changedTooltip.Contains("180 ms"))
+            throw new InvalidOperationException("Changed connection quality did not refresh its tooltip");
+        first.SetVisualState(true, true, false, "disconnected", false);
+        if (first.QualityBadge.ToolTip is not string disconnectedTooltip || !disconnectedTooltip.Contains("未接続"))
+            throw new InvalidOperationException("Disconnection did not refresh its tooltip");
+        Console.WriteLine("[PASS] Status visuals reuse frozen resources and unchanged tooltips while dynamic appearance and quality still update");
     }
 
     internal void VerifyDisguisedOverlay()
@@ -195,6 +209,15 @@ public partial class PlayerAvatar : UserControl
         QualityBar1.Background = bars >= 1 ? activeBrush : InactiveQuality;
         QualityBar2.Background = bars >= 2 ? activeBrush : InactiveQuality;
         QualityBar3.Background = bars >= 3 ? activeBrush : InactiveQuality;
+        UpdateQualityTooltip(connectionState, quality, bars);
+    }
+
+    private void UpdateQualityTooltip(string connectionState, ConnectionQuality? quality, int bars)
+    {
+        if (qualityTooltipConnectionState == connectionState && qualityTooltipMetrics == quality) return;
+        qualityTooltipConnectionState = connectionState;
+        qualityTooltipMetrics = quality;
+        var connected = connectionState == "connected";
         var status = !connected ? "未接続" : bars switch
         {
             0 => "未計測",
