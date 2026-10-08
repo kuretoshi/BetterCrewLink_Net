@@ -35,6 +35,12 @@ internal static class Program
                     parsed.GameProcessId ?? throw new ArgumentException("--game-process-id is required."));
                 return 0;
             }
+            if (args.Contains("--game-reader-profile"))
+            {
+                var parsed = ProbeOptions.Parse(args.Where(arg => arg != "--game-reader-profile").ToArray());
+                return await GameReaderAllocationProfile.RunAsync(parsed.GameProcessId,
+                    parsed.Duration ?? TimeSpan.FromSeconds(30));
+            }
             if (args.Contains("--audio-processing-self-test"))
             {
                 WebRtcPeerManager.VerifyBroadcastBufferReuse();
@@ -230,6 +236,7 @@ internal static class Program
               --independent-opus-self-test  受信診断用の独立Opus復号器を440Hz信号で検証
               --speaker-loopback-self-test 440Hz検出と別周波数の除外を合成音で検証
               --scan-game         起動中の全Among Usプロセスを読み取り検証
+              --game-reader-profile --game-process-id PID --seconds N  ゲーム読取単体の割り当て率を計測
               --expected-players  検証するプロセス数・ロビー人数（既定5）
               --game-scan-self-test ゲーム読取検証コマンドの回帰テスト
               --scalar-read-self-test ゲーム状態の数値読取と割り当て量を検証
