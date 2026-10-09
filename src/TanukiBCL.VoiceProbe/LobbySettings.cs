@@ -23,7 +23,12 @@ internal sealed record LobbySettings
     public bool NosNeutralKillerHaunting { get; init; }
     public bool NosVoicePositions { get; init; }
     public bool NosSizeVoiceEffect { get; init; } = true;
+    public bool NosRokurokubiVoiceEffect { get; init; } = true;
+    public bool NosBerserkerVoiceEffect { get; init; } = true;
+    public bool NosCitrusVoiceEffect { get; init; } = true;
+    public bool NosRainbowStarEcho { get; init; } = true;
     public bool NosFixerJammingVoiceBlock { get; init; } = true;
+    public bool NosFixerJammingLowpass { get; init; }
     public bool TohNeutralKillerHaunting { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, bool>? TohGhostRoles { get; init; }

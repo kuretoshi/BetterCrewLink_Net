@@ -65,7 +65,8 @@ internal sealed class NosSnapshotReader
         "NoS snapshot not published" => $"NoSからデータが公開されていません（{raw}）",
         "Invalid NoS players" => $"プレイヤー一覧の件数またはメモリ位置が不正です（{raw}）",
         "Invalid NoS radios" => $"無線情報の件数またはメモリ位置が不正です（{raw}）",
-        "Invalid NoS float" => $"位置または色の数値が不正です（{raw}）",
+        "Invalid NoS float" => $"位置・色・サイズ・首の長さの数値が不正です（{raw}）",
+        "Invalid NoS body state" => $"BodyTypeまたはNeckLengthが不正です（{raw}）",
         "Invalid NoS flag" => $"役職などの判定値が不正です（{raw}）",
         "Invalid NoS player identity" => $"プレイヤーIDが重複しているか、名前の長さが不正です（{raw}）",
         "Invalid NoS costume name" => $"コスチューム名の長さが不正です（{raw}）",
@@ -262,6 +263,11 @@ internal sealed class NosSnapshotReader
             var start = i * p.Size;
             var id = payload[start + p.PlayerId];
             var nameLength = payload[start + p.NameLength];
+            var bodyType = p.BodyType.HasValue ? BitConverter.ToInt32(payload, start + p.BodyType.Value) : (int?)null;
+            var neckLength = p.NeckLength.HasValue
+                ? Finite(BitConverter.ToSingle(payload, start + p.NeckLength.Value)) : (double?)null;
+            if (bodyType is < 0 or > 32 || neckLength < 0d)
+                throw new InvalidDataException("Invalid NoS body state");
             if (players.ContainsKey(id) || nameLength > 32)
                 throw new InvalidDataException("Invalid NoS player identity");
             players.Add(id, new NosPlayerData
@@ -278,6 +284,8 @@ internal sealed class NosSnapshotReader
                 SpeakerPositionY = Finite(BitConverter.ToSingle(payload, start + p.SpeakerPositionY)),
                 BodyRateX = p.BodyRateX.HasValue ? Finite(BitConverter.ToSingle(payload, start + p.BodyRateX.Value)) : null,
                 BodyRateY = p.BodyRateY.HasValue ? Finite(BitConverter.ToSingle(payload, start + p.BodyRateY.Value)) : null,
+                BodyType = bodyType,
+                NeckLength = neckLength,
                 ColorR = Finite(BitConverter.ToSingle(payload, start + p.ColorR)),
                 ColorG = Finite(BitConverter.ToSingle(payload, start + p.ColorG)),
                 ColorB = Finite(BitConverter.ToSingle(payload, start + p.ColorB)),
@@ -337,7 +345,7 @@ internal sealed class NosLayout
     public void Validate(int pid)
     {
         static bool Field(int offset, int size, int limit) => size > 0 && offset >= 0 && offset + size <= limit;
-        if (Pid != pid || PointerSize != 8 || SchemaVersion is not (20260918 or 20260928 or 20261005) ||
+        if (Pid != pid || PointerSize != 8 || SchemaVersion is not (20260918 or 20260928 or 20261005 or 20261009) ||
             LatestSlotAddress is < 0x10000 or > long.MaxValue ||
             LatestSlotAddress % (ulong)PointerSize != 0 ||
             PlayerData.Size is < 96 or > 4096)
@@ -356,11 +364,15 @@ internal sealed class NosLayout
             p.IsJammed.HasValue && !Field(p.IsJammed.Value, 1, p.Size) ||
             p.BodyRateX.HasValue != p.BodyRateY.HasValue ||
             p.BodyRateX.HasValue && !Field(p.BodyRateX.Value, 4, p.Size) ||
-            p.BodyRateY.HasValue && !Field(p.BodyRateY.Value, 4, p.Size))
+            p.BodyRateY.HasValue && !Field(p.BodyRateY.Value, 4, p.Size) ||
+            p.BodyType.HasValue != p.NeckLength.HasValue ||
+            p.BodyType.HasValue && !Field(p.BodyType.Value, 4, p.Size) ||
+            p.NeckLength.HasValue && !Field(p.NeckLength.Value, 4, p.Size) ||
+            SchemaVersion == 20261009 && (!p.BodyType.HasValue || !p.BodyRateX.HasValue))
             throw new InvalidDataException("Invalid NoS field layout");
         NosCostumeLayout?[] costumes = [p.Skin, p.Hat, p.Visor];
         var costumeCount = costumes.Count(costume => costume is not null);
-        if (costumeCount is not (0 or 3) || SchemaVersion == 20261005 && costumeCount != 3 ||
+        if (costumeCount is not (0 or 3) || SchemaVersion >= 20261005 && costumeCount != 3 ||
             costumes.Any(c => c is not null && (c.Capacity is <= 0 or > 1024 ||
                 !Field(c.Offset, c.Size, p.Size) || !Field(c.NameLength, 1, c.Size) ||
                 !Field(c.Name, c.Capacity * 2, c.Size))))
@@ -398,6 +410,8 @@ internal sealed class NosPlayerLayout
     public int SpeakerPositionY { get; set; }
     public int? BodyRateX { get; set; }
     public int? BodyRateY { get; set; }
+    public int? BodyType { get; set; }
+    public int? NeckLength { get; set; }
     public int? IsJammed { get; set; }
     public int NameLength { get; set; }
     public int Name { get; set; }

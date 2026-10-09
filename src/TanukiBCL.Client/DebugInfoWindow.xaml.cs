@@ -81,7 +81,8 @@ public partial class DebugInfoWindow : Window
             var mod = state?.Mod ?? AmongUsModType.None;
             ModNameText.Text = $"起動中のMOD: {snapshot.ModName}";
             LiveSummaryText.Text = snapshot.Live;
-            var status = mod == AmongUsModType.NebulaOnTheShip ? state?.NosReadStatus?.Message : state?.RoleReaderStatus;
+            var status = mod == AmongUsModType.NebulaOnTheShip
+                ? $"{state?.NosReadStatus?.Message} / {state?.NosRoleStatus}" : state?.RoleReaderStatus;
             ModStatusPanel.Visibility = string.IsNullOrEmpty(status) ? Visibility.Collapsed : Visibility.Visible;
             ModStatusText.Text = status ?? string.Empty;
             ModStatusPanel.Background = mod == AmongUsModType.NebulaOnTheShip && state?.NosReadStatus?.Failed == true
@@ -115,7 +116,8 @@ public partial class DebugInfoWindow : Window
         var search = SearchBox.Text.Trim();
         var filtered = players.Where(player => new[]
             {
-                player.Name, player.Id.ToString(), RoleLabel(state!, player), player.SnrRole?.RoleName, player.TohRole?.RoleName
+                player.Name, player.Id.ToString(), RoleLabel(state!, player), player.SnrRole?.RoleName,
+                player.TohRole?.RoleName, player.NosRole?.RoleName
             }.Any(value => value?.Contains(search, StringComparison.CurrentCultureIgnoreCase) == true)).ToArray();
         PlayerCountText.Text = $"プレイヤー {filtered.Length} / {players.Count}人";
         foreach (var player in filtered) PlayerCards.Children.Add(BuildCard(snapshot, state!, player));
@@ -127,6 +129,7 @@ public partial class DebugInfoWindow : Window
     {
         AmongUsModType.SuperNewRoles when player.SnrRole is { } snr => snr.RoleName ?? $"RoleId {snr.RoleId}",
         AmongUsModType.TownOfHostForE when player.TohRole is { } toh => toh.RoleName ?? $"RoleId {toh.RoleId}",
+        AmongUsModType.NebulaOnTheShip when player.NosRole is { } nosRole => nosRole.Label,
         AmongUsModType.NebulaOnTheShip when player.NosPlayer is { } nos =>
             nos.IsImpostor ? "Impostor" : nos.IsNeutral ? "Neutral" : nos.IsCrewmate ? "Crewmate" : "陣営不明",
         AmongUsModType.NebulaOnTheShip => string.Empty,
@@ -170,7 +173,7 @@ public partial class DebugInfoWindow : Window
         titleArea.Children.Add(top);
         titleArea.Children.Add(new TextBlock
         {
-            Text = $"{(state.Mod == AmongUsModType.NebulaOnTheShip ? "陣営" : "役職")}: {(role.Length == 0 ? "未取得" : role)}",
+            Text = $"{(state.Mod == AmongUsModType.NebulaOnTheShip && player.NosRole is null ? "陣営" : "役職")}: {(role.Length == 0 ? "未取得" : role)}",
             Foreground = Primary, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap
         });
         var card = new StackPanel();
@@ -279,10 +282,17 @@ public partial class DebugInfoWindow : Window
         if (mod == AmongUsModType.NebulaOnTheShip)
         {
             var nos = player.NosPlayer;
+            var role = player.NosRole;
             return [
                 ("IsImpostor", Flag(nos?.IsImpostor)), ("IsCrewmate", Flag(nos?.IsCrewmate)),
                 ("IsNeutral", Flag(nos?.IsNeutral)), ("IsKiller", Flag(nos?.IsKiller)),
-                ("IsImpostorlike", Flag(nos?.IsImpostorlike)), ("IsJammed", Flag(nos?.IsJammed))];
+                ("IsImpostorlike", Flag(nos?.IsImpostorlike)), ("IsJammed", Flag(nos?.IsJammed)),
+                ("RoleId", Text(role?.RoleId?.ToString() ?? "未取得")),
+                ("RoleName", Text(role?.RoleName ?? "未取得")),
+                ("DisplayName", Text(role?.DisplayName ?? "未取得")),
+                ("RuntimeClass", Text(role?.RuntimeClass ?? "未取得")),
+                ("RainbowStar", Flag(role?.IsRainbowStar)),
+                ("BerserkerActive", Flag(role?.IsBerserking))];
         }
         if (mod == AmongUsModType.TownOfHostForE)
         {
@@ -312,6 +322,8 @@ public partial class DebugInfoWindow : Window
         {
             values.Add(("BodyRateX", Text(Number(player.NosPlayer?.BodyRateX))));
             values.Add(("BodyRateY", Text(Number(player.NosPlayer?.BodyRateY))));
+            values.Add(("BodyType", Text(player.NosPlayer?.BodyType?.ToString() ?? player.NosRole?.BodyType?.ToString() ?? "未取得")));
+            values.Add(("NeckLength", Text(Number(player.NosPlayer?.NeckLength))));
         }
         if (player.SnrRole is { HasJumbo: true } jumbo)
             values.Add(("Jumbo current / max", Text($"{Number(jumbo.JumboCurrentSize)} / {Number(jumbo.JumboMaxSize)}")));
@@ -412,7 +424,9 @@ public partial class DebugInfoWindow : Window
         var lines = new List<string>
         {
             $"読み取り状態: {state.NosReadStatus?.Message ?? "未取得"}",
+            $"役職取得状態: {state.NosRoleStatus ?? "未取得"}",
             $"TBCLFields定義バージョン: {state.NosReadStatus?.SchemaVersion?.ToString() ?? "未取得"}",
+            $"検出アドオン: {(state.NosAddonIds.Count == 0 ? "なし" : string.Join(", ", state.NosAddonIds))}",
             "",
             "■ コスチューム（Skin / Hat / Visor）"
         };
@@ -570,11 +584,17 @@ public partial class DebugInfoWindow : Window
             Require(window.PlayerCards.Children.Count == 1, "Player search did not match role names");
             window.SearchBox.Text = string.Empty;
 
+            window.collapsedPlayers.Clear();
             state.Mod = AmongUsModType.NebulaOnTheShip;
             state.NosReadStatus = new NosReadStatus(true, "NoSプレイヤーデータ未取得: PlayerId 8", 20261005);
+            state.NosRoleStatus = "NoS役職を自動更新中（約2秒間隔）";
+            state.NosAddonIds = ["UchuAddon"];
             state.NosLocalMicPosition = new VoicePosition(0, 0);
             state.NosRadios = [new NosRadioData(0, 1 << 8, "Impostor")];
-            state.Players[0].NosPlayer = new NosPlayerData { IsImpostor = true, Hat = new NosCostumeData("nos_hat") };
+            state.Players[0].NosPlayer = new NosPlayerData { IsImpostor = true, Hat = new NosCostumeData("nos_hat"),
+                BodyType = 3, NeckLength = 24d };
+            state.Players[0].NosRole = new NosRoleData(12, "rokurokubi", "ろくろ首",
+                "Rokurokubi+Instance", true, 3);
             state.Players.Add(new Player { Id = 8, ClientId = 10, Name = "remote" });
             radioReports[8] = new VoiceServerProbe.NosRadioReport(10,
                 [new NosRadioData(1, 1 << 7, "Jackal")], DateTimeOffset.UtcNow);
@@ -585,9 +605,12 @@ public partial class DebugInfoWindow : Window
                 window.CardText(1, "#0 Jackal ／ Kind: 1 (Jackal)") && window.CardText(1, "声が届く対象: test（ID: 7）") &&
                 window.CardText(1, "0x00000080") && window.CardText(1, "無線送信：OFF") &&
                 window.NosNoticePanel.Visibility == Visibility.Visible &&
-                window.ModStatusText.Text == "NoSプレイヤーデータ未取得: PlayerId 8",
+                window.ModStatusText.Text.Contains("NoSプレイヤーデータ未取得: PlayerId 8") &&
+                window.ModStatusText.Text.Contains("NoS役職を自動更新中"),
                 "NoS player card did not show missing data or remote radio channels");
             Require(window.NosContentsText.Text.Contains("TBCLFields定義バージョン: 20261005") &&
+                window.NosContentsText.Text.Contains("検出アドオン: UchuAddon") &&
+                window.CardText(0, "ろくろ首") && window.CardText(0, "NeckLength") &&
                 window.NosContentsText.Text.Contains("test（ID: 7）: 未取得 / nos_hat / 未取得") &&
                 window.NosContentsText.Text.Contains("状態: 読み取り成功") &&
                 window.NosContentsText.Text.Contains("\"Version\": 20261005"),

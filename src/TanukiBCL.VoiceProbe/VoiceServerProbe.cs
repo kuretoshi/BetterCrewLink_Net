@@ -1610,6 +1610,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             MeetingGhostOnly = next.MeetingGhostOnly,
             NosVoicePositions = next.NosVoicePositions,
             NosFixerJammingVoiceBlock = next.NosFixerJammingVoiceBlock,
+            NosFixerJammingLowpass = next.NosFixerJammingLowpass,
             JackalRadioEnabled = next.JackalRadioEnabled,
             JackalHaunting = next.JackalHaunting,
             JackalHearOutsideVents = next.JackalHearOutsideVents,
@@ -1839,7 +1840,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         mix = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs)).Apply(mix);
         var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
             activeLobbySettings, voiceEffectStrength, mix.Audible, IsImpostorRadioActive(clientId));
-        audioSession?.SetPeerMix(socketId, mix, effect);
+        var starEcho = VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(currentGameState, other,
+            activeLobbySettings);
+        audioSession?.SetPeerMix(socketId, mix, effect, starEcho);
         PeerMixChanged?.Invoke(clientId, mix);
     }
 

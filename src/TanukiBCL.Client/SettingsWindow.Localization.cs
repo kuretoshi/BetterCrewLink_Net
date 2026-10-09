@@ -275,6 +275,24 @@ public partial class SettingsWindow
             throw new InvalidOperationException("Host lobby edit button did not open own settings");
         window.UpdateCurrentGameState(new AmongUsState
         {
+            Mod = AmongUsModType.NebulaOnTheShip, IsHost = true,
+            GameState = GameState.Lobby, LobbyCode = "ABCDEF", NosAddonIds = ["UchuAddon"]
+        });
+        if (window.NosControlsPanel.Visibility != System.Windows.Visibility.Visible ||
+            window.UchuControlsPanel.Visibility != System.Windows.Visibility.Visible ||
+            !Equals(window.NosRokurokubiVoiceEffectCheck.Content,
+                UiLocalization.Translate("en", "settings.lobbysettings.nos_rokurokubi_voice_effect")) ||
+            !Equals(window.NosFixerJammingLowpassCheck.Content,
+                UiLocalization.Translate("en", "settings.lobbysettings.nos_fixer_jamming_lowpass")))
+            throw new InvalidOperationException("NoS 3.2.21 options or UchuAddon visibility did not update");
+        window.NosFixerJammingLowpassCheck.IsChecked = true;
+        if (window.NosFixerJammingVoiceBlockCheck.IsChecked == true)
+            throw new InvalidOperationException("Fixer low-pass did not disable voice block");
+        window.NosFixerJammingVoiceBlockCheck.IsChecked = true;
+        if (window.NosFixerJammingLowpassCheck.IsChecked == true)
+            throw new InvalidOperationException("Fixer voice block did not disable low-pass");
+        window.UpdateCurrentGameState(new AmongUsState
+        {
             GameState = GameState.Lobby, LobbyCode = "ABCDEF", HostId = 8,
             Players = [new Player { ClientId = 8, Name = "Alice" }]
         });

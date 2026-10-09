@@ -227,16 +227,19 @@ internal sealed class AudioDeviceSession : IDisposable
         target.AddSamples(bytes, 0, pcmBytes.Length);
     }
 
-    public void SetPeerMix(string peerId, PeerVoiceMix mix, NosSizeVoiceEffect? nosSizeEffect = null)
+    public void SetPeerMix(string peerId, PeerVoiceMix mix, NosSizeVoiceEffect? nosSizeEffect = null,
+        bool starEcho = false)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
         peer.Panning.Pan = (float)Math.Clamp(mix.Pan, -1d, 1d);
-        peer.Muffle.Enabled = mix.Muffled;
+        peer.Muffle.Enabled = mix.Muffled && !mix.FixerLowpass;
+        peer.FixerLowpass.Enabled = mix.FixerLowpass;
         peer.RadioHighPass.Enabled = mix.RadioHighPass;
         peer.RadioEcho.Enabled = mix.RadioEcho;
-        peer.CameraMuffle.Enabled = mix.CameraMuffled;
+        peer.CameraMuffle.Enabled = mix.CameraMuffled && !mix.FixerLowpass;
         peer.GhostReverb.Enabled = mix.Reverb && mix.Audible;
+        peer.StarEcho.Enabled = starEcho && mix.Audible;
         peer.NosSizeEffect.SetEffect(nosSizeEffect);
     }
 
@@ -273,14 +276,16 @@ internal sealed class AudioDeviceSession : IDisposable
             };
             var nosSizeEffect = new NosSizeVoiceSampleProvider(mono);
             var muffle = new VentMuffleSampleProvider(nosSizeEffect);
-            var radioHighPass = new RadioHighPassSampleProvider(muffle);
+            var fixerLowpass = new FixerLowpassSampleProvider(muffle);
+            var radioHighPass = new RadioHighPassSampleProvider(fixerLowpass);
             var cameraMuffle = new CameraMuffleSampleProvider(radioHighPass);
             var panning = new PanningSampleProvider(cameraMuffle);
             var volume = new VolumeSampleProvider(panning);
             var ghostReverb = new GhostReverbSampleProvider(volume);
-            var radioEcho = new RadioEchoSampleProvider(ghostReverb);
-            var created = new PeerPlayback(buffer, nosSizeEffect, muffle, radioHighPass,
-                cameraMuffle, panning, volume, ghostReverb, radioEcho);
+            var starEcho = new RadioEchoSampleProvider(ghostReverb, 0.075d, 0.94f, 0.08f, 0.08f);
+            var radioEcho = new RadioEchoSampleProvider(starEcho);
+            var created = new PeerPlayback(buffer, nosSizeEffect, muffle, fixerLowpass, radioHighPass,
+                cameraMuffle, panning, volume, ghostReverb, starEcho, radioEcho);
             peerPlayback[peerId] = created;
             playbackMixer.AddMixerInput(radioEcho);
             return created;
@@ -449,11 +454,13 @@ internal sealed class AudioDeviceSession : IDisposable
         BufferedWaveProvider Buffer,
         NosSizeVoiceSampleProvider NosSizeEffect,
         VentMuffleSampleProvider Muffle,
+        FixerLowpassSampleProvider FixerLowpass,
         RadioHighPassSampleProvider RadioHighPass,
         CameraMuffleSampleProvider CameraMuffle,
         PanningSampleProvider Panning,
         VolumeSampleProvider Volume,
         GhostReverbSampleProvider GhostReverb,
+        RadioEchoSampleProvider StarEcho,
         RadioEchoSampleProvider RadioEcho)
     {
         internal readonly object PlaybackWriteGate = new();

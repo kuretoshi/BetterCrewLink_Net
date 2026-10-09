@@ -12,10 +12,19 @@ internal static class GameReaderAllocationProfile
         using var reader = new AmongUsMemoryReaderService();
         var stateCount = 0;
         var snapshotCount = 0;
+        var nosRoleCount = 0;
+        string? nosRoleStatus = null;
+        string? nosAddons = null;
         reader.StateChanged += (_, state) =>
         {
             Interlocked.Increment(ref stateCount);
             if (state.NosLocalMicPosition is not null) Interlocked.Increment(ref snapshotCount);
+            if (state.Mod == AmongUsModType.NebulaOnTheShip)
+            {
+                Volatile.Write(ref nosRoleCount, state.Players.Count(player => player.NosRole is not null));
+                Volatile.Write(ref nosRoleStatus, state.NosRoleStatus);
+                Volatile.Write(ref nosAddons, string.Join(',', state.NosAddonIds));
+            }
         };
         reader.SetProcess(GameProcessScanner.CreateProcessInfo(gameProcess));
         reader.Start();
@@ -30,6 +39,8 @@ internal static class GameReaderAllocationProfile
         reader.Stop();
         Console.WriteLine($"gameReader pid={gameProcessId} states={Volatile.Read(ref stateCount) - firstCount} " +
             $"nosSnapshots={Volatile.Read(ref snapshotCount) - firstSnapshots} " +
+            $"nosRoles={Volatile.Read(ref nosRoleCount)} nosRoleStatus={Volatile.Read(ref nosRoleStatus)} " +
+            $"nosAddons={Volatile.Read(ref nosAddons)} " +
             $"seconds={watch.Elapsed.TotalSeconds:0.0} allocatedMiB={allocated / 1048576d:0.00} " +
             $"rateMiBPerSecond={allocated / 1048576d / watch.Elapsed.TotalSeconds:0.000}");
         return 0;

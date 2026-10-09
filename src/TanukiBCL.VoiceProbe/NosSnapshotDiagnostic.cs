@@ -56,6 +56,7 @@ internal static class NosSnapshotDiagnostic
                     $"impostor={nos.IsImpostor} neutral={nos.IsNeutral} jammed={nos.IsJammed} " +
                     $"speaker=({nos.SpeakerPositionX:0.000},{nos.SpeakerPositionY:0.000}) " +
                     $"body=({nos.BodyRateX:0.000},{nos.BodyRateY:0.000}) " +
+                    $"bodyType={nos.BodyType?.ToString() ?? "n/a"} neck={nos.NeckLength?.ToString("0.000") ?? "n/a"} " +
                     $"skin={nos.Skin?.Name} hat={nos.Hat?.Name} visor={nos.Visor?.Name}");
             }
             foreach (var radio in state.NosRadios)

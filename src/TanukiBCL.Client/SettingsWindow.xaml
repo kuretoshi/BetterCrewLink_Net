@@ -704,8 +704,24 @@
                             </CheckBox>
                             <CheckBox x:Name="NosSizeVoiceEffectCheck" Content="大きさが変化した場合にエフェクトをかける"
                                       Style="{StaticResource LobbySwitchStyle}" />
-                            <CheckBox x:Name="NosFixerJammingVoiceBlockCheck" Content="フィクサーの妨害を受けた際に音声を遮断する"
+                            <CheckBox x:Name="NosRokurokubiVoiceEffectCheck" Content="ろくろ首の首が伸びるほど声を高くする"
                                       Style="{StaticResource LobbySwitchStyle}" />
+                            <CheckBox x:Name="NosBerserkerVoiceEffectCheck" Content="バーサーカーの暴走中に声へゆがみと残響を加える"
+                                      Style="{StaticResource LobbySwitchStyle}" />
+                            <CheckBox x:Name="NosFixerJammingVoiceBlockCheck" Content="フィクサーの妨害を受けた際に音声を遮断する"
+                                      Style="{StaticResource LobbySwitchStyle}"
+                                      Checked="NosFixerMode_Changed" Unchecked="NosFixerMode_Changed" />
+                            <CheckBox x:Name="NosFixerJammingLowpassCheck" Content="フィクサーの妨害を受けた際にローパスフィルターをかける"
+                                      Style="{StaticResource LobbySwitchStyle}"
+                                      Checked="NosFixerMode_Changed" Unchecked="NosFixerMode_Changed" />
+                            <TextBlock Text="妨害中は聞く声と聞かれる声がこもります。ONにすると音声遮断はOFFになります。"
+                                       Foreground="#B7AABD" FontSize="11" Margin="12,0,12,8" TextWrapping="Wrap" />
+                            <StackPanel x:Name="UchuControlsPanel" Visibility="Collapsed">
+                                <CheckBox x:Name="NosCitrusVoiceEffectCheck" Content="シトラスの柑橘状態で声を高い犯人声にする（UchuAddon）"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                                <CheckBox x:Name="NosRainbowStarEchoCheck" Content="虹色スターの声に薄いエコーを加える（UchuAddon）"
+                                          Style="{StaticResource LobbySwitchStyle}" />
+                            </StackPanel>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

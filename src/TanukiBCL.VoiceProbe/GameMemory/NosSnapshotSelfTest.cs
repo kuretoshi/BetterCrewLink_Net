@@ -84,6 +84,34 @@ internal static class NosSnapshotSelfTest
             throw new InvalidOperationException("64-bit NoS player/radio snapshot changed");
         if (published.Skin?.Name != "Suit" || published.Hat?.Name != "Hat" || published.Visor?.Name != "")
             throw new InvalidOperationException("TBCLFields 20261005 costume names were not read");
+        layout.SchemaVersion = 20261009;
+        layout.PlayerData.BodyType = 160;
+        layout.PlayerData.NeckLength = 164;
+        BitConverter.GetBytes(3).CopyTo(player, 160);
+        BitConverter.GetBytes(24f).CopyTo(player, 164);
+        layout.Validate(42);
+        var bodySnapshot = NosSnapshotReader.ReadSnapshot(layout, Read);
+        if (bodySnapshot.Players[7].BodyType != 3 || bodySnapshot.Players[7].NeckLength != 24d)
+            throw new InvalidOperationException("TBCLFields 20261009 body state was not read");
+        BitConverter.GetBytes(float.NaN).CopyTo(player, 164);
+        try
+        {
+            NosSnapshotReader.ReadSnapshot(layout, Read);
+            throw new InvalidOperationException("Invalid NoS neck length accepted");
+        }
+        catch (InvalidDataException) { }
+        BitConverter.GetBytes(24f).CopyTo(player, 164);
+        layout.PlayerData.NeckLength = null;
+        try
+        {
+            layout.Validate(42);
+            throw new InvalidOperationException("Incomplete TBCLFields 20261009 layout accepted");
+        }
+        catch (InvalidDataException) { }
+        layout.PlayerData.NeckLength = 164;
+        layout.SchemaVersion = 20261005;
+        layout.PlayerData.BodyType = null;
+        layout.PlayerData.NeckLength = null;
         player[100] = 9;
         try
         {
@@ -117,7 +145,7 @@ internal static class NosSnapshotSelfTest
             throw new InvalidOperationException("32-bit NoS layout accepted");
         }
         catch (InvalidDataException) { }
-        Console.WriteLine("[PASS] 64-bit NoS player/radio pointers, 20261005 costumes, publication and torn-read rejection");
+        Console.WriteLine("[PASS] 64-bit NoS player/radio pointers, 20261005 costumes, 20261009 body, publication and torn-read rejection");
         return 0;
     }
 }

@@ -100,6 +100,7 @@ public sealed class Player
     public double LightRadius { get; set; } = 1d;
 
     public NosPlayerData? NosPlayer { get; set; }
+    public NosRoleData? NosRole { get; set; }
     public string? NosLobbyColor { get; set; }
 
     public SnrRoleData? SnrRole { get; set; }
@@ -143,6 +144,10 @@ public sealed class NosPlayerData
     public double? BodyRateX { get; set; }
 
     public double? BodyRateY { get; set; }
+
+    public int? BodyType { get; set; }
+
+    public double? NeckLength { get; set; }
 
     public double ColorR { get; set; }
 
@@ -221,6 +226,10 @@ public sealed class AmongUsState
 
     /// <summary>Automatic SNR/TOH4E role reader status for the debug window.</summary>
     public string? RoleReaderStatus { get; set; }
+
+    public string? NosRoleStatus { get; set; }
+
+    public List<string> NosAddonIds { get; set; } = [];
 
     public List<TohRoleDefinition> TohRoleCatalog { get; set; } = [];
 

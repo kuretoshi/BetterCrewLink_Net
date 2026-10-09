@@ -72,7 +72,7 @@
                 <Border x:Name="NosNoticePanel" CornerRadius="4" Padding="10,6" Margin="0,0,0,8"
                         Background="#1D3047" Visibility="Collapsed">
                     <TextBlock TextWrapping="Wrap" FontSize="12"
-                               Text="NoSが公開する情報は陣営・判定値です。TBCLFieldsには役職名が含まれないため、個別の役職名は表示できません。" />
+                               Text="NoSの陣営・サイズはTBCLFields、役職と能力は別の読み取り経路で取得します。未取得時は下の状態表示を確認してください。" />
                 </Border>
                 <Grid Margin="0,0,0,6">
                     <TextBox x:Name="SearchBox" Padding="8,6" Background="#1D1A23" Foreground="#F5F1F7"

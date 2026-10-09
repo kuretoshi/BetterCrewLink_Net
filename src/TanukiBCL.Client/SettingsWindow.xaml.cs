@@ -732,6 +732,9 @@ public partial class SettingsWindow : Window
             ? Visibility.Visible : Visibility.Collapsed;
         NosControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip
             ? Visibility.Visible : Visibility.Collapsed;
+        UchuControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip &&
+            currentGameState?.NosAddonIds.Contains("UchuAddon", StringComparer.Ordinal) == true
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private bool IsToh4eLobbyHost()
@@ -750,6 +753,15 @@ public partial class SettingsWindow : Window
         var source = (CheckBox)sender;
         var target = ReferenceEquals(source, SnrJackalRadioCheck) ? JackalRadioCheck : SnrJackalRadioCheck;
         if (target.IsChecked != source.IsChecked) target.IsChecked = source.IsChecked;
+    }
+
+    private void NosFixerMode_Changed(object sender, RoutedEventArgs e)
+    {
+        if (loadingLobbyControls || sender is not CheckBox source || source.IsChecked != true ||
+            NosFixerJammingVoiceBlockCheck is null || NosFixerJammingLowpassCheck is null) return;
+        var other = ReferenceEquals(source, NosFixerJammingVoiceBlockCheck)
+            ? NosFixerJammingLowpassCheck : NosFixerJammingVoiceBlockCheck;
+        other.IsChecked = false;
     }
 
     private void TohGhostRoleButton_Click(object sender, RoutedEventArgs e)
@@ -795,7 +807,12 @@ public partial class SettingsWindow : Window
         NosNeutralKillerHaunting = NosNeutralKillerHauntingCheck.IsChecked == true,
         NosVoicePositions = NosVoicePositionsCheck.IsChecked == true,
         NosSizeVoiceEffect = NosSizeVoiceEffectCheck.IsChecked == true,
+        NosRokurokubiVoiceEffect = NosRokurokubiVoiceEffectCheck.IsChecked == true,
+        NosBerserkerVoiceEffect = NosBerserkerVoiceEffectCheck.IsChecked == true,
+        NosCitrusVoiceEffect = NosCitrusVoiceEffectCheck.IsChecked == true,
+        NosRainbowStarEcho = NosRainbowStarEchoCheck.IsChecked == true,
         NosFixerJammingVoiceBlock = NosFixerJammingVoiceBlockCheck.IsChecked == true,
+        NosFixerJammingLowpass = NosFixerJammingLowpassCheck.IsChecked == true,
         PublicLobbyOn = PublicLobbyOnCheck.IsChecked == true,
         PublicLobbyTitle = PublicLobbyTitleBox.Text,
         PublicLobbyLanguage = (PublicLobbyLanguageCombo.SelectedItem as UiLanguage)?.Code ?? "ja"
@@ -829,7 +846,12 @@ public partial class SettingsWindow : Window
         NosNeutralKillerHauntingCheck.IsChecked = value.NosNeutralKillerHaunting;
         NosVoicePositionsCheck.IsChecked = value.NosVoicePositions;
         NosSizeVoiceEffectCheck.IsChecked = value.NosSizeVoiceEffect;
+        NosRokurokubiVoiceEffectCheck.IsChecked = value.NosRokurokubiVoiceEffect;
+        NosBerserkerVoiceEffectCheck.IsChecked = value.NosBerserkerVoiceEffect;
+        NosCitrusVoiceEffectCheck.IsChecked = value.NosCitrusVoiceEffect;
+        NosRainbowStarEchoCheck.IsChecked = value.NosRainbowStarEcho;
         NosFixerJammingVoiceBlockCheck.IsChecked = value.NosFixerJammingVoiceBlock;
+        NosFixerJammingLowpassCheck.IsChecked = value.NosFixerJammingLowpass && !value.NosFixerJammingVoiceBlock;
         PublicLobbyOnCheck.IsChecked = value.PublicLobbyOn;
         PublicLobbyTitleBox.Text = value.PublicLobbyTitle;
         PublicLobbyLanguageCombo.SelectedItem = UiLocalization.Languages
@@ -858,6 +880,13 @@ public partial class SettingsWindow : Window
         SnrSidekickHearOutsideVentsCheck.IsEnabled = regularSettingsEnabled;
         SnrSidekickTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
         NosVoicePositionsCheck.IsEnabled = regularSettingsEnabled;
+        NosSizeVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
+        NosRokurokubiVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
+        NosBerserkerVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
+        NosCitrusVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
+        NosRainbowStarEchoCheck.IsEnabled = regularSettingsEnabled;
+        NosFixerJammingVoiceBlockCheck.IsEnabled = regularSettingsEnabled;
+        NosFixerJammingLowpassCheck.IsEnabled = regularSettingsEnabled;
     }
 
     private void RadioOnlyCheck_Changed(object sender, RoutedEventArgs e)

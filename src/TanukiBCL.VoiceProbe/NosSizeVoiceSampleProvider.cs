@@ -12,6 +12,8 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
     private readonly float[] delayLine = new float[8192];
     private readonly Biquad wetFilter = new();
     private readonly Biquad toneShelf = new();
+    private SourceFilterDsp? sourceFilter;
+    private BerserkerDsp? berserker;
     private NosSizeVoiceEffect? requestedEffect;
     private NosSizeVoiceEffect? appliedEffect;
     private int writeIndex;
@@ -36,9 +38,21 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
         if (effect is null)
         {
             appliedEffect = null;
+            sourceFilter = null;
+            berserker = null;
             return read;
         }
         if (effect != appliedEffect) Configure(effect);
+        if (effect.Mode == NosSizeEffectMode.SourceFilter)
+        {
+            sourceFilter!.Process(buffer, offset, read);
+            return read;
+        }
+        if (effect.Mode == NosSizeEffectMode.Berserker)
+        {
+            berserker!.Process(buffer, offset, read);
+            return read;
+        }
 
         for (var index = offset; index < offset + read; index++)
         {
@@ -55,6 +69,7 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
 
     private void Configure(NosSizeVoiceEffect effect)
     {
+        var previousMode = appliedEffect?.Mode;
         if (appliedEffect is null)
         {
             Array.Clear(delayLine);
@@ -64,6 +79,21 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
             upPhase = downPhase = 0d;
         }
         appliedEffect = effect;
+        if (effect.Mode == NosSizeEffectMode.SourceFilter)
+        {
+            if (previousMode != effect.Mode) sourceFilter = new SourceFilterDsp(SampleRate);
+            sourceFilter!.SetParameters(effect.Pitch, effect.Formant, effect.Squash);
+            berserker = null;
+            return;
+        }
+        if (effect.Mode == NosSizeEffectMode.Berserker)
+        {
+            if (previousMode != effect.Mode) berserker = new BerserkerDsp(SampleRate);
+            sourceFilter = null;
+            return;
+        }
+        sourceFilter = null;
+        berserker = null;
         var strength = Math.Clamp(effect.Strength, 0d, 1d);
         toneDb = Math.Clamp(Math.Log(effect.ToneRate) / Math.Log(5d) * 6d, -6d, 6d);
         toneShelf.ConfigureLowShelf(400d, toneDb);

@@ -33,6 +33,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     private AmongUsModType currentMod = AmongUsModType.None;
     private DateTimeOffset nextModCheck = DateTimeOffset.MinValue;
     private readonly NosSnapshotReader nosReader = new();
+    private readonly NosLiveRoleReader nosRoleReader = new();
+    private DateTimeOffset nextNosAddonCheck;
+    private List<string> nosAddonIds = [];
     private readonly NosPaletteReader nosPaletteReader = new();
     private int nosRound;
     private readonly SnrLiveRoleReader snrReader = new();
@@ -60,6 +63,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             currentMod = nextProcessInfo?.InstalledMod.Id ?? AmongUsModType.None;
             nextModCheck = DateTimeOffset.UtcNow.AddSeconds(2);
             nosReader.Reset();
+            nosRoleReader.Reset();
+            nextNosAddonCheck = default;
+            nosAddonIds = [];
             nosPaletteReader.Reset();
             nosRound = 0;
             snrReader.Reset();
@@ -263,6 +269,12 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         lobbyCode = string.IsNullOrWhiteSpace(lobbyCode) ? "MENU" : lobbyCode;
 
         NosSnapshot? nos = null;
+        if (mod == AmongUsModType.NebulaOnTheShip && DateTimeOffset.UtcNow >= nextNosAddonCheck)
+        {
+            nosAddonIds = NosAddonDetector.Read(Path.GetDirectoryName(currentProcess.ProcessPath));
+            nextNosAddonCheck = DateTimeOffset.UtcNow.AddSeconds(30);
+        }
+        else if (mod != AmongUsModType.NebulaOnTheShip) nosAddonIds = [];
         var nosPointerSize = currentContext.Is64Bit ? 8 : 4;
         var nosLobbyColors = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Lobby
             ? nosPaletteReader.Update(currentProcess.ProcessId, nosPointerSize,
@@ -296,6 +308,22 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         {
             nosReader.Reset();
         }
+        if (mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion)
+        {
+            var roles = nosRoleReader.Update(currentProcess.ProcessId, $"{lobbyCode}:{nosRound}",
+                nosReader.SchemaVersion != 20261009, currentContext.ReadBytes);
+            foreach (var player in players)
+            {
+                if (player.Disconnected || !roles.TryGetValue(player.Id, out var role)) continue;
+                var bodyType = nosReader.SchemaVersion == 20261009 ? player.NosPlayer?.BodyType : role.BodyType;
+                player.NosRole = role with
+                {
+                    BodyType = bodyType,
+                    IsBerserking = role.RoleName == "berserker" && bodyType.HasValue ? bodyType == 2 : null
+                };
+            }
+        }
+        else nosRoleReader.Reset();
         NosReadStatus? nosReadStatus = null;
         if (mod == AmongUsModType.NebulaOnTheShip)
         {
@@ -354,6 +382,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             $"client={clientId}",
             $"host={hostId}",
             mod == AmongUsModType.NebulaOnTheShip ? $"nos={nosReader.Status}" : string.Empty,
+            mod == AmongUsModType.NebulaOnTheShip ? $"nosRole={nosRoleReader.Status}" : string.Empty,
             mod == AmongUsModType.SuperNewRoles ? $"snr={snrReader.Status}" : string.Empty,
             mod == AmongUsModType.TownOfHostForE ? $"toh={tohReader.Status}" : string.Empty,
             $"inner=0x{innerNetClient:X}",
@@ -395,6 +424,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                 AmongUsModType.TownOfHostForE => tohReader.Status,
                 _ => null
             },
+            NosRoleStatus = mod == AmongUsModType.NebulaOnTheShip ? nosRoleReader.Status : null,
+            NosAddonIds = mod == AmongUsModType.NebulaOnTheShip ? nosAddonIds.ToList() : [],
             TohRoleCatalog = mod == AmongUsModType.TownOfHostForE
                 ? tohReader.RoleCatalog.ToList() : [],
             NosLocalMicPosition = nos?.LocalMicPosition,

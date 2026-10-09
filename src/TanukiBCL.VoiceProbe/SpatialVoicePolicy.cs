@@ -19,6 +19,7 @@ internal sealed record SpatialVoiceSettings(
     bool MeetingGhostOnly = false,
     bool NosVoicePositions = false,
     bool NosFixerJammingVoiceBlock = true,
+    bool NosFixerJammingLowpass = false,
     bool JackalRadioEnabled = false,
     bool JackalHaunting = false,
     bool JackalHearOutsideVents = false,
@@ -40,7 +41,8 @@ internal sealed record PeerVoiceMix(
     bool RadioHighPass = false,
     bool RadioEcho = false,
     bool CameraMuffled = false,
-    bool Reverb = false)
+    bool Reverb = false,
+    bool FixerLowpass = false)
 {
     public bool Audible => Gain > 0.0001d;
 }
@@ -57,6 +59,24 @@ internal static class SpatialVoicePolicy
         bool otherUsingImpostorRadio = false,
         bool nosJackalRadioHearable = false,
         bool airshipSpawnFallback = false)
+    {
+        var mix = CalculateCore(state, me, other, settings, otherUsingImpostorRadio,
+            nosJackalRadioHearable, airshipSpawnFallback);
+        return mix.Audible && state.Mod == AmongUsModType.NebulaOnTheShip &&
+            settings.NosFixerJammingLowpass && !settings.NosFixerJammingVoiceBlock &&
+            (me.NosPlayer?.IsJammed == true || other.NosPlayer?.IsJammed == true)
+            ? mix with { FixerLowpass = true, Muffled = false, CameraMuffled = false }
+            : mix;
+    }
+
+    private static PeerVoiceMix CalculateCore(
+        AmongUsState state,
+        Player me,
+        Player other,
+        SpatialVoiceSettings settings,
+        bool otherUsingImpostorRadio,
+        bool nosJackalRadioHearable,
+        bool airshipSpawnFallback)
     {
         var isNos = state.Mod == AmongUsModType.NebulaOnTheShip;
         var isSnr = state.Mod == AmongUsModType.SuperNewRoles;

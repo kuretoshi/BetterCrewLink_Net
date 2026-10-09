@@ -7,14 +7,21 @@ internal sealed class RadioEchoSampleProvider : ISampleProvider
 {
     private readonly ISampleProvider source;
     private readonly float[] delayLine;
+    private readonly float dryGain;
+    private readonly float wetGain;
+    private readonly float feedbackGain;
     private int delayPosition;
     private bool wasEnabled;
     public volatile bool Enabled;
 
-    public RadioEchoSampleProvider(ISampleProvider source)
+    public RadioEchoSampleProvider(ISampleProvider source, double delaySeconds = 0.09d,
+        float dryGain = 0.92f, float wetGain = 0.2f, float feedbackGain = 0.12f)
     {
         this.source = source;
-        delayLine = new float[checked((int)Math.Round(source.WaveFormat.SampleRate * 0.09d) *
+        this.dryGain = dryGain;
+        this.wetGain = wetGain;
+        this.feedbackGain = feedbackGain;
+        delayLine = new float[checked((int)Math.Round(source.WaveFormat.SampleRate * delaySeconds) *
             source.WaveFormat.Channels)];
     }
 
@@ -36,8 +43,8 @@ internal sealed class RadioEchoSampleProvider : ISampleProvider
         {
             var input = buffer[index];
             var delayed = delayLine[delayPosition];
-            delayLine[delayPosition] = input + 0.12f * delayed;
-            buffer[index] = 0.92f * input + 0.2f * delayed;
+            delayLine[delayPosition] = input + feedbackGain * delayed;
+            buffer[index] = dryGain * input + wetGain * delayed;
             if (++delayPosition == delayLine.Length) delayPosition = 0;
         }
         return read;

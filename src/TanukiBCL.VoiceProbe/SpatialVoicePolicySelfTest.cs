@@ -289,6 +289,17 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS: disabled fixer block restores speech", true,
             SpatialVoicePolicy.Calculate(nosTasks, new Player(), jammedSpeaker,
                 nosPolicy with { NosVoicePositions = false, NosFixerJammingVoiceBlock = false }).Audible);
+        var lowpassPolicy = nosPolicy with { NosVoicePositions = false,
+            NosFixerJammingVoiceBlock = false, NosFixerJammingLowpass = true };
+        Check("NoS: jammed speaker gets 1200 Hz low-pass", true,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), jammedSpeaker, lowpassPolicy).FixerLowpass);
+        Check("NoS: jammed listener gets 1200 Hz low-pass", true,
+            SpatialVoicePolicy.Calculate(nosTasks, jammedListener, new Player(), lowpassPolicy).FixerLowpass);
+        Check("NoS: blocker takes priority over low-pass", false,
+            SpatialVoicePolicy.Calculate(nosTasks, new Player(), jammedSpeaker,
+                lowpassPolicy with { NosFixerJammingVoiceBlock = true }).Audible);
+        Check("NoS DSP: Fixer low-pass attenuates 4 kHz more than 400 Hz", true,
+            MeasureFixerFilteredRms(4000d) < MeasureFixerFilteredRms(400d) * 0.3d);
         Check("NoS: non-NoS game ignores fixer flags", true,
             SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks },
                 new Player(), jammedSpeaker, nosPolicy).Audible);
@@ -514,22 +525,23 @@ internal static class SpatialVoicePolicySelfTest
         };
         var sizeEffect = NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker,
             new LobbySettings(), audible: true);
-        Check("NoS size: small body selects direct pitch up", true,
-            sizeEffect?.Mode == NosSizeEffectMode.PitchUp &&
-            Math.Abs(sizeEffect.Strength - Math.Log(2d) / Math.Log(10d)) < 0.0001d);
+        Check("NoS size: small body selects source-filter pitch and formant", true,
+            sizeEffect is { Mode: NosSizeEffectMode.SourceFilter } &&
+            Math.Abs(sizeEffect.Pitch - (1d + Math.Log(2d) / Math.Log(10d))) < 0.0001d &&
+            Math.Abs(sizeEffect.Formant - 1.25d) < 0.0001d);
         sizedSpeaker.NosPlayer!.BodyRateX = 1d;
-        Check("NoS size: narrow body selects squash", true,
-            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true)?.Mode ==
-            NosSizeEffectMode.Squash);
+        Check("NoS size: narrow body selects source-filter squash", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true) is
+                { Mode: NosSizeEffectMode.SourceFilter, Squash: > 0d });
         sizedSpeaker.NosPlayer.BodyRateY = 2d;
-        Check("NoS size: large body selects jumbo", true,
-            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true)?.Mode ==
-            NosSizeEffectMode.Jumbo);
+        Check("NoS size: large body selects source-filter pitch down", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true) is
+                { Mode: NosSizeEffectMode.SourceFilter, Pitch: < 1d });
         sizedSpeaker.NosPlayer.BodyRateX = 0.7d;
         sizedSpeaker.NosPlayer.BodyRateY = 1d;
-        Check("NoS size: neutral height retains tone-rate shelf", true,
-            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true)?.Mode ==
-            NosSizeEffectMode.ToneOnly);
+        Check("NoS size: neutral height warps formant", true,
+            NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), true) is
+                { Mode: NosSizeEffectMode.SourceFilter, Formant: > 1d });
         Check("NoS size: lobby switch disables effect", true,
             NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker,
                 new LobbySettings { NosSizeVoiceEffect = false }, true) is null);
@@ -552,6 +564,53 @@ internal static class SpatialVoicePolicySelfTest
             0.5d, 1d, 0.5d));
         Check("NoS DSP: squash attenuates voice", true,
             Rms(squashAudio) < 0.15d);
+        var sourceFilterAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(
+            NosSizeEffectMode.SourceFilter, 0d, 1d, Pitch: 1.5d));
+        Check("NoS DSP: source-filter raises 440 Hz fundamental", true,
+            ToneAmplitude(sourceFilterAudio, 660d) > ToneAmplitude(sourceFilterAudio, 440d) * 1.5d);
+        Check("NoS DSP: source-filter output remains finite", true,
+            sourceFilterAudio.All(float.IsFinite) && Rms(sourceFilterAudio) > 0.001d);
+        var berserkerAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(
+            NosSizeEffectMode.Berserker, 0d, 1d));
+        Check("NoS DSP: Berserker saturation changes voice", true,
+            berserkerAudio.All(float.IsFinite) && ToneAmplitude(berserkerAudio, 1320d) > 0.001d);
+        var specialSpeaker = new Player { NosRole = new NosRoleData(1, "berserker", "Berserker",
+            "Berserker+Instance", false, 2, true) };
+        Check("NoS Berserker: active body selects distortion", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                new LobbySettings(), 0, true, false)?.Mode == NosSizeEffectMode.Berserker);
+        specialSpeaker.NosRole = specialSpeaker.NosRole with { IsBerserking = false, BodyType = 0 };
+        Check("NoS Berserker: inactive body has no distortion", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                new LobbySettings(), 0, true, false) is null);
+        specialSpeaker.NosPlayer = new NosPlayerData { BodyType = 3, NeckLength = 40d, BodyRateX = 1d };
+        Check("NoS Rokurokubi: 40 neck units add one octave", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                new LobbySettings(), 0, true, false) is { Mode: NosSizeEffectMode.SourceFilter, Pitch: 2d });
+        Check("NoS Rokurokubi: switch disables effect", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                new LobbySettings { NosRokurokubiVoiceEffect = false, NosSizeVoiceEffect = false },
+                0, true, false) is null);
+        specialSpeaker.NosRole = specialSpeaker.NosRole with { IsRainbowStar = true };
+        Check("NoS Rainbow Star: echo active during tasks", true,
+            VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(nosTasks, specialSpeaker, new LobbySettings()));
+        Check("NoS Rainbow Star: echo active during meetings", true,
+            VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(new AmongUsState
+                { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Discussion },
+                specialSpeaker, new LobbySettings()));
+        Check("NoS Rainbow Star: switch disables echo", false,
+            VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(nosTasks, specialSpeaker,
+                new LobbySettings { NosRainbowStarEcho = false }));
+        specialSpeaker.NosPlayer = new NosPlayerData
+            { Hat = new NosCostumeData("noshat_catudon_Citrus_Orange") };
+        Check("NoS Citrus: disguise persists during meetings", true,
+            VoiceDisguiseEffectPolicy.Select(new AmongUsState
+                { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Discussion },
+                new Player(), specialSpeaker, new LobbySettings(), 0, true, false)?.Mode ==
+                NosSizeEffectMode.Disguise);
+        Check("NoS Citrus: switch disables disguise", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                new LobbySettings { NosCitrusVoiceEffect = false }, 0, true, false) is null);
         var disguisedSpeaker = new Player
         {
             Name = "base", AppearanceName = "disguised", IsImpostor = true
@@ -582,12 +641,12 @@ internal static class SpatialVoicePolicySelfTest
         disguiseTasks.Mod = AmongUsModType.NebulaOnTheShip;
         Check("disguise: NoS size takes priority", true,
             VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
-                new LobbySettings(), 100, true, false)?.Mode == NosSizeEffectMode.Squash);
+                new LobbySettings(), 100, true, false)?.Mode == NosSizeEffectMode.SourceFilter);
         disguisedSpeaker.NosPlayer.BodyRateY = 0d;
         disguisedSpeaker.NosPlayer.BodyRateX = 0.8d;
-        Check("disguise: zero NoS body height blocks fallback", true,
+        Check("disguise: zero NoS body height uses 3.2.21 source-filter", true,
             VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
-                new LobbySettings(), 100, true, false) is null);
+                new LobbySettings(), 100, true, false)?.Mode == NosSizeEffectMode.SourceFilter);
         disguiseTasks.Map = MapType.Airship;
         disguiseTasks.AirshipMeetingByOutfit = true;
         disguisedSpeaker.NosPlayer.BodyRateY = 0.5d;
@@ -602,7 +661,7 @@ internal static class SpatialVoicePolicySelfTest
             disguisedSpeaker, new LobbySettings { SnrJumboVoice = true,
                 VoiceEffectEnabled = false }, 0, true, false);
         Check("SNR Jumbo: live size takes priority over disguise toggle", true,
-            snrJumbo is { Mode: NosSizeEffectMode.Jumbo, Strength: 0.5d });
+            snrJumbo is { Mode: NosSizeEffectMode.SourceFilter, Pitch: 0.7d, Formant: 0.775d });
         disguisedSpeaker.SnrRole = disguisedSpeaker.SnrRole with { JumboMaxSize = null };
         Check("SNR Jumbo: missing size blocks disguise fallback", true,
             VoiceDisguiseEffectPolicy.Select(disguiseTasks, disguiseListener, disguisedSpeaker,
@@ -1067,7 +1126,11 @@ internal static class SpatialVoicePolicySelfTest
                 "wallsBlockAudio", "publicLobby_on", "publicLobby_title",
                 "publicLobby_language", "publicLobby_mods"
             };
-            Check("lobby wire: released 3.2.8 field set", true,
+            releasedWireFields.UnionWith([
+                "nosRokurokubiVoiceEffect", "nosBerserkerVoiceEffect",
+                "nosCitrusVoiceEffect", "nosRainbowStarEcho", "nosFixerJammingLowpass"
+            ]);
+            Check("lobby wire: released 3.2.21 field set", true,
                 releasedWireFields.SetEquals(document.RootElement.EnumerateObject()
                     .Select(property => property.Name)));
             Check("lobby wire: publicLobby_on", true,
@@ -1177,6 +1240,14 @@ internal static class SpatialVoicePolicySelfTest
         var energy = 0d;
         foreach (var sample in steadySamples) energy += sample * sample;
         return Math.Sqrt(energy / steadySamples.Length);
+    }
+
+    private static double MeasureFixerFilteredRms(double frequency)
+    {
+        var filter = new FixerLowpassSampleProvider(new TestSineSource(frequency)) { Enabled = true };
+        var samples = new float[4_800];
+        filter.Read(samples, 0, samples.Length);
+        return Rms(samples[2_400..]);
     }
 
     private static double MeasureCameraFilteredRms(double frequency)
