@@ -145,7 +145,61 @@ internal static class NosSnapshotSelfTest
             throw new InvalidOperationException("32-bit NoS layout accepted");
         }
         catch (InvalidDataException) { }
+        VerifyRetrySchedule();
         Console.WriteLine("[PASS] 64-bit NoS player/radio pointers, 20261005 costumes, 20261009 body, publication and torn-read rejection");
         return 0;
+    }
+
+    private static void VerifyRetrySchedule()
+    {
+        var clock = new DateTimeOffset(2026, 10, 10, 0, 0, 0, TimeSpan.Zero);
+        var attempts = 0;
+        var tracker = new NosSnapshotReader((_, _) =>
+        {
+            attempts++;
+            return Task.FromException<NosLayout>(new IOException("NoS data pending"));
+        }, () => clock);
+        byte[] Read(long address, int size) => throw new InvalidOperationException("No layout was resolved");
+        void Update(string session) => tracker.Update(42, session, 8, Read);
+        void Require(int expected, string condition)
+        {
+            if (attempts != expected)
+                throw new InvalidOperationException($"NoS 3.2.22 retry {condition}: {attempts}, expected {expected}");
+        }
+
+        Update("lobby");
+        Require(1, "initial attempt");
+        Update("lobby");
+        if (!tracker.Status.Contains("1秒後", StringComparison.Ordinal))
+            throw new InvalidOperationException("NoS first retry was not scheduled after one second");
+        clock = clock.AddMilliseconds(999);
+        Update("lobby");
+        Require(1, "before one-second deadline");
+        clock = clock.AddMilliseconds(1);
+        Update("lobby");
+        Require(2, "at one-second deadline");
+        Update("lobby");
+        clock = clock.AddMilliseconds(1);
+        Update("round");
+        Require(3, "new round bypasses lobby retry wait");
+        Update("round");
+        clock = clock.AddMilliseconds(999);
+        Update("round");
+        Require(3, "before round retry deadline");
+        clock = clock.AddMilliseconds(1);
+        Update("round");
+        Require(4, "round first retry");
+        Update("round");
+        clock = clock.AddSeconds(2);
+        Update("round");
+        Require(5, "round second retry");
+        Update("round");
+        clock = clock.AddMilliseconds(2999);
+        Update("round");
+        Require(5, "before capped retry deadline");
+        clock = clock.AddMilliseconds(1);
+        Update("round");
+        Require(6, "at capped three-second retry deadline");
+        Console.WriteLine("[PASS] NoS 3.2.22 retry: 1-3 seconds and immediate round transition");
     }
 }

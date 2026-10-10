@@ -9,13 +9,18 @@ namespace TanukiBCL.VoiceProbe.GameMemory;
 internal sealed class NosSnapshotReader
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(3);
+    private readonly Func<int, int, Task<NosLayout>> resolve;
+    private readonly Func<DateTimeOffset> now;
     private int pid = -1;
     private int pointerSize;
     private NosLayout? layout;
     private Task<NosLayout>? resolveTask;
     private DateTimeOffset retryAt;
     private DateTimeOffset? failureSince;
-    private TimeSpan retryDelay = TimeSpan.FromSeconds(5);
+    private TimeSpan retryDelay = InitialRetryDelay;
+    private string retrySession = string.Empty;
     private string observedSession = string.Empty;
     private ulong publication;
     private DateTimeOffset publishedAt;
@@ -26,6 +31,13 @@ internal sealed class NosSnapshotReader
 
     public int? SchemaVersion => layout?.SchemaVersion;
 
+    public NosSnapshotReader(Func<int, int, Task<NosLayout>>? resolve = null,
+        Func<DateTimeOffset>? now = null)
+    {
+        this.resolve = resolve ?? ResolveAsync;
+        this.now = now ?? (() => DateTimeOffset.UtcNow);
+    }
+
     public void Reset()
     {
         pid = -1;
@@ -34,7 +46,8 @@ internal sealed class NosSnapshotReader
         resolveTask = null;
         retryAt = default;
         failureSince = null;
-        retryDelay = TimeSpan.FromSeconds(5);
+        retryDelay = InitialRetryDelay;
+        retrySession = string.Empty;
         observedSession = string.Empty;
         publication = 0;
         publishedAt = default;
@@ -47,16 +60,16 @@ internal sealed class NosSnapshotReader
     private void FailedRead(string reason)
     {
         lastFailure = reason;
-        failureSince ??= DateTimeOffset.UtcNow;
+        failureSince ??= now();
         Status = $"{reason}（自動再取得中）";
-        if (DateTimeOffset.UtcNow - failureSince < TimeSpan.FromSeconds(5)) return;
+        if (now() - failureSince < TimeSpan.FromSeconds(5)) return;
         layout = null;
         failureSince = null;
         observedSession = string.Empty;
         publication = 0;
         publishedAt = default;
         fresh = false;
-        retryAt = DateTimeOffset.UtcNow;
+        retryAt = now();
         Status = $"{reason}（読み取り位置を再取得します）";
     }
 
@@ -90,6 +103,12 @@ internal sealed class NosSnapshotReader
             pid = processId;
             pointerSize = targetPointerSize;
         }
+        if (session != retrySession)
+        {
+            retrySession = session;
+            retryDelay = InitialRetryDelay;
+            if (layout is null) retryAt = default;
+        }
 
         if (resolveTask is { IsCompleted: true })
         {
@@ -100,20 +119,21 @@ internal sealed class NosSnapshotReader
             }
             catch (Exception exception)
             {
-                // 3.2.9 retries helper crashes as well as MOD errors, backing off from 5 to 30 seconds.
+                // 3.2.22 retries helper crashes and MOD errors after 1, 2, then at most 3 seconds.
                 lastFailure = $"NoS未取得: {exception.Message}";
                 Status = $"{lastFailure}（{retryDelay.TotalSeconds:0}秒後に自動再取得）";
-                retryAt = DateTimeOffset.UtcNow + retryDelay;
-                retryDelay = TimeSpan.FromSeconds(Math.Min(retryDelay.TotalSeconds * 2, 30));
+                retryAt = now() + retryDelay;
+                retryDelay = TimeSpan.FromSeconds(Math.Min(retryDelay.TotalSeconds * 2,
+                    MaxRetryDelay.TotalSeconds));
             }
             resolveTask = null;
         }
 
         if (layout is null)
         {
-            if (resolveTask is null && DateTimeOffset.UtcNow >= retryAt)
+            if (resolveTask is null && now() >= retryAt)
             {
-                resolveTask = ResolveAsync(processId, targetPointerSize);
+                resolveTask = resolve(processId, targetPointerSize);
                 Status = lastFailure is null
                     ? "NoSスナップショットの公開を有効化中…"
                     : $"{lastFailure}（読み取り位置を自動再取得中）";
@@ -133,16 +153,16 @@ internal sealed class NosSnapshotReader
             if (snapshot.Publication != publication)
             {
                 publication = snapshot.Publication;
-                publishedAt = DateTimeOffset.UtcNow;
+                publishedAt = now();
                 fresh = true;
             }
-            if (!fresh || DateTimeOffset.UtcNow - publishedAt > TimeSpan.FromSeconds(3))
+            if (!fresh || now() - publishedAt > TimeSpan.FromSeconds(3))
             {
                 FailedRead(fresh ? "NoSデータの更新が3秒以上停止しています" : "NoSの新しいデータがまだ公開されていません");
                 return null;
             }
             failureSince = null;
-            retryDelay = TimeSpan.FromSeconds(5);
+            retryDelay = InitialRetryDelay;
             lastFailure = null;
             Status = "NoSスナップショットを自動更新中";
             return snapshot;

@@ -1,6 +1,6 @@
 # TanukiBCL v3.2.21 互換チェック
 
-基準は公式 [`v3.2.21`](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.21) (`3b07ee3fa290cc6eff9ecf5c4403579f849ded03`)。.NET版は64bit版Among Usのみ対象とする。現在のソース版は `3.2.21-netdev.0` で、配布版はまだ `3.2.20-net-beta.1`。
+基準は公式 [`v3.2.21`](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.21) (`3b07ee3fa290cc6eff9ecf5c4403579f849ded03`)。.NET版は64bit版Among Usのみ対象とする。この変更は `3.2.21-netdev.0` で実装し、`3.2.22-net-beta.1` に含めて配布した。
 
 | 公式での変更 | .NET版での対応 |
 | --- | --- |
