@@ -38,6 +38,7 @@ public partial class VoiceView : UserControl
     private bool popupDirty;
     private bool configuringLaunchPlatforms;
     private string uiLanguage = "ja";
+    private bool showingGameMenu;
 
     public VoiceView()
     {
@@ -219,6 +220,7 @@ public partial class VoiceView : UserControl
         WaitingTitle.Text = UiLocalization.Translate(language, "game.waiting");
         LaunchPresetLabel.Text = UiLocalization.Translate(language, "game.open");
         PublicLobbyButton.Content = UiLocalization.Translate(language, "buttons.public_lobby");
+        if (showingGameMenu) LobbyCode.Text = UiLocalization.Translate(language, "game.menu");
         RebuildLaunchDropdown();
     }
 
@@ -331,16 +333,25 @@ public partial class VoiceView : UserControl
         // player. Only the avatar/name/remote roster depend on that player.
         var lobbyDetected = game is not null && !string.IsNullOrWhiteSpace(game.LobbyCode) &&
             game.LobbyCode != "MENU" && game.GameState is not (GameState.Menu or GameState.Unknown);
+        showingGameMenu = game is not null && !lobbyDetected;
         var hasLocal = lobbyDetected && local is not null;
-        WaitingPanel.Visibility = lobbyDetected ? Visibility.Collapsed : Visibility.Visible;
+        WaitingPanel.Visibility = game is null ? Visibility.Visible : Visibility.Collapsed;
+        PublicLobbyButton.Visibility = showingGameMenu ? Visibility.Visible : Visibility.Collapsed;
         OtherPlayersScroll.Visibility = hasLocal ? Visibility.Visible : Visibility.Collapsed;
-        LobbyHeader.Visibility = lobbyDetected ? Visibility.Visible : Visibility.Collapsed;
+        LobbyHeader.Visibility = game is null ? Visibility.Collapsed : Visibility.Visible;
         LocalAvatarSlot.Visibility = hasLocal ? Visibility.Visible : Visibility.Collapsed;
         LocalAvatarColumn.Width = new GridLength(hasLocal ? 96d : 0d);
         LocalNameSlot.Visibility = hasLocal ? Visibility.Visible : Visibility.Collapsed;
+        MuteControls.Visibility = lobbyDetected ? Visibility.Visible : Visibility.Collapsed;
+        MuteColumn.Width = new GridLength(lobbyDetected ? 28d : 0d);
+        CodeBackground.Background = showingGameMenu ? Brushes.Transparent :
+            new SolidColorBrush(Color.FromRgb(0x3e, 0x43, 0x46));
+        CodeBackground.Padding = showingGameMenu ? new Thickness(0) : new Thickness(9, 5, 9, 5);
         CodeBackground.Margin = hasLocal ? new Thickness(0, 5, 0, 0) : new Thickness(0);
         HeaderPanel.Margin = hasLocal ? new Thickness(0, -6, 0, 6) :
+            showingGameMenu ? new Thickness(0, 10, 0, 10) :
             lobbyDetected ? new Thickness(0, 6, 0, 6) : new Thickness(0);
+        if (showingGameMenu) LobbyCode.Text = UiLocalization.Translate(uiLanguage, "game.menu");
         if (lobbyDetected && game is not null)
         {
             LobbyCode.Text = hideCode ? "LOBBY" : game.LobbyCode;
@@ -570,9 +581,45 @@ public partial class VoiceView : UserControl
             view.LocalName.Text != "Local")
             throw new InvalidOperationException("Normal lobby header did not return after the roster recovered");
         game.GameState = GameState.Menu;
+        game.LobbyCode = "MENU";
+        view.Update(game, true, false, false, false, peers, hideCode: true);
+        if (view.WaitingPanel.Visibility != Visibility.Collapsed ||
+            view.PublicLobbyButton.Visibility != Visibility.Visible ||
+            view.LobbyHeader.Visibility != Visibility.Visible ||
+            view.LobbyCode.Text != "メニュー" ||
+            view.MuteControls.Visibility != Visibility.Collapsed ||
+            view.MuteColumn.Width.Value != 0d ||
+            view.CodeBackground.Background is not SolidColorBrush { Color: { A: 0 } } ||
+            view.LocalAvatarSlot.Visibility != Visibility.Collapsed ||
+            view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
+            throw new InvalidOperationException("Detected Among Us menu did not replace the launch screen");
+        view.Measure(new Size(280, 390));
+        view.Arrange(new Rect(0, 0, 280, 390));
+        view.UpdateLayout();
+        var menuDividerTop = view.HeaderDivider.TranslatePoint(new Point(), view).Y;
+        var publicLobbyTop = view.PublicLobbyButton.TranslatePoint(new Point(), view).Y;
+        if (menuDividerTop is < 73 or > 84 || publicLobbyTop is < 84 or > 95)
+            throw new InvalidOperationException(
+                $"Detected game menu shifted: divider={menuDividerTop:0.0}, public lobby={publicLobbyTop:0.0}");
+        view.SetLanguage("en");
+        if (view.LobbyCode.Text != "MENU" ||
+            !Equals(view.PublicLobbyButton.Content, UiLocalization.Translate("en", "buttons.public_lobby")))
+            throw new InvalidOperationException("Detected game menu did not follow the selected language");
+        view.Update(null, false, false, false, false, peers);
+        if (view.WaitingPanel.Visibility != Visibility.Visible ||
+            view.PublicLobbyButton.Visibility != Visibility.Collapsed ||
+            view.LobbyHeader.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("Game launcher did not return after Among Us exited");
+        view.SetLanguage("ja");
+        game.GameState = GameState.Lobby;
+        game.LobbyCode = "ABCDEF";
         view.Update(game, true, false, false, false, peers);
-        if (view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
-            throw new InvalidOperationException("Footer did not return on the game-waiting screen");
+        if (view.WaitingPanel.Visibility != Visibility.Collapsed ||
+            view.PublicLobbyButton.Visibility != Visibility.Collapsed ||
+            view.LobbyCode.Text != "ABCDEF" ||
+            view.MuteControls.Visibility != Visibility.Visible ||
+            view.MuteColumn.Width.Value != 28d)
+            throw new InvalidOperationException("Lobby controls did not return after leaving the menu");
         view.SetError("Connection failed");
         if (view.ErrorPanel.Visibility != Visibility.Visible ||
             view.ErrorMessage.Text != "Connection failed" ||
