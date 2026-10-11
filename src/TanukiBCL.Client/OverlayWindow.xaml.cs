@@ -19,6 +19,10 @@ public partial class OverlayWindow : Window
     private const int WsExTransparent = 0x20;
     private const int WsExToolWindow = 0x80;
     private const int WsExNoActivate = 0x08000000;
+    private const uint GwHwndPrev = 3;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoActivate = 0x0010;
     private static readonly Brush TopBackground = FrozenBrush(Color.FromArgb(0x80, 0, 0, 0));
     private static readonly Brush BottomLeftBackground = FrozenBrush(Color.FromArgb(0x59, 0, 0, 0));
     private static readonly Brush CompactSideBackground = FrozenBrush(Color.FromArgb(0xc0, 0x25, 0x23, 0x2a));
@@ -175,9 +179,13 @@ public partial class OverlayWindow : Window
             if (IsVisible) Hide();
             return;
         }
+        RefreshPlacement(gameWindow);
+    }
+
+    private void RefreshPlacement(IntPtr gameWindow)
+    {
         if (gameWindow == IntPtr.Zero || IsIconic(gameWindow) ||
-            GetWindowThreadProcessId(GetForegroundWindow(), out var foregroundPid) == 0 ||
-            foregroundPid != gameProcessId || !GetClientRect(gameWindow, out var rect) ||
+            !GetClientRect(gameWindow, out var rect) ||
             rect.Right <= 0 || rect.Bottom <= 0)
         {
             if (IsVisible) Hide();
@@ -207,6 +215,19 @@ public partial class OverlayWindow : Window
             Render();
         }
         if (!IsVisible) Show();
+        var overlayHandle = new WindowInteropHelper(this).Handle;
+        if (!PlaceDirectlyAbove(gameWindow, overlayHandle)) Hide();
+    }
+
+    private static bool PlaceDirectlyAbove(IntPtr gameWindow, IntPtr overlayHandle)
+    {
+        if (overlayHandle == IntPtr.Zero || gameWindow == overlayHandle) return false;
+        // Keep the overlay next to its game in Z-order, not above unrelated windows.
+        // When another app is activated it moves ahead of both without hiding the overlay.
+        var aboveGame = GetWindow(gameWindow, GwHwndPrev);
+        if (aboveGame == overlayHandle) return true;
+        return SetWindowPos(overlayHandle, aboveGame, 0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
     private void Render()
@@ -461,10 +482,12 @@ public partial class OverlayWindow : Window
         VerifyAlternateSidePlacement();
         VerifySidePlacement();
         VerifyRemoteDeathDisplay();
+        VerifyWindowOrder();
         var settings = new ClientSettings { EnableOverlay = true, MeetingOverlay = true };
         var window = new OverlayWindow(0, settings) { Width = 1280, Height = 720 };
         try
         {
+            if (window.Topmost) throw new InvalidOperationException("Overlay must not cover unrelated applications");
             var state = new AmongUsState
             {
                 GameState = GameState.Discussion, LobbyCode = "TEST",
@@ -623,6 +646,73 @@ public partial class OverlayWindow : Window
             Console.WriteLine("[PASS] Left/right side avatars, names and vertical centering at normal and alternate positions");
         }
         finally { window.Close(); }
+    }
+
+    private static void VerifyWindowOrder()
+    {
+        static Window CreateWindow() => new()
+        {
+            Width = 64, Height = 64, Left = -20_000, Top = -20_000,
+            WindowStyle = WindowStyle.None, ShowInTaskbar = false, ShowActivated = false
+        };
+        var gameWindow = CreateWindow();
+        var overlay = new OverlayWindow(0, new ClientSettings { EnableOverlay = true })
+            { Width = 64, Height = 64, Left = -20_000, Top = -20_000 };
+        overlay.placementTimer.Stop();
+        var otherWindow = CreateWindow();
+        try
+        {
+            gameWindow.Show();
+            otherWindow.Show();
+            var gameHandle = new WindowInteropHelper(gameWindow).Handle;
+            var otherHandle = new WindowInteropHelper(otherWindow).Handle;
+            overlay.game = new AmongUsState { GameState = GameState.Tasks };
+            if (!SetWindowPos(otherHandle, IntPtr.Zero, 0, 0, 0, 0,
+                SwpNoMove | SwpNoSize | SwpNoActivate))
+                throw new InvalidOperationException("Could not raise the unrelated test window");
+            overlay.RefreshPlacement(gameHandle);
+            var overlayHandle = new WindowInteropHelper(overlay).Handle;
+            if (!overlay.IsVisible || !WindowsOrdered(otherHandle, overlayHandle, gameHandle))
+                throw new InvalidOperationException("Overlay was not placed directly above the game");
+            overlay.RefreshPlacement(gameHandle);
+            if (!overlay.IsVisible || !WindowsOrdered(otherHandle, overlayHandle, gameHandle))
+                throw new InvalidOperationException("Overlay covered an unrelated window");
+            var raisedGame = SetWindowPos(gameHandle, IntPtr.Zero, 0, 0, 0, 0,
+                SwpNoMove | SwpNoSize | SwpNoActivate);
+            overlay.RefreshPlacement(gameHandle);
+            if (!raisedGame || !overlay.IsVisible ||
+                !WindowsOrdered(overlayHandle, gameHandle, otherHandle))
+                throw new InvalidOperationException("Overlay did not follow the game Z-order");
+            otherWindow.Topmost = true;
+            overlay.RefreshPlacement(gameHandle);
+            if (!overlay.IsVisible ||
+                !WindowsOrdered(otherHandle, overlayHandle, gameHandle))
+                throw new InvalidOperationException("Overlay covered a topmost application");
+            gameWindow.WindowState = WindowState.Minimized;
+            overlay.RefreshPlacement(gameHandle);
+            if (overlay.IsVisible)
+                throw new InvalidOperationException("Overlay remained visible after the game was minimized");
+            gameWindow.WindowState = WindowState.Normal;
+            overlay.RefreshPlacement(gameHandle);
+            if (!overlay.IsVisible || !WindowsOrdered(otherHandle, overlayHandle, gameHandle))
+                throw new InvalidOperationException("Overlay did not return with the game window");
+            Console.WriteLine("[PASS] Overlay follows the game without covering other windows");
+        }
+        finally
+        {
+            otherWindow.Close();
+            overlay.Close();
+            gameWindow.Close();
+        }
+    }
+
+    private static bool WindowsOrdered(params IntPtr[] handles)
+    {
+        var order = new List<IntPtr>();
+        if (!EnumWindows((window, _) => { order.Add(window); return true; }, IntPtr.Zero)) return false;
+        var indexes = handles.Select(handle => order.IndexOf(handle)).ToArray();
+        return indexes.All(index => index >= 0) &&
+            indexes.Zip(indexes.Skip(1)).All(pair => pair.First < pair.Second);
     }
 
     private static void VerifyAlternateSidePlacement()
@@ -945,10 +1035,18 @@ public partial class OverlayWindow : Window
     private struct NativeRect { public int Left; public int Top; public int Right; public int Bottom; }
 
     [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
+    private static extern IntPtr GetWindow(IntPtr window, uint command);
 
-    [DllImport("user32.dll")]
-    private static extern uint GetWindowThreadProcessId(IntPtr window, out int processId);
+    private delegate bool EnumWindowsCallback(IntPtr window, IntPtr context);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr context);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr window, IntPtr insertAfter, int x, int y,
+        int width, int height, uint flags);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
