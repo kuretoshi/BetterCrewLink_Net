@@ -66,6 +66,10 @@ class DiscordReleaseTests(unittest.TestCase):
                 request = open_url.call_args_list[1][0][0]
                 self.assertEqual(request.get_method(), "POST")
                 self.assertEqual(request.full_url, WEBHOOK + "?wait=true")
+                self.assertEqual(
+                    request.get_header("User-agent"),
+                    f"DiscordBot (https://github.com/{notifier.REPOSITORY}, 1.0)",
+                )
                 payload = json.loads(request.data)
                 self.assertEqual(payload["allowed_mentions"], {"parse": []})
                 self.assertIn(release["html_url"], payload["content"])

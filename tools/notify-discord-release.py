@@ -68,7 +68,11 @@ def main(channel, tag):
     payload = json.dumps({"content": message, "allowed_mentions": {"parse": []}}).encode("utf-8")
     request = Request(
         f"{webhook}?wait=true", data=payload,
-        headers={"Content-Type": "application/json"}, method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": f"DiscordBot (https://github.com/{REPOSITORY}, 1.0)",
+        },
+        method="POST",
     )
     try:
         with urlopen(request, timeout=20) as response:
