@@ -73,7 +73,7 @@ catch (Exception error)
 static object? BuildLiveLayout(int pid, SnrPlayerSource source, int pointerSize, Dictionary<string, Dictionary<long,string>> enums)
 {
     // The .NET port targets the 64-bit Among Us process only.
-    if (pointerSize != 8 || source.PlayerType.IsCollectible) return null;
+    if (pointerSize != 8) return null;
     object? DescribeField(string name)
     {
         var field = source.PlayerType.Fields.FirstOrDefault(f => f.Name == name || f.Name == $"<{name}>k__BackingField");

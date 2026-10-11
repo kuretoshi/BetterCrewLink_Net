@@ -741,6 +741,12 @@ internal static class SpatialVoicePolicySelfTest
             airshipSpawnFallback: true);
         Check("Airship spawn: living player hears distant voice centered", true,
             spawnMix is { Audible: true, Pan: 0d, Gain: 1d });
+        var zeroCoordinateMix = SpatialVoicePolicy.Calculate(
+            new AmongUsState { GameState = GameState.Tasks, Map = MapType.Airship },
+            new Player { X = 0d, Y = 0d }, new Player { X = 0d, Y = 0.5d },
+            new SpatialVoiceSettings(MaxDistance: 5d));
+        Check("Airship main hall: zero position remains audible", true,
+            zeroCoordinateMix.Audible && zeroCoordinateMix.Distance == 0.5d);
         var spawnCameraState = new AmongUsState
         {
             GameState = GameState.Tasks, Map = MapType.Airship, CurrentCamera = CameraLocation.East

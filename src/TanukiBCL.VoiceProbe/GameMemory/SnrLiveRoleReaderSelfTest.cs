@@ -16,7 +16,7 @@ internal static class SnrLiveRoleReaderSelfTest
         var memory = new Dictionary<ulong, byte[]>
         {
             [arraySlot] = new byte[8], [array] = new byte[16 + 256 * 8],
-            [player] = new byte[48], [ability] = new byte[32],
+            [player] = new byte[160], [ability] = new byte[48],
             [data] = new byte[24], [list] = new byte[32], [items] = new byte[24]
         };
         void Put(ulong block, int offset, ulong value) =>
@@ -30,20 +30,21 @@ internal static class SnrLiveRoleReaderSelfTest
         PutInt(array, 8, 256);
         Put(array, 16 + 5 * 8, player);
         Put(player, 0, playerType);
-        memory[player][8] = 5;
-        PutInt(player, 12, 7);
-        PutInt(player, 16, 5);
-        PutInt(player, 20, 0);
-        Put(player, 24, list);
+        memory[player][150] = 5;
+        BitConverter.GetBytes((short)7).CopyTo(memory[player], 144);
+        BitConverter.GetBytes((short)5).CopyTo(memory[player], 146);
+        BitConverter.GetBytes((short)0).CopyTo(memory[player], 148);
+        Put(player, 72, list);
         Put(list, 0, listType);
         Put(list, 8, items);
         PutInt(list, 16, 1);
+        PutInt(list, 20, 99); // Adjacent List<T> version is not part of the 32-bit count.
         Put(items, 0, itemsType);
-        PutInt(items, 8, 1);
+        PutInt(items, 8, 4);
         Put(items, 16, ability);
         Put(ability, 0, abilityType);
-        PutFloat(ability, 8, 2.5f);
-        Put(ability, 16, data);
+        PutFloat(ability, 36, 2.5f);
+        Put(ability, 40, data);
         Put(data, 0, dataType);
         PutFloat(data, 8, 5f);
 
@@ -53,18 +54,18 @@ internal static class SnrLiveRoleReaderSelfTest
             PlayerType = playerType, ArrayLengthOffset = 8, ArrayDataOffset = 16,
             Fields = new SnrLiveFields
             {
-                PlayerId = new SnrNumberField { Offset = 8, Size = 1 },
-                Role = new SnrNumberField { Offset = 12, Size = 4,
+                PlayerId = new SnrNumberField { Offset = 150, Size = 1 },
+                Role = new SnrNumberField { Offset = 144, Size = 2,
                     Names = new Dictionary<string, string> { ["7"] = "Jackal", ["9"] = "Sidekick" } },
-                Modifier = new SnrNumberField { Offset = 16, Size = 4,
+                Modifier = new SnrNumberField { Offset = 146, Size = 2,
                     Names = new Dictionary<string, string> { ["1"] = "Other", ["4"] = "JumboModifier" } },
-                GhostRole = new SnrNumberField { Offset = 20, Size = 4 }
+                GhostRole = new SnrNumberField { Offset = 148, Size = 2 }
             },
             Jumbo = new SnrJumboLayout
             {
                 AbilityType = abilityType, DataType = dataType, ListType = listType,
-                ItemsType = itemsType, AbilitiesOffset = 24, ItemsOffset = 8,
-                CountOffset = 16, CurrentOffset = 8, DataOffset = 16, MaxOffset = 8
+                ItemsType = itemsType, AbilitiesOffset = 72, ItemsOffset = 8,
+                CountOffset = 16, CurrentOffset = 36, DataOffset = 40, MaxOffset = 8
             }
         };
         layout.Validate(123);
@@ -90,7 +91,7 @@ internal static class SnrLiveRoleReaderSelfTest
         {
             var bytes = Read(address, size);
             if (address == checked((long)(array + 16)) && size == 256 * 8 && ++arrayReads == 2)
-                PutInt(player, 12, 9);
+                BitConverter.GetBytes((short)9).CopyTo(memory[player], 144);
             return bytes;
         }
         var rejected = false;
