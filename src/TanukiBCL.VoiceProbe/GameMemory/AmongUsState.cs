@@ -105,6 +105,12 @@ public sealed class Player
 
     public SnrRoleData? SnrRole { get; set; }
 
+    public bool SnrPushedFalling { get; set; }
+
+    public VoicePosition? SnrPushOrigin { get; set; }
+
+    internal Player CopyForVoice() => (Player)MemberwiseClone();
+
     public TohRoleData? TohRole { get; set; }
 
     public bool HasVisibleAppearanceChanged()
@@ -236,6 +242,12 @@ public sealed class AmongUsState
     public VoicePosition? NosLocalMicPosition { get; set; }
 
     public List<NosRadioData> NosRadios { get; set; } = [];
+
+    public List<NosMegaphoneState> NosMegaphones { get; set; } = [];
+
+    public List<NosPortableMegaphoneState> NosPortableMegaphones { get; set; } = [];
+
+    public List<NosBibiriEchoState> NosBibiriEchoes { get; set; } = [];
 
     public List<int> ClosedDoors { get; set; } = [];
 }

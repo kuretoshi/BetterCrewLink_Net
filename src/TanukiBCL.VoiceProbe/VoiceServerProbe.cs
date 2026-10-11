@@ -54,6 +54,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private volatile bool hasActiveLobbySettings;
     private int? hostClientId;
     private AudioDeviceSession? audioSession;
+    private readonly NosVoiceRoleSender nosVoiceRoleSender = new();
+    private readonly NosHostVoiceAdmission nosHostVoiceAdmission = new();
+    private readonly NosHostVoiceRelay nosHostVoiceRelay = new();
     private bool microphoneMuted;
     private bool deafened;
     private double masterVolume = 100d;
@@ -809,7 +812,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 echoCancellation,
                 noiseSuppression,
                 autoGainControl,
-                options.OldSampleDebug);
+                options.OldSampleDebug,
+                (rms, active) => nosVoiceRoleSender.Send(rms, active,
+                    options.GameProcessId ?? 0, currentGameState));
             audioSession.SetMicrophoneMuted(microphoneMuted);
             audioSession.SetDeafened(deafened);
             UpdateLocalJamming();
@@ -1047,6 +1052,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
 
             var type = data.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : "other";
+            if (type == "nos-host-voice")
+            {
+                if (peerClientIds.TryGetValue(remoteSocketId, out var clientId) &&
+                    envelope.TryGetProperty("client", out var client) &&
+                    nosHostVoiceAdmission.TryAccept(remoteSocketId, client, data,
+                        currentGameState, clientId, out var sample) && sample is not null)
+                {
+                    nosHostVoiceRelay.Send(sample, options.GameProcessId ?? 0, currentGameState);
+                    _ = RunPeerOperationAsync(remoteSocketId,
+                        () => SendSignalAsync(remoteSocketId, new { type = "nos-host-voice-ack" }));
+                }
+                return;
+            }
             if (type == "bcl-control" && data.TryGetProperty("payload", out var payload) && payload.ValueKind == JsonValueKind.String)
             {
                 ApplyPeerData(remoteSocketId, payload.GetString() ?? string.Empty);
@@ -1837,12 +1855,19 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings,
             IsImpostorRadioActive(clientId), CanHearNosRadio(currentGameState, other, me),
             airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
-        mix = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs)).Apply(mix);
+        var playerConfig = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs));
+        mix = playerConfig.Apply(mix);
         var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
             activeLobbySettings, voiceEffectStrength, mix.Audible, IsImpostorRadioActive(clientId));
         var starEcho = VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(currentGameState, other,
             activeLobbySettings);
-        audioSession?.SetPeerMix(socketId, mix, effect, starEcho);
+        var deathEchoActive = currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
+            currentGameState.GameState is GameState.Tasks or GameState.Discussion &&
+            !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d && !deafened;
+        var deathEchoEvent = currentGameState.NosBibiriEchoes
+            .FirstOrDefault(item => item.PlayerId == other.Id)?.UnixMs;
+        audioSession?.SetPeerMix(socketId, mix, effect, starEcho,
+            deathEchoActive, other.IsDead, deathEchoEvent);
         PeerMixChanged?.Invoke(clientId, mix);
     }
 
@@ -2181,6 +2206,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             }
 
             TryCleanup("audio session", () => audioSession?.Dispose());
+            TryCleanup("NoS voice-role sender", nosVoiceRoleSender.Dispose);
+            TryCleanup("NoS host voice relay", nosHostVoiceRelay.Dispose);
             TryCleanup("peer manager", peerManager.Dispose);
             TryCleanup("voice socket", socket.Dispose);
         }

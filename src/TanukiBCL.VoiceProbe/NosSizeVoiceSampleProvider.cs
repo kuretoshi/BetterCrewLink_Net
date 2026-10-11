@@ -45,6 +45,12 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
         if (effect != appliedEffect) Configure(effect);
         if (effect.Mode == NosSizeEffectMode.SourceFilter)
         {
+            if (effect.MegaphoneEnergy is { } energy)
+            {
+                var wave = Math.Sin(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000d * Math.PI * 8d);
+                sourceFilter!.SetParameters(0.85d + wave * (0.12d + energy * 0.2d),
+                    0.75d + wave * 0.12d, 0.65d);
+            }
             sourceFilter!.Process(buffer, offset, read);
             return read;
         }

@@ -747,6 +747,23 @@ internal static class SpatialVoicePolicySelfTest
             new SpatialVoiceSettings(MaxDistance: 5d));
         Check("Airship main hall: zero position remains audible", true,
             zeroCoordinateMix.Audible && zeroCoordinateMix.Distance == 0.5d);
+        var fallingState = new AmongUsState
+        {
+            Mod = AmongUsModType.SuperNewRoles, GameState = GameState.Tasks
+        };
+        var fallingSpeaker = new Player
+        {
+            IsDead = true, SnrPushedFalling = true, SnrPushOrigin = new VoicePosition(1d, 0d), X = 100d
+        };
+        var fallingMix = SpatialVoicePolicy.Calculate(fallingState, new Player(), fallingSpeaker,
+            new SpatialVoiceSettings(MaxDistance: 5d));
+        Check("SNR push: falling voice uses origin and adds reverb", true,
+            fallingMix.Audible && fallingMix.Reverb && fallingMix.Distance == 1d);
+        fallingSpeaker.SnrPushedFalling = false;
+        Check("SNR push: final death restores ghost hearing rule", false,
+            SpatialVoicePolicy.Calculate(fallingState, new Player(), fallingSpeaker,
+                new SpatialVoiceSettings(MaxDistance: 5d)).Audible);
+        VoiceRoleReleaseSelfTest.Verify(Check);
         var spawnCameraState = new AmongUsState
         {
             GameState = GameState.Tasks, Map = MapType.Airship, CurrentCamera = CameraLocation.East

@@ -17,6 +17,8 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly object playbackGate = new();
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
     private readonly Action<bool> onVadChanged;
+    private readonly Action<double, bool>? onVoiceRoleSample;
+    private long lastVoiceRoleSampleAt;
     private readonly MicrophoneProcessor microphoneProcessor;
     private MicrophoneCaptureConverter captureConverter;
     private readonly TanukiVoiceActivityDetector voiceDetector = new();
@@ -45,12 +47,14 @@ internal sealed class AudioDeviceSession : IDisposable
         bool echoCancellation = true,
         bool noiseSuppression = true,
         bool autoGainControl = false,
-        bool oldSampleDebug = false)
+        bool oldSampleDebug = false,
+        Action<double, bool>? onVoiceRoleSample = null)
     {
         ValidateDeviceNumbers(inputDevice, outputDevice);
         this.inputDevice = inputDevice;
         this.onCaptured = onCaptured;
         this.onVadChanged = onVadChanged;
+        this.onVoiceRoleSample = onVoiceRoleSample;
         microphoneProcessor = new MicrophoneProcessor(echoCancellation, noiseSuppression, autoGainControl);
         var inputRate = MicrophoneCaptureRate.Choose(inputDevice, oldSampleDebug);
         captureConverter = new MicrophoneCaptureConverter(inputRate);
@@ -142,6 +146,8 @@ internal sealed class AudioDeviceSession : IDisposable
         {
             pushToTalkPressed = false;
             ResetVoiceActivity();
+            lock (playbackGate)
+                foreach (var peer in peerPlayback.Values) peer.DeathEcho.Stop();
         }
         masterMix.Volume = value ? 0f : masterVolume;
     }
@@ -228,7 +234,8 @@ internal sealed class AudioDeviceSession : IDisposable
     }
 
     public void SetPeerMix(string peerId, PeerVoiceMix mix, NosSizeVoiceEffect? nosSizeEffect = null,
-        bool starEcho = false)
+        bool starEcho = false, bool deathEchoActive = false, bool peerDead = false,
+        long? deathEchoEvent = null)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
@@ -240,6 +247,8 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.CameraMuffle.Enabled = mix.CameraMuffled && !mix.FixerLowpass;
         peer.GhostReverb.Enabled = mix.Reverb && mix.Audible;
         peer.StarEcho.Enabled = starEcho && mix.Audible;
+        peer.DeathEcho.Update(deathEchoActive, peerDead, deathEchoEvent,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         peer.NosSizeEffect.SetEffect(nosSizeEffect);
     }
 
@@ -281,11 +290,12 @@ internal sealed class AudioDeviceSession : IDisposable
             var cameraMuffle = new CameraMuffleSampleProvider(radioHighPass);
             var panning = new PanningSampleProvider(cameraMuffle);
             var volume = new VolumeSampleProvider(panning);
-            var ghostReverb = new GhostReverbSampleProvider(volume);
+            var deathEcho = new NosDeathEchoSampleProvider(volume);
+            var ghostReverb = new GhostReverbSampleProvider(deathEcho);
             var starEcho = new RadioEchoSampleProvider(ghostReverb, 0.075d, 0.94f, 0.08f, 0.08f);
             var radioEcho = new RadioEchoSampleProvider(starEcho);
             var created = new PeerPlayback(buffer, nosSizeEffect, muffle, fixerLowpass, radioHighPass,
-                cameraMuffle, panning, volume, ghostReverb, starEcho, radioEcho);
+                cameraMuffle, panning, volume, deathEcho, ghostReverb, starEcho, radioEcho);
             peerPlayback[peerId] = created;
             playbackMixer.AddMixerInput(radioEcho);
             return created;
@@ -308,6 +318,7 @@ internal sealed class AudioDeviceSession : IDisposable
     {
         if (disposed) return;
         microphoneProcessor.ProcessCapture(buffer);
+        PublishVoiceRoleSample(buffer);
         var sensitivityEnabled = microphoneSensitivityEnabled;
         // The upstream VAD analyses the raw microphone before output gain.
         bool talking;
@@ -339,6 +350,25 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         onCaptured(buffer);
+    }
+
+    private void PublishVoiceRoleSample(byte[] buffer)
+    {
+        if (onVoiceRoleSample is null) return;
+        var now = Environment.TickCount64;
+        if (now - lastVoiceRoleSampleAt < 50) return;
+        lastVoiceRoleSampleAt = lastVoiceRoleSampleAt == 0 || now - lastVoiceRoleSampleAt > 100
+            ? now : lastVoiceRoleSampleAt + 50;
+        double sum = 0d;
+        for (var index = 0; index + 1 < buffer.Length; index += sizeof(short))
+        {
+            var sample = BitConverter.ToInt16(buffer, index) / 32768d;
+            sum += sample * sample;
+        }
+        var rms = Math.Clamp(Math.Sqrt(sum / Math.Max(1, buffer.Length / sizeof(short))), 0d, 1d);
+        var active = MicrophoneActivationPolicy.AllowsAudio(activationMode, pushToTalkPressed,
+            microphoneMuted, deafened, jammed);
+        onVoiceRoleSample(rms, active);
     }
 
     public static void PrintDevices()
@@ -459,6 +489,7 @@ internal sealed class AudioDeviceSession : IDisposable
         CameraMuffleSampleProvider CameraMuffle,
         PanningSampleProvider Panning,
         VolumeSampleProvider Volume,
+        NosDeathEchoSampleProvider DeathEcho,
         GhostReverbSampleProvider GhostReverb,
         RadioEchoSampleProvider StarEcho,
         RadioEchoSampleProvider RadioEcho)

@@ -39,6 +39,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     private readonly NosPaletteReader nosPaletteReader = new();
     private int nosRound;
     private readonly SnrLiveRoleReader snrReader = new();
+    private readonly SnrPushTracker snrPush = new();
+    private readonly Dictionary<int, VoicePosition> snrVoiceOrigins = [];
     private int snrRound;
     private readonly TohLiveRoleReader tohReader = new();
     private int tohRound;
@@ -69,6 +71,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             nosPaletteReader.Reset();
             nosRound = 0;
             snrReader.Reset();
+            snrPush.Reset();
+            snrVoiceOrigins.Clear();
             snrRound = 0;
             tohReader.Reset();
             tohRound = 0;
@@ -100,6 +104,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     {
         Stop();
         context?.Dispose();
+        snrPush.Dispose();
         cancellationTokenSource?.Dispose();
     }
 
@@ -345,8 +350,16 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                 snrRound++;
             var snrRoles = snrReader.Update(currentProcess.ProcessId,
                 $"{lobbyCode}:{snrRound}", currentContext.ReadBytes);
+            var falling = gameState == GameState.Tasks
+                ? snrPush.Update(currentProcess.ProcessId) : [];
+            if (gameState != GameState.Tasks)
+            {
+                snrPush.Reset();
+                snrVoiceOrigins.Clear();
+            }
             foreach (var player in players)
             {
+                ApplySnrPushState(player, falling);
                 player.SnrRole = !player.Disconnected && snrRoles.TryGetValue(player.Id, out var role)
                     ? role : null;
                 player.IsThirdParty = player.SnrRole?.IsNeutral == true;
@@ -355,6 +368,14 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         else if (mod != AmongUsModType.SuperNewRoles || gameState == GameState.Menu)
         {
             snrReader.Reset();
+            snrPush.Reset();
+            snrVoiceOrigins.Clear();
+        }
+        else
+        {
+            // A new lobby/round must not inherit a previous fall or voice origin.
+            snrPush.Reset();
+            snrVoiceOrigins.Clear();
         }
 
         if (mod == AmongUsModType.TownOfHostForE &&
@@ -430,10 +451,29 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                 ? tohReader.RoleCatalog.ToList() : [],
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosRadios = nos?.Radios ?? [],
+            NosMegaphones = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Tasks
+                ? NosVoiceRoleStateReader.ReadMegaphones(currentProcess.ProcessId,
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
+            NosPortableMegaphones = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Tasks
+                ? NosVoiceRoleStateReader.ReadPortable(currentProcess.ProcessId,
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
+            NosBibiriEchoes = mod == AmongUsModType.NebulaOnTheShip &&
+                gameState is GameState.Tasks or GameState.Discussion
+                ? NosVoiceRoleStateReader.ReadBibiri(currentProcess.ProcessId,
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             CommsSabotaged = taskEnvironment.CommsSabotaged,
             CurrentCamera = taskEnvironment.CurrentCamera,
             ClosedDoors = taskEnvironment.ClosedDoors
         };
+    }
+
+    private void ApplySnrPushState(Player player, IReadOnlyList<int> falling)
+    {
+        player.SnrPushedFalling = !player.Disconnected && falling.Contains(player.Id);
+        if (!player.SnrPushedFalling && !player.IsDead && !player.Disconnected)
+            snrVoiceOrigins[player.Id] = new VoicePosition(player.X, player.Y);
+        player.SnrPushOrigin = player.SnrPushedFalling && snrVoiceOrigins.TryGetValue(player.Id, out var origin)
+            ? origin : null;
     }
 
     private AmongUsModType RefreshInstalledMod(AmongUsProcessInfo currentProcess)

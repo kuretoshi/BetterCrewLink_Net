@@ -60,13 +60,32 @@ internal static class SpatialVoicePolicy
         bool nosJackalRadioHearable = false,
         bool airshipSpawnFallback = false)
     {
-        var mix = CalculateCore(state, me, other, settings, otherUsingImpostorRadio,
+        var voiceMe = SNRVoicePlayer(state, me);
+        var voiceOther = SNRVoicePlayer(state, other);
+        var mix = CalculateCore(state, voiceMe, voiceOther, settings, otherUsingImpostorRadio,
             nosJackalRadioHearable, airshipSpawnFallback);
+        if (mix.Audible && voiceOther != other && !state.AirshipMeetingByOutfit)
+            mix = mix with { Reverb = true };
         return mix.Audible && state.Mod == AmongUsModType.NebulaOnTheShip &&
             settings.NosFixerJammingLowpass && !settings.NosFixerJammingVoiceBlock &&
             (me.NosPlayer?.IsJammed == true || other.NosPlayer?.IsJammed == true)
             ? mix with { FixerLowpass = true, Muffled = false, CameraMuffled = false }
             : mix;
+    }
+
+    private static Player SNRVoicePlayer(AmongUsState state, Player player)
+    {
+        if (state.Mod != AmongUsModType.SuperNewRoles || state.GameState != GameState.Tasks ||
+            !player.SnrPushedFalling || !player.IsDead || player.Disconnected || player.IsDummy)
+            return player;
+        var voice = player.CopyForVoice();
+        voice.IsDead = false;
+        if (player.SnrPushOrigin is { } origin)
+        {
+            voice.X = origin.X;
+            voice.Y = origin.Y;
+        }
+        return voice;
     }
 
     private static PeerVoiceMix CalculateCore(
@@ -108,7 +127,8 @@ internal static class SpatialVoicePolicy
         var meY = useNosPositions ? state.NosLocalMicPosition?.Y ?? me.Y : me.Y;
         var otherX = useNosPositions ? other.NosPlayer?.SpeakerPositionX ?? other.X : other.X;
         var otherY = useNosPositions ? other.NosPlayer?.SpeakerPositionY ?? other.Y : other.Y;
-        var maxDistance = ResolveMaxDistance(state, me, settings);
+        var maxDistance = ResolveMaxDistance(state, me, settings) +
+            (me.IsDead ? 0d : NosMegaphoneVoice.PortableExtraRange(state, other));
         var deltaX = otherX - meX;
         var deltaY = otherY - meY;
         var distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -128,6 +148,13 @@ internal static class SpatialVoicePolicy
         if (settings.DeadOnly && (!me.IsDead || !other.IsDead))
         {
             return Muted(0, distance, "dead-only");
+        }
+        if (NosMegaphoneVoice.Charging(state, other) is { } megaphone && !me.IsDead && !settings.DeadOnly)
+        {
+            if (settings.CommsSabotage && state.CommsSabotaged && !meImpostor)
+                return Muted(pan, distance, "comms-sabotage");
+            return new PeerVoiceMix(NosMegaphoneVoice.Gain(megaphone.Range, deltaX, deltaY),
+                CalculatePan(deltaX, settings.SpatialAudio, megaphone.Range), distance, "nos-megaphone");
         }
         // Released spatialAudio.ts centers the panner before its range check
         // in dead-only mode, making eligible ghost-to-ghost speech room-wide.

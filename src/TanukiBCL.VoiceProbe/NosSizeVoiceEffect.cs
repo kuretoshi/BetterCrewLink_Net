@@ -26,6 +26,13 @@ internal static class VoiceDisguiseEffectPolicy
     public static NosSizeVoiceEffect? Select(AmongUsState state, Player listener, Player speaker,
         LobbySettings lobby, int strengthPercent, bool audible, bool impostorRadioActive)
     {
+        var megaphone = NosMegaphoneVoice.Charging(state, speaker);
+        if (audible && megaphone is { VoiceEffect: not false })
+        {
+            return new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d,
+                Squash: 0.65d, Pitch: 0.85d, Formant: 0.75d,
+                MegaphoneEnergy: megaphone.Energy);
+        }
         if (!audible || speaker.IsDead || speaker.Disconnected || speaker.Bugged || speaker.IsDummy)
             return null;
         if (state.Mod == AmongUsModType.NebulaOnTheShip && lobby.NosCitrusVoiceEffect &&
@@ -97,7 +104,8 @@ internal static class VoiceDisguiseEffectPolicy
 }
 
 internal sealed record NosSizeVoiceEffect(NosSizeEffectMode Mode, double Strength, double ToneRate,
-    double Squash = 0d, double Pitch = 1d, double Formant = 1d);
+    double Squash = 0d, double Pitch = 1d, double Formant = 1d,
+    double? MegaphoneEnergy = null);
 
 internal static class NosSizeVoiceEffectPolicy
 {
