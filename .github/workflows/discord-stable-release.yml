@@ -1,0 +1,32 @@
+name: Notify Discord of .NET stable release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing .NET stable release tag to announce once
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (!github.event.release.prerelease && contains(github.event.release.tag_name, '-net.'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Send stable release to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+        run: python3 tools/notify-discord-release.py release "$RELEASE_TAG"
