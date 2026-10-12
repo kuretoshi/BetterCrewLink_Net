@@ -17,6 +17,39 @@ internal static class VoiceRoleReleaseSelfTest
         VerifyLoopback(check);
         VerifyDeathEcho(check);
         VerifyMegaphoneRecording(check);
+        VerifyNosRadioGap(check);
+    }
+
+    private static void VerifyNosRadioGap(Action<string, bool, bool> check)
+    {
+        var options = ProbeOptions.Parse(["--server", "http://127.0.0.1:1", "--lobby", "ABCDEF",
+            "--client-id", "19", "--player-id", "2", "--host"]);
+        var probe = new VoiceServerProbe(options, "nos-radio-gap-test");
+        try
+        {
+            var local = new Player { Id = 2, ClientId = 19, IsLocal = true, IsImpostor = true };
+            var state = new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
+                GameState = GameState.Tasks, LobbyCode = "ABCDEF", ClientId = 19, HostId = 19,
+                IsHost = true, Players = [local],
+                NosRadios = [new NosRadioData(NosRadioRules.ImpostorKind, 1 << 2, "")] };
+            probe.SetOwnLobbySettings(new LobbySettings { ImpostorRadioEnabled = true });
+            probe.ApplyGameState(state);
+            probe.SetNosRadioPressed(NosRadioRules.ImpostorKind, true);
+            check("NoS radio: initial hold transmits", true,
+                probe.CurrentNosRadioKind == NosRadioRules.ImpostorKind && !probe.IsNosRadioPending);
+            state.NosRadios = [];
+            probe.ApplyGameState(state);
+            check("NoS radio: temporary gap suspends and masks", true,
+                probe.CurrentNosRadioKind is null && probe.IsNosRadioPending);
+            state.NosRadios = [new NosRadioData(NosRadioRules.ImpostorKind, 1 << 2, "")];
+            probe.ApplyGameState(state);
+            check("NoS radio: held key resumes after data returns", true,
+                probe.CurrentNosRadioKind == NosRadioRules.ImpostorKind && !probe.IsNosRadioPending);
+            probe.SetNosRadioPressed(NosRadioRules.ImpostorKind, false);
+            check("NoS radio: release clears transmission and pending", true,
+                probe.CurrentNosRadioKind is null && !probe.IsNosRadioPending);
+        }
+        finally { probe.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
     }
 
     private static void VerifySpatial(Action<string, bool, bool> check)

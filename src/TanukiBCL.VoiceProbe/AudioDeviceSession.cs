@@ -28,6 +28,7 @@ internal sealed class AudioDeviceSession : IDisposable
     private volatile bool microphoneMuted;
     private volatile bool deafened;
     private volatile bool jammed;
+    private volatile bool radioPending;
     private volatile float masterVolume = 1f;
     private volatile float microphoneGain = 1f;
     private volatile bool microphoneSensitivityEnabled;
@@ -221,6 +222,12 @@ internal sealed class AudioDeviceSession : IDisposable
             AddPlaybackSamples(peer.Buffer, stereoPcm, ref peer.PlaybackScratch);
     }
 
+    public void SetRadioPending(bool value)
+    {
+        radioPending = value;
+        if (value) ResetVoiceActivity();
+    }
+
     internal static void AddPlaybackSamples(BufferedWaveProvider target, ReadOnlySpan<short> stereoPcm,
         ref byte[]? scratch)
     {
@@ -361,7 +368,7 @@ internal sealed class AudioDeviceSession : IDisposable
             }
         }
         var audioAllowed = MicrophoneActivationPolicy.AllowsAudio(activationMode, pushToTalkPressed,
-            microphoneMuted, deafened, jammed);
+            microphoneMuted, deafened, jammed || radioPending);
         if (!audioAllowed || (sensitivityEnabled && !talking))
         {
             Array.Clear(buffer);
@@ -392,7 +399,7 @@ internal sealed class AudioDeviceSession : IDisposable
         }
         var rms = Math.Clamp(Math.Sqrt(sum / Math.Max(1, buffer.Length / sizeof(short))), 0d, 1d);
         var active = MicrophoneActivationPolicy.AllowsAudio(activationMode, pushToTalkPressed,
-            microphoneMuted, deafened, jammed);
+            microphoneMuted, deafened, jammed || radioPending);
         onVoiceRoleSample(rms, active);
     }
 

@@ -228,11 +228,17 @@ public partial class PlayerAvatar
             catalogLoader = () => pendingCatalog.Task,
             snrCatalogLoader = () => pendingSnr.Task,
             imageLoader = uri => { requested.Add(uri); return Task.FromResult(bitmap); } };
-        avatar.SetPlayer(new Player { HatId = "Modded_Pack_Name", VisorId = "Modded_Pack_Name" }, null,
+        avatar.SetPlayer(new Player { HatId = "Modded_Pack_Name", VisorId = "Modded_Pack_Name",
+            SkinId = "Modded_Pack_Name" }, null,
             mod: AmongUsModType.SuperNewRoles, gameExecutable: executable);
         if (avatar.CosmeticBack.Children.Count != 1 || avatar.CosmeticFront.Children.Count != 2 ||
+            avatar.CosmeticSkin.Children.Count != 1 ||
             requested.Any(uri => !uri.IsFile))
             throw new InvalidOperationException("SNR local images waited for remote definitions or used CDN images.");
+        var localSkin = (CosmeticAsset)((Image)avatar.CosmeticSkin.Children[0]).Tag;
+        if (!localSkin.Url.IsFile || localSkin.Top != "-52%" || localSkin.Left != "-18px" ||
+            localSkin.Width != "140%")
+            throw new InvalidOperationException("SNR local skin lost the 3.2.27 fallback layout.");
         pendingCatalog.SetResult(CosmeticCatalog.Parse("{}"));
         pendingSnr.SetResult(SnrCosmeticCatalog.Parse("{}", """
             {"Visors":[{"name":"Name","package":"Pack","resource":"Name_idle.png","IsSNR":true}]}

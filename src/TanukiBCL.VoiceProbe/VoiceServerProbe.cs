@@ -73,6 +73,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private bool pushToTalkPressed;
     private readonly object radioTransmitGate = new();
     private readonly HeldNosRadio heldNosRadio = new();
+    private bool nosRadioPending;
     private volatile bool impostorRadioTransmitting;
     private int? localRadioKind;
     private volatile bool localVadTalking;
@@ -277,6 +278,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         get { lock (radioTransmitGate) return localRadioKind; }
     }
 
+    internal bool IsNosRadioPending => nosRadioPending;
+
     public bool IsRemoteRadioVisible(int clientId)
     {
         var state = currentGameState;
@@ -363,8 +366,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         lastPublishedPublicLobbySignature = signature;
     }
 
-    public bool SetImpostorRadioTransmitting(bool active, int kind = NosRadioRules.ImpostorKind)
+    public bool SetImpostorRadioTransmitting(bool active, int kind = NosRadioRules.ImpostorKind,
+        bool preserveHeldNosRadio = false)
     {
+        if (!active && !preserveHeldNosRadio)
+        {
+            nosRadioPending = false;
+            audioSession?.SetRadioPending(false);
+        }
         var state = currentGameState;
         if (active && (!CanUseImpostorRadio || !CanUseLocalRadioKind(state, kind)))
         {
@@ -374,13 +383,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         lock (radioTransmitGate)
         {
             var selected = active && state?.Mod == AmongUsModType.NebulaOnTheShip ? kind : (int?)null;
+            if (!active && !preserveHeldNosRadio) heldNosRadio.Clear();
             if (impostorRadioTransmitting == active && localRadioKind == selected)
             {
                 return true;
             }
             impostorRadioTransmitting = active;
             localRadioKind = selected;
-            if (!active) heldNosRadio.Clear();
             impostorRadioVersion = Math.Max(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), impostorRadioVersion + 1);
         }
 
@@ -396,16 +405,59 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public void SetNosRadioPressed(int kind, bool pressed)
     {
         if (currentGameState?.Mod != AmongUsModType.NebulaOnTheShip) return;
-        if (pressed && !CanUseLocalRadioKind(currentGameState, kind)) return;
-        int? next;
+        if (kind is not (NosRadioRules.ImpostorKind or NosRadioRules.JackalKind)) return;
         lock (radioTransmitGate)
         {
             heldNosRadio.Set(kind, pressed);
-            next = heldNosRadio.Kind;
-            if (impostorRadioTransmitting == next.HasValue && localRadioKind == next) return;
         }
-        if (next.HasValue && !CanUseLocalRadioKind(currentGameState, next.Value)) next = null;
-        SetImpostorRadioTransmitting(next.HasValue, next ?? NosRadioRules.ImpostorKind);
+        RefreshHeldNosRadio();
+        if (!pressed)
+        {
+            lock (radioTransmitGate)
+            {
+                if (heldNosRadio.Kind.HasValue) return;
+            }
+            SetImpostorRadioTransmitting(false);
+        }
+    }
+
+    private void RefreshHeldNosRadio()
+    {
+        var state = currentGameState;
+        int? heldKind;
+        lock (radioTransmitGate) heldKind = heldNosRadio.Kind;
+        if (!heldKind.HasValue && !nosRadioPending) return;
+
+        var local = state?.Players.FirstOrDefault(player => player.IsLocal);
+        if (state?.Mod != AmongUsModType.NebulaOnTheShip ||
+            state.GameState is not (GameState.Tasks or GameState.Discussion) ||
+            local is null || local.IsDead || local.Disconnected ||
+            (heldKind.HasValue && !NosRadioRules.IsEnabled(heldKind.Value, activeLobbySettings)))
+        {
+            lock (radioTransmitGate) heldNosRadio.Clear();
+            audioSession?.SetRadioPending(false);
+            nosRadioPending = false;
+            if (impostorRadioTransmitting) SetImpostorRadioTransmitting(false);
+            return;
+        }
+
+        if (heldKind.HasValue && CanUseLocalRadioKind(state, heldKind.Value))
+        {
+            // Turn the radio on before unmasking capture, so no proximity voice escapes.
+            if (SetImpostorRadioTransmitting(true, heldKind.Value))
+            {
+                audioSession?.SetRadioPending(false);
+                nosRadioPending = false;
+            }
+            return;
+        }
+
+        // Keep the hotkey held through a temporary missing RadioData snapshot.
+        // Capture is muted before the radio is dropped to prevent proximity leakage.
+        nosRadioPending = heldKind.HasValue;
+        audioSession?.SetRadioPending(nosRadioPending);
+        if (impostorRadioTransmitting)
+            SetImpostorRadioTransmitting(false, preserveHeldNosRadio: true);
     }
 
     public void ApplyGameState(AmongUsState state)
@@ -456,14 +508,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             hostClientId = state.HostId;
         }
-        if (options.AutoRadioTone && !impostorRadioTransmitting && CanUseImpostorRadio)
+        RefreshHeldNosRadio();
+        if (options.AutoRadioTone && !impostorRadioTransmitting && !nosRadioPending && CanUseImpostorRadio)
         {
             SetImpostorRadioTransmitting(true);
         }
         if (impostorRadioTransmitting && (!CanUseImpostorRadio ||
             !CanUseLocalRadioKind(state, localRadioKind ?? NosRadioRules.ImpostorKind)))
         {
-            SetImpostorRadioTransmitting(false);
+            SetImpostorRadioTransmitting(false, preserveHeldNosRadio: nosRadioPending);
         }
         else if (impostorRadioTransmitting && DateTimeOffset.UtcNow - lastRadioStatusSentAt >= TimeSpan.FromSeconds(1))
         {
@@ -821,6 +874,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 (rms, active) => nosVoiceRoleSender.Send(rms, active,
                     options.GameProcessId ?? 0, currentGameState));
             audioSession.SetMicrophoneMuted(microphoneMuted);
+            audioSession.SetRadioPending(nosRadioPending);
             audioSession.SetDeafened(deafened);
             UpdateLocalJamming();
             audioSession.SetMasterVolume(masterVolume);
@@ -1653,14 +1707,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             TohGhostRoles = next.TohGhostRoles,
             NosNeutralKillerHaunting = next.NosNeutralKillerHaunting
         };
-        if (options.AutoRadioTone && !impostorRadioTransmitting && CanUseImpostorRadio)
+        RefreshHeldNosRadio();
+        if (options.AutoRadioTone && !impostorRadioTransmitting && !nosRadioPending && CanUseImpostorRadio)
         {
             SetImpostorRadioTransmitting(true);
         }
         if (impostorRadioTransmitting && (!CanUseImpostorRadio ||
             !CanUseLocalRadioKind(currentGameState, localRadioKind ?? NosRadioRules.ImpostorKind)))
         {
-            SetImpostorRadioTransmitting(false);
+            SetImpostorRadioTransmitting(false, preserveHeldNosRadio: nosRadioPending);
         }
         LobbySettingsChanged?.Invoke(next);
         ImpostorRadioAvailabilityChanged?.Invoke(CanUseImpostorRadio);
