@@ -1,6 +1,7 @@
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using System.Runtime.InteropServices;
+using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
 
@@ -13,6 +14,7 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly WaveOutEvent playback;
     private readonly MixingSampleProvider playbackMixer;
     private readonly VolumeSampleProvider masterMix;
+    private readonly NosMegaphoneRecording localMegaphoneRecording = new();
     private readonly Dictionary<string, PeerPlayback> peerPlayback = [];
     private readonly object playbackGate = new();
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
@@ -67,6 +69,7 @@ internal sealed class AudioDeviceSession : IDisposable
             {
                 ReadFully = true
             };
+            playbackMixer.AddMixerInput(localMegaphoneRecording);
             masterMix = new VolumeSampleProvider(playbackMixer);
             playback = new WaveOutEvent
             {
@@ -147,7 +150,12 @@ internal sealed class AudioDeviceSession : IDisposable
             pushToTalkPressed = false;
             ResetVoiceActivity();
             lock (playbackGate)
-                foreach (var peer in peerPlayback.Values) peer.DeathEcho.Stop();
+                foreach (var peer in peerPlayback.Values)
+                {
+                    peer.DeathEcho.Stop();
+                    peer.MegaphoneRecording.Cancel();
+                }
+            localMegaphoneRecording.Cancel();
         }
         masterMix.Volume = value ? 0f : masterVolume;
     }
@@ -208,6 +216,7 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         var peer = GetOrCreatePeerPlayback(peerId);
+        peer.MegaphoneRecording.RecordStereoPcm16(stereoPcm);
         lock (peer.PlaybackWriteGate)
             AddPlaybackSamples(peer.Buffer, stereoPcm, ref peer.PlaybackScratch);
     }
@@ -252,13 +261,25 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.NosSizeEffect.SetEffect(nosSizeEffect);
     }
 
+    public void UpdateLocalMegaphoneRecording(NosMegaphoneState? entry, bool active) =>
+        localMegaphoneRecording.Update(entry, active && !deafened, 1d);
+
+    public void UpdatePeerMegaphoneRecording(string peerId, NosMegaphoneState? entry,
+        bool active, double volume)
+    {
+        var peer = GetOrCreatePeerPlayback(peerId);
+        peer.MegaphoneRecording.Update(entry, active && !deafened, volume);
+    }
+
     public void RemovePeer(string peerId)
     {
         lock (playbackGate)
         {
             if (peerPlayback.Remove(peerId, out var peer))
             {
+                peer.MegaphoneRecording.Cancel();
                 playbackMixer.RemoveMixerInput(peer.RadioEcho);
+                playbackMixer.RemoveMixerInput(peer.MegaphoneRecording);
             }
         }
     }
@@ -294,10 +315,13 @@ internal sealed class AudioDeviceSession : IDisposable
             var ghostReverb = new GhostReverbSampleProvider(deathEcho);
             var starEcho = new RadioEchoSampleProvider(ghostReverb, 0.075d, 0.94f, 0.08f, 0.08f);
             var radioEcho = new RadioEchoSampleProvider(starEcho);
+            var megaphoneRecording = new NosMegaphoneRecording();
             var created = new PeerPlayback(buffer, nosSizeEffect, muffle, fixerLowpass, radioHighPass,
-                cameraMuffle, panning, volume, deathEcho, ghostReverb, starEcho, radioEcho);
+                cameraMuffle, panning, volume, deathEcho, ghostReverb, starEcho, radioEcho,
+                megaphoneRecording);
             peerPlayback[peerId] = created;
             playbackMixer.AddMixerInput(radioEcho);
+            playbackMixer.AddMixerInput(megaphoneRecording);
             return created;
         }
     }
@@ -349,6 +373,7 @@ internal sealed class AudioDeviceSession : IDisposable
             onVadChanged(transmittedTalking);
         }
 
+        localMegaphoneRecording.RecordMonoPcm16(buffer);
         onCaptured(buffer);
     }
 
@@ -492,7 +517,8 @@ internal sealed class AudioDeviceSession : IDisposable
         NosDeathEchoSampleProvider DeathEcho,
         GhostReverbSampleProvider GhostReverb,
         RadioEchoSampleProvider StarEcho,
-        RadioEchoSampleProvider RadioEcho)
+        RadioEchoSampleProvider RadioEcho,
+        NosMegaphoneRecording MegaphoneRecording)
     {
         internal readonly object PlaybackWriteGate = new();
         internal byte[]? PlaybackScratch;

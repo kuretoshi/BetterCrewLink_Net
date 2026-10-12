@@ -16,6 +16,7 @@ internal static class VoiceRoleReleaseSelfTest
         VerifyHostAdmission(check);
         VerifyLoopback(check);
         VerifyDeathEcho(check);
+        VerifyMegaphoneRecording(check);
     }
 
     private static void VerifySpatial(Action<string, bool, bool> check)
@@ -141,6 +142,56 @@ internal static class VoiceRoleReleaseSelfTest
         echo.Read(buffer, 0, buffer.Length);
         check("NoS Bibiri: mute stops the tail", true,
             buffer.All(value => Math.Abs(value) < 0.0001f));
+    }
+
+    private static void VerifyMegaphoneRecording(Action<string, bool, bool> check)
+    {
+        var recording = new NosMegaphoneRecording();
+        var state = new NosMegaphoneState
+        {
+            PlayerId = 1, Energy = 0.5d, Range = 10d,
+            ShotId = 12, Phase = "charging", VoiceEffect = false
+        };
+        recording.Update(state, true, 1d);
+        var input = new short[960 * 2];
+        Array.Fill(input, (short)16384);
+        recording.RecordStereoPcm16(input);
+        check("NoS megaphone: decoded charge is buffered in memory", true,
+            recording.RecordedSamples == 960);
+        state.Phase = "firing";
+        recording.Update(state, true, 1d);
+        var output = new float[960 * 2];
+        recording.Read(output, 0, output.Length);
+        check("NoS megaphone: firing plays dry audio at full distance", true,
+            Math.Abs(output[0] - 0.35f) < 0.001f &&
+            Math.Abs(output[1] - 0.35f) < 0.001f);
+        recording.Update(state, true, 1d);
+        Array.Clear(output);
+        recording.Read(output, 0, output.Length);
+        check("NoS megaphone: one shot replays only once", true,
+            output.All(value => Math.Abs(value) < 0.0001f));
+
+        state.ShotId = 13;
+        state.Phase = "charging";
+        recording.Update(state, true, 1d);
+        recording.RecordStereoPcm16(input);
+        state.Phase = "firing";
+        recording.Update(state, true, 0d);
+        Array.Clear(output);
+        recording.Read(output, 0, output.Length);
+        recording.Update(state, true, 1d);
+        Array.Clear(output);
+        recording.Read(output, 0, output.Length);
+        check("NoS megaphone: muted replay still advances", true,
+            output.All(value => Math.Abs(value) < 0.0001f));
+
+        state.ShotId = 14;
+        state.Phase = "charging";
+        recording.Update(state, true, 1d);
+        recording.RecordStereoPcm16(input);
+        recording.Update(state, false, 1d);
+        check("NoS megaphone: meeting or disconnection cancels charge", true,
+            recording.RecordedSamples == 0 && !recording.IsPlaying);
     }
 
     private static void VerifyLoopback(Action<string, bool, bool> check)

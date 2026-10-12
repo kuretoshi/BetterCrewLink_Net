@@ -12,6 +12,8 @@ public sealed class NosMegaphoneState
     [JsonRequired]
     public double Range { get; set; }
     public bool? VoiceEffect { get; set; }
+    public long? ShotId { get; set; }
+    public string? Phase { get; set; }
 }
 
 public sealed class NosPortableMegaphoneState
@@ -38,9 +40,12 @@ internal static class NosVoiceRoleStateReader
     };
 
     public static List<NosMegaphoneState> ReadMegaphones(int pid, long now, string? path = null) =>
-        Read<NosMegaphoneState>(pid, now, path ?? DefaultPath("megaphone-state.json"),
+        Read<NosMegaphoneState>(pid, now, path ?? PerProcessPath("megaphone-state", pid),
             item => double.IsFinite(item.Energy) && item.Energy is >= 0d and <= 1d &&
-                double.IsFinite(item.Range) && item.Range is >= 2d and <= 40d,
+                double.IsFinite(item.Range) && item.Range is >= 2d and <= 40d &&
+                (item.Phase is null ||
+                 (item.Phase is "charging" or "firing" &&
+                  item.ShotId is > 0 and <= 9_007_199_254_740_991L)),
             item => item.PlayerId);
 
     public static List<NosPortableMegaphoneState> ReadPortable(int pid, long now, string? path = null) =>
@@ -82,6 +87,12 @@ internal static class NosVoiceRoleStateReader
     private static string DefaultPath(string name) => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TanukiBCL", "NoS", name);
+
+    private static string PerProcessPath(string prefix, int pid)
+    {
+        var perProcess = DefaultPath($"{prefix}-{pid}.json");
+        return File.Exists(perProcess) ? perProcess : DefaultPath($"{prefix}.json");
+    }
 
     private sealed class Envelope<T>
     {

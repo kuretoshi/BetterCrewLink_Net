@@ -7,7 +7,7 @@ internal static class NosMegaphoneVoice
     public static NosMegaphoneState? Charging(AmongUsState state, Player speaker) =>
         state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState == GameState.Tasks &&
         !speaker.IsDead && !speaker.Disconnected && !speaker.IsDummy && !speaker.Bugged
-            ? state.NosMegaphones.FirstOrDefault(item => item.PlayerId == speaker.Id) : null;
+            ? state.NosMegaphones.FirstOrDefault(item => item.PlayerId == speaker.Id && item.Phase is null) : null;
 
     public static double PortableExtraRange(AmongUsState state, Player speaker) =>
         state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState == GameState.Tasks &&

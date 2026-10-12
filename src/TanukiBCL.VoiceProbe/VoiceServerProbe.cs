@@ -442,6 +442,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             lastMobileFrameSentAt = default;
         }
         currentGameState = state;
+        var localPlayer = state.Players.FirstOrDefault(player => player.IsLocal);
+        audioSession?.UpdateLocalMegaphoneRecording(
+            state.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == localPlayer?.Id),
+            state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState == GameState.Tasks &&
+            localPlayer is { Disconnected: false });
         UpdateLocalJamming();
         UpdateLocalVadVisibility();
         SyncNosRadioReports(state);
@@ -823,6 +828,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             audioSession.SetMicrophoneSensitivity(microphoneSensitivityEnabled, microphoneSensitivity);
             audioSession.SetMicrophoneActivationMode(microphoneActivationMode);
             audioSession.SetPushToTalkPressed(pushToTalkPressed);
+            if (currentGameState is { } initialState)
+            {
+                var local = initialState.Players.FirstOrDefault(player => player.IsLocal);
+                audioSession.UpdateLocalMegaphoneRecording(
+                    initialState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == local?.Id),
+                    initialState.Mod == AmongUsModType.NebulaOnTheShip &&
+                    initialState.GameState == GameState.Tasks && local is { Disconnected: false });
+            }
             audioSession.Start();
         }
 
@@ -1838,6 +1851,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             var ownClientMix = new PeerVoiceMix(0d, 0d, 0d, "same-client");
             audioSession?.SetPeerMix(socketId, ownClientMix);
+            audioSession?.UpdatePeerMegaphoneRecording(socketId, null, false, 0d);
             PeerMixChanged?.Invoke(clientId, ownClientMix);
             return;
         }
@@ -1848,6 +1862,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             var unmappedMix = new PeerVoiceMix(0d, 0d, 0d, "unmapped-player");
             audioSession?.SetPeerMix(socketId, unmappedMix);
+            audioSession?.UpdatePeerMegaphoneRecording(socketId, null, false, 0d);
             PeerMixChanged?.Invoke(clientId, unmappedMix);
             return;
         }
@@ -1868,6 +1883,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             .FirstOrDefault(item => item.PlayerId == other.Id)?.UnixMs;
         audioSession?.SetPeerMix(socketId, mix, effect, starEcho,
             deathEchoActive, other.IsDead, deathEchoEvent);
+        audioSession?.UpdatePeerMegaphoneRecording(socketId,
+            currentGameState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == other.Id),
+            currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
+            currentGameState.GameState == GameState.Tasks && !other.Disconnected,
+            playerConfig.IsMuted ? 0d : playerConfig.Volume);
         PeerMixChanged?.Invoke(clientId, mix);
     }
 
