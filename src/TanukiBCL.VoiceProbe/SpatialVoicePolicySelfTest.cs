@@ -1032,12 +1032,35 @@ internal static class SpatialVoicePolicySelfTest
         CheckGain("Web Audio Q: radio 10 dB", Math.Sqrt(10d), WebAudioBiquadQ.ToLinear(10f));
         CheckGain("Web Audio Q: camera -15 dB", Math.Pow(10d, -0.75d), WebAudioBiquadQ.ToLinear(-15f));
         var echo = new RadioEchoSampleProvider(new TestImpulseStereoSource()) { Enabled = true };
+        Check("radio echo DSP: idle peer does not retain a delay buffer", true,
+            echo.DelayCapacitySamples == 0);
         var echoSamples = new float[17_282];
         echo.Read(echoSamples, 0, echoSamples.Length);
+        Check("radio echo DSP: active peer allocates the 90 ms buffer", true,
+            echo.DelayCapacitySamples == 8_640);
         CheckGain("radio echo DSP: dry signal", 0.92d, echoSamples[0]);
         CheckGain("radio echo DSP: first 90 ms reflection", 0.2d, echoSamples[8_640]);
         CheckGain("radio echo DSP: second reflection", 0.024d, echoSamples[17_280]);
         CheckGain("radio echo DSP: channels remain separate", 0d, echoSamples[8_641]);
+        echo.Enabled = false;
+        echo.Read(echoSamples, 0, 2);
+        Check("radio echo DSP: disabling releases delay history", true,
+            echo.DelayCapacitySamples == 0);
+        echo.Enabled = true;
+        echo.Read(echoSamples, 0, 2);
+        Check("radio echo DSP: re-enabling begins with a silent delay", true,
+            echo.DelayCapacitySamples == 8_640 && echoSamples[0] == 0f);
+        var starEcho = new RadioEchoSampleProvider(new TestImpulseStereoSource(), 0.075d);
+        Check("NoS star echo DSP: idle peer has no delay buffer", true,
+            starEcho.DelayCapacitySamples == 0);
+        starEcho.Enabled = true;
+        starEcho.Read(echoSamples, 0, 2);
+        Check("NoS star echo DSP: active peer allocates the 75 ms buffer", true,
+            starEcho.DelayCapacitySamples == 7_200);
+        starEcho.Enabled = false;
+        starEcho.Read(echoSamples, 0, 2);
+        Check("NoS star echo DSP: disabling releases the buffer", true,
+            starEcho.DelayCapacitySamples == 0);
 
         var cameraPolicy = new SpatialVoiceSettings(HearThroughCameras: true);
         var airshipCamera = new AmongUsState

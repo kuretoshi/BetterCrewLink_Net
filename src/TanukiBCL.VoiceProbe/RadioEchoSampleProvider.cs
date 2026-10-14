@@ -6,10 +6,11 @@ namespace TanukiBCL.VoiceProbe;
 internal sealed class RadioEchoSampleProvider : ISampleProvider
 {
     private readonly ISampleProvider source;
-    private readonly float[] delayLine;
+    private readonly int delaySamples;
     private readonly float dryGain;
     private readonly float wetGain;
     private readonly float feedbackGain;
+    private float[]? delayLine;
     private int delayPosition;
     private bool wasEnabled;
     public volatile bool Enabled;
@@ -21,11 +22,12 @@ internal sealed class RadioEchoSampleProvider : ISampleProvider
         this.dryGain = dryGain;
         this.wetGain = wetGain;
         this.feedbackGain = feedbackGain;
-        delayLine = new float[checked((int)Math.Round(source.WaveFormat.SampleRate * delaySeconds) *
-            source.WaveFormat.Channels)];
+        delaySamples = checked((int)Math.Round(source.WaveFormat.SampleRate * delaySeconds) *
+            source.WaveFormat.Channels);
     }
 
     public WaveFormat WaveFormat => source.WaveFormat;
+    internal int DelayCapacitySamples => delayLine?.Length ?? 0;
 
     public int Read(float[] buffer, int offset, int count)
     {
@@ -33,19 +35,20 @@ internal sealed class RadioEchoSampleProvider : ISampleProvider
         var enabled = Enabled;
         if (enabled != wasEnabled)
         {
-            Array.Clear(delayLine);
+            delayLine = enabled ? new float[delaySamples] : null;
             delayPosition = 0;
             wasEnabled = enabled;
         }
         if (!enabled) return read;
 
+        var line = delayLine!;
         for (var index = offset; index < offset + read; index++)
         {
             var input = buffer[index];
-            var delayed = delayLine[delayPosition];
-            delayLine[delayPosition] = input + feedbackGain * delayed;
+            var delayed = line[delayPosition];
+            line[delayPosition] = input + feedbackGain * delayed;
             buffer[index] = dryGain * input + wetGain * delayed;
-            if (++delayPosition == delayLine.Length) delayPosition = 0;
+            if (++delayPosition == line.Length) delayPosition = 0;
         }
         return read;
     }
