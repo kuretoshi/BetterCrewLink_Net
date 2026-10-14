@@ -25,6 +25,8 @@ public partial class MainWindow : Window
     private readonly ClientSessionCoordinator sessions = new();
     private readonly CoalescedSessionRestart settingsRestarts = new();
     private readonly DispatcherTimer gameDetectionTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer audioUiTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private AudioUiFrameBatch? audioUiFrames;
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
     private PublicLobbyBrowserWindow? publicLobbyBrowserWindow;
@@ -111,12 +113,18 @@ public partial class MainWindow : Window
         {
             if (!processSwitchInProgress && settingsWindow is null) TryAutomaticConnection();
         };
+        audioUiTimer.Tick += (_, _) => FlushAudioUi();
         Loaded += (_, _) =>
         {
             TryAutomaticConnection();
             gameDetectionTimer.Start();
+            audioUiTimer.Start();
         };
-        Closed += (_, _) => gameDetectionTimer.Stop();
+        Closed += (_, _) =>
+        {
+            gameDetectionTimer.Stop();
+            audioUiTimer.Stop();
+        };
     }
 
     private void RefreshGameLaunchers()
@@ -563,6 +571,14 @@ public partial class MainWindow : Window
             MobileCosmeticsRequested = mobileCosmetics.Resend
         };
         probe = activeProbe;
+        var audioFrames = new AudioUiFrameBatch();
+        Volatile.Write(ref audioUiFrames, audioFrames);
+        session.AddCleanup(() =>
+        {
+            if (ReferenceEquals(Volatile.Read(ref audioUiFrames), audioFrames))
+                Volatile.Write(ref audioUiFrames, null);
+            return ValueTask.CompletedTask;
+        });
         session.AddCleanup(async () =>
         {
             try { await activeProbe.DisposeAsync(); }
@@ -629,23 +645,13 @@ public partial class MainWindow : Window
         });
         activeProbe.PeerPcmReceived += (clientId, pcm) =>
         {
-            var level = RecentPcmLevelTracker.Measure(pcm);
-            var receivedAt = DateTimeOffset.UtcNow;
-            Dispatch(session, () =>
-            {
-                var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
-                var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
-                var firstFrame = !row.HasReceivedFrames;
-                var connectionRecovered = row.IncrementReceived();
-                row.RecordDecodedPcm(level, receivedAt);
-                if (firstFrame || connectionRecovered) UpdateCompactView();
-            });
+            if (session.AcceptsCallbacks)
+                audioFrames.AddReceived(clientId, RecentPcmLevelTracker.Measure(pcm), DateTimeOffset.UtcNow);
         };
-        activeProbe.LocalAudioFrameSent += peerCount => Dispatch(session, () =>
+        activeProbe.LocalAudioFrameSent += peerCount =>
         {
-            sentAudioFrames++;
-            SentText.Text = $"Opus送信: {sentAudioFrames} frame / {peerCount} peer";
-        });
+            if (session.AcceptsCallbacks) audioFrames.AddSent(peerCount);
+        };
         activeProbe.LocalVadChanged += talking => Dispatch(session, () =>
         {
             localTalking = talking;
@@ -951,6 +957,32 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(session.Guard(action));
     }
 
+    private void FlushAudioUi()
+    {
+        var session = sessions.Current;
+        var frames = Volatile.Read(ref audioUiFrames);
+        if (session is null || !session.AcceptsCallbacks || frames is null) return;
+
+        var refreshCompact = false;
+        frames.Drain((clientId, count) =>
+        {
+            var player = currentState?.Players.FirstOrDefault(candidate => candidate.ClientId == clientId);
+            var row = FindOrCreatePeer(clientId, player?.Name ?? $"client {clientId}");
+            var firstFrame = !row.HasReceivedFrames;
+            var connectionRecovered = row.IncrementReceived(count);
+            refreshCompact |= firstFrame || connectionRecovered;
+        }, (clientId, level, at) =>
+        {
+            var row = peers.FirstOrDefault(candidate => candidate.ClientId == clientId);
+            row?.RecordDecodedPcm(level, at);
+        }, (count, peerCount) =>
+        {
+            sentAudioFrames += count;
+            SentText.Text = $"Opus送信: {sentAudioFrames} frame / {peerCount} peer";
+        });
+        if (refreshCompact) UpdateCompactView();
+    }
+
     private void SelectProcessFromCommandLine()
     {
         var args = Environment.GetCommandLineArgs();
@@ -1187,13 +1219,13 @@ public partial class MainWindow : Window
 
         public void RecordDecodedPcm(PcmLevelFrame level, DateTimeOffset at) => decodedPcm.Add(level, at);
 
-        public bool IncrementReceived()
+        public bool IncrementReceived(int count = 1)
         {
             // Decoded audio is direct evidence of an active voice path even if
             // the earlier connection callback was missed during roster churn.
             var connectionRecovered = Connection is not ("data-ready" or "接続済み");
             if (connectionRecovered) Connection = "接続済み";
-            receivedFrames++;
+            receivedFrames += count;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Received)));
             return connectionRecovered;
         }

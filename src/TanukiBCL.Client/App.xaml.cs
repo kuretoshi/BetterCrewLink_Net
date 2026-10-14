@@ -72,6 +72,7 @@ public partial class App : Application
                     TanukiBCL.Client.MainWindow.VerifyAppIcon();
                     TanukiBCL.Client.MainWindow.VerifyPeerConnectionRecovery();
                     RecentPcmLevelTracker.Verify();
+                    AudioUiFrameBatch.Verify();
                     VoiceView.VerifyNameLayout();
                     VoiceView.VerifyPeerQualityFallback();
                     VoiceView.VerifyDuplicateClientAvatars();
