@@ -816,6 +816,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         failedReconnectAttempts.Clear();
         pendingOfferFallbacks.Clear();
         peerAppVersions.Clear();
+        tohRoleSent.Clear();
         appVersionSentAt = default;
         UpdateVersionWarning();
     }
@@ -1035,9 +1036,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             foreach (var staleSocketId in peerClientIds.Keys.Where(id => !incomingSocketIds.Contains(id)).ToArray())
             {
                 if (!peerClientIds.TryRemove(staleSocketId, out var staleClientId)) continue;
-                pendingOfferFallbacks.TryRemove(staleSocketId, out _);
-                peerManager.RemovePeer(staleSocketId);
-                audioSession?.RemovePeer(staleSocketId);
+                RemovePeerSocketState(staleSocketId);
                 if (!peerClientIds.Values.Contains(staleClientId))
                 {
                     if (staleClientId == hostClientId) ClearTohHostReports();
@@ -1047,6 +1046,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     PeerConnectionStatusChanged?.Invoke(staleClientId, "closed");
                 }
             }
+            UpdateVersionWarning();
             Log("EVENT", $"setClients count={peerClientIds.Count}");
         });
         socket.On("join", response =>
@@ -1067,18 +1067,13 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             {
                 if (departedClientId == hostClientId && !peerClientIds.Values.Contains(departedClientId))
                     ClearTohHostReports();
-                stalledReconnectAttempts.TryRemove(remoteSocketId, out _);
-                failedReconnectAttempts.TryRemove(remoteSocketId, out _);
-                pendingOfferFallbacks.TryRemove(remoteSocketId, out _);
                 impostorRadioStates.TryRemove(departedClientId, out _);
                 nosRadioReports.TryRemove(departedClientId, out _);
-                peerAppVersions.TryRemove(remoteSocketId, out _);
-                UpdateVersionWarning();
                 PeerVadChanged?.Invoke(departedClientId, false);
                 PeerConnectionStatusChanged?.Invoke(departedClientId, "closed");
             }
-            peerManager.RemovePeer(remoteSocketId);
-            audioSession?.RemovePeer(remoteSocketId);
+            RemovePeerSocketState(remoteSocketId);
+            UpdateVersionWarning();
         });
         socket.On("VAD", response =>
         {
@@ -1165,17 +1160,65 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             {
                 Log("INFO", $"同一clientの旧peerを除去 client={clientId} peer={staleSocketId}");
                 peerClientIds.TryRemove(staleSocketId, out _);
-                stalledReconnectAttempts.TryRemove(staleSocketId, out _);
-                failedReconnectAttempts.TryRemove(staleSocketId, out _);
-                pendingOfferFallbacks.TryRemove(staleSocketId, out _);
-                peerManager.RemovePeer(staleSocketId);
-                audioSession?.RemovePeer(staleSocketId);
+                RemovePeerSocketState(staleSocketId);
                 PeerVadChanged?.Invoke(clientId, false);
                 PeerConnectionStatusChanged?.Invoke(clientId, "closed");
             }
             peerClientIds[socketId] = clientId;
+            UpdateVersionWarning();
             RefreshPeerMix(socketId, clientId);
         }
+    }
+
+    private void RemovePeerSocketState(string socketId)
+    {
+        stalledReconnectAttempts.TryRemove(socketId, out _);
+        failedReconnectAttempts.TryRemove(socketId, out _);
+        pendingOfferFallbacks.TryRemove(socketId, out _);
+        peerAppVersions.TryRemove(socketId, out _);
+        tohRoleSent.TryRemove(socketId, out _);
+        peerManager.RemovePeer(socketId);
+        audioSession?.RemovePeer(socketId);
+    }
+
+    internal static async Task VerifyPeerSocketMetadataCleanupAsync()
+    {
+        await using var probe = new VoiceServerProbe(ProbeOptions.Parse(["--self-test"]),
+            "socket-state-test", sendDiagnosticProbe: false) { AppVersion = "3.2.27" };
+        const string retired = "retired-socket";
+        probe.currentGameState = new AmongUsState
+        {
+            GameState = GameState.Lobby, LobbyCode = "ABCDEF",
+            Players = [new Player { ClientId = 20, Name = "remote" }]
+        };
+        using var version = JsonDocument.Parse("{\"lobbyCode\":\"ABCDEF\",\"version\":\"3.2.26\"}");
+        probe.peerClientIds[retired] = 20;
+        probe.ApplyAppVersion(retired, 20, version.RootElement);
+        if (!probe.peerAppVersions.ContainsKey(retired))
+            throw new InvalidOperationException("A current socket did not accept version metadata.");
+        probe.peerClientIds.TryRemove(retired, out _);
+        probe.peerAppVersions.TryRemove(retired, out _);
+        probe.ApplyAppVersion(retired, 20, version.RootElement);
+        if (probe.peerAppVersions.ContainsKey(retired))
+            throw new InvalidOperationException("A retired socket restored its version metadata.");
+
+        probe.stalledReconnectAttempts[retired] = 1;
+        probe.failedReconnectAttempts[retired] = 1;
+        probe.pendingOfferFallbacks[retired] = 0;
+        probe.peerAppVersions[retired] = "3.2.26";
+        probe.tohRoleSent[retired] = ("old-role", DateTimeOffset.UtcNow);
+        probe.RemovePeerSocketState(retired);
+        if (probe.stalledReconnectAttempts.ContainsKey(retired) ||
+            probe.failedReconnectAttempts.ContainsKey(retired) ||
+            probe.pendingOfferFallbacks.ContainsKey(retired) ||
+            probe.peerAppVersions.ContainsKey(retired) || probe.tohRoleSent.ContainsKey(retired))
+            throw new InvalidOperationException("Retired peer metadata was retained.");
+
+        probe.tohRoleSent[retired] = ("old-session", DateTimeOffset.UtcNow);
+        probe.ResetPeerState();
+        if (!probe.tohRoleSent.IsEmpty)
+            throw new InvalidOperationException("A new session retained old TOH role-send metadata.");
+        Console.WriteLine("[PASS] Departed and refreshed sockets release version, TOH and recovery metadata");
     }
 
     private void ScheduleOfferFallback(string remoteSocketId)
@@ -1335,6 +1378,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         if (state.Mod != AmongUsModType.TownOfHostForE ||
             state.GameState is not (GameState.Tasks or GameState.Discussion)) return;
 
+        foreach (var socketId in tohRoleSent.Keys)
+            if (!peerClientIds.ContainsKey(socketId)) tohRoleSent.TryRemove(socketId, out _);
+
         if (tohGameStartNames.Count > 0 &&
             now - lastTohRosterSentAt >= TimeSpan.FromSeconds(1))
         {
@@ -1488,6 +1534,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         var state = currentGameState;
         if (AppVersion.Length == 0 || state is null ||
+            !peerClientIds.TryGetValue(remoteSocketId, out var currentClientId) || currentClientId != clientId ||
             !data.TryGetProperty("lobbyCode", out var lobbyCode) ||
             lobbyCode.ValueKind != JsonValueKind.String || lobbyCode.GetString() != state.LobbyCode ||
             !data.TryGetProperty("version", out var versionElement) ||

@@ -14,6 +14,7 @@ internal static class ServerReconnectSelfTest
 {
     public static async Task<int> RunAsync()
     {
+        await VoiceServerProbe.VerifyPeerSocketMetadataCleanupAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         await using var server = new LoopbackServer();
         var options = ProbeOptions.Parse(["--server", server.Address.ToString(), "--lobby", "ABCDEF",
