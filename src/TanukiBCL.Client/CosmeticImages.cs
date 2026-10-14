@@ -1,12 +1,15 @@
 using System.IO;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
 
 namespace TanukiBCL.Client;
 
 internal static class CosmeticImages
 {
+    private const int MaxDecodeDimension = 512;
     private static readonly object Gate = new();
+    private static readonly ConditionalWeakTable<BitmapSource, ImageDimensions> OriginalSizes = new();
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20),
         MaxResponseContentBufferSize = 8 * 1024 * 1024 };
     private static Task<CosmeticCatalog>? catalog;
@@ -27,6 +30,10 @@ internal static class CosmeticImages
 
     public static Task<BitmapSource> GetImageAsync(Uri uri) => Images.GetAsync(uri);
 
+    internal static (int Width, int Height) OriginalSize(BitmapSource image) =>
+        OriginalSizes.TryGetValue(image, out var size)
+            ? (size.Width, size.Height) : (image.PixelWidth, image.PixelHeight);
+
     internal static async Task<SnrCosmeticCatalog> GetSnrCatalogAsync()
     {
         Task<SnrCosmeticCatalog> request;
@@ -44,16 +51,33 @@ internal static class CosmeticImages
             bytes = await File.ReadAllBytesAsync(uri.LocalPath).ConfigureAwait(false);
         }
         else bytes = await Http.GetByteArrayAsync(uri).ConfigureAwait(false);
+        return Decode(bytes);
+    }
+
+    private static BitmapSource Decode(byte[] bytes)
+    {
         using var stream = new MemoryStream(bytes, writable: false);
+        var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnDemand).Frames[0];
+        var width = frame.PixelWidth;
+        var height = frame.PixelHeight;
+        if (width > 4096 || height > 4096) throw new InvalidDataException("Cosmetic image too large");
+        stream.Position = 0;
         var image = new BitmapImage();
         image.BeginInit();
         image.CacheOption = BitmapCacheOption.OnLoad;
         image.StreamSource = stream;
+        if (Math.Max(width, height) > MaxDecodeDimension)
+        {
+            if (width >= height) image.DecodePixelWidth = MaxDecodeDimension;
+            else image.DecodePixelHeight = MaxDecodeDimension;
+        }
         image.EndInit();
-        if (image.PixelWidth > 4096 || image.PixelHeight > 4096) throw new InvalidDataException("Cosmetic image too large");
         image.Freeze();
+        OriginalSizes.Add(image, new ImageDimensions(width, height));
         return image;
     }
+
+    private sealed record ImageDimensions(int Width, int Height);
 
     internal static void VerifyCache()
     {
@@ -125,8 +149,35 @@ internal static class CosmeticImages
         if (!ReferenceEquals(pending.GetAwaiter().GetResult(), image) ||
             pendingCache.Count != 0 || pendingCache.CachedBytes != 0)
             throw new InvalidOperationException("A completed stale request repopulated the cleared cache.");
+        var largePixels = new byte[1024 * 768 * 4];
+        var largeSource = BitmapSource.Create(1024, 768, 96, 96,
+            System.Windows.Media.PixelFormats.Bgra32, null, largePixels, 1024 * 4);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(largeSource));
+        using var encoded = new MemoryStream();
+        encoder.Save(encoded);
+        var reduced = Decode(encoded.ToArray());
+        var visor = new CosmeticAsset(new Uri("https://example.invalid/visor.png"),
+            false, "-52%", "-18px", "140%", true);
+        var sourceSize = OriginalSize(reduced);
+        if (reduced.PixelWidth != 512 || reduced.PixelHeight != 384 ||
+            sourceSize != (1024, 768) || !reduced.IsFrozen || OriginalSize(image) != (2, 2) ||
+            SnrCosmeticCatalog.WithImageSize(visor, sourceSize.Width, sourceSize.Height) !=
+            SnrCosmeticCatalog.WithImageSize(visor, 1024, 768))
+            throw new InvalidOperationException("Cosmetic decode bound or original dimensions failed.");
+        var tallSource = BitmapSource.Create(768, 1024, 96, 96,
+            System.Windows.Media.PixelFormats.Bgra32, null, largePixels, 768 * 4);
+        encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(tallSource));
+        encoded.SetLength(0);
+        encoded.Position = 0;
+        encoder.Save(encoded);
+        var tall = Decode(encoded.ToArray());
+        if (tall.PixelWidth != 384 || tall.PixelHeight != 512 || OriginalSize(tall) != (768, 1024))
+            throw new InvalidOperationException("Portrait cosmetic decode bound failed.");
         Console.WriteLine("[PASS] Cosmetic image cache byte budget, LRU eviction and retry");
         Console.WriteLine("[PASS] Cosmetic cache clears without invalidating displayed or pending images");
+        Console.WriteLine("[PASS] Large cosmetic decodes smaller without losing original layout dimensions");
     }
 }
 

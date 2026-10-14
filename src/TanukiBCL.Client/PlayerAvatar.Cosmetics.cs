@@ -186,7 +186,8 @@ public partial class PlayerAvatar
         {
             var bitmap = await imageLoader(asset.Url);
             if (generation != cosmeticGeneration) return false;
-            asset = SnrCosmeticCatalog.WithImageSize(asset, bitmap.PixelWidth, bitmap.PixelHeight);
+            var originalSize = CosmeticImages.OriginalSize(bitmap);
+            asset = SnrCosmeticCatalog.WithImageSize(asset, originalSize.Width, originalSize.Height);
             CosmeticCatalog.ResolveLength(asset.Top, 80);
             CosmeticCatalog.ResolveLength(asset.Left, 80);
             CosmeticCatalog.ResolveLength(asset.Width, 80);
