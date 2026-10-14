@@ -38,6 +38,7 @@ public partial class MainWindow : Window
     private volatile bool hotkeysSuspended;
     private readonly ObservableCollection<PeerRow> peers = [];
     private readonly VoicePlayerStatusCache compactPeerStatuses = new();
+    private readonly Dictionary<int, ObsPeerState> obsPeerStatuses = [];
     private readonly ClientSettings settings;
     private AmongUsState? currentState;
     private bool microphoneMuted;
@@ -1084,9 +1085,11 @@ public partial class MainWindow : Window
         if (settings.ObsOverlay && sessions.Current?.AcceptsCallbacks == true &&
             currentState is { } state && probe is { } activeProbe)
         {
-            var obsPeers = peers.ToDictionary(row => row.ClientId, row => new ObsPeerState(
-                activeProbe.IsPeerPresent(row.ClientId), row.VadActive, row.Radio == "送信中"));
-            activeProbe.PublishObsOverlay(settings.ObsSecret, state, obsPeers,
+            obsPeerStatuses.Clear();
+            foreach (var row in peers)
+                obsPeerStatuses[row.ClientId] = new ObsPeerState(
+                    activeProbe.IsPeerPresent(row.ClientId), row.VadActive, row.Radio == "送信中");
+            activeProbe.PublishObsOverlay(settings.ObsSecret, state, obsPeerStatuses,
                 localTalking && !microphoneMuted, radioTransmitting);
         }
         UpdateOverlayWindow();

@@ -133,6 +133,12 @@ internal static class SpatialVoicePolicySelfTest
         var missingObs = ObsOverlayWire.Build(obsState, new Dictionary<int, ObsPeerState>(), false, false);
         Check("OBS: missing NoS color is omitted", true,
             !missingObs.GetProperty("overlayState").GetProperty("players")[1].TryGetProperty("nosColor", out _));
+        Check("OBS: missing peer remains disconnected and radio silent", true,
+            !missingObs.GetProperty("overlayState").GetProperty("players")[1]
+                .GetProperty("connected").GetBoolean() &&
+            !missingObs.GetProperty("overlayState").GetProperty("players")[1]
+                .GetProperty("usingRadio").GetBoolean() &&
+            !missingObs.GetProperty("otherTalking").GetProperty("2").GetBoolean());
         var vanillaObs = ObsOverlayWire.Build(new AmongUsState
         {
             GameState = GameState.Lobby,

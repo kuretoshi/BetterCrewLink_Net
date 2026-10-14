@@ -3,7 +3,7 @@ using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
 
-internal sealed record ObsPeerState(bool Connected, bool Talking, bool UsingRadio);
+internal readonly record struct ObsPeerState(bool Connected, bool Talking, bool UsingRadio);
 
 internal static class ObsOverlayWire
 {
@@ -21,7 +21,7 @@ internal static class ObsOverlayWire
         var local = state.Players.FirstOrDefault(player => player.IsLocal);
         var playerStates = state.Players.Select(player =>
         {
-            peers.TryGetValue(player.ClientId, out var peer);
+            var hasPeer = peers.TryGetValue(player.ClientId, out var peer);
             var data = new Dictionary<string, object?>
             {
                 ["id"] = player.Id,
@@ -36,8 +36,8 @@ internal static class ObsOverlayWire
                 ["disconnected"] = player.Disconnected,
                 ["isLocal"] = player.IsLocal,
                 ["bugged"] = player.Bugged,
-                ["usingRadio"] = player.IsLocal ? localUsingRadio : peer?.UsingRadio == true,
-                ["connected"] = peer?.Connected == true
+                ["usingRadio"] = player.IsLocal ? localUsingRadio : hasPeer && peer.UsingRadio,
+                ["connected"] = hasPeer && peer.Connected
             };
             if (state.Mod == AmongUsModType.NebulaOnTheShip)
             {
