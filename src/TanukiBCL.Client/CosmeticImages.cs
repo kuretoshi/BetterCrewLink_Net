@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
@@ -57,9 +58,7 @@ internal static class CosmeticImages
     private static BitmapSource Decode(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes, writable: false);
-        var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnDemand).Frames[0];
-        var width = frame.PixelWidth;
-        var height = frame.PixelHeight;
+        var (width, height) = ReadDimensions(bytes, stream);
         if (width > 4096 || height > 4096) throw new InvalidDataException("Cosmetic image too large");
         stream.Position = 0;
         var image = new BitmapImage();
@@ -75,6 +74,26 @@ internal static class CosmeticImages
         image.Freeze();
         OriginalSizes.Add(image, new ImageDimensions(width, height));
         return image;
+    }
+
+    private static (int Width, int Height) ReadDimensions(byte[] bytes, Stream stream)
+    {
+        // The cosmetic packs sampled here use PNG. Its fixed IHDR header avoids creating a
+        // second WPF decoder just to learn the dimensions before the actual decode.
+        if (bytes.Length >= 24 && bytes[0] == 137 && bytes[1] == 80 && bytes[2] == 78 &&
+            bytes[3] == 71 && bytes[4] == 13 && bytes[5] == 10 && bytes[6] == 26 &&
+            bytes[7] == 10 && bytes[8] == 0 && bytes[9] == 0 && bytes[10] == 0 &&
+            bytes[11] == 13 && bytes[12] == 'I' && bytes[13] == 'H' &&
+            bytes[14] == 'D' && bytes[15] == 'R')
+        {
+            var width = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4));
+            var height = BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20, 4));
+            if (width == 0 || height == 0 || width > 4096 || height > 4096)
+                throw new InvalidDataException("Cosmetic image too large");
+            return ((int)width, (int)height);
+        }
+        var frame = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation, BitmapCacheOption.OnDemand).Frames[0];
+        return (frame.PixelWidth, frame.PixelHeight);
     }
 
     private sealed record ImageDimensions(int Width, int Height);
@@ -175,9 +194,24 @@ internal static class CosmeticImages
         var tall = Decode(encoded.ToArray());
         if (tall.PixelWidth != 384 || tall.PixelHeight != 512 || OriginalSize(tall) != (768, 1024))
             throw new InvalidOperationException("Portrait cosmetic decode bound failed.");
+        var oversizedPng = encoded.ToArray();
+        oversizedPng[18] = 16;
+        oversizedPng[19] = 1;
+        try { Decode(oversizedPng); throw new InvalidOperationException("Oversized PNG was accepted."); }
+        catch (InvalidDataException) { }
+        var jpeg = new JpegBitmapEncoder();
+        jpeg.Frames.Add(BitmapFrame.Create(largeSource));
+        encoded.SetLength(0);
+        encoded.Position = 0;
+        jpeg.Save(encoded);
+        var jpegImage = Decode(encoded.ToArray());
+        if (jpegImage.PixelWidth != 512 || jpegImage.PixelHeight != 384 ||
+            OriginalSize(jpegImage) != (1024, 768))
+            throw new InvalidOperationException("Non-PNG cosmetic fallback lost dimensions.");
         Console.WriteLine("[PASS] Cosmetic image cache byte budget, LRU eviction and retry");
         Console.WriteLine("[PASS] Cosmetic cache clears without invalidating displayed or pending images");
         Console.WriteLine("[PASS] Large cosmetic decodes smaller without losing original layout dimensions");
+        Console.WriteLine("[PASS] PNG header dimensions and non-PNG fallback");
     }
 }
 
