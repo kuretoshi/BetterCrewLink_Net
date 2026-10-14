@@ -31,6 +31,7 @@ internal sealed class NosCosmeticContents
     public static NosCosmeticContents Shared { get; } = new();
 
     private sealed record ZipImage(string Archive, string Entry);
+    private readonly record struct RawImageBytes(byte[] Buffer, int Length);
 
     private sealed record Asset(object File, object? Extra, bool ExtraInFront, int Columns, int Rows,
         bool Adaptive, bool Mask = false);
@@ -65,7 +66,6 @@ internal sealed class NosCosmeticContents
                 if (current == signature && result is not null) return result;
                 Clear();
                 root = RealPath(gameDirectory);
-                addonImages = IndexAddonImages(root);
                 // Stream one costume at a time: the whole file as a string or JsonDocument would
                 // land on the large object heap and its pooled buffers stay committed afterwards.
                 Manifest? manifest;
@@ -75,6 +75,7 @@ internal sealed class NosCosmeticContents
                     manifest.Version.TryGetInt32(out var number) && number == ManifestVersion;
                 if (supported)
                 {
+                    addonImages = IndexAddonImages(root);
                     Register(manifest!.Hats, "hat", current);
                     Register(manifest.Visors, "visor", current);
                     Register(manifest.Skins, "skin", current);
@@ -174,6 +175,8 @@ internal sealed class NosCosmeticContents
         costumes.Clear();
         images.Clear();
         imageOrder.Clear();
+        addonImages = [];
+        root = string.Empty;
     }
 
     private static string RealPath(string path)
@@ -345,13 +348,14 @@ internal sealed class NosCosmeticContents
         }
     }
 
-    private byte[] ReadImage(object file)
+    private RawImageBytes ReadImage(object file)
     {
         if (file is string path)
         {
             // Recheck containment before each read, including files replaced by symbolic links.
             if (!Inside(RealPath(path))) throw new InvalidDataException("Image unavailable");
-            return File.ReadAllBytes(path);
+            var bytes = File.ReadAllBytes(path);
+            return new RawImageBytes(bytes, bytes.Length);
         }
         var image = (ZipImage)file;
         if (!Inside(RealPath(image.Archive))) throw new InvalidDataException("Image unavailable");
@@ -363,7 +367,7 @@ internal sealed class NosCosmeticContents
         using var buffer = new MemoryStream((int)entry.Length);
         stream.CopyTo(buffer);
         if (buffer.Length != entry.Length) throw new InvalidDataException("Invalid ZIP image size");
-        return buffer.ToArray();
+        return new RawImageBytes(buffer.GetBuffer(), (int)buffer.Length);
     }
 
     private BitmapSource Render(Asset asset, double[] rgb)
@@ -376,14 +380,14 @@ internal sealed class NosCosmeticContents
         double[] tint = [0.604, 0.792, 0.835];
         void Draw(object file, bool adaptive)
         {
-            var bytes = ReadImage(file);
-            if (bytes.Length < 24 ||
-                (long)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16)) *
-                System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20)) > MaxImageBytes)
+            var (bytes, length) = ReadImage(file);
+            if (length < 24 ||
+                (long)System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16, 4)) *
+                System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20, 4)) > MaxImageBytes)
                 throw new InvalidDataException("Image too large");
             // Only the top-left sprite frame is drawn. Without a load cache WIC decodes just the
             // rows of that frame instead of keeping the whole sheet (often several MiB) decoded.
-            using var stream = new MemoryStream(bytes, writable: false);
+            using var stream = new MemoryStream(bytes, 0, length, writable: false);
             var decoder = new PngBitmapDecoder(stream,
                 BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.None);
             var frame = new FormatConvertedBitmap(decoder.Frames[0], PixelFormats.Bgra32, null, 0);
@@ -504,6 +508,12 @@ internal sealed class NosCosmeticContents
                 using var image = archive.CreateEntry("Pack/MoreCosmic/visors/Shade.png").Open();
                 image.Write(Png(1, 1, (_, _) => ((byte)0, (byte)255, (byte)0, (byte)255)));
             }
+            var zipPayload = new byte[1024 * 1024];
+            RandomNumberGenerator.Fill(zipPayload);
+            var zipPath = Path.Combine(game, "Addons", "pack.zip");
+            using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Update))
+            using (var largeImage = archive.CreateEntry("Pack/MoreCosmic/visors/Large.bin").Open())
+                largeImage.Write(zipPayload);
             var manifest = """
                 {"Version":20261005,
                  "Hats":{"MyHat":{"ProductId":"nos_hat","RelatedRawLocalPath":"BepInEx/MoreCosmic/Local/MyHat",
@@ -519,8 +529,17 @@ internal sealed class NosCosmeticContents
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             var contents = new NosCosmeticContents();
             var status = contents.Update(game);
-            Require(status.Status == "読み取り成功" && status.Revision is not null,
+            Require(status.Status == "読み取り成功" && status.Revision is not null &&
+                contents.addonImages.Count > 0,
                 "LoadedContents.json was not read");
+            var allocatedBeforeZipRead = GC.GetAllocatedBytesForCurrentThread();
+            var zipImage = contents.ReadImage(new ZipImage(zipPath, "Pack/MoreCosmic/visors/Large.bin"));
+            var allocatedZipRead = GC.GetAllocatedBytesForCurrentThread() - allocatedBeforeZipRead;
+            Require(zipImage.Length == zipPayload.Length &&
+                zipImage.Buffer.AsSpan(0, zipImage.Length).SequenceEqual(zipPayload) &&
+                allocatedZipRead < zipPayload.Length * 3L / 2,
+                "Addon ZIP image read copied the full compressed bytes twice");
+            Console.WriteLine($"NoS ZIP read: 1 MiB entry, {allocatedZipRead / 1048576d:0.00} MiB allocated");
             var player = new NosPlayerData
             {
                 ColorR = 0.5, ColorG = 0, ColorB = 1,
@@ -578,7 +597,12 @@ internal sealed class NosCosmeticContents
             File.WriteAllText(Path.Combine(game, "BepInEx", "MoreCosmic", "LoadedContents.json"), "{\"Version\":1}");
             contents.nextRead = default;
             Require(contents.Update(game).Status == "画像表示は未対応の定義バージョンです" &&
-                contents.Cosmetics(player) is null, "Unsupported manifest kept stale cosmetics");
+                contents.Cosmetics(player) is null && contents.addonImages.Count == 0 &&
+                contents.CachedImageCount == 0, "Unsupported manifest kept stale cosmetics or ZIP index");
+            File.Delete(Path.Combine(game, "BepInEx", "MoreCosmic", "LoadedContents.json"));
+            contents.nextRead = default;
+            Require(contents.Update(game).Status.StartsWith("読み取り失敗:", StringComparison.Ordinal) &&
+                contents.addonImages.Count == 0, "Missing manifest kept the old addon ZIP index");
         }
         finally
         {
