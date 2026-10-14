@@ -111,6 +111,7 @@ public partial class MainWindow : Window
         UpdateCompactView();
         gameDetectionTimer.Tick += (_, _) =>
         {
+            if (StopSessionIfGameExited()) return;
             if (!processSwitchInProgress && settingsWindow is null) TryAutomaticConnection();
         };
         audioUiTimer.Tick += (_, _) => FlushAudioUi();
@@ -463,6 +464,19 @@ public partial class MainWindow : Window
         {
             if (window.Icon is null || window.DiagnosticsGrid.Visibility != Visibility.Collapsed)
                 throw new InvalidOperationException("The beta window lost its icon or opened developer controls");
+            window.currentState = new AmongUsState { GameState = GameState.Lobby, LobbyCode = "TEST" };
+            window.peers.Add(new PeerRow(1, "peer"));
+            if (!window.sessions.TryStart(out var session))
+                throw new InvalidOperationException("Failed to start a game-exit test session");
+            window.activeGamePid = int.MaxValue;
+            if (!window.StopSessionIfGameExited() || !session.Token.IsCancellationRequested)
+                throw new InvalidOperationException("An exited game did not stop its voice session");
+            session.RunAsync(() => Task.CompletedTask, _ => { }).GetAwaiter().GetResult();
+            window.activeGamePid = null;
+            window.ResetStoppedSessionView();
+            if (window.currentState is not null || window.peers.Count != 0)
+                throw new InvalidOperationException("A stopped session retained its game snapshot or peer rows");
+            Console.WriteLine("[PASS] Exited game stops voice and clears retained session state");
         }
         finally { window.Close(); }
         Console.WriteLine("[PASS] Main window loads the released icon and starts compact");
@@ -527,7 +541,7 @@ public partial class MainWindow : Window
         {
             activeGamePid = null;
             hotkeys = null;
-            if (!isClosing && !Dispatcher.HasShutdownStarted) SetRunning(false);
+            ResetStoppedSessionView();
             return ValueTask.CompletedTask;
         });
         session.AddCleanup(() =>
@@ -827,6 +841,21 @@ public partial class MainWindow : Window
     {
         if (sessions.Current?.AcceptsCallbacks == true)
             probe?.SetImpostorRadioTransmitting(!radioTransmitting);
+    }
+
+    private bool StopSessionIfGameExited()
+    {
+        if (activeGamePid is not { } gamePid || IsGameProcessAlive(gamePid)) return false;
+        sessions.Current?.RequestStop();
+        return true;
+    }
+
+    private void ResetStoppedSessionView()
+    {
+        currentState = null;
+        peers.Clear();
+        NosCosmeticContents.Shared.Release();
+        if (!isClosing && !Dispatcher.HasShutdownStarted) SetRunning(false);
     }
 
     private void UpdateRadioButtonLabel()
