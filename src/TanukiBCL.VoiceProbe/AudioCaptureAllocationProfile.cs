@@ -37,6 +37,9 @@ internal static class AudioCaptureAllocationProfile
             }, _ => { });
         audio.Start();
         await Task.Delay(TimeSpan.FromSeconds(10));
+        using var process = Process.GetCurrentProcess();
+        process.Refresh();
+        var privateBefore = process.PrivateMemorySize64;
         var firstCount = Volatile.Read(ref frameCount);
         var allocatedBefore = GC.GetTotalAllocatedBytes(false);
         var watch = Stopwatch.StartNew();
@@ -45,6 +48,8 @@ internal static class AudioCaptureAllocationProfile
         Volatile.Write(ref measuring, 0);
         watch.Stop();
         var allocated = GC.GetTotalAllocatedBytes(false) - allocatedBefore;
+        process.Refresh();
+        var privateAfter = process.PrivateMemorySize64;
         if (codec is not null)
         {
             var encoder = typeof(WebRtcPeerManager)
@@ -59,6 +64,7 @@ internal static class AudioCaptureAllocationProfile
             $"frames={Volatile.Read(ref frameCount) - firstCount} " +
             (encode ? $"encodeThreadBytes={Volatile.Read(ref encodeThreadBytes)} " : "") +
             (encode ? $"packetBytes={Volatile.Read(ref packetBytes)} absoluteSamples={Volatile.Read(ref absoluteSamples)} " : "") +
+            $"privateMiB={privateBefore / 1048576d:0.00}->{privateAfter / 1048576d:0.00} " +
             $"seconds={watch.Elapsed.TotalSeconds:0.0} allocatedMiB={allocated / 1048576d:0.00} " +
             $"rateMiBPerSecond={allocated / 1048576d / watch.Elapsed.TotalSeconds:0.000}");
         return 0;
