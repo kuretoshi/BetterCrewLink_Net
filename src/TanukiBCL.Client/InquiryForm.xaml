@@ -125,6 +125,17 @@
                         BorderThickness="1" Margin="0,0,0,16">
                     <TextBlock x:Name="ResultText" TextWrapping="Wrap" FontSize="14" />
                 </Border>
+                <Button x:Name="IssueLinkButton" Visibility="Collapsed" HorizontalAlignment="Left"
+                        Style="{StaticResource InquiryTextActionStyle}" Click="IssueLinkButton_Click"
+                        Margin="0,0,0,12" />
+                <Border Background="#4B351D" BorderBrush="#A87935" BorderThickness="1"
+                        CornerRadius="4" Padding="12" Margin="0,0,0,12">
+                    <TextBlock TextWrapping="Wrap" FontSize="13"
+                               Text="送信すると、件名・本文・選択した添付ファイル・自動添付ログが、この.NET版の公開GitHub IssueとDiscordフォーラムに掲載されます。個人情報や秘密情報が含まれていないか確認してください。" />
+                </Border>
+                <CheckBox x:Name="PublicIssueConsentBox" Content="公開される内容を確認しました"
+                          Checked="PublicIssueConsentBox_Changed" Unchecked="PublicIssueConsentBox_Changed"
+                          Foreground="#F5F1F7" Margin="0,0,0,16" />
                 <ComboBox x:Name="TagCombo" Height="56" SelectedIndex="0" Margin="0,0,0,16"
                           Style="{StaticResource InquiryComboStyle}">
                     <ComboBoxItem Content="質問" Tag="question" />

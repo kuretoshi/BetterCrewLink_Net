@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
@@ -13,6 +14,7 @@ namespace TanukiBCL.Client;
 public partial class InquiryForm : UserControl
 {
     private readonly ObservableCollection<InquiryAttachment> attachments = [];
+    private Uri? issueUrl;
     private bool sending;
 
     public InquiryForm()
@@ -27,6 +29,8 @@ public partial class InquiryForm : UserControl
         UpdateSendAvailability();
         RefreshFieldLabels();
     }
+
+    private void PublicIssueConsentBox_Changed(object sender, RoutedEventArgs e) => UpdateSendAvailability();
 
     private void Field_FocusChanged(object sender, KeyboardFocusChangedEventArgs e) => RefreshFieldLabels();
 
@@ -54,13 +58,15 @@ public partial class InquiryForm : UserControl
     private void UpdateSendAvailability()
     {
         if (SendButton is not null)
-            SendButton.IsEnabled = !sending && !string.IsNullOrWhiteSpace(SubjectBox?.Text) &&
+            SendButton.IsEnabled = !sending && PublicIssueConsentBox?.IsChecked == true &&
+                !string.IsNullOrWhiteSpace(SubjectBox?.Text) &&
                 !string.IsNullOrWhiteSpace(BodyBox?.Text);
     }
 
     private void SelectFilesButton_Click(object sender, RoutedEventArgs e)
     {
         ResultBanner.Visibility = Visibility.Collapsed;
+        IssueLinkButton.Visibility = Visibility.Collapsed;
         var picker = new OpenFileDialog { Multiselect = true, Title = "添付ファイルを選択" };
         if (picker.ShowDialog(Window.GetWindow(this)) != true) return;
         foreach (var path in picker.FileNames)
@@ -90,7 +96,9 @@ public partial class InquiryForm : UserControl
         UpdateSendAvailability();
         TagCombo.IsEnabled = SubjectBox.IsEnabled = BodyBox.IsEnabled = SelectFilesButton.IsEnabled =
             AttachmentsList.IsEnabled = false;
+        PublicIssueConsentBox.IsEnabled = false;
         ResultBanner.Visibility = Visibility.Collapsed;
+        IssueLinkButton.Visibility = Visibility.Collapsed;
         try
         {
             var tag = TagCombo.SelectedIndex switch
@@ -99,12 +107,16 @@ public partial class InquiryForm : UserControl
                 2 => InquiryTag.Request,
                 _ => InquiryTag.Question
             };
-            await InquirySubmission.SubmitAsync(SubjectBox.Text, BodyBox.Text, tag, attachments.ToArray());
+            issueUrl = await InquirySubmission.SubmitAsync(SubjectBox.Text, BodyBox.Text, tag,
+                attachments.ToArray(), PublicIssueConsentBox.IsChecked == true);
             SubjectBox.Clear();
             BodyBox.Clear();
             TagCombo.SelectedIndex = 0;
             attachments.Clear();
+            PublicIssueConsentBox.IsChecked = false;
             ShowResult("送信しました。お問い合わせありがとうございます。", false);
+            IssueLinkButton.Content = $"公開Issueを開く: {issueUrl}";
+            IssueLinkButton.Visibility = Visibility.Visible;
         }
         catch (Exception error) when (error is HttpRequestException or IOException or
             UnauthorizedAccessException or InvalidOperationException or UriFormatException)
@@ -116,8 +128,16 @@ public partial class InquiryForm : UserControl
             sending = false;
             TagCombo.IsEnabled = SubjectBox.IsEnabled = BodyBox.IsEnabled = SelectFilesButton.IsEnabled =
                 AttachmentsList.IsEnabled = true;
+            PublicIssueConsentBox.IsEnabled = true;
             UpdateSendAvailability();
         }
+    }
+
+    private void IssueLinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (issueUrl is null) return;
+        try { Process.Start(new ProcessStartInfo(issueUrl.AbsoluteUri) { UseShellExecute = true })?.Dispose(); }
+        catch (System.ComponentModel.Win32Exception error) { ShowResult(error.Message, true); }
     }
 
     private void ShowResult(string message, bool isError)
@@ -150,8 +170,11 @@ public partial class InquiryForm : UserControl
         if (form.SubjectLabel.FontSize != 12 || form.BodyLabel.FontSize != 12 ||
                 form.SubjectLabel.VerticalAlignment != VerticalAlignment.Top)
                 throw new InvalidOperationException("Filled inquiry field labels did not float above their borders");
+        if (form.SendButton.IsEnabled)
+                throw new InvalidOperationException("Public inquiry was enabled without consent");
+        form.PublicIssueConsentBox.IsChecked = true;
         if (!form.SendButton.IsEnabled)
-                throw new InvalidOperationException("Valid inquiry did not enable Send");
+                throw new InvalidOperationException("Approved inquiry did not enable Send");
         form.BodyBox.Text = " ";
         if (form.SendButton.IsEnabled)
                 throw new InvalidOperationException("Blank inquiry body enabled Send");

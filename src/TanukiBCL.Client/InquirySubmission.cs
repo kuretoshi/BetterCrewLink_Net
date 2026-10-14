@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace TanukiBCL.Client;
 
@@ -10,7 +11,7 @@ internal enum InquiryTag { Question, Bug, Request }
 
 internal sealed record InquiryAttachment(string Path, string Name, long Size);
 
-// The relay chooses the product-specific Discord destination on the server.
+// The relay chooses the product-specific Issue repository and Discord destination.
 // Never ship a Discord webhook URL in the desktop application.
 internal static class InquirySubmission
 {
@@ -19,6 +20,9 @@ internal static class InquirySubmission
     private static readonly Uri DefaultDestination =
         new("https://debug-auth.kuretoshi.work/v1/inquiries");
     private static readonly HttpClient Client = new() { Timeout = TimeSpan.FromSeconds(60) };
+    private static readonly Regex IssueUrlPattern = new(
+        @"\Ahttps://github\.com/kuretoshi/BetterCrewLink_Net/issues/[1-9][0-9]*\z",
+        RegexOptions.CultureInvariant);
 
     internal static IReadOnlyList<InquiryAttachment> GetSupportLogs()
     {
@@ -34,11 +38,14 @@ internal static class InquirySubmission
         catch (UnauthorizedAccessException) { return []; }
     }
 
-    internal static async Task SubmitAsync(string subject, string body, InquiryTag tag,
-        IEnumerable<InquiryAttachment> selectedFiles, CancellationToken cancellationToken = default,
+    internal static async Task<Uri> SubmitAsync(string subject, string body, InquiryTag tag,
+        IEnumerable<InquiryAttachment> selectedFiles, bool publicIssueConsent,
+        CancellationToken cancellationToken = default,
         HttpClient? httpClient = null, Uri? destination = null,
         IEnumerable<InquiryAttachment>? supportLogs = null)
     {
+        if (!publicIssueConsent)
+            throw new InvalidOperationException("公開される内容を確認してください。");
         subject = Sanitize(subject, 100);
         body = Sanitize(body, 1800);
         if (subject.Length == 0 || body.Length == 0)
@@ -67,6 +74,7 @@ internal static class InquirySubmission
         var payload = JsonSerializer.Serialize(new
         {
             product = "net",
+            public_issue_consent = true,
             tag = tagName,
             subject,
             body
@@ -99,6 +107,12 @@ internal static class InquirySubmission
         using var response = await (httpClient ?? Client).SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"お問い合わせの送信に失敗しました。HTTP {(int)response.StatusCode}");
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(cancellationToken));
+        if (!result.RootElement.TryGetProperty("issue_url", out var issueUrl) ||
+            issueUrl.ValueKind != JsonValueKind.String ||
+            !IssueUrlPattern.IsMatch(issueUrl.GetString() ?? string.Empty))
+            throw new InvalidOperationException(".NET版の公開Issueへの投稿を確認できませんでした。");
+        return new Uri(issueUrl.GetString()!);
     }
 
     private static string Sanitize(string value, int limit)
@@ -120,24 +134,34 @@ internal static class InquirySubmission
     {
         using var handler = new TestHandler();
         using var client = new HttpClient(handler);
-        await SubmitAsync("  件名  ", " 本文 ", InquiryTag.Bug, [], httpClient: client,
+        var createdIssue = await SubmitAsync("  件名  ", " 本文 ", InquiryTag.Bug, [], true, httpClient: client,
             destination: new Uri("https://example.invalid/submit"), supportLogs: []);
         using var payload = JsonDocument.Parse(handler.Content!);
         if (handler.Count != 1 || handler.Method != HttpMethod.Post ||
             handler.Uri != new Uri("https://example.invalid/submit") ||
             payload.RootElement.GetProperty("product").GetString() != "net" ||
+            payload.RootElement.GetProperty("public_issue_consent").GetBoolean() != true ||
             payload.RootElement.GetProperty("tag").GetString() != "bug" ||
             payload.RootElement.GetProperty("subject").GetString() != "件名" ||
-            payload.RootElement.GetProperty("body").GetString() != "本文")
+            payload.RootElement.GetProperty("body").GetString() != "本文" ||
+            createdIssue.AbsoluteUri != "https://github.com/kuretoshi/BetterCrewLink_Net/issues/123")
             throw new InvalidOperationException("Inquiry relay payload differs from the server contract");
         try
         {
-            await SubmitAsync(" ", "body", InquiryTag.Question, [], httpClient: client,
+            await SubmitAsync(" ", "body", InquiryTag.Question, [], true, httpClient: client,
                 destination: new Uri("https://example.invalid/submit"), supportLogs: []);
             throw new InvalidOperationException("Blank inquiry was accepted");
         }
         catch (InvalidOperationException error) when (error.Message.Contains("件名と本文")) { }
         if (handler.Count != 1) throw new InvalidOperationException("Invalid inquiry was transmitted");
+        try
+        {
+            await SubmitAsync("subject", "body", InquiryTag.Question, [], false, httpClient: client,
+                destination: new Uri("https://example.invalid/submit"), supportLogs: []);
+            throw new InvalidOperationException("Inquiry without publication consent was accepted");
+        }
+        catch (InvalidOperationException error) when (error.Message.Contains("公開される内容")) { }
+        if (handler.Count != 1) throw new InvalidOperationException("Unapproved inquiry was transmitted");
 
         var attachmentPath = System.IO.Path.GetTempFileName();
         var logPath = System.IO.Path.GetTempFileName();
@@ -147,6 +171,7 @@ internal static class InquirySubmission
             await File.WriteAllBytesAsync(logPath, Enumerable.Repeat((byte)'a', LogTailBytes + 5).ToArray());
             await SubmitAsync("subject", "body", InquiryTag.Request,
                 [new InquiryAttachment(attachmentPath, "chosen.txt", new FileInfo(attachmentPath).Length)],
+                true,
                 httpClient: client, destination: new Uri("https://example.invalid/submit"),
                 supportLogs: [new InquiryAttachment(logPath, "debug.log", LogTailBytes)]);
             if (handler.Count != 2 || handler.Content is null ||
@@ -154,6 +179,14 @@ internal static class InquirySubmission
                 !handler.Content.Contains("chosen-file") || !handler.Content.Contains("\"product\":\"net\"") ||
                 !handler.Content.Contains("\"tag\":\"request\""))
                 throw new InvalidOperationException("Inquiry attachments or request tag were lost");
+            handler.ResponseIssueUrl = "https://github.com/kuretoshi/TanukiBCL/issues/123";
+            try
+            {
+                await SubmitAsync("subject", "body", InquiryTag.Bug, [], true, httpClient: client,
+                    destination: new Uri("https://example.invalid/submit"), supportLogs: []);
+                throw new InvalidOperationException("Wrong repository Issue URL was accepted");
+            }
+            catch (InvalidOperationException error) when (error.Message.Contains(".NET版の公開Issue")) { }
         }
         finally
         {
@@ -169,13 +202,17 @@ internal static class InquirySubmission
         internal HttpMethod? Method;
         internal Uri? Uri;
         internal string? Content;
+        internal string ResponseIssueUrl = "https://github.com/kuretoshi/BetterCrewLink_Net/issues/123";
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Count++;
             Method = request.Method;
             Uri = request.RequestUri;
             Content = await request.Content!.ReadAsStringAsync(cancellationToken);
-            return new HttpResponseMessage(HttpStatusCode.OK);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { issue_url = ResponseIssueUrl }))
+            };
         }
     }
 }
