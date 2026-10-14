@@ -464,6 +464,17 @@ public partial class MainWindow : Window
         {
             if (window.Icon is null || window.DiagnosticsGrid.Visibility != Visibility.Collapsed)
                 throw new InvalidOperationException("The beta window lost its icon or opened developer controls");
+            AvatarImageFactory.GetNos(new Player { NosLobbyColor = "#1464c8" });
+            window.currentState = new AmongUsState
+            {
+                Mod = AmongUsModType.NebulaOnTheShip,
+                GameState = GameState.Tasks,
+                LobbyCode = "TEST"
+            };
+            window.ShowGameState(new AmongUsState { GameState = GameState.Menu });
+            if (AvatarImageFactory.RetainedRecolorCount != 0)
+                throw new InvalidOperationException("Returning to the menu retained recolored avatars");
+            Console.WriteLine("[PASS] Menu transition releases NoS recolored avatar images");
             window.currentState = new AmongUsState { GameState = GameState.Lobby, LobbyCode = "TEST" };
             window.peers.Add(new PeerRow(1, "peer"));
             if (!window.sessions.TryStart(out var session))
@@ -473,9 +484,11 @@ public partial class MainWindow : Window
                 throw new InvalidOperationException("An exited game did not stop its voice session");
             session.RunAsync(() => Task.CompletedTask, _ => { }).GetAwaiter().GetResult();
             window.activeGamePid = null;
+            AvatarImageFactory.GetNos(new Player { NosLobbyColor = "#1464c8" });
             window.ResetStoppedSessionView();
-            if (window.currentState is not null || window.peers.Count != 0)
-                throw new InvalidOperationException("A stopped session retained its game snapshot or peer rows");
+            if (window.currentState is not null || window.peers.Count != 0 ||
+                AvatarImageFactory.RetainedRecolorCount != 0)
+                throw new InvalidOperationException("A stopped session retained game state, peers or avatars");
             Console.WriteLine("[PASS] Exited game stops voice and clears retained session state");
         }
         finally { window.Close(); }
@@ -855,6 +868,7 @@ public partial class MainWindow : Window
         currentState = null;
         peers.Clear();
         NosCosmeticContents.Shared.Release();
+        AvatarImageFactory.ReleaseCaches();
         if (!isClosing && !Dispatcher.HasShutdownStarted) SetRunning(false);
     }
 
@@ -893,7 +907,10 @@ public partial class MainWindow : Window
         }
         UpdateCompactView();
         if (leavingNos || (state.GameState == GameState.Menu && previousGameState != GameState.Menu))
+        {
             NosCosmeticContents.Shared.Release();
+            AvatarImageFactory.ReleaseCaches();
+        }
     }
 
     private void UpdatePeerMix(int clientId, PeerVoiceMix mix)

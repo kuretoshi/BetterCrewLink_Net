@@ -37,6 +37,17 @@ internal static class AvatarImageFactory
     private static readonly Lazy<BitmapSource> RainbowPlayer = new(() => Load("rainbow-alive.png"));
     private static readonly Lazy<BitmapSource> RainbowGhost = new(() => Load("rainbow-dead.png"));
 
+    internal static int RetainedRecolorCount
+    {
+        get { lock (RecolorCacheGate) return Cache.Count + NosCache.Count; }
+    }
+
+    internal static void ReleaseCaches()
+    {
+        lock (RecolorCacheGate) Cache.Clear();
+        NosCache.Clear();
+    }
+
     public static BitmapSource Get(int colorId, bool isDead, IReadOnlyList<PlayerColorPair>? playerColors)
     {
         if (colorId == RainbowColorId)
@@ -248,7 +259,17 @@ internal static class AvatarImageFactory
         }
         if (first is null || !first.IsFrozen || first.PixelWidth <= 0)
             throw new InvalidOperationException("Eviction invalidated an active avatar image.");
+        var active = Get(0, false, palette);
+        var nosPlayer = new Player { NosLobbyColor = "#1464c8" };
+        var nosActive = GetNos(nosPlayer);
+        if (nosActive is null || Cache.Count == 0 || NosCache.Count == 0)
+            throw new InvalidOperationException("Avatar caches were not populated before release.");
+        ReleaseCaches();
+        if (Cache.Count != 0 || NosCache.Count != 0 || !active.IsFrozen || !nosActive.IsFrozen ||
+            ReferenceEquals(active, Get(0, false, palette)) || ReferenceEquals(nosActive, GetNos(nosPlayer)))
+            throw new InvalidOperationException("Avatar caches were not released and rebuilt after leaving the game.");
         Console.WriteLine("[PASS] Recolored avatar cache remains bounded without invalidating displayed images");
+        Console.WriteLine("[PASS] Vanilla and NoS recolor caches release on exit and render again on return");
     }
 
     private static Color FromGameColor(uint packed) =>
