@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private Task? reloadTask;
     private volatile bool hotkeysSuspended;
     private readonly ObservableCollection<PeerRow> peers = [];
+    private readonly VoicePlayerStatusCache compactPeerStatuses = new();
     private readonly ClientSettings settings;
     private AmongUsState? currentState;
     private bool microphoneMuted;
@@ -1060,11 +1061,14 @@ public partial class MainWindow : Window
 
     private void UpdateCompactView()
     {
-        var statuses = peers.ToDictionary(row => row.ClientId, row => new VoicePlayerStatus(
-            row.Connection is "data-ready" or "接続済み"
-                ? row.HasReceivedFrames ? "connected" : "novoice"
-                : "disconnected",
-            row.Talking, row.Radio == "送信中", row.Quality));
+        compactPeerStatuses.Begin();
+        foreach (var row in peers)
+            compactPeerStatuses.Set(row.ClientId,
+                row.Connection is "data-ready" or "接続済み"
+                    ? row.HasReceivedFrames ? "connected" : "novoice"
+                    : "disconnected",
+                row.Talking, row.Radio == "送信中", row.Quality);
+        var statuses = compactPeerStatuses.End();
         CompactVoiceView.Update(currentState, voiceServerConnected, localTalking && !microphoneMuted,
             microphoneMuted, deafened, statuses, hideCode: settings.HideCode, localUsingRadio: radioTransmitting,
             playerConfigs: settings.PlayerConfigMap, serverQuality: serverQuality);
