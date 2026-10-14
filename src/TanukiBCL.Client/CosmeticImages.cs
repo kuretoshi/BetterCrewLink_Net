@@ -15,6 +15,8 @@ internal static class CosmeticImages
     // session through many public lobbies no longer grows toward 64 MiB of decoded images.
     private static readonly CosmeticImageCache Images = new(128, 32L * 1024 * 1024, LoadAsync);
 
+    internal static void ReleaseCachedImages() => Images.Clear();
+
     public static async Task<CosmeticCatalog> GetCatalogAsync()
     {
         Task<CosmeticCatalog> request;
@@ -107,7 +109,24 @@ internal static class CosmeticImages
         retry.GetAsync(first).GetAwaiter().GetResult();
         if (attempts != 2 || retry.Count != 1)
             throw new InvalidOperationException("Failed cosmetic download was retained in cache.");
+        var activeImage = cache.GetAsync(first).GetAwaiter().GetResult();
+        var loadsBeforeClear = loads[first];
+        cache.Clear();
+        if (cache.Count != 0 || cache.CachedBytes != 0 || !activeImage.IsFrozen)
+            throw new InvalidOperationException("Clearing the cosmetic cache invalidated a displayed image.");
+        cache.GetAsync(first).GetAwaiter().GetResult();
+        if (loads[first] != loadsBeforeClear + 1)
+            throw new InvalidOperationException("A cleared cosmetic was not reloaded on demand.");
+        var pendingLoad = new TaskCompletionSource<BitmapSource>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingCache = new CosmeticImageCache(3, 32, _ => pendingLoad.Task);
+        var pending = pendingCache.GetAsync(first);
+        pendingCache.Clear();
+        pendingLoad.SetResult(image);
+        if (!ReferenceEquals(pending.GetAwaiter().GetResult(), image) ||
+            pendingCache.Count != 0 || pendingCache.CachedBytes != 0)
+            throw new InvalidOperationException("A completed stale request repopulated the cleared cache.");
         Console.WriteLine("[PASS] Cosmetic image cache byte budget, LRU eviction and retry");
+        Console.WriteLine("[PASS] Cosmetic cache clears without invalidating displayed or pending images");
     }
 }
 
@@ -120,6 +139,16 @@ internal sealed class CosmeticImageCache(int maxEntries, long maxBytes, Func<Uri
 
     internal int Count { get { lock (gate) return images.Count; } }
     internal long CachedBytes { get { lock (gate) return cachedBytes; } }
+
+    internal void Clear()
+    {
+        lock (gate)
+        {
+            images.Clear();
+            order.Clear();
+            cachedBytes = 0;
+        }
+    }
 
     internal async Task<BitmapSource> GetAsync(Uri uri)
     {

@@ -869,6 +869,7 @@ public partial class MainWindow : Window
         peers.Clear();
         NosCosmeticContents.Shared.Release();
         AvatarImageFactory.ReleaseCaches();
+        CosmeticImages.ReleaseCachedImages();
         if (!isClosing && !Dispatcher.HasShutdownStarted) SetRunning(false);
     }
 
@@ -910,6 +911,7 @@ public partial class MainWindow : Window
         {
             NosCosmeticContents.Shared.Release();
             AvatarImageFactory.ReleaseCaches();
+            CosmeticImages.ReleaseCachedImages();
         }
     }
 
