@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using TanukiBCL.VoiceProbe.GameMemory;
 
@@ -21,7 +22,103 @@ internal static class ObsOverlayWire
 
     public static void Write(Utf8JsonWriter writer, AmongUsState state,
         IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
-        => JsonSerializer.Serialize(writer, CreatePayload(state, peers, localTalking, localUsingRadio));
+    {
+        writer.WriteStartObject();
+        writer.WriteStartObject("overlayState");
+        writer.WriteNumber("gameState", (int)state.GameState);
+        writer.WriteStartArray("players");
+        foreach (var player in state.Players)
+            WritePlayer(writer, state, player, peers, localUsingRadio);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+        WriteClientMap(writer, "otherTalking", state.Players, peers, talking: true);
+        WriteClientMap(writer, "otherDead", state.Players, peers, talking: false);
+        writer.WriteBoolean("localTalking", localTalking);
+        writer.WriteBoolean("localIsAlive", state.Players.FirstOrDefault(player => player.IsLocal)?.IsDead != true);
+        writer.WriteString("mod", ModName(state.Mod));
+        writer.WriteBoolean("oldMeetingHud", state.OldMeetingHud);
+        writer.WriteEndObject();
+    }
+
+    private static void WritePlayer(Utf8JsonWriter writer, AmongUsState state, Player player,
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localUsingRadio)
+    {
+        var hasPeer = peers.TryGetValue(player.ClientId, out var peer);
+        writer.WriteStartObject();
+        writer.WriteNumber("id", player.Id);
+        writer.WriteNumber("clientId", player.ClientId);
+        writer.WriteBoolean("inVent", player.InVent);
+        writer.WriteBoolean("isDead", player.IsDead);
+        writer.WriteString("name", player.Name);
+        writer.WriteString("hatId", player.HatId);
+        writer.WriteNumber("petId", player.PetId);
+        writer.WriteString("skinId", player.SkinId);
+        writer.WriteString("visorId", player.VisorId);
+        writer.WriteBoolean("disconnected", player.Disconnected);
+        writer.WriteBoolean("isLocal", player.IsLocal);
+        writer.WriteBoolean("bugged", player.Bugged);
+        writer.WriteBoolean("usingRadio", player.IsLocal ? localUsingRadio : hasPeer && peer.UsingRadio);
+        writer.WriteBoolean("connected", hasPeer && peer.Connected);
+        if (state.Mod == AmongUsModType.NebulaOnTheShip)
+        {
+            if (NosColor.For(player) is { } nosColor) writer.WriteString("nosColor", nosColor);
+        }
+        else WritePlayerColor(writer, state, player);
+        writer.WriteEndObject();
+    }
+
+    private static void WritePlayerColor(Utf8JsonWriter writer, AmongUsState state, Player player)
+    {
+        writer.WriteNumber("colorId", player.ColorId);
+        writer.WriteNumber("shiftedColor", player.ShiftedColor);
+        if (player.ColorId >= 0 && player.ColorId < state.PlayerColors.Count)
+        {
+            var colors = state.PlayerColors[player.ColorId];
+            writer.WriteStartArray("realColor");
+            writer.WriteStringValue(ColorHex(colors.Main));
+            writer.WriteStringValue(ColorHex(colors.Shadow));
+            writer.WriteEndArray();
+        }
+        else if (player.ColorId >= 0 && player.ColorId < DefaultPlayerColors.Length)
+        {
+            writer.WriteStartArray("realColor");
+            foreach (var color in DefaultPlayerColors[player.ColorId]) writer.WriteStringValue(color);
+            writer.WriteEndArray();
+        }
+    }
+
+    private static void WriteClientMap(Utf8JsonWriter writer, string name, List<Player> players,
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool talking)
+    {
+        writer.WriteStartObject(name);
+        Span<char> key = stackalloc char[11];
+        for (var i = 0; i < players.Count; i++)
+        {
+            var player = players[i];
+            if (player.IsLocal || SeenEarlier(players, i)) continue;
+            player.ClientId.TryFormat(key, out var length, provider: CultureInfo.InvariantCulture);
+            var value = talking ? peers.TryGetValue(player.ClientId, out var peer) && peer.Talking
+                : LastDead(players, i);
+            writer.WriteBoolean(key[..length], value);
+        }
+        writer.WriteEndObject();
+    }
+
+    private static bool SeenEarlier(List<Player> players, int index)
+    {
+        for (var i = 0; i < index; i++)
+            if (!players[i].IsLocal && players[i].ClientId == players[index].ClientId) return true;
+        return false;
+    }
+
+    private static bool LastDead(List<Player> players, int index)
+    {
+        var clientId = players[index].ClientId;
+        var dead = players[index].IsDead;
+        for (var i = index + 1; i < players.Count; i++)
+            if (!players[i].IsLocal && players[i].ClientId == clientId) dead = players[i].IsDead;
+        return dead;
+    }
 
     private static object CreatePayload(AmongUsState state,
         IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)

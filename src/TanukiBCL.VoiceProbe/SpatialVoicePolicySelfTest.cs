@@ -113,6 +113,26 @@ internal static class SpatialVoicePolicySelfTest
         using var streamedObs = JsonDocument.Parse(obsBuffer.WrittenMemory);
         Check("OBS: reusable writer matches element serializer", true,
             streamedObs.RootElement.GetRawText() == obs.GetRawText());
+        var duplicateObsState = new AmongUsState
+        {
+            GameState = GameState.Tasks,
+            PlayerColors = [new PlayerColorPair { Main = 0x00332211, Shadow = 0x00665544 }],
+            Players =
+            [
+                new Player { Id = 0, ClientId = 1, IsLocal = true, ColorId = 0, Name = "日本語" },
+                new Player { Id = 1, ClientId = 2, ColorId = 0, ShiftedColor = 3,
+                    Name = "first", HatId = "hat_A", SkinId = "skin_B", VisorId = "visor_C",
+                    PetId = 7, InVent = true, Disconnected = true, Bugged = true, IsDead = false },
+                new Player { Id = 2, ClientId = 2, ColorId = -1, Name = "last", IsDead = true },
+                new Player { Id = 3, ClientId = -4, ColorId = 5, Name = "negative id" }
+            ]
+        };
+        Check("OBS: vanilla colors, duplicate clients and negative IDs match released JSON", true,
+            ObsWriterMatchesReference(duplicateObsState,
+                new Dictionary<int, ObsPeerState> { [2] = new(true, true, false) }, true, false));
+        Check("OBS: empty player map matches released JSON", true,
+            ObsWriterMatchesReference(new AmongUsState { GameState = GameState.Menu },
+                new Dictionary<int, ObsPeerState>(), false, false));
         var obsCache = new ObsOverlayPayloadCache();
         var obsPeers = new Dictionary<int, ObsPeerState> { [2] = new(true, true, true) };
         var firstObs = obsCache.BuildIfChanged("ABC123XYZ", obsState, obsPeers, true, true);
@@ -1300,6 +1320,17 @@ internal static class SpatialVoicePolicySelfTest
             failures++;
             Console.Error.WriteLine($"[FAIL] {name}: expected={expected:0.###} actual={actual:0.###}");
         }
+    }
+
+    private static bool ObsWriterMatchesReference(AmongUsState state,
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+            ObsOverlayWire.Write(writer, state, peers, localTalking, localUsingRadio);
+        using var result = JsonDocument.Parse(buffer.WrittenMemory);
+        return result.RootElement.GetRawText() ==
+            ObsOverlayWire.Build(state, peers, localTalking, localUsingRadio).GetRawText();
     }
 
     private static Player WithDead(this Player source) => new()
