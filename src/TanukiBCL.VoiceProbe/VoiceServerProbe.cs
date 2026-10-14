@@ -21,7 +21,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly ConcurrentDictionary<string, int> stalledReconnectAttempts = new();
     private readonly ConcurrentDictionary<string, int> failedReconnectAttempts = new();
     private int automaticPeerRecoveryCount;
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> peerOperationGates = new();
+    private readonly object peerOperationGateLock = new();
+    private readonly Dictionary<string, PeerOperationGate> peerOperationGates = [];
+    private int inFlightPeerOperations;
+    private TaskCompletionSource peerOperationsDrained = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly ConcurrentDictionary<string, byte> pendingOfferFallbacks = new();
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
     private readonly ConcurrentDictionary<int, NosRadioReport> nosRadioReports = new();
@@ -107,6 +110,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         this.label = label;
         this.receiveOnly = receiveOnly;
         lifetimeToken = lifetimeCancellation.Token;
+        peerOperationsDrained.TrySetResult();
         socket = new SocketIOClient.SocketIO(options.Server, new SocketIOOptions
         {
             Transport = TransportProtocol.WebSocket,
@@ -2148,11 +2152,20 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private async Task RunPeerOperationAsync(string remoteSocketId, Func<Task> operation)
     {
         if (lifetimeToken.IsCancellationRequested) return;
-        var gate = peerOperationGates.GetOrAdd(remoteSocketId, _ => new SemaphoreSlim(1, 1));
+        PeerOperationGate gate;
+        lock (peerOperationGateLock)
+        {
+            if (lifetimeToken.IsCancellationRequested) return;
+            if (!peerOperationGates.TryGetValue(remoteSocketId, out gate!))
+                peerOperationGates[remoteSocketId] = gate = new PeerOperationGate();
+            gate.Users++;
+            if (++inFlightPeerOperations == 1)
+                peerOperationsDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
         var acquired = false;
         try
         {
-            await gate.WaitAsync(lifetimeToken);
+            await gate.Semaphore.WaitAsync(lifetimeToken);
             acquired = true;
             await RunPeerOperationAsync(operation);
         }
@@ -2161,8 +2174,76 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
         finally
         {
-            if (acquired) gate.Release();
+            if (acquired) gate.Semaphore.Release();
+            lock (peerOperationGateLock)
+            {
+                if (--gate.Users == 0)
+                {
+                    peerOperationGates.Remove(remoteSocketId);
+                    gate.Semaphore.Dispose();
+                }
+                if (--inFlightPeerOperations == 0) peerOperationsDrained.TrySetResult();
+            }
         }
+    }
+
+    internal static async Task VerifyPeerOperationGateLifetimeAsync()
+    {
+        await using var probe = new VoiceServerProbe(ProbeOptions.Parse(["--self-test"]),
+            "peer-gate-test", sendDiagnosticProbe: false);
+        var firstEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var order = new List<int>();
+        var first = probe.RunPeerOperationAsync("same-peer", async () =>
+        {
+            order.Add(1);
+            firstEntered.TrySetResult();
+            await releaseFirst.Task;
+            order.Add(2);
+        });
+        await firstEntered.Task;
+        var second = probe.RunPeerOperationAsync("same-peer", () =>
+        {
+            order.Add(3);
+            return Task.CompletedTask;
+        });
+        int overlappingGateCount;
+        lock (probe.peerOperationGateLock) overlappingGateCount = probe.peerOperationGates.Count;
+        var ranEarly = order.Count != 1;
+        releaseFirst.TrySetResult();
+        await Task.WhenAll(first, second);
+        if (overlappingGateCount != 1 || ranEarly || !order.SequenceEqual([1, 2, 3]))
+            throw new InvalidOperationException("Operations for one peer were not serialized.");
+
+        var churn = Enumerable.Range(0, 1_000).Select(index =>
+            probe.RunPeerOperationAsync($"departed-{index}", async () => await Task.Yield()));
+        await Task.WhenAll(churn);
+        lock (probe.peerOperationGateLock)
+        {
+            if (probe.peerOperationGates.Count != 0 || probe.inFlightPeerOperations != 0)
+                throw new InvalidOperationException("Completed peer operations retained their gates.");
+        }
+        var disposeEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseDispose = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = probe.RunPeerOperationAsync("during-dispose", async () =>
+        {
+            disposeEntered.TrySetResult();
+            await releaseDispose.Task;
+        });
+        await disposeEntered.Task;
+        var disposal = probe.DisposeAsync().AsTask();
+        var disposedEarly = disposal.IsCompleted;
+        var lateOperationRan = false;
+        await probe.RunPeerOperationAsync("after-dispose", () =>
+        {
+            lateOperationRan = true;
+            return Task.CompletedTask;
+        });
+        releaseDispose.TrySetResult();
+        await Task.WhenAll(pending, disposal);
+        if (disposedEarly || lateOperationRan)
+            throw new InvalidOperationException("Disposal did not drain active peer operations safely.");
+        Console.WriteLine("[PASS] Peer operations serialize, release 1,000 departed socket gates, and drain on disposal");
     }
 
     private Task SendSignalAsync(string remoteSocketId, object data)
@@ -2259,13 +2340,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         await gameStateGate.WaitAsync();
         try
         {
-            // Keep each peer operation's gate held until its actual work ends;
-            // disposing the peer manager before then would race SDP mutations.
-            foreach (var gate in peerOperationGates.Values)
-            {
-                await gate.WaitAsync();
-                gate.Release();
-            }
+            // Cancellation stops new registrations under the gate lock. Drain all
+            // registered operations before disposing the peer manager they use.
+            Task peerDrain;
+            lock (peerOperationGateLock) peerDrain = peerOperationsDrained.Task;
+            await peerDrain;
             if (socket.Connected)
             {
                 try
@@ -2307,6 +2386,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     }
 
     private sealed record RadioStatus(long Version, bool Active, DateTimeOffset SeenAt, int? NosKind);
+
+    private sealed class PeerOperationGate
+    {
+        public readonly SemaphoreSlim Semaphore = new(1, 1);
+        public int Users;
+    }
 
     public sealed record NosRadioReport(int ClientId, IReadOnlyList<NosRadioData> Radios, DateTimeOffset ReceivedAt);
 }

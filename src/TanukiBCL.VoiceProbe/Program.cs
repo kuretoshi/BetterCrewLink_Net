@@ -51,6 +51,7 @@ internal static class Program
             {
                 WebRtcPeerManager.VerifyBroadcastBufferReuse();
                 WebRtcPeerManager.VerifyStereoFrameReuse();
+                await VoiceServerProbe.VerifyPeerOperationGateLifetimeAsync();
                 return MicrophoneProcessorSelfTest.Run();
             }
             if (args.Contains("--mobile-host-self-test"))
