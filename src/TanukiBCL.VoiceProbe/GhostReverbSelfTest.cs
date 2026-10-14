@@ -42,6 +42,13 @@ internal static class GhostReverbSelfTest
         if (!Near(reset[0], 0f) || !Near(reset[1], 0f)) return false;
         if (reverb.RetainedHistoryBytes == 0) return false;
         reverb.Enabled = false;
+        reverb.ReleaseInactiveHistory();
+        reverb.Read(bypass, 0, bypass.Length);
+        if (reverb.RetainedHistoryBytes != 0 || reverb.RetainedWorkingBytes != 0) return false;
+        reverb.Enabled = true;
+        reverb.Read(reset, 0, reset.Length);
+        if (reverb.RetainedHistoryBytes == 0 || !Near(reset[0], 0f)) return false;
+        reverb.Enabled = false;
         var disabledAudio = new float[48_000 * 2];
         for (var second = 0; second < 10; second++)
             reverb.Read(disabledAudio, 0, disabledAudio.Length);

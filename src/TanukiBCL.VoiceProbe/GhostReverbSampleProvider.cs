@@ -29,6 +29,7 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     private int framePosition;
     private int historyPosition;
     private int disabledFrames;
+    private int releaseInactiveHistory;
     private bool wasEnabled;
     private volatile bool enabled;
 
@@ -73,6 +74,10 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
         (long)(leftFft.Length + rightFft.Length + leftSum.Length + rightSum.Length) * sizeof(double) * 2 +
         (long)(input.Length + output.Length + leftOverlap.Length + rightOverlap.Length) * sizeof(float);
 
+    // A new round revives the peer, so its previous ghost convolution state cannot be reused.
+    // Let the audio callback release its own buffers to avoid racing a concurrent Read.
+    internal void ReleaseInactiveHistory() => Volatile.Write(ref releaseInactiveHistory, 1);
+
     public int Read(float[] buffer, int offset, int count)
     {
         var read = source.Read(buffer, offset, count);
@@ -101,15 +106,11 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
             // Retain briefly across distance changes to avoid repeatedly allocating
             // large convolution buffers when players cross the audible boundary.
             disabledFrames = Math.Min(HistoryRetentionFrames, disabledFrames + read / 2);
-            if (disabledFrames == HistoryRetentionFrames)
-            {
-                leftHistory = [];
-                rightHistory = [];
-                leftFft = rightFft = leftSum = rightSum = [];
-                input = output = leftOverlap = rightOverlap = [];
-            }
+            if (Interlocked.Exchange(ref releaseInactiveHistory, 0) != 0 ||
+                disabledFrames == HistoryRetentionFrames) ReleaseBuffers();
             return read;
         }
+        Interlocked.Exchange(ref releaseInactiveHistory, 0);
 
         for (var index = offset; index < offset + read; index += 2)
         {
@@ -127,6 +128,14 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
             }
         }
         return read;
+    }
+
+    private void ReleaseBuffers()
+    {
+        leftHistory = [];
+        rightHistory = [];
+        leftFft = rightFft = leftSum = rightSum = [];
+        input = output = leftOverlap = rightOverlap = [];
     }
 
     private void ProcessBlock()

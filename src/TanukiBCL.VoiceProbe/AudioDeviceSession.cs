@@ -262,6 +262,7 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.RadioEcho.Enabled = mix.RadioEcho;
         peer.CameraMuffle.Enabled = mix.CameraMuffled && !mix.FixerLowpass;
         peer.GhostReverb.Enabled = mix.Reverb && mix.Audible;
+        if (!peerDead && !mix.Reverb) peer.GhostReverb.ReleaseInactiveHistory();
         peer.StarEcho.Enabled = starEcho && mix.Audible;
         peer.DeathEcho.Update(deathEchoActive, peerDead, deathEchoEvent,
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
