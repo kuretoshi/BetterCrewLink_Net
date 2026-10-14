@@ -9,7 +9,7 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
     private const int SampleRate = 48_000;
     private const double UpWindowSeconds = 0.035d;
     private const double DownWindowSeconds = 0.08d;
-    private readonly float[] delayLine = new float[8192];
+    private float[]? delayLine;
     private readonly Biquad wetFilter = new();
     private readonly Biquad toneShelf = new();
     private SourceFilterDsp? sourceFilter;
@@ -28,6 +28,7 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
     private bool squaredFade;
 
     public WaveFormat WaveFormat => source.WaveFormat;
+    internal int DelayCapacitySamples => delayLine?.Length ?? 0;
 
     public void SetEffect(NosSizeVoiceEffect? effect) => Volatile.Write(ref requestedEffect, effect);
 
@@ -40,6 +41,7 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
             appliedEffect = null;
             sourceFilter = null;
             berserker = null;
+            delayLine = null;
             return read;
         }
         if (effect != appliedEffect) Configure(effect);
@@ -60,15 +62,16 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
             return read;
         }
 
+        var line = delayLine ??= new float[8192];
         for (var index = offset; index < offset + read; index++)
         {
             var dry = buffer[index];
             var wetInput = wetFilter.Process(dry);
-            delayLine[writeIndex] = (float)wetInput;
+            line[writeIndex] = (float)wetInput;
             var shifted = wetGain > 0d ? WindowedPitchSample() : 0d;
             var combined = dry * dryGain + shifted * wetGain;
             buffer[index] = (float)(outputGain * (toneDb == 0d ? combined : toneShelf.Process(combined)));
-            writeIndex = (writeIndex + 1) % delayLine.Length;
+            writeIndex = (writeIndex + 1) % line.Length;
         }
         return read;
     }
@@ -78,7 +81,7 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
         var previousMode = appliedEffect?.Mode;
         if (appliedEffect is null)
         {
-            Array.Clear(delayLine);
+            if (delayLine is not null) Array.Clear(delayLine);
             wetFilter.Reset();
             toneShelf.Reset();
             writeIndex = 0;
@@ -181,12 +184,13 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
 
     private double ReadDelayed(double delaySamples)
     {
+        var line = delayLine!;
         var position = writeIndex - delaySamples;
-        while (position < 0d) position += delayLine.Length;
-        var first = (int)Math.Floor(position) % delayLine.Length;
-        var next = (first + 1) % delayLine.Length;
+        while (position < 0d) position += line.Length;
+        var first = (int)Math.Floor(position) % line.Length;
+        var next = (first + 1) % line.Length;
         var fraction = position - Math.Floor(position);
-        return delayLine[first] * (1d - fraction) + delayLine[next] * fraction;
+        return line[first] * (1d - fraction) + line[next] * fraction;
     }
 
     private sealed class Biquad

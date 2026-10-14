@@ -554,6 +554,31 @@ internal static class SpatialVoicePolicySelfTest
                 new Player { IsDead = true, NosPlayer = sizedSpeaker.NosPlayer }, new LobbySettings(), true) is null);
         Check("NoS size: muted sender disables effect", true,
             NosSizeVoiceEffectPolicy.Select(nosTasks, sizedSpeaker, new LobbySettings(), false) is null);
+        var sizeBuffer = new NosSizeVoiceSampleProvider(new TestSineSource(440d));
+        var sizeFrames = new float[960];
+        Check("NoS DSP: idle peer keeps no pitch-delay buffer", true,
+            sizeBuffer.DelayCapacitySamples == 0);
+        sizeBuffer.Read(sizeFrames, 0, sizeFrames.Length);
+        var dryReference = new float[sizeFrames.Length];
+        new TestSineSource(440d).Read(dryReference, 0, dryReference.Length);
+        Check("NoS DSP: dry playback keeps no pitch-delay buffer", true,
+            sizeBuffer.DelayCapacitySamples == 0 && sizeFrames.SequenceEqual(dryReference));
+        sizeBuffer.SetEffect(new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d, Pitch: 1.5d));
+        sizeBuffer.Read(sizeFrames, 0, sizeFrames.Length);
+        Check("NoS DSP: source-filter uses no pitch-delay buffer", true,
+            sizeBuffer.DelayCapacitySamples == 0);
+        sizeBuffer.SetEffect(new NosSizeVoiceEffect(NosSizeEffectMode.PitchUp, 0.3d, 1d));
+        sizeBuffer.Read(sizeFrames, 0, sizeFrames.Length);
+        Check("NoS DSP: pitch effect prepares delay buffer", true,
+            sizeBuffer.DelayCapacitySamples == 8192);
+        sizeBuffer.SetEffect(null);
+        sizeBuffer.Read(sizeFrames, 0, sizeFrames.Length);
+        Check("NoS DSP: disabled pitch effect releases delay buffer", true,
+            sizeBuffer.DelayCapacitySamples == 0);
+        sizeBuffer.SetEffect(new NosSizeVoiceEffect(NosSizeEffectMode.Jumbo, 0.4d, 1d));
+        sizeBuffer.Read(sizeFrames, 0, sizeFrames.Length);
+        Check("NoS DSP: pitch delay can be recreated", true,
+            sizeBuffer.DelayCapacitySamples == 8192 && sizeFrames.All(float.IsFinite));
         var pitchUpAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(NosSizeEffectMode.PitchUp, 0.3d, 1d));
         var pitchDownAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(NosSizeEffectMode.Jumbo, 0.4d, 1d));
         Check("NoS DSP: direct pitch raises 440 Hz tone", true,
