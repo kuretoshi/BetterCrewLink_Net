@@ -74,6 +74,7 @@ public partial class App : Application
                     RecentPcmLevelTracker.Verify();
                     AudioUiFrameBatch.Verify();
                     VoicePlayerStatusCache.Verify();
+                    GlobalHotkeyMonitor.VerifyPolling();
                     VoiceView.VerifyNameLayout();
                     VoiceView.VerifyPeerQualityFallback();
                     VoiceView.VerifyDuplicateClientAvatars();

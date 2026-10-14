@@ -33,14 +33,15 @@ internal sealed class GlobalHotkeyMonitor(
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        var previous = new PressedSet(false, false, false, false, false);
+        var previous = default(PressedSet);
         var observedVersion = -1;
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(20));
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
                 PollOnce(ref previous, ref observedVersion);
-                await Task.Delay(20, cancellationToken);
+                if (!await timer.WaitForNextTickAsync(cancellationToken)) break;
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -63,12 +64,12 @@ internal sealed class GlobalHotkeyMonitor(
             onPushToTalk(false);
             if (previous.Radio) onRadio(0, false);
             if (previous.JackalRadio) onRadio(1, false);
-            previous = new PressedSet(false, false, false, false, false);
+            previous = default;
             observedVersion = current.Version;
         }
 
         var pressed = suspended()
-            ? new PressedSet(false, false, false, false, false)
+            ? default
             : new PressedSet(IsPressed(current.PushToTalk), IsPressed(current.Radio),
                 IsPressed(current.JackalRadio), IsPressed(current.Mute), IsPressed(current.Deafen));
         var speaking = pressed.PushToTalk || pressed.Radio || pressed.JackalRadio;
@@ -83,6 +84,32 @@ internal sealed class GlobalHotkeyMonitor(
 
     private static bool IsPressed(int virtualKey) => virtualKey != 0 &&
         (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+
+    internal static void VerifyPolling()
+    {
+        var releases = 0;
+        var monitor = new GlobalHotkeyMonitor(speaking => { if (!speaking) releases++; },
+            (_, _) => { }, () => { }, () => { }, () => true);
+        monitor.UpdateBindings(new ClientSettings
+        {
+            PushToTalkShortcut = "Disabled", ImpostorRadioShortcut = "Disabled",
+            JackalRadioShortcut = "Disabled", MuteShortcut = "Disabled",
+            DeafenShortcut = "Disabled"
+        });
+        var previous = default(PressedSet);
+        var version = -1;
+        monitor.PollOnce(ref previous, ref version);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 10_000; i++) monitor.PollOnce(ref previous, ref version);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        if (allocated != 0 || releases != 1)
+            throw new InvalidOperationException($"Idle hotkey polling allocated {allocated} bytes or repeated release.");
+
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(70));
+        Task.Run(() => monitor.RunAsync(cancellation.Token)).GetAwaiter().GetResult();
+        if (releases < 3) throw new InvalidOperationException("Hotkey timer did not release on cancellation.");
+        Console.WriteLine("[PASS] Hotkey poll is allocation-free and timer releases on cancellation");
+    }
 
     public static string NormalizeShortcut(string? value, string fallback) =>
         value is not null && TryResolve(value, out _) ? value : fallback;
@@ -165,5 +192,5 @@ internal sealed class GlobalHotkeyMonitor(
     }
 
     private sealed record BindingSet(int PushToTalk, int Radio, int JackalRadio, int Mute, int Deafen, int Version);
-    private sealed record PressedSet(bool PushToTalk, bool Radio, bool JackalRadio, bool Mute, bool Deafen);
+    private readonly record struct PressedSet(bool PushToTalk, bool Radio, bool JackalRadio, bool Mute, bool Deafen);
 }
