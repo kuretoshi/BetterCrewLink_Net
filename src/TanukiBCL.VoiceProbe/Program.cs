@@ -59,6 +59,7 @@ internal static class Program
                 return AudioCodecAllocationProfile.VerifyNativeInterop();
             if (args.Contains("--audio-processing-self-test"))
             {
+                AudioCodecAllocationProfile.VerifyFrameDurations();
                 WebRtcPeerManager.VerifyBroadcastBufferReuse();
                 WebRtcPeerManager.VerifyStereoFrameReuse();
                 await VoiceServerProbe.VerifyPeerOperationGateLifetimeAsync();

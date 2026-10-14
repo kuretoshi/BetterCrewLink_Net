@@ -9,6 +9,27 @@ namespace TanukiBCL.VoiceProbe;
 
 internal static class AudioCodecAllocationProfile
 {
+    internal static void VerifyFrameDurations()
+    {
+        var encoder = OpusCodecFactory.CreateEncoder(48_000, 1, OpusApplication.OPUS_APPLICATION_VOIP);
+        var decoder = OpusCodecFactory.CreateDecoder(48_000, 1);
+        using var encoderLifetime = encoder as IDisposable;
+        using var decoderLifetime = decoder as IDisposable;
+        var packet = new byte[1_500];
+        var decoded = new short[5_760];
+        foreach (var frameSamples in new[] { 480, 960, 1_920, 2_880 })
+        {
+            var pcm = new short[frameSamples];
+            for (var index = 0; index < pcm.Length; index++)
+                pcm[index] = (short)(Math.Sin(2 * Math.PI * 440 * index / 48_000d) * 6_000);
+            var length = encoder.Encode(pcm, frameSamples, packet, packet.Length);
+            var count = decoder.Decode(packet.AsSpan(0, length), decoded, decoded.Length, false);
+            if (count != frameSamples || decoded.AsSpan(0, count).IndexOfAnyExcept((short)0) < 0)
+                throw new InvalidOperationException($"Opus {frameSamples}-sample frame did not decode correctly.");
+        }
+        Console.WriteLine("[PASS] Direct Opus decode handles 10/20/40/60 ms frames in a reusable mono buffer");
+    }
+
     internal static int VerifyNativeInterop()
     {
         var previous = OpusCodecFactory.AttemptToUseNativeLibrary;
@@ -27,6 +48,8 @@ internal static class AudioCodecAllocationProfile
             if (!nativeEncoder.GetType().FullName!.Contains("Native", StringComparison.Ordinal) ||
                 !nativeDecoder.GetType().FullName!.Contains("Native", StringComparison.Ordinal))
                 throw new InvalidOperationException("Native Opus is not available in this build.");
+            if (nativeEncoder is not IDisposable || nativeDecoder is not IDisposable)
+                throw new InvalidOperationException("Native Opus codec lifetime cannot be released.");
 
             managedEncoder.Bitrate = nativeEncoder.Bitrate = 51_000;
             managedEncoder.Complexity = nativeEncoder.Complexity = 9;
@@ -90,12 +113,28 @@ internal static class AudioCodecAllocationProfile
 
         using var encoder = new AudioEncoder(true, true);
         using var decoder = new AudioEncoder(true, true);
+        var directDecoder = OpusCodecFactory.CreateDecoder(48_000, 1);
+        using var directDecoderLifetime = directDecoder as IDisposable;
+        var directPcm = new short[5_760];
+        var maxPcmDelta = 0;
+        long totalPcmDelta = 0;
+        var comparedSamples = 0;
         for (var frame = 0; frame < 100; frame++)
         {
             var packet = encoder.EncodeAudio(samples[frame % samples.Length], format);
             var decoded = decoder.DecodeAudio(packet, format);
-            if (decoded.Length != samplesPerFrame || decoded.All(sample => sample == 0))
+            var directCount = directDecoder.Decode(packet, directPcm, directPcm.Length, false);
+            if (decoded.Length != samplesPerFrame || directCount != samplesPerFrame ||
+                decoded.All(sample => sample == 0) || directPcm.AsSpan(0, directCount).IndexOfAnyExcept((short)0) < 0)
                 throw new InvalidOperationException("Opus warmup frame did not decode to audible samples.");
+            if (frame >= 68)
+                for (var index = 0; index < decoded.Length; index++)
+                {
+                    var delta = Math.Abs((int)decoded[index] - directPcm[index]);
+                    maxPcmDelta = Math.Max(maxPcmDelta, delta);
+                    totalPcmDelta += delta;
+                    comparedSamples++;
+                }
         }
 
         using var process = Process.GetCurrentProcess();
@@ -105,12 +144,22 @@ internal static class AudioCodecAllocationProfile
         var threadBefore = GC.GetAllocatedBytesForCurrentThread();
         var packetBytes = 0;
         var decodedSamples = 0;
+        long encodeBytes = 0;
+        long wrappedDecodeBytes = 0;
+        long directDecodeBytes = 0;
         var watch = Stopwatch.StartNew();
         for (var frame = 0; frame < measuredFrames; frame++)
         {
+            var before = GC.GetAllocatedBytesForCurrentThread();
             var packet = encoder.EncodeAudio(samples[frame % samples.Length], format);
+            encodeBytes += GC.GetAllocatedBytesForCurrentThread() - before;
+            before = GC.GetAllocatedBytesForCurrentThread();
             var decoded = decoder.DecodeAudio(packet, format);
-            if (decoded.Length != samplesPerFrame)
+            wrappedDecodeBytes += GC.GetAllocatedBytesForCurrentThread() - before;
+            before = GC.GetAllocatedBytesForCurrentThread();
+            var directCount = directDecoder.Decode(packet, directPcm, directPcm.Length, false);
+            directDecodeBytes += GC.GetAllocatedBytesForCurrentThread() - before;
+            if (decoded.Length != samplesPerFrame || directCount != samplesPerFrame)
                 throw new InvalidOperationException("Opus frame did not decode to 960 samples.");
             packetBytes += packet.Length;
             decodedSamples += decoded.Length;
@@ -124,6 +173,9 @@ internal static class AudioCodecAllocationProfile
         Console.WriteLine($"codecProfile encoder={opus?.GetType().FullName ?? "unknown"} " +
             $"bitrate={opus?.Bitrate} complexity={opus?.Complexity} vbr={opus?.UseVBR} fec={opus?.UseInbandFEC} " +
             $"frames={measuredFrames} packetBytes={packetBytes} decodedSamples={decodedSamples} " +
+            $"encodeMiB={encodeBytes / 1048576d:0.00} wrappedDecodeMiB={wrappedDecodeBytes / 1048576d:0.00} " +
+            $"directDecodeMiB={directDecodeBytes / 1048576d:0.00} " +
+            $"pcmDeltaMax={maxPcmDelta} pcmDeltaMean={totalPcmDelta / (double)comparedSamples:0.00} " +
             $"threadMiB={threadBytes / 1048576d:0.00} processMiB={processBytes / 1048576d:0.00} " +
             $"privateMiB={privateBefore / 1048576d:0.00}->{process.PrivateMemorySize64 / 1048576d:0.00} " +
             $"elapsedMs={watch.Elapsed.TotalMilliseconds:0}");

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using Concentus;
 using SIPSorcery.Media;
 using SIPSorcery.Net;
 using SIPSorceryMedia.Abstractions;
@@ -20,6 +21,7 @@ internal sealed class WebRtcPeerManager : IDisposable
     private static readonly IReadOnlyList<IceServer> NatFixTcpIceServers =
         NatFixIceServers.Select(server => server with { Url = $"{server.Url}?transport=tcp" }).ToArray();
     private const int SamplesPerChannel = 960;
+    private const int MaxOpusFrameSamples = 5_760;
     private const int PlaybackChannels = 2;
     private const int MaxReusableStereoSamples = 8_192;
     private readonly string owner;
@@ -420,7 +422,16 @@ internal sealed class WebRtcPeerManager : IDisposable
 
         peer.Connection.close();
         peer.Connection.Dispose();
-        peer.Decoder.Dispose();
+        lock (peer.StereoGate)
+        {
+            peer.Closed = true;
+            (peer.Decoder as IDisposable)?.Dispose();
+            peer.Decoder = null;
+            peer.AlternateDecoder?.Dispose();
+            peer.AlternateDecoder = null;
+            peer.MonoFrame = null;
+            peer.StereoFrame = null;
+        }
     }
 
     private Peer CreatePeer(string remoteSocketId, bool initiator, string? connectionId = null)
@@ -826,28 +837,15 @@ internal sealed class WebRtcPeerManager : IDisposable
     {
         EncodedAudioReceived?.Invoke(peer.RemoteSocketId, frame.EncodedAudio.Length);
         EncodedAudioPacketReceived?.Invoke(peer.RemoteSocketId, frame.EncodedAudio);
-        short[] pcm;
-        lock (peer.AudioGate)
-        {
-            pcm = peer.Decoder.DecodeAudio(frame.EncodedAudio, frame.AudioFormat.Codec == AudioCodecsEnum.Unknown
-                ? OpusFormat
-                : frame.AudioFormat);
-        }
-
-        if (pcm.Length == 0)
-        {
-            return;
-        }
-
-        // All current listeners consume the frame synchronously (the playback
-        // ring copies it). Serialize callbacks so a second packet cannot
-        // overwrite this peer's reusable frame while a listener reads it.
-        lock (peer.StereoGate)
-            PcmReceived?.Invoke(peer.RemoteSocketId, MonoToStereo(pcm, ref peer.StereoFrame));
-
         AudioTestResult? result;
-        lock (peer.AudioGate)
+        lock (peer.StereoGate)
         {
+            if (peer.Closed) return;
+            var pcm = DecodePcm(peer, frame);
+            if (pcm.IsEmpty) return;
+            // The playback ring copies the frame synchronously. Keep the
+            // reusable mono and stereo arrays stable through that callback.
+            PcmReceived?.Invoke(peer.RemoteSocketId, MonoToStereo(pcm, ref peer.StereoFrame));
             if (peer.AudioReported)
             {
                 return;
@@ -890,7 +888,19 @@ internal sealed class WebRtcPeerManager : IDisposable
         AudioVerified?.Invoke(peer.RemoteSocketId, result);
     }
 
-    private static short[] MonoToStereo(short[] pcm, ref short[]? reusableFrame)
+    private static ReadOnlySpan<short> DecodePcm(Peer peer, EncodedAudioFrame frame)
+    {
+        var format = frame.AudioFormat.Codec == AudioCodecsEnum.Unknown ? OpusFormat : frame.AudioFormat;
+        if (format.Codec != AudioCodecsEnum.OPUS || format.ClockRate != 48_000)
+            return (peer.AlternateDecoder ??= new AudioEncoder(true, true))
+                .DecodeAudio(frame.EncodedAudio, format);
+        var decoder = peer.Decoder ??= OpusCodecFactory.CreateDecoder(48_000, 1);
+        var mono = peer.MonoFrame ??= new short[MaxOpusFrameSamples];
+        var count = decoder.Decode(frame.EncodedAudio, mono, mono.Length, false);
+        return count <= 0 ? ReadOnlySpan<short>.Empty : mono.AsSpan(0, count);
+    }
+
+    private static short[] MonoToStereo(ReadOnlySpan<short> pcm, ref short[]? reusableFrame)
     {
         var length = checked(pcm.Length * PlaybackChannels);
         var stereo = length > MaxReusableStereoSamples
@@ -1232,7 +1242,10 @@ internal sealed class WebRtcPeerManager : IDisposable
         bool RelayOnly)
     {
         public Guid InstanceId { get; } = Guid.NewGuid();
-        public AudioEncoder Decoder { get; } = new(true, true);
+        public IOpusDecoder? Decoder { get; set; }
+        public AudioEncoder? AlternateDecoder { get; set; }
+        public short[]? MonoFrame;
+        public bool Closed;
         public RTCDataChannel? Channel { get; set; }
         public object DataChannelGate { get; } = new();
         public HashSet<RTCDataChannel> OpenChannels { get; } = [];
@@ -1247,7 +1260,6 @@ internal sealed class WebRtcPeerManager : IDisposable
         public int LocalCandidateFallbackStarted;
         public int LocalCandidateFallbackElapsed;
         public bool LocalDescriptionSent { get; set; }
-        public object AudioGate { get; } = new();
         public object StereoGate { get; } = new();
         public short[]? StereoFrame;
         public int AudioFrames { get; set; }
