@@ -11,7 +11,9 @@ namespace TanukiBCL.Client;
 internal sealed class MobileCosmetics
 {
     private const int MaxImageBytes = 192 * 1024;
-    private const int MaxCacheBytes = 8 * 1024 * 1024;
+    // The previous 8 MiB character budget held about 16 MiB of UTF-16 payloads.
+    // Preserve that capacity so crowded lobbies do not evict unsent costumes sooner.
+    private const int MaxCacheBytes = 16 * 1024 * 1024;
     private readonly object gate = new();
     private readonly NosCosmeticContents contents;
     private readonly Dictionary<string, (string Id, string Png)> cache = [];
@@ -96,6 +98,8 @@ internal sealed class MobileCosmetics
         }
         Dictionary<string, string>? assets = null;
         lock (gate)
+        {
+            PruneRetries(active);
             if (DateTimeOffset.UtcNow - lastSentAt >= TimeSpan.FromMilliseconds(100))
                 foreach (var source in active)
                 {
@@ -105,7 +109,16 @@ internal sealed class MobileCosmetics
                     lastSentAt = DateTimeOffset.UtcNow;
                     break;
                 }
+        }
         return new MobileCosmeticFrame(partsByPlayer, assets);
+    }
+
+    // Caller holds gate; keep only failures for costumes still on screen.
+    private void PruneRetries(HashSet<string> active)
+    {
+        if (retryAt.Count == 0) return;
+        foreach (var source in retryAt.Keys.Where(source => !active.Contains(source)).ToArray())
+            retryAt.Remove(source);
     }
 
     private void Load(string source, string key, double red, double green, double blue)
@@ -127,15 +140,7 @@ internal sealed class MobileCosmetics
                 lock (gate)
                 {
                     if (generation != currentGeneration) return;
-                    while (bytes + asset.Png.Length > MaxCacheBytes && cache.Count > 0)
-                    {
-                        var oldest = cache.First();
-                        bytes -= oldest.Value.Png.Length;
-                        sent.Remove(oldest.Value.Id);
-                        cache.Remove(oldest.Key);
-                    }
-                    cache[source] = asset;
-                    bytes += asset.Png.Length;
+                    CacheAsset(source, asset);
                 }
             }
             catch (Exception error) when (error is IOException or InvalidDataException or InvalidOperationException or
@@ -153,17 +158,33 @@ internal sealed class MobileCosmetics
         });
     }
 
+    // Caller holds gate; bytes tracks retained UTF-16 PNG text, not character count.
+    private void CacheAsset(string source, (string Id, string Png) asset)
+    {
+        var assetBytes = checked(asset.Png.Length * sizeof(char));
+        while (bytes + assetBytes > MaxCacheBytes && cache.Count > 0)
+        {
+            var oldest = cache.First();
+            bytes -= checked(oldest.Value.Png.Length * sizeof(char));
+            sent.Remove(oldest.Value.Id);
+            cache.Remove(oldest.Key);
+        }
+        cache[source] = asset;
+        bytes += assetBytes;
+    }
+
     private static (string Id, string Png) Encode(BitmapSource image)
     {
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(image));
         using var stream = new MemoryStream();
         encoder.Save(stream);
-        var png = stream.ToArray();
-        if (png.Length is < 24 or > MaxImageBytes || png[0] != 137 || png[1] != 80)
+        var length = checked((int)stream.Length);
+        var png = stream.GetBuffer();
+        if (length is < 24 or > MaxImageBytes || png[0] != 137 || png[1] != 80)
             throw new InvalidDataException("Invalid processed NoS PNG");
-        return (Convert.ToHexString(SHA256.HashData(png)).ToLowerInvariant(),
-            "data:image/png;base64," + Convert.ToBase64String(png));
+        return (Convert.ToHexString(SHA256.HashData(png.AsSpan(0, length))).ToLowerInvariant(),
+            "data:image/png;base64," + Convert.ToBase64String(png, 0, length));
     }
 
     internal static void VerifyEncoding()
@@ -176,6 +197,18 @@ internal sealed class MobileCosmetics
         if (id.Length != 64 || id != Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant() ||
             !png.StartsWith("data:image/png;base64,", StringComparison.Ordinal))
             throw new InvalidOperationException("Mobile NoS PNG hash and data URL differ from 3.2.14");
+        var cacheTest = new MobileCosmetics();
+        for (var index = 0; index < 40; index++)
+            cacheTest.CacheAsset($"source-{index}", ($"id-{index}", new string((char)('A' + index), 300_000)));
+        if (cacheTest.bytes > MaxCacheBytes ||
+            cacheTest.bytes != cacheTest.cache.Values.Sum(asset => asset.Png.Length * sizeof(char)) ||
+            cacheTest.cache.ContainsKey("source-0") || !cacheTest.cache.ContainsKey("source-39"))
+            throw new InvalidOperationException("Mobile NoS cache did not budget UTF-16 strings or evict oldest entries");
+        cacheTest.retryAt["active"] = DateTimeOffset.UtcNow.AddSeconds(5);
+        cacheTest.retryAt["stale"] = DateTimeOffset.UtcNow.AddSeconds(5);
+        cacheTest.PruneRetries(new HashSet<string> { "active" });
+        if (!cacheTest.retryAt.ContainsKey("active") || cacheTest.retryAt.ContainsKey("stale"))
+            throw new InvalidOperationException("Inactive NoS image retry state was retained");
         Console.WriteLine("[PASS] 3.2.14 mobile NoS processed PNG hash and data URL");
     }
 
