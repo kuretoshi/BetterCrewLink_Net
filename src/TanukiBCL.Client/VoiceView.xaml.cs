@@ -362,6 +362,7 @@ public partial class VoiceView : UserControl
         }
         if (!hasLocal || local is null || game is null)
         {
+            LocalAvatar.ClearCosmetics();
             remoteDeadForDisplay.Clear();
             previousDeathDisplayState = GameState.Unknown;
             ClosePlayerConfigPopup();
@@ -580,6 +581,7 @@ public partial class VoiceView : UserControl
             view.LocalAvatarColumn.Width.Value != 96d ||
             view.LocalName.Text != "Local")
             throw new InvalidOperationException("Normal lobby header did not return after the roster recovered");
+        view.LocalAvatar.CosmeticFront.Children.Add(new Image());
         game.GameState = GameState.Menu;
         game.LobbyCode = "MENU";
         view.Update(game, true, false, false, false, peers, hideCode: true);
@@ -591,6 +593,7 @@ public partial class VoiceView : UserControl
             view.MuteColumn.Width.Value != 0d ||
             view.CodeBackground.Background is not SolidColorBrush { Color: { A: 0 } } ||
             view.LocalAvatarSlot.Visibility != Visibility.Collapsed ||
+            view.LocalAvatar.CosmeticFront.Children.Count != 0 ||
             view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
             throw new InvalidOperationException("Detected Among Us menu did not replace the launch screen");
         view.Measure(new Size(280, 390));

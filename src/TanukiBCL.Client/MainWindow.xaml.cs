@@ -257,6 +257,7 @@ public partial class MainWindow : Window
         if (radioTransmitting && state?.Players.FirstOrDefault(player => player.IsLocal) is { } local)
             radioClientIds.Add(local.ClientId);
         var nosContents = state?.Mod == AmongUsModType.NebulaOnTheShip &&
+            state.GameState is not (GameState.Menu or GameState.Unknown) &&
             Path.GetDirectoryName(state.GameExecutablePath) is { Length: > 0 } gameDirectory
                 ? NosCosmeticContents.Shared.Update(gameDirectory) : null;
         return new DebugInfoSnapshot(state?.Mod.ToString() ?? "未取得", live,
@@ -625,7 +626,11 @@ public partial class MainWindow : Window
             serverQuality = quality;
             UpdateCompactView();
         });
-        activeProbe.GameStateApplied += state => Dispatch(session, () => ShowGameState(state));
+        activeProbe.GameStateApplied += state =>
+        {
+            if (state.GameState == GameState.Menu) mobileCosmetics.Reset();
+            Dispatch(session, () => ShowGameState(state));
+        };
         activeProbe.VersionWarningChanged += _ => Dispatch(session, UpdateCompactView);
         activeProbe.PeerMixChanged += (clientId, mix) => Dispatch(session, () => UpdatePeerMix(clientId, mix));
         activeProbe.PeerConnectionStatusChanged += (clientId, status) => Dispatch(session, () => UpdatePeerConnection(clientId, status));
@@ -833,6 +838,9 @@ public partial class MainWindow : Window
 
     private void ShowGameState(AmongUsState state)
     {
+        var previousGameState = currentState?.GameState;
+        var leavingNos = currentState?.Mod == AmongUsModType.NebulaOnTheShip &&
+            state.Mod != AmongUsModType.NebulaOnTheShip;
         currentState = state;
         UpdateRadioButtonLabel();
         settingsWindow?.UpdateCurrentGameState(state);
@@ -855,6 +863,8 @@ public partial class MainWindow : Window
             peers.Remove(stale);
         }
         UpdateCompactView();
+        if (leavingNos || (state.GameState == GameState.Menu && previousGameState != GameState.Menu))
+            NosCosmeticContents.Shared.Release();
     }
 
     private void UpdatePeerMix(int clientId, PeerVoiceMix mix)

@@ -168,6 +168,16 @@ internal sealed class NosCosmeticContents
 
     internal int CachedImageCount { get { lock (gate) return images.Count; } }
 
+    internal void Release()
+    {
+        lock (gate)
+        {
+            Clear();
+            result = null;
+            nextRead = default;
+        }
+    }
+
     private void Clear()
     {
         signature = string.Empty;
@@ -594,6 +604,22 @@ internal sealed class NosCosmeticContents
                 ReferenceEquals(contents.Image(parts[NosCosmeticPart.Skin], 0.5, 0, 1), skin) &&
                 !ReferenceEquals(contents.Image(parts[NosCosmeticPart.Skin], 0, 0, 0), first),
                 "NoS image cache exceeded its budget or evicted the wrong image");
+            contents.Release();
+            Require(contents.CachedImageCount == 0 && contents.addonImages.Count == 0 &&
+                contents.Cosmetics(player) is null && contents.result is null,
+                "NoS menu transition retained rendered images or ZIP index");
+            var menuFrame = new MobileCosmetics(contents).Frame(new AmongUsState
+            {
+                LobbyCode = "MENU", Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Menu,
+                GameExecutablePath = Path.Combine(game, "Among Us.exe"),
+                Players = [new Player { Id = 4, NosPlayer = player }]
+            });
+            Require(contents.result is null && menuFrame.PlayerParts.Count == 0 && menuFrame.Assets is null,
+                "NoS menu frame reloaded costumes after cache release");
+            Require(contents.Update(game).Status == "読み取り成功" &&
+                contents.Cosmetics(player) is { } restored &&
+                contents.Image(restored[NosCosmeticPart.Skin], 0.5, 0, 1) is not null,
+                "NoS cosmetics did not reload after menu cache release");
             File.WriteAllText(Path.Combine(game, "BepInEx", "MoreCosmic", "LoadedContents.json"), "{\"Version\":1}");
             contents.nextRead = default;
             Require(contents.Update(game).Status == "画像表示は未対応の定義バージョンです" &&

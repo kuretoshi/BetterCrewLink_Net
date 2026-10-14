@@ -96,7 +96,11 @@ internal sealed class AudioUiFrameBatch
         batch.Drain((_, _) => throw new InvalidOperationException("Audio UI count was retained"),
             (_, _, _) => throw new InvalidOperationException("Audio UI level was retained"),
             (_, _) => throw new InvalidOperationException("Audio UI send count was retained"));
-        batch.AddReceived(7, default, now);
+        for (var frame = 0; frame < MaxQueuedLevels; frame++)
+            batch.AddReceived(7, default, now);
+        batch.Drain((_, _) => { }, (_, _, _) => { }, (_, _) => { });
+        for (var frame = 0; frame < MaxQueuedLevels; frame++)
+            batch.AddReceived(7, default, now);
         batch.Drain((_, _) => { }, (_, _, _) => { }, (_, _) => { });
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var frame = 0; frame < 10_000; frame++)

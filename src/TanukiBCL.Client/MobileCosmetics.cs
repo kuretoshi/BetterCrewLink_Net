@@ -66,6 +66,7 @@ internal sealed class MobileCosmetics
         var partsByPlayer = new Dictionary<int, IReadOnlyDictionary<string, string>>();
         var active = new HashSet<string>();
         if (state.Mod == AmongUsModType.NebulaOnTheShip &&
+            state.GameState is not (GameState.Menu or GameState.Unknown) &&
             Path.GetDirectoryName(state.GameExecutablePath) is { Length: > 0 } gameDirectory)
         {
             contents.Update(gameDirectory);

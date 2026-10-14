@@ -16,6 +16,20 @@ public partial class PlayerAvatar
     private NosCosmeticContents nosContents = NosCosmeticContents.Shared;
     private ImageBrush? nosBodyMask;
 
+    internal void ClearCosmetics()
+    {
+        if (cosmeticKey is null && nosBodyMask is null &&
+            CosmeticBack.Children.Count == 0 && CosmeticSkin.Children.Count == 0 &&
+            CosmeticFront.Children.Count == 0) return;
+        cosmeticGeneration++;
+        cosmeticKey = null;
+        cosmeticRetryAt = default;
+        CosmeticBack.Children.Clear();
+        CosmeticSkin.Children.Clear();
+        CosmeticFront.Children.Clear();
+        BodyCanvas.OpacityMask = nosBodyMask = null;
+    }
+
     private void UpdateCosmetics(Player player, IReadOnlyList<PlayerColorPair>? palette, AmongUsModType mod, int colorId,
         string gameExecutable, GameState gameState)
     {
@@ -432,6 +446,24 @@ public partial class PlayerAvatar
                 $"NoS lobby equipment was not rendered without round PlayerData: " +
                 $"front={avatar.CosmeticFront.Children.Count} skin={avatar.CosmeticSkin.Children.Count} " +
                 $"mask={avatar.BodyCanvas.OpacityMask is not null}.");
+            avatar.ClearCosmetics();
+            Require(avatar.CosmeticBack.Children.Count == 0 && avatar.CosmeticFront.Children.Count == 0 &&
+                avatar.CosmeticSkin.Children.Count == 0 && avatar.BodyCanvas.OpacityMask is null,
+                "Hidden NoS avatar retained costume layers");
+            avatar.SetPlayer(lobbyPlayer, null, mod: AmongUsModType.NebulaOnTheShip,
+                gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"), gameState: GameState.Lobby);
+            deadline = DateTime.UtcNow.AddSeconds(10);
+            while ((avatar.CosmeticFront.Children.Count < 2 || avatar.CosmeticSkin.Children.Count < 1) &&
+                DateTime.UtcNow < deadline)
+            {
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                    System.Windows.Threading.DispatcherPriority.Background, new Action(() => frame.Continue = false));
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+                Thread.Sleep(10);
+            }
+            Require(avatar.CosmeticFront.Children.Count == 2 && avatar.CosmeticSkin.Children.Count == 1,
+                "NoS costume did not reload after hidden avatar release");
             lobbyPlayer.AppearanceHatId = lobbyPlayer.AppearanceSkinId = lobbyPlayer.AppearanceVisorId = "";
             avatar.SetPlayer(lobbyPlayer, null, mod: AmongUsModType.NebulaOnTheShip,
                 gameExecutable: System.IO.Path.Combine(game, "Among Us.exe"), gameState: GameState.Lobby);

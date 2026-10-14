@@ -45,7 +45,7 @@ public partial class PlayerAvatar : UserControl
     {
         InitializeComponent();
         SizeChanged += (_, _) => LayoutCosmetics();
-        Unloaded += (_, _) => { cosmeticGeneration++; cosmeticKey = null; };
+        Unloaded += (_, _) => ClearCosmetics();
     }
 
     public void SetOverlayMode(bool lookLeft = false, bool showBorder = false)
