@@ -17,6 +17,7 @@ internal static class VoiceRoleReleaseSelfTest
         VerifyLoopback(check);
         VerifyDeathEcho(check);
         VerifyMegaphoneRecording(check);
+        VerifyMegaphoneBuffering(check);
         VerifyNosRadioGap(check);
     }
 
@@ -225,6 +226,53 @@ internal static class VoiceRoleReleaseSelfTest
         recording.Update(state, false, 1d);
         check("NoS megaphone: meeting or disconnection cancels charge", true,
             recording.RecordedSamples == 0 && !recording.IsPlaying);
+    }
+
+    private static void VerifyMegaphoneBuffering(Action<string, bool, bool> check)
+    {
+        var recording = new NosMegaphoneRecording();
+        var state = new NosMegaphoneState
+        {
+            PlayerId = 1, ShotId = 15, Phase = "charging", VoiceEffect = false
+        };
+        recording.Update(state, true, 1d);
+        check("NoS megaphone: charging does not preallocate ten seconds", true,
+            recording.BufferedCapacitySamples == 0);
+
+        var frame = new short[960 * 2];
+        Array.Fill(frame, (short)16384);
+        for (var index = 0; index < 10; index++) recording.RecordStereoPcm16(frame);
+        check("NoS megaphone: short charge keeps only one chunk", true,
+            recording.RecordedSamples == 9_600 && recording.BufferedCapacitySamples == 9_600);
+        Array.Fill(frame, (short)-16384);
+        recording.RecordStereoPcm16(frame);
+        check("NoS megaphone: next chunk is allocated only when needed", true,
+            recording.BufferedCapacitySamples == 19_200);
+
+        state.Phase = "firing";
+        recording.Update(state, true, 1d);
+        var output = new float[960 * 2];
+        for (var index = 0; index < 10; index++) recording.Read(output, 0, output.Length);
+        recording.Read(output, 0, output.Length);
+        check("NoS megaphone: playback crosses chunk boundary without changing audio", true,
+            Math.Abs(output[0] + 0.35f) < 0.001f && recording.BufferedCapacitySamples == 0);
+
+        state.ShotId = 16;
+        state.Phase = "charging";
+        recording.Update(state, true, 1d);
+        var monoFrame = new byte[960 * sizeof(short)];
+        for (var index = 1; index < monoFrame.Length; index += 2) monoFrame[index] = 0x40;
+        for (var index = 0; index < 501; index++) recording.RecordMonoPcm16(monoFrame);
+        check("NoS megaphone: chunked recording retains the ten-second cap", true,
+            recording.RecordedSamples == 480_000 && recording.BufferedCapacitySamples == 480_000);
+        state.Phase = "firing";
+        recording.Update(state, true, 1d);
+        for (var index = 0; index < 500; index++) recording.Read(output, 0, output.Length);
+        check("NoS megaphone: final chunk replays and releases at ten seconds", true,
+            Math.Abs(output[0] - 0.35f) < 0.001f && recording.BufferedCapacitySamples == 0);
+        recording.Cancel();
+        check("NoS megaphone: cancel releases all recording chunks", true,
+            recording.BufferedCapacitySamples == 0);
     }
 
     private static void VerifyLoopback(Action<string, bool, bool> check)
