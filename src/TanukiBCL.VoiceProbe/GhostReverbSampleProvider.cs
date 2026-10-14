@@ -12,9 +12,12 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     private const int BlockFrames = 1024;
     private const int FftLength = BlockFrames * 2;
     private const int HistoryRetentionFrames = 48_000 * 10;
-    private static readonly Lazy<ImpulseSpectrum> ReleasedImpulse = new(LoadReleasedImpulse);
+    private static readonly object ImpulseGate = new();
+    private static WeakReference<ImpulseSpectrum>? releasedImpulse;
 
     private readonly ISampleProvider source;
+    private readonly object impulseStateGate = new();
+    private readonly bool usesReleasedImpulse;
     private ImpulseSpectrum? impulse;
     private Complex[][] leftHistory = [];
     private Complex[][] rightHistory = [];
@@ -38,35 +41,44 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
         get => enabled;
         set
         {
-            // Prepare the shared response on the game-state thread, before
-            // publishing the enabled flag to the audio callback.
-            if (value) impulse ??= ReleasedImpulse.Value;
-            enabled = value;
+            lock (impulseStateGate)
+            {
+                // Prepare on the game-state thread before publishing enabled.
+                if (value && impulse is null)
+                    impulse = usesReleasedImpulse ? AcquireReleasedImpulse() :
+                        throw new InvalidOperationException("Ghost impulse was not prepared.");
+                enabled = value;
+            }
         }
     }
 
     public GhostReverbSampleProvider(ISampleProvider source)
-        : this(source, (ImpulseSpectrum?)null)
+        : this(source, (ImpulseSpectrum?)null, usesReleasedImpulse: true)
     {
     }
 
     internal GhostReverbSampleProvider(ISampleProvider source, float[] stereoImpulse)
-        : this(source, CreateImpulse(stereoImpulse, source.WaveFormat.SampleRate, normalize: false))
+        : this(source, CreateImpulse(stereoImpulse, source.WaveFormat.SampleRate, normalize: false),
+            usesReleasedImpulse: false)
     {
     }
 
-    private GhostReverbSampleProvider(ISampleProvider source, ImpulseSpectrum? impulse)
+    private GhostReverbSampleProvider(ISampleProvider source, ImpulseSpectrum? impulse, bool usesReleasedImpulse)
     {
         if (source.WaveFormat.SampleRate != 48_000 || source.WaveFormat.Channels != 2)
             throw new ArgumentException("Ghost reverb requires 48 kHz stereo input.", nameof(source));
 
         this.source = source;
         this.impulse = impulse;
+        this.usesReleasedImpulse = usesReleasedImpulse;
     }
 
     public WaveFormat WaveFormat => source.WaveFormat;
     internal long PreparedImpulseBytes => impulse is null ? 0 :
         (long)(impulse.Left.Length + impulse.Right.Length) * FftLength * sizeof(double) * 2;
+    internal static bool SharedImpulseIsLive => releasedImpulse?.TryGetTarget(out _) == true;
+    internal bool SharesImpulseWith(GhostReverbSampleProvider other) =>
+        impulse is not null && ReferenceEquals(impulse, other.impulse);
 
     internal long RetainedHistoryBytes =>
         (long)(leftHistory.Length + rightHistory.Length) * FftLength * sizeof(double) * 2;
@@ -136,6 +148,20 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
         rightHistory = [];
         leftFft = rightFft = leftSum = rightSum = [];
         input = output = leftOverlap = rightOverlap = [];
+        if (usesReleasedImpulse)
+            lock (impulseStateGate)
+                if (!enabled) impulse = null;
+    }
+
+    private static ImpulseSpectrum AcquireReleasedImpulse()
+    {
+        lock (ImpulseGate)
+        {
+            if (releasedImpulse?.TryGetTarget(out var cached) == true) return cached;
+            var loaded = LoadReleasedImpulse();
+            releasedImpulse = new WeakReference<ImpulseSpectrum>(loaded);
+            return loaded;
+        }
     }
 
     private void ProcessBlock()

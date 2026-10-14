@@ -65,6 +65,8 @@ internal static class GhostReverbSelfTest
         if (released.PreparedImpulseBytes != 0) return false;
         released.Enabled = true;
         if (released.PreparedImpulseBytes == 0) return false;
+        var secondPeer = new GhostReverbSampleProvider(new ImpulseSource()) { Enabled = true };
+        if (!released.SharesImpulseWith(secondPeer)) return false;
         Console.WriteLine($"ghost reverb: shared impulse {released.PreparedImpulseBytes / 1024d / 1024d:F1} MiB, prepared only when enabled");
         var releasedOutput = new float[48_000 * 2];
         var timer = Stopwatch.StartNew();
@@ -78,8 +80,20 @@ internal static class GhostReverbSelfTest
         released.Enabled = false;
         for (var second = 0; second < 10; second++)
             released.Read(releasedOutput, 0, releasedOutput.Length);
-        if (released.RetainedHistoryBytes != 0 || released.RetainedWorkingBytes != 0) return false;
+        if (released.RetainedHistoryBytes != 0 || released.RetainedWorkingBytes != 0 ||
+            released.PreparedImpulseBytes != 0 || !GhostReverbSampleProvider.SharedImpulseIsLive) return false;
+        secondPeer.Enabled = false;
+        for (var elapsed = 0; elapsed < 10; elapsed++)
+            secondPeer.Read(releasedOutput, 0, releasedOutput.Length);
+        if (secondPeer.PreparedImpulseBytes != 0) return false;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        if (GhostReverbSampleProvider.SharedImpulseIsLive) return false;
         Console.WriteLine($"ghost reverb: released {retainedHistoryBytes / 1024d / 1024d:F1} MiB after 10 s inactive");
+        Console.WriteLine("ghost reverb: shared 8.9 MiB impulse is collectible after every peer is inactive");
+        released.Enabled = true;
+        if (released.PreparedImpulseBytes == 0) return false;
         return producedAudio;
     }
 
