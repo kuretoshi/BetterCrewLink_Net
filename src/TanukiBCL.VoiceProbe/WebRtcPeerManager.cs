@@ -118,7 +118,7 @@ internal sealed class WebRtcPeerManager : IDisposable
         return sentPeers;
     }
 
-    private byte[] EncodeMonoFrame(ReadOnlySpan<byte> pcm16Mono)
+    internal byte[] EncodeMonoFrame(ReadOnlySpan<byte> pcm16Mono)
     {
         lock (audioCodecLock)
         {

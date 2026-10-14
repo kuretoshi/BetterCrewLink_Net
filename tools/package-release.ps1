@@ -83,7 +83,7 @@ $required = @(
     'TanukiBCL.Net.exe', 'TanukiBCL.Net.deps.json', 'update-manifest.json',
     'Updater/TanukiBCL.Updater.exe', 'NoSReader/TbclSnapshotReader.exe',
     'RoleReaders/SnrRoleReader.exe', 'README.md', 'LICENSE',
-    'Licenses/SourceCodePro-OFL.md'
+    'Licenses/SourceCodePro-OFL.md', 'Licenses/OpusSharp.Natives.LICENSE.txt', 'opus.dll'
 )
 if ($resolvedDebugAuthFile -or $debugAuthJson) { $required += 'debug-auth.json' }
 foreach ($item in $required) {

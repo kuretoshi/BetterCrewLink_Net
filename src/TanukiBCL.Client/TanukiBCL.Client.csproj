@@ -23,6 +23,9 @@
     <Content Include="..\..\licenses\SpeexDSPSharp.*.LICENSE.txt"
              Link="Licenses\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\licenses\OpusSharp.Natives.LICENSE.txt"
+             Link="Licenses\OpusSharp.Natives.LICENSE.txt"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\OFL-LICENSE.md" Link="Licenses\SourceCodePro-OFL.md"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
