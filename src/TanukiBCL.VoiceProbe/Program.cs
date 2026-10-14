@@ -53,6 +53,10 @@ internal static class Program
                 return await AudioCaptureAllocationProfile.RunAsync(parsed.InputDevice, parsed.OutputDevice,
                     parsed.Duration ?? TimeSpan.FromSeconds(30), encode: true);
             }
+            if (args.Contains("--audio-codec-profile"))
+                return AudioCodecAllocationProfile.Run();
+            if (args.Contains("--native-opus-interop-self-test"))
+                return AudioCodecAllocationProfile.VerifyNativeInterop();
             if (args.Contains("--audio-processing-self-test"))
             {
                 WebRtcPeerManager.VerifyBroadcastBufferReuse();
@@ -252,6 +256,8 @@ internal static class Program
               --game-reader-profile --game-process-id PID --seconds N  ゲーム読取単体の割り当て率を計測
               --audio-capture-profile --seconds N  マイク処理単体の割り当て率を計測（音声は保存・送信しない）
               --audio-encode-profile --seconds N  マイク処理＋Opus符号化の割り当て率を計測（音声は保存・送信しない）
+              --audio-codec-profile  合成音のOpus符号化・復号で割り当て量を計測（音声は保存・送信しない）
+              --native-opus-interop-self-test  管理版とネイティブ版のOpus相互復号を検証
               --expected-players  検証するプロセス数・ロビー人数（既定5）
               --game-scan-self-test ゲーム読取検証コマンドの回帰テスト
               --scalar-read-self-test ゲーム状態の数値読取と割り当て量を検証
