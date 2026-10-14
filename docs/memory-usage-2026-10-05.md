@@ -326,3 +326,9 @@ NoS衣装の自己テストではキャッシュ上限まで画像を作った�
 ## NoS接続中の管理ヒープ内訳（2026-10-14）
 
 同じNoS版Among Us PID 46956へ現行x64 Release WPF版を非表示で接続し、`dotnet-gcdump report -p`で生存中の管理オブジェクトを採取した。GCヒープは5,263,518バイト、60,431オブジェクトだった。これは採取時点のライブ管理ヒープであり、前節の約130 MiBのPrivate Bytesと同じ意味の指標ではない。Private Bytesには.NETランタイム、WPF描画、音声・通信のネイティブ領域、予約済み領域なども含まれる。この条件では管理オブジェクトの長期保持だけをさらに削っても、プロセス全体への効果は限定的と考えられる。次の調査は表示状態や音声セッションを揃えたネイティブ・WPF側の内訳確認を優先する。測定用.NET版は終了した。
+
+## VMMapによるプロセスメモリ内訳（2026-10-14）
+
+[Microsoft Sysinternals VMMap](https://learn.microsoft.com/en-us/sysinternals/downloads/vmmap)を公式配布元から導入し、実行ファイルのMicrosoft署名を検証した。現行x64 Release WPF版を同じNoS版Among Usへ非表示で接続し、VMMapの単一スナップショットを採取した。Private合計は133,380 KiB（約130.25 MiB）。内訳はManaged Heap 35,840 KiB、Heap 30,936 KiB、Private Data 35,432 KiB、Image 29,516 KiB、Stack 1,656 KiBだった。Imageの私有ページのうち20,596 KiBはNVIDIA表示ドライバーの`nvd3dumx.dll`マッピングに属する。これはDLLの私有ページの分類であり、描画機能を無効にした場合に同量が減ることは示さない。
+
+設定ではハードウェアアクセラレーションがONで、利用者は既存の設定画面から切替可能。描画速度や実際の表示状態を揃えたA/B測定をせずに既定値は変更しない。GCダンプの生存オブジェクト約5.0 MiBとVMMapのManaged Heap私有約35 MiBも測定対象が異なるため、差をリークとは扱わない。測定用.NET版は終了し、Among Usと公式版は維持した。
