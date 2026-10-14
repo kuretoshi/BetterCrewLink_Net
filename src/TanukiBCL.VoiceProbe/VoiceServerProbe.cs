@@ -99,9 +99,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly Dictionary<int, string> tohGameStartNames = [];
     private readonly Dictionary<int, string> tohLobbyNames = [];
     private readonly ConcurrentDictionary<string, (string Signature, DateTimeOffset SentAt)> tohRoleSent = new();
-    private readonly object obsPayloadGate = new();
-    private string lastObsPayload = string.Empty;
-    private string lastObsSecret = string.Empty;
+    private readonly ObsOverlayPayloadCache obsPayloadCache = new();
 
     public VoiceServerProbe(ProbeOptions options, string label = "probe", bool receiveOnly = false,
         bool sendDiagnosticProbe = true)
@@ -318,15 +316,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             ((state.GameState is GameState.Unknown or GameState.Menu) &&
              state.OldGameState == state.GameState))
             return;
-        var data = ObsOverlayWire.Build(state, peers, localTalking, localUsingRadio);
-        var payload = data.GetRawText();
-        lock (obsPayloadGate)
-        {
-            if (payload == lastObsPayload && secret == lastObsSecret) return;
-            lastObsPayload = payload;
-            lastObsSecret = secret;
-        }
-        _ = RunPeerOperationAsync(() => socket.EmitAsync("signal", new { to = secret, data }).WaitAsync(lifetimeToken));
+        var data = obsPayloadCache.BuildIfChanged(secret, state, peers, localTalking, localUsingRadio);
+        if (data is null) return;
+        _ = RunPeerOperationAsync(() => socket.EmitAsync("signal", new { to = secret, data = data.Value })
+            .WaitAsync(lifetimeToken));
     }
 
     private bool IsCurrentHost => currentGameState?.IsHost ?? options.IsHost;
@@ -937,7 +930,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         socket.OnConnected += (_, _) =>
         {
             if (lifetimeToken.IsCancellationRequested) return;
-            lock (obsPayloadGate) { lastObsPayload = string.Empty; lastObsSecret = string.Empty; }
+            obsPayloadCache.Reset();
             Log("OK", $"Socket.IO接続成功 socketId={socket.Id}");
             ConnectionStatusChanged?.Invoke("ボイスサーバー接続済み");
             currentConnectionReady.TrySetResult();
@@ -971,7 +964,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             nosRadioReports.Clear();
             LobbySettingsChanged?.Invoke(null);
             mobileRunning = false;
-            lock (obsPayloadGate) { lastObsPayload = string.Empty; lastObsSecret = string.Empty; }
+            obsPayloadCache.Reset();
             ServerQualityChanged?.Invoke(null);
             Log("WARN", $"切断: {reason}");
             ConnectionStatusChanged?.Invoke($"切断: {reason}");

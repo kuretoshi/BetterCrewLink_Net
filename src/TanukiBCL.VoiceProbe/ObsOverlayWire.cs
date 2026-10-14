@@ -17,6 +17,14 @@ internal static class ObsOverlayWire
 
     public static JsonElement Build(AmongUsState state,
         IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
+        => JsonSerializer.SerializeToElement(CreatePayload(state, peers, localTalking, localUsingRadio));
+
+    public static void Write(Utf8JsonWriter writer, AmongUsState state,
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
+        => JsonSerializer.Serialize(writer, CreatePayload(state, peers, localTalking, localUsingRadio));
+
+    private static object CreatePayload(AmongUsState state,
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
     {
         var local = state.Players.FirstOrDefault(player => player.IsLocal);
         var playerStates = state.Players.Select(player =>
@@ -74,7 +82,7 @@ internal static class ObsOverlayWire
             mod = ModName(state.Mod),
             oldMeetingHud = state.OldMeetingHud
         };
-        return JsonSerializer.SerializeToElement(payload);
+        return payload;
     }
 
     private static string ColorHex(uint packed) =>

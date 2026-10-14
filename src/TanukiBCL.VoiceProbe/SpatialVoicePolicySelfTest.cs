@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text.Json;
 using NAudio.Wave;
 using SIPSorcery.Net;
@@ -105,6 +106,43 @@ internal static class SpatialVoicePolicySelfTest
         };
         var obs = ObsOverlayWire.Build(obsState,
             new Dictionary<int, ObsPeerState> { [2] = new(true, true, true) }, true, true);
+        var obsBuffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(obsBuffer))
+            ObsOverlayWire.Write(writer, obsState,
+                new Dictionary<int, ObsPeerState> { [2] = new(true, true, true) }, true, true);
+        using var streamedObs = JsonDocument.Parse(obsBuffer.WrittenMemory);
+        Check("OBS: reusable writer matches element serializer", true,
+            streamedObs.RootElement.GetRawText() == obs.GetRawText());
+        var obsCache = new ObsOverlayPayloadCache();
+        var obsPeers = new Dictionary<int, ObsPeerState> { [2] = new(true, true, true) };
+        var firstObs = obsCache.BuildIfChanged("ABC123XYZ", obsState, obsPeers, true, true);
+        Check("OBS: repeated payload is not rebuilt", true,
+            firstObs?.GetRawText() == obs.GetRawText() &&
+            obsCache.BuildIfChanged("ABC123XYZ", obsState, obsPeers, true, true) is null);
+        obsPeers[2] = new ObsPeerState(true, false, true);
+        var changedObs = obsCache.BuildIfChanged("ABC123XYZ", obsState, obsPeers, true, true);
+        Check("OBS: peer activity invalidates cached payload", true,
+            changedObs?.GetProperty("otherTalking").GetProperty("2").GetBoolean() == false);
+        Check("OBS: secret change sends unchanged state", true,
+            obsCache.BuildIfChanged("XYZ123ABC", obsState, obsPeers, true, true) is not null);
+        obsCache.Reset();
+        Check("OBS: reconnection resends unchanged state", true,
+            obsCache.BuildIfChanged("XYZ123ABC", obsState, obsPeers, true, true) is not null);
+        for (var i = 0; i < 100; i++)
+        {
+            _ = ObsOverlayWire.Build(obsState, obsPeers, true, true).GetRawText();
+            _ = obsCache.BuildIfChanged("XYZ123ABC", obsState, obsPeers, true, true);
+        }
+        var obsAllocStart = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 1000; i++)
+            _ = ObsOverlayWire.Build(obsState, obsPeers, true, true).GetRawText();
+        var oldObsAlloc = GC.GetAllocatedBytesForCurrentThread() - obsAllocStart;
+        obsAllocStart = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 1000; i++)
+            _ = obsCache.BuildIfChanged("XYZ123ABC", obsState, obsPeers, true, true);
+        var cachedObsAlloc = GC.GetAllocatedBytesForCurrentThread() - obsAllocStart;
+        Console.WriteLine($"OBS unchanged payload: {cachedObsAlloc:N0} vs {oldObsAlloc:N0} B / 1,000 updates");
+        Check("OBS: unchanged payload allocates less", true, cachedObsAlloc < oldObsAlloc);
         Check("OBS: v3.2.7 state and NoS color", true,
             obs.GetProperty("overlayState").GetProperty("gameState").GetInt32() == (int)GameState.Tasks &&
             obs.GetProperty("mod").GetString() == "NoS" &&
