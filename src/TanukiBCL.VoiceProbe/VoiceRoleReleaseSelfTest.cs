@@ -119,10 +119,36 @@ internal static class VoiceRoleReleaseSelfTest
                 NosVoiceRoleStateReader.ReadBibiri(123, now + 3001, bibiri).Count == 0);
             check("NoS voice-role descriptor: token and role validated", true,
                 NosVoiceRoleSender.ReadDescriptor(descriptor) is { PlayerId: 4, Port: 12345 });
-            File.WriteAllText(descriptor, File.ReadAllText(descriptor).Replace(
+            var discovered = NosVoiceRoleSender.ReadDescriptor(descriptor);
+            check("NoS voice-role discovery: fresh matching player skips file fallback", true,
+                NosVoiceRoleSender.IsCurrentDiscovery(discovered, now, now + 999, 123, 4));
+            check("NoS voice-role discovery: stale, wrong player or clock rollback uses file fallback", true,
+                !NosVoiceRoleSender.IsCurrentDiscovery(discovered, now, now + 1000, 123, 4) &&
+                !NosVoiceRoleSender.IsCurrentDiscovery(discovered, now, now + 500, 123, 5) &&
+                !NosVoiceRoleSender.IsCurrentDiscovery(discovered, now, now + 500, 124, 4) &&
+                !NosVoiceRoleSender.IsCurrentDiscovery(discovered, now, now - 1, 123, 4));
+            using var cachedSender = new NosVoiceRoleSender(descriptor);
+            var originalJson = File.ReadAllText(descriptor);
+            var originalWriteTime = File.GetLastWriteTimeUtc(descriptor);
+            var firstRead = cachedSender.ReadDescriptorCached(now);
+            check("NoS voice-role descriptor: unchanged file reuses parsed data", true,
+                firstRead is not null && ReferenceEquals(firstRead,
+                    cachedSender.ReadDescriptorCached(now + 250)));
+            File.WriteAllText(descriptor, originalJson.Replace(
                 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "invalid", StringComparison.Ordinal));
+            var changedWriteTime = originalWriteTime.AddSeconds(1);
+            File.SetLastWriteTimeUtc(descriptor, changedWriteTime);
             check("NoS voice-role descriptor: invalid token rejected", true,
-                NosVoiceRoleSender.ReadDescriptor(descriptor) is null);
+                NosVoiceRoleSender.ReadDescriptor(descriptor) is null &&
+                cachedSender.ReadDescriptorCached(now + 500) is null);
+            File.WriteAllText(descriptor, originalJson);
+            File.SetLastWriteTimeUtc(descriptor, changedWriteTime);
+            check("NoS voice-role descriptor: unchanged timestamp forces periodic refresh", true,
+                cachedSender.ReadDescriptorCached(now + 750) is null &&
+                cachedSender.ReadDescriptorCached(now + 5500) is { PlayerId: 4 });
+            File.Delete(descriptor);
+            check("NoS voice-role descriptor: deletion clears fallback", true,
+                cachedSender.ReadDescriptorCached(now + 5750) is null);
         }
         finally
         {

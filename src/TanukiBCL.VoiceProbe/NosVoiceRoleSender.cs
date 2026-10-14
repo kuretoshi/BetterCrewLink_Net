@@ -26,8 +26,11 @@ internal sealed class NosVoiceRoleSender : IDisposable
     private NosVoiceRoleDescriptor? discovered;
     private long discoveredAt;
     private long lastRead;
+    private long lastFullRead;
     private long lastDiscovery;
     private long sequence;
+    private DateTime? descriptorWriteTimeUtc;
+    private bool descriptorChecked;
     private string token = string.Empty;
     private int currentPid;
     private int currentPlayer = -1;
@@ -58,13 +61,13 @@ internal sealed class NosVoiceRoleSender : IDisposable
             lastDiscovery = now;
             SendUdp($"TBCLD1|{pid}|{nonce}", DiscoveryPort);
         }
-        if (now - lastRead >= 250)
+        var live = IsCurrentDiscovery(discovered, discoveredAt, now, pid, playerId);
+        if (!live && now - lastRead >= 250)
         {
             lastRead = now;
-            descriptor = ReadDescriptor(descriptorPath);
+            descriptor = ReadDescriptorCached(now);
         }
-        var selected = discovered is { } live && now - discoveredAt < 1000 &&
-            live.Pid == pid && live.PlayerId == playerId ? live : descriptor;
+        var selected = live ? discovered : descriptor;
         if (selected is null || selected.Pid != pid || selected.PlayerId != playerId) return;
         if (selected.Role == "tanukiMicTest" ? phase != GameState.Lobby : phase == GameState.Lobby) return;
         if (phase == GameState.Discussion && selected.Role is not
@@ -156,6 +159,32 @@ internal sealed class NosVoiceRoleSender : IDisposable
         }
     }
 
+    // The file is a compatibility fallback. Poll its metadata at the released
+    // 250 ms cadence, but avoid re-reading and parsing an unchanged JSON file.
+    // Periodic full reads cover replacements that preserve the write timestamp.
+    internal NosVoiceRoleDescriptor? ReadDescriptorCached(long now)
+    {
+        DateTime? writeTimeUtc;
+        try { writeTimeUtc = File.GetLastWriteTimeUtc(descriptorPath); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            writeTimeUtc = null;
+        }
+        if (descriptorChecked && writeTimeUtc is not null &&
+            writeTimeUtc == descriptorWriteTimeUtc &&
+            now >= lastFullRead && now - lastFullRead < 5000) return descriptor;
+        descriptor = ReadDescriptor(descriptorPath);
+        descriptorWriteTimeUtc = writeTimeUtc;
+        descriptorChecked = true;
+        lastFullRead = now;
+        return descriptor;
+    }
+
+    internal static bool IsCurrentDiscovery(NosVoiceRoleDescriptor? candidate, long discoveredAt,
+        long now, int pid, int playerId) => candidate is not null &&
+        now >= discoveredAt && now - discoveredAt < 1000 &&
+        candidate.Pid == pid && candidate.PlayerId == playerId;
+
     internal static bool Valid(NosVoiceRoleDescriptor? value) => value is
     { Protocol: 1, PlayerId: >= 0 and <= 255, Pid: > 0, Port: > 0 and <= 65535,
       Role: "tanukiMegaphone" or "tanukiBclBibiri" or "tanukiTalkative" or "tanukiMicTest" or "tanukiVoiceRoles" } &&
@@ -174,6 +203,10 @@ internal sealed class NosVoiceRoleSender : IDisposable
         receiveCancellation = null;
         socket = null;
         discovered = null;
+        descriptor = null;
+        descriptorWriteTimeUtc = null;
+        descriptorChecked = false;
+        lastRead = lastFullRead = 0;
         nonce = NewNonce();
     }
 
