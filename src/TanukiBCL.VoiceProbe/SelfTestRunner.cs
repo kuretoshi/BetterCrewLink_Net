@@ -111,6 +111,11 @@ internal static class SelfTestRunner
                 second.AudioVerified.WaitAsync(timeout, cancellation.Token),
                 settingsVerified.Task.WaitAsync(timeout, cancellation.Token));
             Console.WriteLine("[PASS] Both peers decoded the other's Opus test audio");
+            var firstAllocated = first.VerifyConnectedBroadcastAllocations();
+            var secondAllocated = second.VerifyConnectedBroadcastAllocations();
+            Console.WriteLine($"[PASS] Connected broadcast filters 10,000 frames without peer copies: " +
+                $"current={firstAllocated.Current}/{secondAllocated.Current} bytes; " +
+                $"former copy={firstAllocated.PerFrameCopy}/{secondAllocated.PerFrameCopy} bytes");
 
             first.SetOwnLobbySettings(updatedSettings);
             await updateVerified.Task.WaitAsync(timeout, cancellation.Token);

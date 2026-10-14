@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
@@ -33,6 +34,8 @@ internal sealed class WebRtcPeerManager : IDisposable
     private bool natFix;
     private readonly Func<string, object, Task> sendSignal;
     private readonly ConcurrentDictionary<string, Peer> peers = new();
+    private readonly object peerSnapshotGate = new();
+    private Peer[] peerSnapshot = [];
     private readonly AudioEncoder audioEncoder = new(true, true);
     private readonly object audioCodecLock = new();
     private short[]? monoEncodeBuffer;
@@ -85,39 +88,49 @@ internal sealed class WebRtcPeerManager : IDisposable
         {
             return 0;
         }
-        if (peers.IsEmpty) return 0;
-
-        // Capture continues in the lobby even without a connected listener.
-        // Skip Opus work entirely until there is at least one eligible peer.
-        var recipients = peers.Values.ToArray();
-        var recipientCount = 0;
-        for (var index = 0; index < recipients.Length; index++)
+        // Publish a new peer array only when membership changes, not for every
+        // 20 ms capture frame. A removed peer can still be in this local snapshot,
+        // just as it could be in the old per-frame snapshot during teardown.
+        var snapshot = Volatile.Read(ref peerSnapshot);
+        if (snapshot.Length == 0) return 0;
+        var recipients = ArrayPool<Peer>.Shared.Rent(snapshot.Length);
+        try
         {
-            var peer = recipients[index];
-            if (CanSendAudio(peer) && (canSendToPeer is null || canSendToPeer(peer.RemoteSocketId)))
-                recipients[recipientCount++] = peer;
-        }
-        if (recipientCount == 0) return 0;
+            // Fix this frame's recipients before encoding/sending so a radio
+            // rule change cannot alter the set halfway through the frame.
+            var recipientCount = 0;
+            foreach (var peer in snapshot)
+            {
+                if (CanSendAudio(peer) && (canSendToPeer is null || canSendToPeer(peer.RemoteSocketId)))
+                    recipients[recipientCount++] = peer;
+            }
+            // Capture continues in the lobby without a connected listener.
+            if (recipientCount == 0) return 0;
 
-        var encoded = EncodeMonoFrame(pcm16Mono);
-        var sentPeers = 0;
-        for (var index = 0; index < recipientCount; index++)
-        {
-            var peer = recipients[index];
-            try
+            var encoded = EncodeMonoFrame(pcm16Mono);
+            var sentPeers = 0;
+            for (var index = 0; index < recipientCount; index++)
             {
-                peer.Connection.SendAudio(SamplesPerChannel, encoded);
-                sentPeers++;
+                if (SendEncodedAudio(recipients[index], encoded)) sentPeers++;
             }
-            catch (Exception exception)
-            {
-                if (Interlocked.Exchange(ref peer.AudioSendFailureLogged, 1) == 0)
-                {
-                    Log($"Opus send failed peer={Short(peer.RemoteSocketId)}: {exception.Message}");
-                }
-            }
+            return sentPeers;
         }
-        return sentPeers;
+        finally { ArrayPool<Peer>.Shared.Return(recipients, clearArray: true); }
+    }
+
+    private bool SendEncodedAudio(Peer peer, byte[] encoded)
+    {
+        try
+        {
+            peer.Connection.SendAudio(SamplesPerChannel, encoded);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            if (Interlocked.Exchange(ref peer.AudioSendFailureLogged, 1) == 0)
+                Log($"Opus send failed peer={Short(peer.RemoteSocketId)}: {exception.Message}");
+            return false;
+        }
     }
 
     internal byte[] EncodeMonoFrame(ReadOnlySpan<byte> pcm16Mono)
@@ -149,7 +162,7 @@ internal sealed class WebRtcPeerManager : IDisposable
             BitConverter.TryWriteBytes(fullFrame.AsSpan(i * sizeof(short)), (short)(i + 1));
         if (manager.BroadcastMonoPcm48k(fullFrame) != 0 || manager.monoEncodeBuffer is not null)
             throw new InvalidOperationException("No-listener frame was encoded or sent.");
-        // The first pass also warms the JIT path used by ConcurrentDictionary.IsEmpty.
+        // Warm the empty published peer snapshot before measuring.
         for (var i = 0; i < 11_000; i++) manager.BroadcastMonoPcm48k(fullFrame);
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 10_000; i++) manager.BroadcastMonoPcm48k(fullFrame);
@@ -168,6 +181,30 @@ internal sealed class WebRtcPeerManager : IDisposable
             encodeBuffer[0] != 0x1234 || encodeBuffer.AsSpan(1).IndexOfAnyExcept((short)0) >= 0)
             throw new InvalidOperationException("Short mono frame retained audio from the previous frame.");
         Console.WriteLine($"[PASS] Idle capture skips Opus encoding ({allocated} bytes / 10,000 warmed frames); active frames reuse a cleared mono buffer");
+    }
+
+    internal (long Current, long PerFrameCopy) VerifyConnectedBroadcastAllocations()
+    {
+        if (Volatile.Read(ref peerSnapshot).Length == 0)
+            throw new InvalidOperationException("Connected broadcast test has no peer snapshot.");
+        var frame = new byte[SamplesPerChannel * sizeof(short)];
+        for (var index = 0; index < 1_000; index++)
+            BroadcastMonoPcm48k(frame, static _ => false);
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < 10_000; index++)
+            BroadcastMonoPcm48k(frame, static _ => false);
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        if (allocated > 8_192)
+            throw new InvalidOperationException($"Filtered connected broadcast allocated {allocated} bytes.");
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (var index = 0; index < 10_000; index++)
+            GC.KeepAlive(peers.Values.ToArray());
+        var perFrameCopy = GC.GetAllocatedBytesForCurrentThread() - before;
+        if (perFrameCopy <= allocated)
+            throw new InvalidOperationException("Published peer snapshot did not reduce capture allocations.");
+        if (BroadcastMonoPcm48k(frame) == 0)
+            throw new InvalidOperationException("Connected broadcast did not send an Opus frame.");
+        return (allocated, perFrameCopy);
     }
 
     public void Configure(JsonElement configuration)
@@ -415,9 +452,11 @@ internal sealed class WebRtcPeerManager : IDisposable
 
     public void RemovePeer(string remoteSocketId)
     {
-        if (!peers.TryRemove(remoteSocketId, out var peer))
+        Peer? peer;
+        lock (peerSnapshotGate)
         {
-            return;
+            if (!peers.TryRemove(remoteSocketId, out peer)) return;
+            Volatile.Write(ref peerSnapshot, peers.Values.ToArray());
         }
 
         peer.Connection.close();
@@ -453,7 +492,11 @@ internal sealed class WebRtcPeerManager : IDisposable
         var connection = new RTCPeerConnection(configuration);
         var peer = new Peer(remoteSocketId, connectionId ?? Guid.NewGuid().ToString("N"), connection,
             initiator, useNatFix || forceRelayOnly);
-        peers[remoteSocketId] = peer;
+        lock (peerSnapshotGate)
+        {
+            peers[remoteSocketId] = peer;
+            Volatile.Write(ref peerSnapshot, peers.Values.ToArray());
+        }
         _ = WatchHandshakeAsync(peer);
         connection.addTrack(new MediaStreamTrack([OpusFormat], MediaStreamStatusEnum.SendRecv));
         var iceChannel = connection.GetRtpChannel();

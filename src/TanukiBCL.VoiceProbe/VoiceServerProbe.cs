@@ -223,6 +223,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     internal int AutomaticPeerRecoveryCount => Volatile.Read(ref automaticPeerRecoveryCount);
 
+    internal (long Current, long PerFrameCopy) VerifyConnectedBroadcastAllocations() =>
+        peerManager.VerifyConnectedBroadcastAllocations();
+
     public Task<AudioTestResult> AudioVerified => audioVerified.Task;
 
     public event Action<AmongUsState>? GameStateApplied;
