@@ -29,6 +29,7 @@ internal sealed class NosHostVoiceAdmission
     {
         sample = null;
         if (state is not { IsHost: true, Mod: AmongUsModType.NebulaOnTheShip } ||
+            state.Players is not { } players ||
             client.ValueKind != JsonValueKind.Object || data.ValueKind != JsonValueKind.Object ||
             !Int(client, "playerId", out var playerId) || !Int(client, "clientId", out var clientId) ||
             clientId != knownClientId || !Int(data, "playerId", out var dataPlayer) ||
@@ -41,7 +42,7 @@ internal sealed class NosHostVoiceAdmission
             !Regex.IsMatch(session, "^[a-f0-9-]{36}$") ||
             !Long(data, "sequence", out var sequence) || sequence <= 0)
             return false;
-        if (!state.Players.Any(player => player.Id == playerId && player.ClientId == clientId &&
+        if (!players.Any(player => player.Id == playerId && player.ClientId == clientId &&
             !player.IsDead && !player.Disconnected)) return false;
         var now = timestamp ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (scope != state.LobbyCode)
@@ -116,7 +117,8 @@ internal sealed class NosHostVoiceRelay : IDisposable
     public void Send(NosHostVoiceSample sample, int pid, AmongUsState? state)
     {
         if (state is not { IsHost: true, Mod: AmongUsModType.NebulaOnTheShip } || pid <= 0 ||
-            !state.Players.Any(player => player.Id == sample.PlayerId &&
+            state.Players is not { } players ||
+            !players.Any(player => player.Id == sample.PlayerId &&
                 !player.IsDead && !player.Disconnected)) return;
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (pid != knownPid || now - lastRead >= 250)

@@ -43,8 +43,9 @@ internal sealed class NosVoiceRoleSender : IDisposable
     {
         if (!double.IsFinite(rms) || rms is < 0d or > 1d ||
             state?.Mod != AmongUsModType.NebulaOnTheShip ||
-            state.GameState is not (GameState.Tasks or GameState.Discussion or GameState.Lobby)) return;
-        var player = state.Players.FirstOrDefault(item => item.IsLocal);
+            state.GameState is not (GameState.Tasks or GameState.Discussion or GameState.Lobby) ||
+            state.Players is not { } players) return;
+        var player = players.FirstOrDefault(item => item.IsLocal);
         if (player is null || player.IsDead || player.Disconnected) return;
         lock (gate) SendCore(rms, active, pid, player.Id, state.GameState);
     }

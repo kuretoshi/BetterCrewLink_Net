@@ -49,6 +49,11 @@ internal static class VoiceRoleReleaseSelfTest
             probe.SetNosRadioPressed(NosRadioRules.ImpostorKind, false);
             check("NoS radio: release clears transmission and pending", true,
                 probe.CurrentNosRadioKind is null && !probe.IsNosRadioPending);
+            state.Players = null!;
+            state.GameState = GameState.Menu;
+            probe.ApplyGameState(state);
+            check("Among Us exit: missing player list becomes an empty roster", true,
+                state.Players.Count == 0 && probe.CurrentNosRadioKind is null);
         }
         finally { probe.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
     }
@@ -177,6 +182,10 @@ internal static class VoiceRoleReleaseSelfTest
                 out _, 1200) &&
             !admission.TryAccept("peer-b", client.RootElement, data.RootElement, state, 8,
                 out _, 1200));
+        state.Players = null!;
+        check("NoS mobile host relay: missing shutdown roster rejected", true,
+            !admission.TryAccept("peer-c", client.RootElement, data.RootElement, state, 7,
+                out var missingSample, 1400) && missingSample is null);
     }
 
     private static void VerifyDeathEcho(Action<string, bool, bool> check)
@@ -329,12 +338,23 @@ internal static class VoiceRoleReleaseSelfTest
                 endpoint.Address.Equals(IPAddress.Loopback) &&
                 local.StartsWith("TBCL1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|", StringComparison.Ordinal) &&
                 local.EndsWith("|0.25|1", StringComparison.Ordinal));
+            var missingPlayers = new AmongUsState
+            {
+                IsHost = true, Mod = AmongUsModType.NebulaOnTheShip,
+                GameState = GameState.Tasks, Players = null!
+            };
+            sender.Send(0.25d, true, 123, missingPlayers);
+            check("NoS voice role: missing shutdown roster sends no UDP", true,
+                receiver.Available == 0);
             using var relay = new NosHostVoiceRelay(_ => hostPath);
             relay.Send(new NosHostVoiceSample(4, 0.5d, true), 123, state);
             var host = Encoding.UTF8.GetString(receiver.Receive(ref endpoint));
             check("NoS mobile host relay: authenticated loopback UDP", true,
                 host.StartsWith("TBCLH1|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|4|", StringComparison.Ordinal) &&
                 host.EndsWith("|0.5|1", StringComparison.Ordinal));
+            relay.Send(new NosHostVoiceSample(4, 0.5d, true), 123, missingPlayers);
+            check("NoS mobile host relay: missing shutdown roster sends no UDP", true,
+                receiver.Available == 0);
         }
         finally
         {

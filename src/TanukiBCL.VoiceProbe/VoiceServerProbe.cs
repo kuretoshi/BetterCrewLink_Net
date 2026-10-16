@@ -462,6 +462,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     public void ApplyGameState(AmongUsState state)
     {
+        // A shutdown snapshot can retain the NoS phase before its player list is available.
+        state.Players ??= [];
         airshipSpawnFallback.Update(state, DateTimeOffset.UtcNow);
         if (state.LobbyCode != tohLobbyCode || state.GameState == GameState.Menu)
         {
