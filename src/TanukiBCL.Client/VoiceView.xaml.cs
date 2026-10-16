@@ -147,6 +147,25 @@ public partial class VoiceView : UserControl
         if (view.VersionWarningText.Visibility != Visibility.Visible) throw new InvalidOperationException("Version warning hidden");
         view.SetVersionWarning("");
         if (view.VersionWarningText.Visibility != Visibility.Collapsed) throw new InvalidOperationException("Version warning stayed visible");
+        var game = new AmongUsState { GameState = GameState.Tasks, LobbyCode = "ABCDEF",
+            Players = [new Player { Id = 0, IsLocal = true, Name = "Local" },
+                new Player { Id = 1, Name = "Remote" }] };
+        view.Update(game, true, false, false, false, new Dictionary<int, VoicePlayerStatus>());
+        view.Measure(new Size(280, 390));
+        view.Arrange(new Rect(0, 0, 280, 390));
+        view.UpdateLayout();
+        var before = view.HeaderDivider.TranslatePoint(new Point(), view).Y;
+        var rosterHeight = view.OtherPlayersScroll.ActualHeight;
+        view.SetVersionWarning("ホストと参加者のバージョンが一致していません。更新してから接続してください。");
+        if (view.HeaderDivider.TranslatePoint(new Point(), view).Y <= before ||
+            view.OtherPlayersScroll.ActualHeight >= rosterHeight ||
+            view.FooterBar.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Version notice did not reflow the roster without window resize");
+        view.SetVersionWarning(null);
+        if (Math.Abs(view.HeaderDivider.TranslatePoint(new Point(), view).Y - before) > 0.5d ||
+            Math.Abs(view.OtherPlayersScroll.ActualHeight - rosterHeight) > 0.5d)
+            throw new InvalidOperationException("Version notice did not restore the layout without window resize");
+        view.popupCloseTimer.Stop();
         Console.WriteLine("[PASS] 3.2.9 NoS failure MOD badge and app-version notice");
     }
 
@@ -709,10 +728,14 @@ public partial class VoiceView : UserControl
 
     public void SetWarnings(string? first, string? second)
     {
-        WarningText.Text = first ?? string.Empty;
-        WarningText.Visibility = string.IsNullOrWhiteSpace(first) ? Visibility.Collapsed : Visibility.Visible;
-        SecondWarningText.Text = second ?? string.Empty;
-        SecondWarningText.Visibility = string.IsNullOrWhiteSpace(second) ? Visibility.Collapsed : Visibility.Visible;
+        var firstText = first ?? string.Empty;
+        var secondText = second ?? string.Empty;
+        if (WarningText.Text == firstText && SecondWarningText.Text == secondText) return;
+        WarningText.Text = firstText;
+        WarningText.Visibility = string.IsNullOrWhiteSpace(firstText) ? Visibility.Collapsed : Visibility.Visible;
+        SecondWarningText.Text = secondText;
+        SecondWarningText.Visibility = string.IsNullOrWhiteSpace(secondText) ? Visibility.Collapsed : Visibility.Visible;
+        RefreshNoticeLayout();
     }
 
     public void SetDetectedMod(string? mod, NosReadStatus? nosStatus = null)
@@ -732,8 +755,20 @@ public partial class VoiceView : UserControl
 
     public void SetVersionWarning(string? warning)
     {
-        VersionWarningText.Text = warning ?? string.Empty;
-        VersionWarningText.Visibility = string.IsNullOrWhiteSpace(warning) ? Visibility.Collapsed : Visibility.Visible;
+        var text = warning ?? string.Empty;
+        if (VersionWarningText.Text == text) return;
+        VersionWarningText.Text = text;
+        VersionWarningText.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
+        RefreshNoticeLayout();
+    }
+
+    private void RefreshNoticeLayout()
+    {
+        // A visible warning changes the Auto-sized header while the roster uses
+        // the remaining star row. Reflow before reusing its viewport dimensions.
+        InvalidateMeasure();
+        UpdateLayout();
+        ApplyPlayerLayout();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
