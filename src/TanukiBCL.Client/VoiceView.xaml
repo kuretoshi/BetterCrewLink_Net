@@ -102,8 +102,6 @@
                        Foreground="#D7D1DA" Margin="4,4,4,0" TextWrapping="Wrap" />
             <TextBlock x:Name="SecondWarningText" Visibility="Collapsed" TextAlignment="Center" FontSize="11"
                        Foreground="#D7D1DA" Margin="4,0,4,0" TextWrapping="Wrap" />
-            <TextBlock x:Name="VersionWarningText" Visibility="Collapsed" TextAlignment="Center" FontSize="11"
-                       Foreground="#FFA726" Margin="8,2,8,2" TextWrapping="Wrap" />
         </StackPanel>
 
         <Border x:Name="HeaderDivider" Grid.Row="2" Background="#5C565F" />
@@ -174,6 +172,17 @@
                 <WrapPanel x:Name="OtherPlayersPanel" Width="225" HorizontalAlignment="Center" />
             </ScrollViewer>
         </Grid>
+
+        <Border x:Name="VersionWarningPanel" Grid.Row="3" Panel.ZIndex="3"
+                Visibility="Collapsed" VerticalAlignment="Bottom" Margin="12,0,12,8"
+                MaxHeight="96" Padding="10,8" BorderBrush="#9B7B2D" BorderThickness="1"
+                CornerRadius="4" Background="#443919">
+            <ScrollViewer x:Name="VersionWarningScroll" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <TextBlock x:Name="VersionWarningText" Visibility="Collapsed" TextAlignment="Center"
+                           FontSize="11" Foreground="#FFA726" TextWrapping="Wrap" />
+            </ScrollViewer>
+        </Border>
 
         <Grid Grid.Row="4">
             <StackPanel x:Name="FooterBar" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">

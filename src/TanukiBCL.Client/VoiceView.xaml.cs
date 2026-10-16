@@ -157,10 +157,23 @@ public partial class VoiceView : UserControl
         var before = view.HeaderDivider.TranslatePoint(new Point(), view).Y;
         var rosterHeight = view.OtherPlayersScroll.ActualHeight;
         view.SetVersionWarning("ホストと参加者のバージョンが一致していません。更新してから接続してください。");
-        if (view.HeaderDivider.TranslatePoint(new Point(), view).Y <= before ||
+        if (Math.Abs(view.HeaderDivider.TranslatePoint(new Point(), view).Y - before) > 0.5d ||
             view.OtherPlayersScroll.ActualHeight >= rosterHeight ||
+            view.VersionWarningPanel.Visibility != Visibility.Visible ||
+            view.VersionWarningPanel.ActualHeight > 96d ||
             view.FooterBar.Visibility != Visibility.Visible)
-            throw new InvalidOperationException("Version notice did not reflow the roster without window resize");
+            throw new InvalidOperationException("Version notice moved the header or did not reserve roster space");
+        view.SetVersionWarning(string.Concat(Enumerable.Repeat("参加者のバージョンが異なります。", 20)));
+        if (view.VersionWarningScroll.ScrollableHeight <= 0d ||
+            view.VersionWarningPanel.ActualHeight > 96d ||
+            view.HeaderDivider.TranslatePoint(new Point(), view).Y != before)
+            throw new InvalidOperationException("Long version notice did not scroll independently of the roster");
+        view.SetError("接続に失敗しました");
+        if (view.VersionWarningPanel.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("Version notice covered the error screen");
+        view.SetError(null);
+        if (view.VersionWarningPanel.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("Version notice did not return after error recovery");
         view.SetVersionWarning(null);
         if (Math.Abs(view.HeaderDivider.TranslatePoint(new Point(), view).Y - before) > 0.5d ||
             Math.Abs(view.OtherPlayersScroll.ActualHeight - rosterHeight) > 0.5d)
@@ -723,6 +736,9 @@ public partial class VoiceView : UserControl
         HeaderPanel.Visibility = hasError ? Visibility.Collapsed : Visibility.Visible;
         HeaderDivider.Visibility = hasError ? Visibility.Collapsed : Visibility.Visible;
         GameContent.Visibility = hasError ? Visibility.Collapsed : Visibility.Visible;
+        var showVersionWarning = !hasError && !string.IsNullOrWhiteSpace(VersionWarningText.Text);
+        VersionWarningPanel.Visibility = showVersionWarning ? Visibility.Visible : Visibility.Collapsed;
+        OtherPlayersScroll.Margin = new Thickness(0, 4, 0, showVersionWarning ? 104 : 0);
         if (hasError) ClosePlayerConfigPopup();
     }
 
@@ -757,8 +773,12 @@ public partial class VoiceView : UserControl
     {
         var text = warning ?? string.Empty;
         if (VersionWarningText.Text == text) return;
+        var visible = !string.IsNullOrWhiteSpace(text);
+        var showPanel = visible && ErrorPanel.Visibility != Visibility.Visible;
         VersionWarningText.Text = text;
-        VersionWarningText.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
+        VersionWarningText.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        VersionWarningPanel.Visibility = showPanel ? Visibility.Visible : Visibility.Collapsed;
+        OtherPlayersScroll.Margin = new Thickness(0, 4, 0, showPanel ? 104 : 0);
         RefreshNoticeLayout();
     }
 
