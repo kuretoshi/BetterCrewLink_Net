@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<PeerRow> peers = [];
     private readonly VoicePlayerStatusCache compactPeerStatuses = new();
     private readonly Dictionary<int, ObsPeerState> obsPeerStatuses = [];
+    private ObsSkinAssets? obsSkinAssets;
     private readonly ClientSettings settings;
     private AmongUsState? currentState;
     private bool microphoneMuted;
@@ -305,7 +306,9 @@ public partial class MainWindow : Window
                 QueueApplicationRelaunch();
             Topmost = current.AlwaysOnTop;
             if (previous.Language != current.Language) CompactVoiceView.SetLanguage(current.Language);
-            if (previous.MicrophoneName != current.MicrophoneName || previous.SpeakerName != current.SpeakerName)
+            if (previous.MicrophoneName != current.MicrophoneName ||
+                previous.MicrophoneDeviceId != current.MicrophoneDeviceId ||
+                previous.SpeakerName != current.SpeakerName)
             {
                 InputCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
                 OutputCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
@@ -395,9 +398,8 @@ public partial class MainWindow : Window
 
     private void SelectConfiguredDevices()
     {
-        InputCombo.SelectedItem = InputCombo.Items.Cast<AudioDeviceInfo>()
-            .FirstOrDefault(device => device.Name == settings.MicrophoneName)
-            ?? InputCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
+        InputCombo.SelectedItem = AudioDeviceSelection.Choose(InputCombo.Items.Cast<AudioDeviceInfo>(),
+            settings.MicrophoneName, settings.MicrophoneDeviceId);
         OutputCombo.SelectedItem = OutputCombo.Items.Cast<AudioDeviceInfo>()
             .FirstOrDefault(device => device.Name == settings.SpeakerName)
             ?? OutputCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
@@ -571,6 +573,7 @@ public partial class MainWindow : Window
         if (settingsWindow is null)
         {
             settings.MicrophoneName = input.Name;
+            settings.MicrophoneDeviceId = input.Id;
             settings.SpeakerName = output.Name;
             try { ClientSettingsStore.Save(settings); }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -594,6 +597,8 @@ public partial class MainWindow : Window
         if (settings.OldSampleDebug) optionArgs.Add("--old-sample-debug");
         var options = ProbeOptions.Parse([.. optionArgs]);
         var mobileCosmetics = new MobileCosmetics();
+        var obsAssets = new ObsSkinAssets();
+        obsSkinAssets = obsAssets;
         var activeProbe = new VoiceServerProbe(options, "client")
         {
             AppVersion = AppVersionPolicy.WireVersion(UpdateCatalog.CurrentVersion),
@@ -615,6 +620,19 @@ public partial class MainWindow : Window
             finally { if (ReferenceEquals(probe, activeProbe)) probe = null; }
         });
         session.AddCleanup(() => { mobileCosmetics.Reset(); return ValueTask.CompletedTask; });
+        session.AddCleanup(() =>
+        {
+            obsAssets.Reset();
+            if (ReferenceEquals(obsSkinAssets, obsAssets)) obsSkinAssets = null;
+            return ValueTask.CompletedTask;
+        });
+        activeProbe.ObsCosmeticsRequested += (recipient, sources) =>
+        {
+            if (!session.AcceptsCallbacks || !settings.ObsOverlay) return;
+            var secret = settings.ObsSecret;
+            foreach (var source in sources)
+                _ = SendObsAssetAsync(obsAssets, activeProbe, session, settings, recipient, source, secret);
+        };
         session.AddCleanup(async () =>
         {
             try
@@ -1089,10 +1107,30 @@ public partial class MainWindow : Window
             foreach (var row in peers)
                 obsPeerStatuses[row.ClientId] = new ObsPeerState(
                     activeProbe.IsPeerPresent(row.ClientId), row.VadActive, row.Radio == "送信中");
+            var appearances = state.GameState is GameState.Menu or GameState.Unknown
+                ? null : obsSkinAssets?.Update(state);
+            if (appearances is null) obsSkinAssets?.Reset();
             activeProbe.PublishObsOverlay(settings.ObsSecret, state, obsPeerStatuses,
-                localTalking && !microphoneMuted, radioTransmitting);
+                localTalking && !microphoneMuted, radioTransmitting, appearances,
+                obsSkinAssets?.AssetSession);
         }
         UpdateOverlayWindow();
+    }
+
+    private static async Task SendObsAssetAsync(ObsSkinAssets assets, VoiceServerProbe activeProbe,
+        ClientSessionCoordinator.Session session, ClientSettings settings, string recipient,
+        string source, string? secret)
+    {
+        try
+        {
+            var png = await assets.GetAsync(source);
+            if (png is not null && session.AcceptsCallbacks && settings.ObsOverlay && settings.ObsSecret == secret)
+                activeProbe.SendObsCosmetic(recipient, source, png);
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Trace.TraceWarning($"OBS image relay failed: {error.Message}");
+        }
     }
 
     private void UpdateOverlayWindow()

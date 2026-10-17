@@ -587,6 +587,20 @@ internal sealed class NosCosmeticContents
             var skin = contents.Image(parts[NosCosmeticPart.Skin], 0.5, 0, 1)!;
             // Adaptive: R*rgb + G*tint + B*rgb*.55 with source (200,0,0) -> (100, 0, 200).
             Require(Pixel(skin, 158, 159) == (200, 0, 100, 255), "Adaptive NoS recolor differs from 3.2.9");
+            var obsAssets = new ObsSkinAssets(contents);
+            var obsAppearance = obsAssets.Update(new AmongUsState
+            {
+                LobbyCode = "ABCDEF", Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Tasks,
+                GameExecutablePath = Path.Combine(game, "Among Us.exe"),
+                Players = [new Player { NosPlayer = player }]
+            })[0];
+            Require(obsAppearance.SkinSource is not null && obsAppearance.BodyMaskSource is not null &&
+                obsAssets.GetAsync(obsAppearance.SkinSource).GetAwaiter().GetResult()
+                    ?.StartsWith("data:image/png;base64,", StringComparison.Ordinal) == true &&
+                obsAssets.GetAsync(obsAppearance.BodyMaskSource).GetAwaiter().GetResult()
+                    ?.StartsWith("data:image/png;base64,", StringComparison.Ordinal) == true,
+                "OBS NoS skin or body mask transfer did not use the active rendered image");
+            obsAssets.Reset();
             MobileCosmetics.VerifyTransfer(contents, game, player);
             Require(contents.Image(parts[NosCosmeticPart.Skin], 2, 0, 0) is null, "Invalid NoS color was rendered");
             // Rendered layers stay within the byte budget, keeping the most recently used ones.

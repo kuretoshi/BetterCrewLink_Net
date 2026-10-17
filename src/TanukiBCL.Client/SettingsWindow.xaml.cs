@@ -73,8 +73,8 @@ public partial class SettingsWindow : Window
         radioOnlyBackup = settings.RadioOnlyBackup;
         MicrophoneCombo.ItemsSource = AudioDeviceSession.GetInputDevices();
         SpeakerCombo.ItemsSource = AudioDeviceSession.GetOutputDevices();
-        MicrophoneCombo.SelectedItem = ((IEnumerable<AudioDeviceInfo>)MicrophoneCombo.ItemsSource)
-            .FirstOrDefault(device => device.Name == settings.MicrophoneName) ?? MicrophoneCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
+        MicrophoneCombo.SelectedItem = AudioDeviceSelection.Choose(
+            MicrophoneCombo.Items.Cast<AudioDeviceInfo>(), settings.MicrophoneName, settings.MicrophoneDeviceId);
         SpeakerCombo.SelectedItem = ((IEnumerable<AudioDeviceInfo>)SpeakerCombo.ItemsSource)
             .FirstOrDefault(device => device.Name == settings.SpeakerName) ?? SpeakerCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
         OverlayAlwaysOnTopCheck.IsChecked = settings.AlwaysOnTop;
@@ -959,6 +959,7 @@ public partial class SettingsWindow : Window
             OldSampleDebug = OldSampleDebugCheck.IsChecked == true,
             HardwareAcceleration = HardwareAccelerationCheck.IsChecked == true,
             MicrophoneName = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Name,
+            MicrophoneDeviceId = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Id,
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,
             AlwaysOnTop = OverlayAlwaysOnTopCheck.IsChecked == true,
             EnableOverlay = EnableOverlayCheck.IsChecked == true,

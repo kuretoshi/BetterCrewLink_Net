@@ -95,11 +95,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private Dictionary<(int PlayerId, int ClientId), bool> tohImpostors = [];
     private int tohReportHostClientId;
     private DateTimeOffset lastTohLobbySentAt;
-    private DateTimeOffset lastTohRosterSentAt;
+    private string lastTohLobbySignature = string.Empty;
+    private string lastTohRosterSignature = string.Empty;
+    private readonly HashSet<string> tohRosterRecipients = [];
+    private volatile bool tohPeerNeedsSync;
     private readonly Dictionary<int, string> tohGameStartNames = [];
     private readonly Dictionary<int, string> tohLobbyNames = [];
     private readonly ConcurrentDictionary<string, (string Signature, DateTimeOffset SentAt)> tohRoleSent = new();
     private readonly ObsOverlayPayloadCache obsPayloadCache = new();
+    private string obsSecret = string.Empty;
 
     public VoiceServerProbe(ProbeOptions options, string label = "probe", bool receiveOnly = false,
         bool sendDiagnosticProbe = true)
@@ -127,6 +131,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             activeSctpAnswer: options.ActiveSctpAnswer);
         peerManager.PeerVerified += socketId =>
         {
+            tohPeerNeedsSync = true;
             Log("OK", $"P2P双方向通信成功 peer={socketId}");
             peerVerified.TrySetResult();
             if (IsCurrentHost)
@@ -310,17 +315,37 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     internal bool IsPeerSocketPresent(string socketId) => peerClientIds.ContainsKey(socketId);
 
     public void PublishObsOverlay(string? secret, AmongUsState state,
-        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio,
+        IReadOnlyList<ObsPlayerAppearance>? appearances = null, string? assetSession = null)
     {
         if (!socket.Connected || secret is not { Length: 9 } || state.Players.Count == 0 ||
             ((state.GameState is GameState.Unknown or GameState.Menu) &&
              state.OldGameState == state.GameState))
             return;
-        var data = obsPayloadCache.BuildIfChanged(secret, state, peers, localTalking, localUsingRadio);
+        Volatile.Write(ref obsSecret, secret);
+        var data = obsPayloadCache.BuildIfChanged(secret, state, peers, localTalking, localUsingRadio,
+            appearances, assetSession);
         if (data is null) return;
         _ = RunPeerOperationAsync(() => socket.EmitAsync("signal", new { to = secret, data = data.Value })
             .WaitAsync(lifetimeToken));
     }
+
+    public event Action<string, string[]>? ObsCosmeticsRequested;
+
+    public void SendObsCosmetic(string recipient, string source, string png)
+    {
+        if (!socket.Connected || string.IsNullOrEmpty(Volatile.Read(ref obsSecret)) ||
+            !IsObsSkinSource(source) || !png.StartsWith("data:image/png;base64,", StringComparison.Ordinal) ||
+            png.Length > 750_000) return;
+        _ = RunPeerOperationAsync(() => socket.EmitAsync("signal", new
+        {
+            to = recipient, data = new { type = "obs-cosmetic", source, png }
+        }).WaitAsync(lifetimeToken));
+    }
+
+    private static bool IsObsSkinSource(string source) => source.Length <= 512 &&
+        (source.StartsWith("nos-cosmetic://image/", StringComparison.Ordinal) ||
+         source.StartsWith("snr-cosmetic://skin/", StringComparison.Ordinal));
 
     private bool IsCurrentHost => currentGameState?.IsHost ?? options.IsHost;
 
@@ -476,7 +501,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             tohImpostors.Clear();
             tohReportHostClientId = state.HostId;
             lastTohLobbySentAt = default;
-            lastTohRosterSentAt = default;
+            lastTohLobbySignature = string.Empty;
+            lastTohRosterSignature = string.Empty;
+            tohRosterRecipients.Clear();
             tohGameStartNames.Clear();
             tohLobbyNames.Clear();
             tohRoleSent.Clear();
@@ -1115,7 +1142,23 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 return;
             }
 
-            var type = data.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : "other";
+            var type = data.ValueKind == JsonValueKind.Object &&
+                data.TryGetProperty("type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String
+                    ? typeElement.GetString() : "other";
+            if (type == "obs-cosmetics-request")
+            {
+                if (data.TryGetProperty("secret", out var requestSecret) &&
+                    requestSecret.ValueKind == JsonValueKind.String &&
+                    requestSecret.GetString() == Volatile.Read(ref obsSecret) &&
+                    data.TryGetProperty("sources", out var sources) && sources.ValueKind == JsonValueKind.Array &&
+                    sources.GetArrayLength() <= 4)
+                {
+                    var requested = sources.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String)
+                        .Select(item => item.GetString()!).Where(IsObsSkinSource).ToArray();
+                    if (requested.Length > 0) ObsCosmeticsRequested?.Invoke(remoteSocketId, requested);
+                }
+                return;
+            }
             if (type == "nos-host-voice")
             {
                 if (peerClientIds.TryGetValue(remoteSocketId, out var clientId) &&
@@ -1359,19 +1402,28 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     {
         if (!state.IsHost || state.GameState is GameState.Menu or GameState.Unknown ||
             state.LobbyCode is "" or "MENU") return;
+        if (tohPeerNeedsSync)
+        {
+            tohPeerNeedsSync = false;
+            lastTohLobbySentAt = default;
+            lastTohRosterSignature = string.Empty;
+        }
         var now = DateTimeOffset.UtcNow;
-        if (now - lastTohLobbySentAt >= TimeSpan.FromSeconds(1))
+        var enabled = state.Mod == AmongUsModType.TownOfHostForE;
+        var roleCatalog = enabled && TohRoleCatalog.IsValid(state.TohRoleCatalog)
+            ? state.TohRoleCatalog : [];
+        var lobbySignature = $"{state.LobbyCode}|{enabled}|{JsonSerializer.Serialize(roleCatalog)}";
+        if (TohSyncSchedule.ShouldSend(lobbySignature, lastTohLobbySignature, lastTohLobbySentAt, now))
         {
             var lobby = JsonSerializer.Serialize(new
             {
                 type = "toh4e-lobby", lobbyCode = state.LobbyCode,
-                enabled = state.Mod == AmongUsModType.TownOfHostForE,
-                roleCatalog = state.Mod == AmongUsModType.TownOfHostForE &&
-                    TohRoleCatalog.IsValid(state.TohRoleCatalog) ? state.TohRoleCatalog : []
+                enabled, roleCatalog
             }, LobbySettings.WireJsonOptions);
             foreach (var socketId in peerClientIds.Keys)
                 peerManager.TrySendPeerData(socketId, lobby);
             lastTohLobbySentAt = now;
+            lastTohLobbySignature = lobbySignature;
         }
         if (state.Mod != AmongUsModType.TownOfHostForE ||
             state.GameState is not (GameState.Tasks or GameState.Discussion)) return;
@@ -1379,20 +1431,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         foreach (var socketId in tohRoleSent.Keys)
             if (!peerClientIds.ContainsKey(socketId)) tohRoleSent.TryRemove(socketId, out _);
 
-        if (tohGameStartNames.Count > 0 &&
-            now - lastTohRosterSentAt >= TimeSpan.FromSeconds(1))
+        if (tohGameStartNames.Count > 0)
         {
-            var roster = JsonSerializer.Serialize(new
-            {
-                type = "toh4e-roster", lobbyCode = state.LobbyCode,
-                players = tohGameStartNames.Select(pair => new
-                {
-                    clientId = pair.Key, name = pair.Value
-                }).ToArray()
-            });
-            foreach (var socketId in peerClientIds.Keys)
-                peerManager.TrySendPeerData(socketId, roster);
-            lastTohRosterSentAt = now;
+            SendTohRosterIfNeeded(state);
         }
 
         foreach (var (socketId, clientId) in peerClientIds)
@@ -1406,12 +1447,33 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 candidate.Id, candidate.ClientId, IsImpostor = TohRoleCatalog.IsImpostor(candidate)
             });
             var signature = $"{state.LobbyCode}|{player.Id}|{JsonSerializer.Serialize(role)}|{JsonSerializer.Serialize(impostors)}";
-            if (tohRoleSent.TryGetValue(socketId, out var sent) && sent.Signature == signature &&
-                now - sent.SentAt < TimeSpan.FromSeconds(1)) continue;
+            if (tohRoleSent.TryGetValue(socketId, out var sent) &&
+                !TohSyncSchedule.ShouldSend(signature, sent.Signature, sent.SentAt, now)) continue;
             var payload = TohRoleWire.Serialize(state.LobbyCode, player, state.Players);
             if (peerManager.TrySendPeerData(socketId, payload))
                 tohRoleSent[socketId] = (signature, now);
         }
+    }
+
+    private void SendTohRosterIfNeeded(AmongUsState state)
+    {
+        var roster = JsonSerializer.Serialize(new
+        {
+            type = "toh4e-roster", lobbyCode = state.LobbyCode,
+            players = tohGameStartNames.Select(pair => new
+            {
+                clientId = pair.Key, name = pair.Value
+            }).ToArray()
+        });
+        if (roster != lastTohRosterSignature)
+        {
+            lastTohRosterSignature = roster;
+            tohRosterRecipients.Clear();
+        }
+        tohRosterRecipients.RemoveWhere(socketId => !peerClientIds.ContainsKey(socketId));
+        foreach (var socketId in peerClientIds.Keys)
+            if (!tohRosterRecipients.Contains(socketId) && peerManager.TrySendPeerData(socketId, roster))
+                tohRosterRecipients.Add(socketId);
     }
 
     private void ApplyTohReport(int clientId, JsonElement data)

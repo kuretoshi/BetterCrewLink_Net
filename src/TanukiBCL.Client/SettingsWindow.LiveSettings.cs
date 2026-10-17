@@ -59,7 +59,8 @@ public partial class SettingsWindow
         BindToggle(ObsOverlayCheck, nameof(ClientSettings.ObsOverlay), nameof(ClientSettings.ObsSecret));
         foreach (var radio in new[] { VoiceModeRadio, PushToTalkModeRadio, PushToMuteModeRadio })
             radio.Click += (_, _) => ApplyControls(true, nameof(ClientSettings.PushToTalkMode));
-        MicrophoneCombo.SelectionChanged += (_, _) => ApplyControls(true, nameof(ClientSettings.MicrophoneName));
+        MicrophoneCombo.SelectionChanged += (_, _) => ApplyControls(true,
+            nameof(ClientSettings.MicrophoneName), nameof(ClientSettings.MicrophoneDeviceId));
         SpeakerCombo.SelectionChanged += (_, _) => ApplyControls(true, nameof(ClientSettings.SpeakerName));
         OverlayPositionCombo.SelectionChanged += (_, _) => ApplyControls(true, nameof(ClientSettings.OverlayPosition));
         ServerUrlBox.SelectionChanged += (_, _) =>

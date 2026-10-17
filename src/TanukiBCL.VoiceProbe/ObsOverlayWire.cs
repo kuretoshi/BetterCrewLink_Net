@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
@@ -8,6 +9,10 @@ internal readonly record struct ObsPeerState(bool Connected, bool Talking, bool 
 
 internal static class ObsOverlayWire
 {
+    private static readonly JsonSerializerOptions ReferenceJsonOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
     private static readonly string[][] DefaultPlayerColors =
     [
         ["#C51111", "#7A0838"], ["#132ED1", "#09158E"], ["#117F2D", "#0A4D2E"],
@@ -17,18 +22,23 @@ internal static class ObsOverlayWire
     ];
 
     public static JsonElement Build(AmongUsState state,
-        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
-        => JsonSerializer.SerializeToElement(CreatePayload(state, peers, localTalking, localUsingRadio));
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio,
+        IReadOnlyList<ObsPlayerAppearance>? appearances = null, string? assetSession = null)
+        => JsonSerializer.SerializeToElement(CreatePayload(state, peers, localTalking, localUsingRadio,
+            appearances, assetSession), ReferenceJsonOptions);
 
     public static void Write(Utf8JsonWriter writer, AmongUsState state,
-        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio,
+        IReadOnlyList<ObsPlayerAppearance>? appearances = null, string? assetSession = null)
     {
         writer.WriteStartObject();
+        if (assetSession is not null) writer.WriteString("assetSession", assetSession);
         writer.WriteStartObject("overlayState");
         writer.WriteNumber("gameState", (int)state.GameState);
         writer.WriteStartArray("players");
-        foreach (var player in state.Players)
-            WritePlayer(writer, state, player, peers, localUsingRadio);
+        for (var index = 0; index < state.Players.Count; index++)
+            WritePlayer(writer, state, state.Players[index], peers, localUsingRadio,
+                appearances is not null && index < appearances.Count ? appearances[index] : null);
         writer.WriteEndArray();
         writer.WriteEndObject();
         WriteClientMap(writer, "otherTalking", state.Players, peers, talking: true);
@@ -41,7 +51,7 @@ internal static class ObsOverlayWire
     }
 
     private static void WritePlayer(Utf8JsonWriter writer, AmongUsState state, Player player,
-        IReadOnlyDictionary<int, ObsPeerState> peers, bool localUsingRadio)
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localUsingRadio, ObsPlayerAppearance? appearance)
     {
         var hasPeer = peers.TryGetValue(player.ClientId, out var peer);
         writer.WriteStartObject();
@@ -50,10 +60,12 @@ internal static class ObsOverlayWire
         writer.WriteBoolean("inVent", player.InVent);
         writer.WriteBoolean("isDead", player.IsDead);
         writer.WriteString("name", player.Name);
-        writer.WriteString("hatId", player.HatId);
+        writer.WriteString("hatId", appearance?.HatId ?? player.HatId);
         writer.WriteNumber("petId", player.PetId);
-        writer.WriteString("skinId", player.SkinId);
-        writer.WriteString("visorId", player.VisorId);
+        writer.WriteString("skinId", appearance?.SkinId ?? player.SkinId);
+        if (appearance?.SkinSource is { } skinSource) writer.WriteString("skinSource", skinSource);
+        if (appearance?.BodyMaskSource is { } bodyMaskSource) writer.WriteString("bodyMaskSource", bodyMaskSource);
+        writer.WriteString("visorId", appearance?.VisorId ?? player.VisorId);
         writer.WriteBoolean("disconnected", player.Disconnected);
         writer.WriteBoolean("isLocal", player.IsLocal);
         writer.WriteBoolean("bugged", player.Bugged);
@@ -121,11 +133,13 @@ internal static class ObsOverlayWire
     }
 
     private static object CreatePayload(AmongUsState state,
-        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio)
+        IReadOnlyDictionary<int, ObsPeerState> peers, bool localTalking, bool localUsingRadio,
+        IReadOnlyList<ObsPlayerAppearance>? appearances, string? assetSession)
     {
         var local = state.Players.FirstOrDefault(player => player.IsLocal);
-        var playerStates = state.Players.Select(player =>
+        var playerStates = state.Players.Select((player, index) =>
         {
+            var appearance = appearances is not null && index < appearances.Count ? appearances[index] : null;
             var hasPeer = peers.TryGetValue(player.ClientId, out var peer);
             var data = new Dictionary<string, object?>
             {
@@ -134,16 +148,18 @@ internal static class ObsOverlayWire
                 ["inVent"] = player.InVent,
                 ["isDead"] = player.IsDead,
                 ["name"] = player.Name,
-                ["hatId"] = player.HatId,
+                ["hatId"] = appearance?.HatId ?? player.HatId,
                 ["petId"] = player.PetId,
-                ["skinId"] = player.SkinId,
-                ["visorId"] = player.VisorId,
-                ["disconnected"] = player.Disconnected,
-                ["isLocal"] = player.IsLocal,
-                ["bugged"] = player.Bugged,
-                ["usingRadio"] = player.IsLocal ? localUsingRadio : hasPeer && peer.UsingRadio,
-                ["connected"] = hasPeer && peer.Connected
+                ["skinId"] = appearance?.SkinId ?? player.SkinId
             };
+            if (appearance?.SkinSource is { } skinSource) data["skinSource"] = skinSource;
+            if (appearance?.BodyMaskSource is { } bodyMaskSource) data["bodyMaskSource"] = bodyMaskSource;
+            data["visorId"] = appearance?.VisorId ?? player.VisorId;
+            data["disconnected"] = player.Disconnected;
+            data["isLocal"] = player.IsLocal;
+            data["bugged"] = player.Bugged;
+            data["usingRadio"] = player.IsLocal ? localUsingRadio : hasPeer && peer.UsingRadio;
+            data["connected"] = hasPeer && peer.Connected;
             if (state.Mod == AmongUsModType.NebulaOnTheShip)
             {
                 if (NosColor.For(player) is { } nosColor) data["nosColor"] = nosColor;
@@ -166,6 +182,7 @@ internal static class ObsOverlayWire
         }).ToArray();
         var payload = new
         {
+            assetSession,
             overlayState = new { gameState = (int)state.GameState, players = playerStates },
             otherTalking = state.Players.Where(player => !player.IsLocal)
                 .GroupBy(player => player.ClientId)

@@ -22,6 +22,8 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly Action<double, bool>? onVoiceRoleSample;
     private long lastVoiceRoleSampleAt;
     private readonly MicrophoneProcessor microphoneProcessor;
+    private readonly bool autoGainControl;
+    private readonly MicrophoneGate microphoneGate = new();
     private MicrophoneCaptureConverter captureConverter;
     private readonly TanukiVoiceActivityDetector voiceDetector = new();
     private bool? lastVadState;
@@ -58,6 +60,7 @@ internal sealed class AudioDeviceSession : IDisposable
         this.onCaptured = onCaptured;
         this.onVadChanged = onVadChanged;
         this.onVoiceRoleSample = onVoiceRoleSample;
+        this.autoGainControl = autoGainControl;
         microphoneProcessor = new MicrophoneProcessor(echoCancellation, noiseSuppression, autoGainControl);
         var inputRate = MicrophoneCaptureRate.Choose(inputDevice, oldSampleDebug);
         captureConverter = new MicrophoneCaptureConverter(inputRate);
@@ -185,16 +188,16 @@ internal sealed class AudioDeviceSession : IDisposable
 
     public void SetMicrophoneGain(double gainPercent)
     {
-        microphoneGain = (float)Math.Clamp(gainPercent / 100d, 0d, 3d);
+        microphoneGain = autoGainControl ? 1f : (float)Math.Clamp(gainPercent / 100d, 0d, 3d);
     }
 
     public void SetMicrophoneSensitivity(bool enabled, double minimumNoiseLevel)
     {
         lock (voiceDetector)
         {
-            voiceDetector.SetMinimumNoiseLevel(enabled ? minimumNoiseLevel : 0.15d);
+            voiceDetector.SetMinimumNoiseLevel(enabled && !autoGainControl ? minimumNoiseLevel : 0.15d);
         }
-        microphoneSensitivityEnabled = enabled;
+        microphoneSensitivityEnabled = enabled && !autoGainControl;
     }
 
     public void SetMicrophoneActivationMode(MicrophoneActivationMode mode)
@@ -370,10 +373,7 @@ internal sealed class AudioDeviceSession : IDisposable
         }
         var audioAllowed = MicrophoneActivationPolicy.AllowsAudio(activationMode, pushToTalkPressed,
             microphoneMuted, deafened, jammed || radioPending);
-        if (!audioAllowed || (sensitivityEnabled && !talking))
-        {
-            Array.Clear(buffer);
-        }
+        microphoneGate.Apply(buffer, audioAllowed, sensitivityEnabled, talking);
         var transmittedTalking = audioAllowed && talking;
         if (lastVadState != transmittedTalking)
         {

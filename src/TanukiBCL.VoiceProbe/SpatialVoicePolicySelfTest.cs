@@ -159,6 +159,7 @@ internal static class SpatialVoicePolicySelfTest
             ObsWriterMatchesReference(new AmongUsState { GameState = GameState.Menu },
                 new Dictionary<int, ObsPeerState>(), false, false));
         var obsCache = new ObsOverlayPayloadCache();
+        TohSyncSchedule.Verify();
         var obsPeers = new Dictionary<int, ObsPeerState> { [2] = new(true, true, true) };
         var firstObs = obsCache.BuildIfChanged("ABC123XYZ", obsState, obsPeers, true, true);
         Check("OBS: repeated payload is not rebuilt", true,
@@ -170,6 +171,31 @@ internal static class SpatialVoicePolicySelfTest
             changedObs?.GetProperty("otherTalking").GetProperty("2").GetBoolean() == false);
         Check("OBS: secret change sends unchanged state", true,
             obsCache.BuildIfChanged("XYZ123ABC", obsState, obsPeers, true, true) is not null);
+        var customAppearance = new[]
+        {
+            new ObsPlayerAppearance("hat_A", "skin_B", "visor_C", "snr-cosmetic://skin/skin_B"),
+            new ObsPlayerAppearance("hat_D", "skin_E", "visor_F", "nos-cosmetic://image/skin",
+                "nos-cosmetic://image/mask")
+        };
+        var customObs = ObsOverlayWire.Build(obsState, obsPeers, true, true, customAppearance, "ABCDEF:NoS");
+        var customBuffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(customBuffer))
+            ObsOverlayWire.Write(writer, obsState, obsPeers, true, true, customAppearance, "ABCDEF:NoS");
+        using var customStream = JsonDocument.Parse(customBuffer.WrittenMemory);
+        Check("OBS: 3.2.32 skin sources, body mask and session match streamed JSON", true,
+            customStream.RootElement.GetRawText() == customObs.GetRawText() &&
+            customObs.GetProperty("assetSession").GetString() == "ABCDEF:NoS" &&
+            customObs.GetProperty("overlayState").GetProperty("players")[1]
+                .GetProperty("bodyMaskSource").GetString() == "nos-cosmetic://image/mask");
+        var refreshCache = new ObsOverlayPayloadCache();
+        var refreshAt = DateTimeOffset.UtcNow;
+        Check("OBS: unchanged state refreshes for browser reload after five seconds", true,
+            refreshCache.BuildIfChanged("ABC123XYZ", obsState, obsPeers, true, true,
+                customAppearance, "ABCDEF:NoS", refreshAt) is not null &&
+            refreshCache.BuildIfChanged("ABC123XYZ", obsState, obsPeers, true, true,
+                customAppearance, "ABCDEF:NoS", refreshAt.AddSeconds(4)) is null &&
+            refreshCache.BuildIfChanged("ABC123XYZ", obsState, obsPeers, true, true,
+                customAppearance, "ABCDEF:NoS", refreshAt.AddSeconds(5)) is not null);
         obsCache.Reset();
         Check("OBS: reconnection resends unchanged state", true,
             obsCache.BuildIfChanged("XYZ123ABC", obsState, obsPeers, true, true) is not null);

@@ -22,6 +22,7 @@ internal sealed class ClientSettings
     public string Language { get; set; } = "ja";
     public List<string> ServerUrls { get; set; } = ["https://bettercrewl.ink"];
     public string? MicrophoneName { get; set; }
+    public int? MicrophoneDeviceId { get; set; }
     public string? SpeakerName { get; set; }
     public bool AlwaysOnTop { get; set; }
     public bool EnableOverlay { get; set; }
@@ -102,6 +103,7 @@ internal sealed class ClientSettings
         GhostVolumeAsImpostor = Math.Clamp(GhostVolumeAsImpostor, 0, 100);
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);
         MicSensitivity = double.IsFinite(MicSensitivity) ? Math.Clamp(MicSensitivity, 0d, 1d) : 0.15d;
+        if (MicrophoneDeviceId < 0) MicrophoneDeviceId = null;
         if (!Enum.IsDefined(PushToTalkMode)) PushToTalkMode = MicrophoneActivationMode.Voice;
         if (OverlayPosition is not ("hidden" or "top" or "bottom_left" or "right" or
             "right1" or "left" or "left1")) OverlayPosition = "right";

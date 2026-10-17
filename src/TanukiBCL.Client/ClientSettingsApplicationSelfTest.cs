@@ -23,6 +23,7 @@ internal static class ClientSettingsApplicationSelfTest
         {
             settings => settings.ServerUrl = "https://example.invalid",
             settings => settings.MicrophoneName = "another mic",
+            settings => settings.MicrophoneDeviceId = 2,
             settings => settings.SpeakerName = "another speaker",
             settings => settings.EchoCancellation = false,
             settings => settings.NoiseSuppression = false,

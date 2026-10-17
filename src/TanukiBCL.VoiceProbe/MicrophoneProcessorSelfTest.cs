@@ -9,6 +9,7 @@ public static class MicrophoneProcessorSelfTest
         try
         {
             VerifyDisabled();
+            MicrophoneGate.Verify();
             VerifyCaptureFraming();
             VerifyCaptureRateConversion();
             VerifyPlaybackBufferReuse();

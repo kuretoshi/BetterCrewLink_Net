@@ -1,8 +1,10 @@
 # タヌキのベタクル .NET ベータ (TanukiBCL.Net)
 
-TanukiBCL.Netは、[タヌキのベタクル v3.2.31](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.31)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
+TanukiBCL.Netは、[タヌキのベタクル v3.2.32](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.32)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
 
 現在の配布版は **`3.2.31-net-beta.3`（プレリリース）** です。公式タヌキのベタクルとの通信・音声・ゲーム連動の主要経路は実機で相互確認しています。人数と表示領域に応じてアバター一覧のサイズを自動調整し、設定画面の不要な再読込を削減しました。.NET版の報告はこのリポジトリのIssuesへ作成します。音声・追加役職の細部は引き続きベータテスト対象です。64ビット版Among Usのみ対応します。
+
+ソース上の開発版は `3.2.32-net-beta.1` です。3.2.32対応は反映中で、まだ配布していません。
 
 ## 主な機能
 
@@ -45,7 +47,7 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.31](https://github.com/kuretos
 
 ## 開発・検証
 
-現在の完全移植目標は公式TanukiBCL v3.2.31です。[3.2.31互換チェックリスト](docs/compatibility-3.2.31.md)に今回の反映内容と確認状況を記録しています。[3.2.30互換チェックリスト](docs/compatibility-3.2.30.md)以前の資料は履歴です。
+現在の完全移植目標は公式TanukiBCL v3.2.32です。[3.2.32互換チェックリスト](docs/compatibility-3.2.32.md)に今回の反映内容と確認状況を記録しています。[3.2.31互換チェックリスト](docs/compatibility-3.2.31.md)以前の資料は履歴です。
 
 以下は開発時の診断コマンドと作り直し初期からの検証メモです。配布版の利用には必要ありません。
 

@@ -89,6 +89,7 @@ public partial class App : Application
                     CosmeticCatalog.Verify();
                     SnrCosmeticCatalog.Verify();
                     SnrLocalCosmetics.Verify();
+                    ObsSkinAssets.VerifySnrTransfer();
                     CosmeticImages.VerifyCache();
                     PlayerAvatar.VerifyCosmeticLayers();
                     NosCosmeticContents.Verify();
@@ -103,6 +104,7 @@ public partial class App : Application
                 if (e.Args.Contains("--overlay-self-test")) OverlayWindow.VerifyRender();
                 if (e.Args.Contains("--settings-self-test"))
                 {
+                    AudioDeviceSelection.Verify();
                     DeveloperDebugAuth.VerifyParity();
                     DebugInfoWindow.VerifyUi();
                     PublicLobbyBrowserWindow.VerifyUi();
