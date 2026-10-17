@@ -2,7 +2,8 @@ using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
 
-internal sealed record OverlayPeerStatus(bool Connected, bool VoiceActive, bool UsingRadio);
+internal sealed record OverlayPeerStatus(bool Connected, bool VoiceActive, bool UsingRadio,
+    bool Audible = true);
 
 internal sealed record OverlayPlayer(Player Player, bool VoiceActive, bool Talking,
     bool UsingRadio);
@@ -31,7 +32,8 @@ internal static class OverlaySelection
             if (!player.IsLocal && peer?.Connected != true) continue;
             var vadHidden = player.ShiftedColor >= 0 && state.GameState != GameState.Discussion;
             var active = (!vadHidden || player.IsLocal) &&
-                (player.IsLocal ? localTalking && !microphoneMuted : peer?.VoiceActive == true);
+                (player.IsLocal ? localTalking && !microphoneMuted : peer?.VoiceActive == true &&
+                    (state.GameState != GameState.Tasks || peer.Audible));
             if (compact && !active) continue;
             result.Add(new OverlayPlayer(player, active, active && !player.InVent,
                 player.IsLocal ? localUsingRadio : peer?.UsingRadio == true));

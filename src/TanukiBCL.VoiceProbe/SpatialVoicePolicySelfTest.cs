@@ -29,6 +29,31 @@ internal static class SpatialVoicePolicySelfTest
             [2] = new(true, true, false), [3] = new(true, true, false)
         };
         var overlayPlayers = OverlaySelection.Select(overlayState, overlayPeers, false, false, true);
+        var proximityState = new AmongUsState { GameState = GameState.Tasks, Players =
+        [
+            new Player { Id = 0, ClientId = 1, IsLocal = true },
+            new Player { Id = 1, ClientId = 2 },
+            new Player { Id = 2, ClientId = 3 }
+        ] };
+        var proximityPeers = new Dictionary<int, OverlayPeerStatus>
+        {
+            [2] = new(true, true, false, true),
+            [3] = new(true, true, false, false)
+        };
+        Check("overlay: tasks only audible speakers glow", true,
+            OverlaySelection.Select(proximityState, proximityPeers, false, false, false)
+                .Where(entry => entry.Talking).Select(entry => entry.Player.ClientId).SequenceEqual([2]));
+        Check("overlay: compact excludes distant active speakers", true,
+            OverlaySelection.Select(proximityState, proximityPeers, false, false, true)
+                .Select(entry => entry.Player.ClientId).SequenceEqual([2]));
+        proximityPeers[3] = new(true, true, false, true);
+        Check("overlay: approaching speaker becomes visible", true,
+            OverlaySelection.Select(proximityState, proximityPeers, false, false, true).Count == 2);
+        proximityPeers[3] = new(true, true, false, false);
+        proximityState.GameState = GameState.Discussion;
+        Check("overlay: discussion retains VAD regardless of task proximity", true,
+            OverlaySelection.Select(proximityState, proximityPeers, false, false, false)
+                .Single(entry => entry.Player.ClientId == 3).Talking);
         Check("overlay: local radio enabled without forcing VAD", true,
             OverlaySelection.Select(overlayState, overlayPeers, false, false, false, true)
                 .Single(entry => entry.Player.IsLocal) is { UsingRadio: true, VoiceActive: false });
