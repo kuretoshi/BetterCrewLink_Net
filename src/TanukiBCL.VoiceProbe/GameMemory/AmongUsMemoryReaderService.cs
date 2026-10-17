@@ -450,6 +450,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             TohRoleCatalog = mod == AmongUsModType.TownOfHostForE
                 ? tohReader.RoleCatalog.ToList() : [],
             NosLocalMicPosition = nos?.LocalMicPosition,
+            NosDyingVoices = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
+                ? NosVoiceRoleStateReader.ReadDyingVoices(currentProcess.ProcessId,
+                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosRadios = nos?.Radios ?? [],
             NosMegaphones = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Tasks
                 ? NosVoiceRoleStateReader.ReadMegaphones(currentProcess.ProcessId,

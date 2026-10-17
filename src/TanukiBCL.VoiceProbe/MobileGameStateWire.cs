@@ -39,6 +39,8 @@ internal static class MobileGameStateWire
         return new
         {
             gameState = game,
+            nosVoiceFrameTime = state.Mod == AmongUsModType.NebulaOnTheShip
+                ? (long?)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() : null,
             activeLobbySettings = JsonSerializer.SerializeToNode(settings.Normalize(), Options),
             nosCosmeticAssets = cosmetics?.Assets
         };

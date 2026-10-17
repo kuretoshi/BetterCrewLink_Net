@@ -158,6 +158,7 @@ internal sealed class AudioDeviceSession : IDisposable
                 {
                     peer.DeathEcho.Stop();
                     peer.MegaphoneRecording.Cancel();
+                    peer.DyingVoiceRecording.Cancel();
                 }
             localMegaphoneRecording.Cancel();
         }
@@ -221,6 +222,7 @@ internal sealed class AudioDeviceSession : IDisposable
 
         var peer = GetOrCreatePeerPlayback(peerId);
         peer.MegaphoneRecording.RecordStereoPcm16(stereoPcm);
+        peer.DyingVoiceRecording.RecordStereoPcm16(stereoPcm);
         lock (peer.PlaybackWriteGate)
             AddPlaybackSamples(peer.Buffer, stereoPcm, ref peer.PlaybackScratch);
     }
@@ -275,6 +277,19 @@ internal sealed class AudioDeviceSession : IDisposable
     public void UpdateLocalMegaphoneRecording(NosMegaphoneState? entry, bool active) =>
         localMegaphoneRecording.Update(entry, active && !deafened, 1d);
 
+    public void UpdatePeerDyingVoice(string peerId, NosDyingVoiceState? entry, bool active, bool near, double volume)
+    {
+        var peer = GetOrCreatePeerPlayback(peerId);
+        peer.DyingVoiceRecording.Update(entry, active && !deafened, near, deafened ? 0d : volume,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
+
+    public void ClearDyingVoiceRecordings()
+    {
+        lock (playbackGate)
+            foreach (var peer in peerPlayback.Values) peer.DyingVoiceRecording.Cancel();
+    }
+
     public void UpdatePeerMegaphoneRecording(string peerId, NosMegaphoneState? entry,
         bool active, double volume)
     {
@@ -289,8 +304,10 @@ internal sealed class AudioDeviceSession : IDisposable
             if (peerPlayback.Remove(peerId, out var peer))
             {
                 peer.MegaphoneRecording.Cancel();
+                peer.DyingVoiceRecording.Cancel();
                 playbackMixer.RemoveMixerInput(peer.RadioEcho);
                 playbackMixer.RemoveMixerInput(peer.MegaphoneRecording);
+                playbackMixer.RemoveMixerInput(peer.DyingVoiceRecording);
             }
         }
     }
@@ -327,12 +344,14 @@ internal sealed class AudioDeviceSession : IDisposable
             var starEcho = new RadioEchoSampleProvider(ghostReverb, 0.075d, 0.94f, 0.08f, 0.08f);
             var radioEcho = new RadioEchoSampleProvider(starEcho);
             var megaphoneRecording = new NosMegaphoneRecording();
+            var dyingVoiceRecording = new NosDyingVoiceRecording();
             var created = new PeerPlayback(buffer, nosSizeEffect, muffle, fixerLowpass, radioHighPass,
                 cameraMuffle, panning, volume, deathEcho, ghostReverb, starEcho, radioEcho,
-                megaphoneRecording);
+                megaphoneRecording, dyingVoiceRecording);
             peerPlayback[peerId] = created;
             playbackMixer.AddMixerInput(radioEcho);
             playbackMixer.AddMixerInput(megaphoneRecording);
+            playbackMixer.AddMixerInput(dyingVoiceRecording);
             return created;
         }
     }
@@ -479,6 +498,8 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         disposed = true;
+        lock (playbackGate)
+            foreach (var peer in peerPlayback.Values) peer.DyingVoiceRecording.Cancel();
         capture.DataAvailable -= OnDataAvailable;
         try { capture.StopRecording(); }
         finally { DisposePlaybackAndCapture(); }
@@ -526,7 +547,8 @@ internal sealed class AudioDeviceSession : IDisposable
         GhostReverbSampleProvider GhostReverb,
         RadioEchoSampleProvider StarEcho,
         RadioEchoSampleProvider RadioEcho,
-        NosMegaphoneRecording MegaphoneRecording)
+        NosMegaphoneRecording MegaphoneRecording,
+        NosDyingVoiceRecording DyingVoiceRecording)
     {
         internal readonly object PlaybackWriteGate = new();
         internal byte[]? PlaybackScratch;

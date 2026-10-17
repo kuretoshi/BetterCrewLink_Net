@@ -523,6 +523,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             lastMobileFrameSentAt = default;
         }
         currentGameState = state;
+        if (state.Mod != AmongUsModType.NebulaOnTheShip || state.GameState is not (GameState.Tasks or GameState.Discussion))
+            audioSession?.ClearDyingVoiceRecordings();
         var localPlayer = state.Players.FirstOrDefault(player => player.IsLocal);
         audioSession?.UpdateLocalMegaphoneRecording(
             state.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == localPlayer?.Id),
@@ -2018,6 +2020,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             var ownClientMix = new PeerVoiceMix(0d, 0d, 0d, "same-client");
             audioSession?.SetPeerMix(socketId, ownClientMix);
             audioSession?.UpdatePeerMegaphoneRecording(socketId, null, false, 0d);
+            audioSession?.UpdatePeerDyingVoice(socketId, null, false, false, 0d);
             PeerMixChanged?.Invoke(clientId, ownClientMix);
             return;
         }
@@ -2029,6 +2032,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             var unmappedMix = new PeerVoiceMix(0d, 0d, 0d, "unmapped-player");
             audioSession?.SetPeerMix(socketId, unmappedMix);
             audioSession?.UpdatePeerMegaphoneRecording(socketId, null, false, 0d);
+            audioSession?.UpdatePeerDyingVoice(socketId, null, false, false, 0d);
             PeerMixChanged?.Invoke(clientId, unmappedMix);
             return;
         }
@@ -2054,6 +2058,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
             currentGameState.GameState == GameState.Tasks && !other.Disconnected,
             playerConfig.IsMuted ? 0d : playerConfig.Volume);
+        var dyingVoice = currentGameState.NosDyingVoices.FirstOrDefault(entry => entry.PlayerId == other.Id);
+        audioSession?.UpdatePeerDyingVoice(socketId, dyingVoice,
+            currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
+            currentGameState.GameState is GameState.Tasks or GameState.Discussion &&
+            other.IsDead && !other.Disconnected && !playerConfig.IsMuted,
+            NosDyingVoiceRecording.InRange(dyingVoice, me, currentGameState.GameState), playerConfig.Volume);
         PeerMixChanged?.Invoke(clientId, mix);
     }
 

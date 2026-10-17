@@ -18,6 +18,7 @@ internal static class VoiceRoleReleaseSelfTest
         VerifyDeathEcho(check);
         VerifyMegaphoneRecording(check);
         VerifyMegaphoneBuffering(check);
+        DyingVoiceSelfTest.Verify(check);
         VerifyNosRadioGap(check);
     }
 
