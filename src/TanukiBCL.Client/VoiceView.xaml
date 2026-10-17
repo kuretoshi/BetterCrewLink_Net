@@ -165,7 +165,7 @@
                     Background="Transparent" Foreground="#CE93D8"
                     Click="PublicLobbyButton_Click" />
             <ScrollViewer x:Name="OtherPlayersScroll" Visibility="Collapsed"
-                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled"
                           SizeChanged="OtherPlayersScroll_SizeChanged"
                           ScrollChanged="OtherPlayersScroll_ScrollChanged"
                           Margin="0,4,0,0">

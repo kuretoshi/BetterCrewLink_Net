@@ -21,6 +21,7 @@ public partial class SettingsWindow : Window
     private readonly ClientSettings settings;
     private readonly ObservableCollection<string> serverUrlDrafts = [];
     private bool lobbySettingsEditable;
+    private int lobbyControlsLoadCount;
     private readonly ClientSettingsTransaction settingsTransaction;
     private readonly DispatcherTimer lobbyCommitTimer = new() { Interval = TimeSpan.FromMilliseconds(750) };
     private bool settingsReady;
@@ -163,7 +164,8 @@ public partial class SettingsWindow : Window
         var wasEditable = lobbySettingsEditable;
         lobbySettingsEditable = state is not { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
-        if (wasEditable != lobbySettingsEditable || showingCurrentLobby) ShowSelectedLobbySettings();
+        if (wasEditable != lobbySettingsEditable || showingCurrentLobby)
+            ShowSelectedLobbySettings(reloadControls: wasEditable != lobbySettingsEditable);
         else UpdateLobbyNotice();
         UpdateModSettingsVisibility();
         UpdateShortcutLabels();
@@ -667,7 +669,7 @@ public partial class SettingsWindow : Window
         ShowSelectedLobbySettings();
     }
 
-    private void ShowSelectedLobbySettings()
+    private void ShowSelectedLobbySettings(bool reloadControls = true)
     {
         UpdateModSettingsVisibility();
         var lobbyCode = currentGameState?.LobbyCode;
@@ -680,9 +682,10 @@ public partial class SettingsWindow : Window
         NoLobbyText.Visibility = showingCurrentLobby && !inLobby ? Visibility.Visible : Visibility.Collapsed;
         LobbyNotice.Visibility = showingCurrentLobby && !inLobby ? Visibility.Collapsed : Visibility.Visible;
         LobbyHostPanel.Visibility = showingCurrentLobby && inLobby ? Visibility.Visible : Visibility.Collapsed;
+        var becameVisible = value is not null && LobbyControlsPanel.Visibility != Visibility.Visible;
         LobbyControlsPanel.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
-        if (value is not null) LoadLobbyControls(value);
+        if (value is not null && (reloadControls || becameVisible)) LoadLobbyControls(value);
     }
 
     private void UpdateLobbyNotice()
@@ -820,6 +823,7 @@ public partial class SettingsWindow : Window
 
     private void LoadLobbyControls(LobbySettings value)
     {
+        lobbyControlsLoadCount++;
         loadingLobbyControls = true;
         DistanceSlider.Value = value.MaxDistance;
         WallsBlockAudioCheck.IsChecked = value.WallsBlockAudio;
@@ -1074,6 +1078,7 @@ public partial class SettingsWindow : Window
         SettingsConfirmDialog.VerifyBehavior();
         VerifyImmediateSettings();
         VerifyResetDefaults();
+        VerifyStableLobbyUpdates();
         var lobby = new LobbySettings
         {
             SnrJumboVoice = true, JackalHaunting = true, JackalRadioEnabled = true,

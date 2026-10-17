@@ -477,20 +477,26 @@ public partial class VoiceView : UserControl
         ApplyPlayerLayout();
     }
 
-    private static (int Columns, double AvatarSize) CalculatePlayerLayout(double gridWidth, int playerCount)
+    private static (int Columns, double AvatarSize) CalculatePlayerLayout(double gridWidth, double gridHeight, int playerCount)
     {
-        var columns = Math.Max(1, Math.Min(12, Math.Min(Math.Max(3, playerCount),
-            (int)Math.Floor((gridWidth + 8d) / 72d))));
-        return (columns, Math.Min(100d, Math.Max(1d, gridWidth / columns - 8d)));
+        var best = (Columns: 1, AvatarSize: 0d);
+        for (var columns = 1; columns <= Math.Min(12, Math.Max(1, playerCount)); columns++)
+        {
+            var rows = Math.Max(1, (int)Math.Ceiling((double)playerCount / columns));
+            var size = Math.Min(100d, Math.Min(gridWidth / columns, gridHeight / rows) - 8d);
+            if (size > best.AvatarSize) best = (columns, size);
+        }
+        return (best.Columns, Math.Max(1d, best.AvatarSize));
     }
 
     private void ApplyPlayerLayout()
     {
         var viewport = OtherPlayersScroll.ViewportWidth > 0d
             ? OtherPlayersScroll.ViewportWidth : OtherPlayersScroll.ActualWidth;
-        var gridWidth = viewport > 0d ? Math.Max(72d, viewport - 48d) : 225d;
-        var (columns, avatarSize) = CalculatePlayerLayout(gridWidth, remoteAvatars.Count);
-        OtherPlayersPanel.Width = (avatarSize + 8d) * columns;
+        var gridWidth = viewport > 0d ? Math.Max(1d, viewport - 48d) : 225d;
+        var gridHeight = Math.Max(1d, OtherPlayersScroll.ActualHeight - 1d);
+        var (columns, avatarSize) = CalculatePlayerLayout(gridWidth, gridHeight, remoteAvatars.Count);
+        OtherPlayersPanel.Width = (avatarSize + 8d) * columns + 0.01d;
         foreach (var avatar in remoteAvatars.Values)
             avatar.Width = avatar.Height = avatarSize;
     }
@@ -499,7 +505,8 @@ public partial class VoiceView : UserControl
 
     private void OtherPlayersScroll_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        if (Math.Abs(e.ViewportWidthChange) > 0.5d) ApplyPlayerLayout();
+        if (Math.Abs(e.ViewportWidthChange) > 0.5d || Math.Abs(e.ViewportHeightChange) > 0.5d)
+            ApplyPlayerLayout();
     }
 
     internal static ConnectionQuality? ResolvePeerQuality(ConnectionQuality? peer, ConnectionQuality? server)
@@ -574,11 +581,13 @@ public partial class VoiceView : UserControl
         if (view.OtherPlayersPanel.Children.Count != 6 ||
             view.FooterBar.Visibility != Visibility.Visible || view.FooterRow.Height.Value != 52d)
             throw new InvalidOperationException("Footer did not return with six remote players");
-        if (CalculatePlayerLayout(225d, 2).Columns != 3 ||
-            CalculatePlayerLayout(225d, 20).Columns != 3 ||
-            CalculatePlayerLayout(800d, 20).Columns != 11 ||
-            CalculatePlayerLayout(2000d, 20) != (12, 100d))
-            throw new InvalidOperationException("Responsive player columns or avatar cap differ from 3.2.17");
+        foreach (var count in new[] { 1, 4, 9, 14, 20 })
+        {
+            var (columns, size) = CalculatePlayerLayout(225d, 120d, count);
+            if ((size + 8d) * columns > 225.01d ||
+                (size + 8d) * Math.Ceiling((double)count / columns) > 120.01d || size > 100d)
+                throw new InvalidOperationException("Player grid does not fit its available width and height");
+        }
         for (var id = 10; id <= 23; id++)
             game.Players.Add(new Player { Id = id, ClientId = id + 10, Name = $"Guest {id}" });
         view.Update(game, true, false, false, false, peers);
@@ -586,13 +595,27 @@ public partial class VoiceView : UserControl
         view.Arrange(new Rect(0, 0, 280, 260));
         view.UpdateLayout();
         var narrowWidth = view.OtherPlayersPanel.Width;
-        if (view.FooterBar.Visibility != Visibility.Visible || view.OtherPlayersScroll.ScrollableHeight <= 0d)
-            throw new InvalidOperationException("Twenty-player roster did not scroll above its fixed footer");
+        if (view.FooterBar.Visibility != Visibility.Visible || view.OtherPlayersScroll.ScrollableHeight > 0.5d ||
+            view.OtherPlayersPanel.ActualHeight > view.OtherPlayersScroll.ActualHeight + 0.5d)
+            throw new InvalidOperationException("Twenty-player roster does not fit above its fixed footer");
         view.Measure(new Size(600, 260));
         view.Arrange(new Rect(0, 0, 600, 260));
         view.UpdateLayout();
         if (view.OtherPlayersPanel.Width <= narrowWidth || view.remoteAvatars[0].Width > 100d)
             throw new InvalidOperationException("Player grid did not respond to a wider voice window");
+        view.Measure(new Size(280, 390));
+        view.Arrange(new Rect(0, 0, 280, 390));
+        view.UpdateLayout();
+        var fullHeightSize = view.remoteAvatars[0].Width;
+        view.SetVersionWarning("ホストと参加者のバージョンが一致していません。");
+        view.UpdateLayout();
+        if (view.remoteAvatars[0].Width >= fullHeightSize ||
+            view.OtherPlayersPanel.ActualHeight > view.OtherPlayersScroll.ActualHeight + 0.5d)
+            throw new InvalidOperationException("Player grid did not shrink to fit the version notice");
+        view.SetVersionWarning(null);
+        view.UpdateLayout();
+        if (Math.Abs(view.remoteAvatars[0].Width - fullHeightSize) > 0.5d)
+            throw new InvalidOperationException("Player grid did not grow after the version notice cleared");
         game.GameState = GameState.Lobby;
         game.Players.Clear();
         view.Update(game, true, false, true, false, peers);

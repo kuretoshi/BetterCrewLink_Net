@@ -12,6 +12,33 @@ namespace TanukiBCL.Client;
 
 public partial class SettingsWindow
 {
+    private static void VerifyStableLobbyUpdates()
+    {
+        var state = new AmongUsState { GameState = GameState.Lobby, LobbyCode = "ABCDEF" };
+        var window = new SettingsWindow(new ClientSettings(), true,
+            new LobbySettings { MaxDistance = 3 }, false, state, (_, _, _) => { }, _ => { });
+        try
+        {
+            window.showingCurrentLobby = true;
+            window.ShowSelectedLobbySettings();
+            var before = window.lobbyControlsLoadCount;
+            var watch = Stopwatch.StartNew();
+            for (var i = 0; i < 1000; i++) window.UpdateCurrentGameState(state);
+            watch.Stop();
+            if (window.lobbyControlsLoadCount != before)
+                throw new InvalidOperationException("Unchanged game snapshots reloaded lobby controls");
+            window.UpdateCurrentLobbySettings(new LobbySettings { MaxDistance = 7 });
+            if (window.DistanceSlider.Value != 7 || window.lobbyControlsLoadCount != before + 1)
+                throw new InvalidOperationException("Changed lobby settings did not refresh controls");
+            window.UpdateCurrentGameState(new AmongUsState { GameState = GameState.Menu });
+            window.UpdateCurrentGameState(state);
+            if (window.LobbyControlsPanel.Visibility != Visibility.Visible || window.DistanceSlider.Value != 7)
+                throw new InvalidOperationException("Returning to a lobby did not restore controls");
+            Console.WriteLine($"[PASS] Settings: 1,000 game snapshots, zero lobby-control reloads ({watch.Elapsed.TotalMilliseconds:0.0} ms); server updates and lobby return retained");
+        }
+        finally { window.Close(); }
+    }
+
     private static void VerifyImmediateSettings()
     {
         var settings = new ClientSettings();
