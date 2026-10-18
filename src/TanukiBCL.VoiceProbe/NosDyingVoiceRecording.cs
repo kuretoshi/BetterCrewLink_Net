@@ -13,7 +13,7 @@ internal sealed class NosDyingVoiceRecording : ISampleProvider
     private readonly List<float[]> chunks = [];
     private long started, recordUntil;
     private int samples, capacity, position;
-    private bool recording, complete, inside, playing;
+    private bool recording, complete, inside, playing, loop;
     private float volume;
     private BiQuadFilter high = BiQuadFilter.HighPassFilter(SampleRate, 400, .707f);
     private BiQuadFilter low = BiQuadFilter.LowPassFilter(SampleRate, 3000, .707f);
@@ -40,6 +40,7 @@ internal sealed class NosDyingVoiceRecording : ISampleProvider
                 recordUntil = clock() + (long)remainingMs;
                 complete = remainingMs <= 0;
             }
+            loop = entry.Loop;
             recording = !complete && now < entry.Started + entry.Seconds * 1000;
             if (!recording) complete = true;
             if (!near || volume == 0) { inside = false; playing = false; return; }
@@ -77,7 +78,11 @@ internal sealed class NosDyingVoiceRecording : ISampleProvider
             {
                 float sample = low.Transform(high.Transform(chunks[position / ChunkSize][position % ChunkSize])) * volume;
                 buffer[offset + i] = sample; buffer[offset + i + 1] = sample;
-                if (++position >= samples) playing = false;
+                if (++position >= samples)
+                {
+                    position = 0;
+                    if (!loop) playing = false;
+                }
             }
         }
         return count;

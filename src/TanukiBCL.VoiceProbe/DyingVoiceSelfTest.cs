@@ -44,6 +44,19 @@ internal static class DyingVoiceSelfTest
         check("Dying voice: memory bounded by recording duration", true, audio.RecordedSamples == 48000);
         audio.Update(null, false, false, 0, 21000);
         check("Dying voice: game end clears buffer", true, audio.RecordedSamples == 0 && !audio.IsPlaying);
+        entry.Started = 30000; entry.Loop = true; clock = 4000;
+        audio.Update(entry, true, false, 1, 30000);
+        audio.RecordStereoPcm16([10000, 10000, -10000, -10000]);
+        audio.Update(entry, true, true, 1, 31000);
+        var repeated = new float[20]; audio.Read(repeated, 0, repeated.Length);
+        check("Dying voice: loop continues past recording end", true, audio.IsPlaying && repeated.Skip(4).Any(value => value != 0));
+        audio.Update(entry, true, false, 1, 31001);
+        check("Dying voice: leaving stops loop", false, audio.IsPlaying);
+        audio.Update(entry, true, true, 1, 31002);
+        audio.Update(entry, true, true, 0, 31003);
+        check("Dying voice: mute stops loop", false, audio.IsPlaying);
+        audio.Cancel();
+        check("Dying voice: loop buffer cleared at game end", true, audio.RecordedSamples == 0);
         VerifyFiles(check);
     }
 

@@ -114,7 +114,7 @@ internal sealed class NosHostVoiceRelay : IDisposable
 
     public NosHostVoiceRelay(Func<int, string>? path = null) => descriptorPath = path ?? DefaultPath;
 
-    public void Send(NosHostVoiceSample sample, int pid, AmongUsState? state)
+    public void Send(NosHostVoiceSample sample, int pid, AmongUsState? state, string appVersion = "")
     {
         if (state is not { IsHost: true, Mod: AmongUsModType.NebulaOnTheShip } || pid <= 0 ||
             state.Players is not { } players ||
@@ -130,7 +130,8 @@ internal sealed class NosHostVoiceRelay : IDisposable
         if (descriptor is null) return;
         sequence = Math.Max(sequence + 1, now * 1000);
         var payload = FormattableString.Invariant(
-            $"TBCLH1|{descriptor.Token}|{sample.PlayerId}|{sequence}|{now}|{sample.Rms}|{(sample.Active ? 1 : 0)}");
+            $"TBCLH1|{descriptor.Token}|{sample.PlayerId}|{sequence}|{now}|{sample.Rms}|{(sample.Active ? 1 : 0)}") +
+            (descriptor.ReportVersion ? "|" + appVersion : "");
         try
         {
             var bytes = Encoding.UTF8.GetBytes(payload);
@@ -164,6 +165,7 @@ internal sealed class NosHostVoiceRelay : IDisposable
 
     private sealed class HostDescriptor
     {
+        public bool ReportVersion { get; set; }
         public int Protocol { get; set; }
         public int Pid { get; set; }
         public int Port { get; set; }

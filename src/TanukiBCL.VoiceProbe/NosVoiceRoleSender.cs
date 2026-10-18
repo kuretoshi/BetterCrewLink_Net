@@ -39,7 +39,7 @@ internal sealed class NosVoiceRoleSender : IDisposable
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TanukiBCL", "NoS", "voice-role.json");
 
-    public void Send(double rms, bool active, int pid, AmongUsState? state)
+    public void Send(double rms, bool active, int pid, AmongUsState? state, string appVersion = "")
     {
         if (!double.IsFinite(rms) || rms is < 0d or > 1d ||
             state?.Mod != AmongUsModType.NebulaOnTheShip ||
@@ -47,10 +47,10 @@ internal sealed class NosVoiceRoleSender : IDisposable
             state.Players is not { } players) return;
         var player = players.FirstOrDefault(item => item.IsLocal);
         if (player is null || player.IsDead || player.Disconnected) return;
-        lock (gate) SendCore(rms, active, pid, player.Id, state.GameState);
+        lock (gate) SendCore(rms, active, pid, player.Id, state.GameState, appVersion);
     }
 
-    private void SendCore(double rms, bool active, int pid, int playerId, GameState phase)
+    private void SendCore(double rms, bool active, int pid, int playerId, GameState phase, string appVersion)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         currentPid = pid;
@@ -80,7 +80,8 @@ internal sealed class NosVoiceRoleSender : IDisposable
         }
         sequence = Math.Max(sequence + 1, now * 1000);
         SendUdp(FormattableString.Invariant(
-            $"TBCL1|{token}|{sequence}|{now}|{rms}|{(active ? 1 : 0)}"), selected.Port);
+            $"TBCL1|{token}|{sequence}|{now}|{rms}|{(active ? 1 : 0)}") +
+            (selected.ReportVersion ? "|" + appVersion : ""), selected.Port);
     }
 
     private void EnsureSocket()
@@ -216,6 +217,7 @@ internal sealed class NosVoiceRoleSender : IDisposable
 
 internal sealed class NosVoiceRoleDescriptor
 {
+    public bool ReportVersion { get; set; }
     public int Protocol { get; set; }
     public string Role { get; set; } = string.Empty;
     public int PlayerId { get; set; }

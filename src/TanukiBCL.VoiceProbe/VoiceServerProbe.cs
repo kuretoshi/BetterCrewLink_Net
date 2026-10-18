@@ -904,7 +904,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                 autoGainControl,
                 options.OldSampleDebug,
                 (rms, active) => nosVoiceRoleSender.Send(rms, active,
-                    options.GameProcessId ?? 0, currentGameState));
+                    options.GameProcessId ?? 0, currentGameState, AppVersion));
             audioSession.SetMicrophoneMuted(microphoneMuted);
             audioSession.SetRadioPending(nosRadioPending);
             audioSession.SetDeafened(deafened);
@@ -1168,7 +1168,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     nosHostVoiceAdmission.TryAccept(remoteSocketId, client, data,
                         currentGameState, clientId, out var sample) && sample is not null)
                 {
-                    nosHostVoiceRelay.Send(sample, options.GameProcessId ?? 0, currentGameState);
+                    nosHostVoiceRelay.Send(sample, options.GameProcessId ?? 0, currentGameState, AppVersion);
                     _ = RunPeerOperationAsync(remoteSocketId,
                         () => SendSignalAsync(remoteSocketId, new { type = "nos-host-voice-ack" }));
                 }
