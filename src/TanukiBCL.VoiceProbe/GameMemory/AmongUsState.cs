@@ -244,6 +244,7 @@ public sealed class AmongUsState
     public List<NosRadioData> NosRadios { get; set; } = [];
 
     public List<NosMegaphoneState> NosMegaphones { get; set; } = [];
+    public List<NosInterviewState> NosInterviews { get; set; } = [];
     public List<NosDyingVoiceState> NosDyingVoices { get; set; } = [];
 
     public List<NosPortableMegaphoneState> NosPortableMegaphones { get; set; } = [];

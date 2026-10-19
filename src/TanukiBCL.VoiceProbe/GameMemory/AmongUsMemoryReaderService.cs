@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -450,6 +450,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             TohRoleCatalog = mod == AmongUsModType.TownOfHostForE
                 ? tohReader.RoleCatalog.ToList() : [],
             NosLocalMicPosition = nos?.LocalMicPosition,
+            NosInterviews = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
+                ? NosVoiceRoleStateReader.ReadInterviews(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosDyingVoices = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadDyingVoices(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],

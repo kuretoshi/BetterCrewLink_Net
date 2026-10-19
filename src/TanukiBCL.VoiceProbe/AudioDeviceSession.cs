@@ -15,6 +15,9 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly MixingSampleProvider playbackMixer;
     private readonly VolumeSampleProvider masterMix;
     private readonly NosMegaphoneRecording localMegaphoneRecording = new();
+    private readonly NosInterviewerRecording interviews = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> interviewInputs = new();
+    private int interviewLocalId = -1;
     private readonly Dictionary<string, PeerPlayback> peerPlayback = [];
     private readonly object playbackGate = new();
     private readonly Action<ReadOnlyMemory<byte>> onCaptured;
@@ -74,6 +77,7 @@ internal sealed class AudioDeviceSession : IDisposable
                 ReadFully = true
             };
             playbackMixer.AddMixerInput(localMegaphoneRecording);
+            playbackMixer.AddMixerInput(interviews);
             masterMix = new VolumeSampleProvider(playbackMixer);
             playback = new WaveOutEvent
             {
@@ -149,6 +153,7 @@ internal sealed class AudioDeviceSession : IDisposable
     public void SetDeafened(bool value)
     {
         deafened = value;
+        interviews.SetAudible(!value && masterVolume > 0);
         if (value)
         {
             pushToTalkPressed = false;
@@ -185,6 +190,7 @@ internal sealed class AudioDeviceSession : IDisposable
     {
         masterVolume = (float)Math.Clamp(volumePercent / 100d, 0d, 2d);
         masterMix.Volume = deafened ? 0f : masterVolume;
+        interviews.SetAudible(!deafened && masterVolume > 0);
     }
 
     public void SetMicrophoneGain(double gainPercent)
@@ -221,6 +227,7 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         var peer = GetOrCreatePeerPlayback(peerId);
+        if (!deafened && interviewInputs.TryGetValue(peerId, out var interviewId)) interviews.Record(interviewId, stereoPcm, 2);
         peer.MegaphoneRecording.RecordStereoPcm16(stereoPcm);
         peer.DyingVoiceRecording.RecordStereoPcm16(stereoPcm);
         lock (peer.PlaybackWriteGate)
@@ -297,8 +304,24 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.MegaphoneRecording.Update(entry, active && !deafened, volume);
     }
 
+    public void UpdateInterviews(AmongUsState state)
+    {
+        var local = state.Players.FirstOrDefault(p => p.IsLocal);
+        Volatile.Write(ref interviewLocalId, local?.Id ?? -1);
+        interviews.Update(state.NosInterviews, state.Mod == AmongUsModType.NebulaOnTheShip &&
+            state.GameState is GameState.Tasks or GameState.Discussion,
+            state.GameState == GameState.Discussion, !deafened && masterVolume > 0,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
+    public void SetInterviewPeer(string peerId, int id, bool enabled)
+    {
+        if (enabled) interviewInputs[peerId] = id;
+        else interviewInputs.TryRemove(peerId, out _);
+    }
+
     public void RemovePeer(string peerId)
     {
+        interviewInputs.TryRemove(peerId, out _);
         lock (playbackGate)
         {
             if (peerPlayback.Remove(peerId, out var peer))
@@ -400,6 +423,7 @@ internal sealed class AudioDeviceSession : IDisposable
             onVadChanged(transmittedTalking);
         }
 
+        interviews.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1);
         localMegaphoneRecording.RecordMonoPcm16(buffer);
         onCaptured(buffer);
     }
@@ -498,6 +522,8 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         disposed = true;
+        interviews.Clear();
+        interviewInputs.Clear();
         lock (playbackGate)
             foreach (var peer in peerPlayback.Values) peer.DyingVoiceRecording.Cancel();
         capture.DataAvailable -= OnDataAvailable;

@@ -523,6 +523,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             lastMobileFrameSentAt = default;
         }
         currentGameState = state;
+        audioSession?.UpdateInterviews(state);
         if (state.Mod != AmongUsModType.NebulaOnTheShip || state.GameState is not (GameState.Tasks or GameState.Discussion))
             audioSession?.ClearDyingVoiceRecordings();
         var localPlayer = state.Players.FirstOrDefault(player => player.IsLocal);
@@ -916,6 +917,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             audioSession.SetPushToTalkPressed(pushToTalkPressed);
             if (currentGameState is { } initialState)
             {
+                audioSession.UpdateInterviews(initialState);
                 var local = initialState.Players.FirstOrDefault(player => player.IsLocal);
                 audioSession.UpdateLocalMegaphoneRecording(
                     initialState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == local?.Id),
@@ -2008,6 +2010,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     private void RefreshPeerMix(string socketId, int clientId)
     {
+        audioSession?.SetInterviewPeer(socketId, -1, false);
         if (currentGameState is null)
         {
             return;
@@ -2041,6 +2044,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             IsImpostorRadioActive(clientId), CanHearNosRadio(currentGameState, other, me),
             airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
         var playerConfig = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs));
+        audioSession?.SetInterviewPeer(socketId, other.Id, !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d);
         mix = playerConfig.Apply(mix);
         var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
             activeLobbySettings, voiceEffectStrength, mix.Audible, IsImpostorRadioActive(clientId));

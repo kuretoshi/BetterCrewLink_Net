@@ -19,6 +19,7 @@ internal static class VoiceRoleReleaseSelfTest
         VerifyMegaphoneRecording(check);
         VerifyMegaphoneBuffering(check);
         DyingVoiceSelfTest.Verify(check);
+        InterviewerSelfTest.Verify(check);
         VerifyNosRadioGap(check);
     }
 

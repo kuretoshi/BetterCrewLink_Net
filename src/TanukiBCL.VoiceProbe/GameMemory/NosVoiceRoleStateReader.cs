@@ -58,6 +58,10 @@ internal static class NosVoiceRoleStateReader
             item => item.UnixMs >= now - 3000 && item.UnixMs <= now + 100,
             item => item.PlayerId, timestampRequired: false);
 
+    public static List<NosInterviewState> ReadInterviews(int pid, long now, string? path = null) =>
+        Read<NosInterviewState>(pid, now, path ?? DefaultPath($"interviews-{pid}.json"),
+            item => item.IsValid(now), item => item.PlayerId, maxAgeMs: 1000, maxBytes: 65536, maxPlayers: 32);
+
     public static List<NosDyingVoiceState> ReadDyingVoices(int pid, long now, string? path = null) =>
         Read<NosDyingVoiceState>(pid, now, path ?? DefaultPath($"dying-voice-{pid}.json"),
             item => item.Started > 0 && item.Started <= now + 100 &&
@@ -68,7 +72,7 @@ internal static class NosVoiceRoleStateReader
             item => item.PlayerId, maxAgeMs: 1000, maxBytes: 32768);
 
     private static List<T> Read<T>(int pid, long now, string path, Func<T, bool> valid,
-        Func<T, int> playerId, bool timestampRequired = true, int maxAgeMs = 500, int maxBytes = 16_384)
+        Func<T, int> playerId, bool timestampRequired = true, int maxAgeMs = 500, int maxBytes = 16_384, int maxPlayers = 255)
     {
         try
         {
@@ -76,7 +80,7 @@ internal static class NosVoiceRoleStateReader
             if (!file.Exists || file.Length > maxBytes) return [];
             var envelope = JsonSerializer.Deserialize<Envelope<T>>(File.ReadAllText(path), Options);
             if (envelope is null || envelope.Protocol != 1 || envelope.Pid != pid ||
-                envelope.Players is not { Count: <= 255 } players ||
+                envelope.Players is not { Count: <= 255 } players || players.Count > maxPlayers ||
                 timestampRequired && (now - envelope.UnixMs > maxAgeMs || now - envelope.UnixMs < -100)) return [];
             var seen = new HashSet<int>();
             foreach (var item in players)
