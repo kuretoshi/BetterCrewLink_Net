@@ -68,6 +68,7 @@ static string FunctionName(SyntaxNode node)
 static string FindRoot(string directory)
 {
     for (var current = new DirectoryInfo(directory); current is not null; current = current.Parent)
-        if (Directory.Exists(Path.Combine(current.FullName, ".git"))) return current.FullName;
+        if (Directory.Exists(Path.Combine(current.FullName, ".git")) ||
+            File.Exists(Path.Combine(current.FullName, ".git"))) return current.FullName;
     throw new DirectoryNotFoundException("Git workspace not found.");
 }

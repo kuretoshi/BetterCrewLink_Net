@@ -345,7 +345,10 @@ internal static class SpatialVoicePolicy
 
     private static double ResolveMaxDistance(AmongUsState state, Player me, SpatialVoiceSettings settings)
     {
-        var maxDistance = settings.VisionHearing && !IsImpostor(state, me)
+        // NoS neutral roles can have a wide sight radius, but use the lobby voice range.
+        var nosNeutral = state.Mod == AmongUsModType.NebulaOnTheShip &&
+            (me.NosPlayer?.IsNeutral == true || me.IsThirdParty);
+        var maxDistance = settings.VisionHearing && !nosNeutral && !IsImpostor(state, me)
             ? state.LightRadius + 0.5d : settings.MaxDistance;
         if (!double.IsFinite(maxDistance) || maxDistance <= 0.6d) return 1d;
         return maxDistance;

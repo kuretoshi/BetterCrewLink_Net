@@ -831,6 +831,36 @@ internal static class SpatialVoicePolicySelfTest
         Check("vision hearing: disabling restores configured range", true,
             SpatialVoicePolicy.Calculate(visionTasks, new Player(), new Player { X = 3d },
                 visionPolicy with { VisionHearing = false }).Audible);
+        var wideSightAirship = new AmongUsState
+        {
+            Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Tasks,
+            Map = MapType.Airship, LightRadius = 35d
+        };
+        var distantAirshipSpeaker = new Player { X = 30d };
+        Check("NoS neutral: Archive-Cockpit-scale separation stays silent with wide sight", false,
+            SpatialVoicePolicy.Calculate(wideSightAirship,
+                new Player { NosPlayer = new NosPlayerData { IsNeutral = true } },
+                distantAirshipSpeaker, visionPolicy).Audible);
+        Check("NoS neutral: third-party fallback also stays silent at long range", false,
+            SpatialVoicePolicy.Calculate(wideSightAirship, new Player { IsThirdParty = true },
+                distantAirshipSpeaker, visionPolicy).Audible);
+        Check("NoS neutral: lobby range still permits nearby speech", true,
+            SpatialVoicePolicy.Calculate(wideSightAirship,
+                new Player { NosPlayer = new NosPlayerData { IsNeutral = true } },
+                new Player { X = 3d }, visionPolicy).Audible);
+        Check("NoS crew: wide sight still permits distant speech", true,
+            SpatialVoicePolicy.Calculate(wideSightAirship, new Player(),
+                distantAirshipSpeaker, visionPolicy).Audible);
+        Check("NoS impostor: distant speech remains outside lobby range", false,
+            SpatialVoicePolicy.Calculate(wideSightAirship, new Player { IsImpostor = true },
+                distantAirshipSpeaker, visionPolicy).Audible);
+        Check("other MOD: third party keeps existing vision-hearing range", true,
+            SpatialVoicePolicy.Calculate(new AmongUsState
+                { Mod = AmongUsModType.SuperNewRoles, GameState = GameState.Tasks, LightRadius = 35d },
+                new Player { IsThirdParty = true }, distantAirshipSpeaker, visionPolicy).Audible);
+        Check("NoS neutral: disabled vision hearing still uses lobby range", false,
+            SpatialVoicePolicy.Calculate(wideSightAirship, new Player { IsThirdParty = true },
+                distantAirshipSpeaker, visionPolicy with { VisionHearing = false }).Audible);
         var meetingOutfit = new Player { CurrentOutfit = 1, ColorId = 0, AppearanceColorId = 0 };
         var otherMeetingOutfit = new Player { CurrentOutfit = 1, ColorId = 1, AppearanceColorId = 1,
             X = 30d };
