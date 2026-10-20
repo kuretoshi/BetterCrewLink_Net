@@ -157,6 +157,11 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         }
 
         var mod = RefreshInstalledMod(currentProcess);
+        if (mod != AmongUsModType.NebulaOnTheShip)
+        {
+            nosAddonIds = [];
+            nextNosAddonCheck = default;
+        }
 
         if (currentContext is null)
         {
@@ -279,7 +284,6 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             nosAddonIds = NosAddonDetector.Read(Path.GetDirectoryName(currentProcess.ProcessPath));
             nextNosAddonCheck = DateTimeOffset.UtcNow.AddSeconds(30);
         }
-        else if (mod != AmongUsModType.NebulaOnTheShip) nosAddonIds = [];
         var nosPointerSize = currentContext.Is64Bit ? 8 : 4;
         var nosLobbyColors = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Lobby
             ? nosPaletteReader.Update(currentProcess.ProcessId, nosPointerSize,
