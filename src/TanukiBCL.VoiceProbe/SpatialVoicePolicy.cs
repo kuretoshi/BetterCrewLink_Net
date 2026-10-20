@@ -64,6 +64,9 @@ internal static class SpatialVoicePolicy
         var voiceOther = SNRVoicePlayer(state, other);
         var mix = CalculateCore(state, voiceMe, voiceOther, settings, otherUsingImpostorRadio,
             nosJackalRadioHearable, airshipSpawnFallback);
+        var jamming = VoiceJammingPolicy.For(state, other.Id);
+        if (jamming?.Muted == true) return mix with { Gain = 0d, Reason = "voice-jamminger" };
+        if (jamming?.Lowpass == true) mix = mix with { FixerLowpass = true, Muffled = false, CameraMuffled = false };
         if (mix.Audible && voiceOther != other && !state.AirshipMeetingByOutfit)
             mix = mix with { Reverb = true };
         return mix.Audible && state.Mod == AmongUsModType.NebulaOnTheShip &&

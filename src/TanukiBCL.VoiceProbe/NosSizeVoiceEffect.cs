@@ -26,6 +26,9 @@ internal static class VoiceDisguiseEffectPolicy
     public static NosSizeVoiceEffect? Select(AmongUsState state, Player listener, Player speaker,
         LobbySettings lobby, int strengthPercent, bool audible, bool impostorRadioActive)
     {
+        var jamming = VoiceJammingPolicy.For(state, speaker.Id);
+        if (audible && jamming is { Pitch: not 1d } && !speaker.Disconnected && !speaker.Bugged && !speaker.IsDummy)
+            return new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d, Pitch: jamming.Pitch);
         var megaphone = NosMegaphoneVoice.Charging(state, speaker);
         if (audible && megaphone is { VoiceEffect: not false })
         {

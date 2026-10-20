@@ -20,6 +20,7 @@ internal static class VoiceRoleReleaseSelfTest
         VerifyMegaphoneBuffering(check);
         DyingVoiceSelfTest.Verify(check);
         InterviewerSelfTest.Verify(check);
+        VoiceJammingSelfTest.Verify(check);
         VerifyNosRadioGap(check);
     }
 

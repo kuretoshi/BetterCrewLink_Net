@@ -7,8 +7,9 @@ internal static class LocalJammingPolicy
     // Matches released 3.2.8 VoiceController.onGameState -> AudioController.setJammed.
     public static bool IsJammed(AmongUsState? state, LobbySettings settings) =>
         state?.Mod == AmongUsModType.NebulaOnTheShip &&
-        settings.NosFixerJammingVoiceBlock &&
-        state.Players.Any(player => player.IsLocal && player.NosPlayer?.IsJammed == true);
+        state.Players.Any(player => player.IsLocal &&
+            (settings.NosFixerJammingVoiceBlock && player.NosPlayer?.IsJammed == true ||
+             VoiceJammingPolicy.For(state, player.Id)?.Muted == true));
 }
 
 internal static class LocalVadVisibilityPolicy

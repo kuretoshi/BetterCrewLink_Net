@@ -452,6 +452,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosInterviews = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadInterviews(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
+            NosVoiceJamming = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Discussion
+                ? NosVoiceRoleStateReader.ReadVoiceJamming(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosDyingVoices = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadDyingVoices(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
