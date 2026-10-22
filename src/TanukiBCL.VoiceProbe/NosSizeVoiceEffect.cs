@@ -41,7 +41,12 @@ internal static class VoiceDisguiseEffectPolicy
         if (state.Mod == AmongUsModType.NebulaOnTheShip && lobby.NosCitrusVoiceEffect &&
             state.GameState is GameState.Tasks or GameState.Discussion &&
             speaker.NosPlayer?.Hat?.Name is "noshat_catudon_Citrus_Orange" or "noshat_catudon_Citrus_Lemon")
-            return new NosSizeVoiceEffect(NosSizeEffectMode.Disguise, 1d, 1d);
+        {
+            var strength = Math.Clamp(lobby.NosCitrusVoiceEffectStrength, 0, 100);
+            return strength > 0
+                ? new NosSizeVoiceEffect(NosSizeEffectMode.Disguise, strength / 100d, 1d)
+                : null;
+        }
         if (state.GameState != GameState.Tasks ||
             state.Map == MapType.Airship && state.AirshipMeetingByOutfit) return null;
         if (state.Mod == AmongUsModType.NebulaOnTheShip && lobby.NosBerserkerVoiceEffect &&

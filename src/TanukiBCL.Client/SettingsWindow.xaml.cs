@@ -813,6 +813,7 @@ public partial class SettingsWindow : Window
         NosRokurokubiVoiceEffect = NosRokurokubiVoiceEffectCheck.IsChecked == true,
         NosBerserkerVoiceEffect = NosBerserkerVoiceEffectCheck.IsChecked == true,
         NosCitrusVoiceEffect = NosCitrusVoiceEffectCheck.IsChecked == true,
+        NosCitrusVoiceEffectStrength = (int)NosCitrusVoiceEffectStrengthSlider.Value,
         NosRainbowStarEcho = NosRainbowStarEchoCheck.IsChecked == true,
         NosFixerJammingVoiceBlock = NosFixerJammingVoiceBlockCheck.IsChecked == true,
         NosFixerJammingLowpass = NosFixerJammingLowpassCheck.IsChecked == true,
@@ -853,6 +854,7 @@ public partial class SettingsWindow : Window
         NosRokurokubiVoiceEffectCheck.IsChecked = value.NosRokurokubiVoiceEffect;
         NosBerserkerVoiceEffectCheck.IsChecked = value.NosBerserkerVoiceEffect;
         NosCitrusVoiceEffectCheck.IsChecked = value.NosCitrusVoiceEffect;
+        NosCitrusVoiceEffectStrengthSlider.Value = value.NosCitrusVoiceEffectStrength;
         NosRainbowStarEchoCheck.IsChecked = value.NosRainbowStarEcho;
         NosFixerJammingVoiceBlockCheck.IsChecked = value.NosFixerJammingVoiceBlock;
         NosFixerJammingLowpassCheck.IsChecked = value.NosFixerJammingLowpass && !value.NosFixerJammingVoiceBlock;
@@ -888,6 +890,7 @@ public partial class SettingsWindow : Window
         NosRokurokubiVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
         NosBerserkerVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
         NosCitrusVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
+        NosCitrusVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosCitrusVoiceEffect;
         NosRainbowStarEchoCheck.IsEnabled = regularSettingsEnabled;
         NosFixerJammingVoiceBlockCheck.IsEnabled = regularSettingsEnabled;
         NosFixerJammingLowpassCheck.IsEnabled = regularSettingsEnabled;
@@ -917,6 +920,13 @@ public partial class SettingsWindow : Window
         UpdateDistanceTitle();
     }
 
+    private void NosCitrusVoiceEffectCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (NosCitrusVoiceEffectStrengthSlider is not null && RadioOnlyCheck is not null)
+            NosCitrusVoiceEffectStrengthSlider.IsEnabled =
+                NosCitrusVoiceEffectCheck.IsChecked == true && RadioOnlyCheck.IsChecked != true;
+    }
+
     private void UpdateDistanceTitle()
     {
         DistanceTitleText.Text = UiLocalization.Translate(settings.Language,
@@ -936,6 +946,8 @@ public partial class SettingsWindow : Window
         MicrophoneGainValue.Text = $"{MicrophoneGainSlider.Value:0}%";
         MicSensitivityValue.Text = $"{MicSensitivitySlider.Value:0.00}";
         DistanceValue.Text = $"{DistanceSlider.Value:0.0}";
+        if (NosCitrusVoiceEffectStrengthValue is not null)
+            NosCitrusVoiceEffectStrengthValue.Text = $"{NosCitrusVoiceEffectStrengthSlider.Value:0}%";
     }
 
     private ClientSettings ReadSettingsControls()

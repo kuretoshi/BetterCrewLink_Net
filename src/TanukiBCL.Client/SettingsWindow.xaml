@@ -718,7 +718,23 @@
                                        Foreground="#B7AABD" FontSize="11" Margin="12,0,12,8" TextWrapping="Wrap" />
                             <StackPanel x:Name="UchuControlsPanel" Visibility="Collapsed">
                                 <CheckBox x:Name="NosCitrusVoiceEffectCheck" Content="シトラスの柑橘状態で声を高い犯人声にする（UchuAddon）"
-                                          Style="{StaticResource LobbySwitchStyle}" />
+                                          Style="{StaticResource LobbySwitchStyle}"
+                                          Checked="NosCitrusVoiceEffectCheck_Changed" Unchecked="NosCitrusVoiceEffectCheck_Changed" />
+                                <Grid Height="64" Margin="16,0" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="48" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="シトラス感染時のボイスチェンジャーの強さ" FontSize="14"
+                                               TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    <Slider x:Name="NosCitrusVoiceEffectStrengthSlider" Grid.Column="1"
+                                            Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                                            ValueChanged="VolumeSlider_ValueChanged" Margin="0,0,12,0"
+                                            VerticalAlignment="Center" />
+                                    <TextBlock x:Name="NosCitrusVoiceEffectStrengthValue" Grid.Column="2"
+                                               TextAlignment="Right" VerticalAlignment="Center" />
+                                </Grid>
                                 <CheckBox x:Name="NosRainbowStarEchoCheck" Content="虹色スターの声に薄いエコーを加える（UchuAddon）"
                                           Style="{StaticResource LobbySwitchStyle}" />
                             </StackPanel>

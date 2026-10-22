@@ -26,6 +26,7 @@ internal sealed record LobbySettings
     public bool NosRokurokubiVoiceEffect { get; init; } = true;
     public bool NosBerserkerVoiceEffect { get; init; } = true;
     public bool NosCitrusVoiceEffect { get; init; } = true;
+    public int NosCitrusVoiceEffectStrength { get; init; } = 100;
     public bool NosRainbowStarEcho { get; init; } = true;
     public bool NosFixerJammingVoiceBlock { get; init; } = true;
     public bool NosFixerJammingLowpass { get; init; }
@@ -58,6 +59,7 @@ internal sealed record LobbySettings
     public LobbySettings Normalize() => this with
     {
         MaxDistance = double.IsFinite(MaxDistance) ? Math.Clamp(MaxDistance, 1d, 10d) : 5.32d,
+        NosCitrusVoiceEffectStrength = Math.Clamp(NosCitrusVoiceEffectStrength, 0, 100),
         PublicLobbyTitle = PublicLobbyTitle ?? string.Empty,
         PublicLobbyLanguage = string.IsNullOrWhiteSpace(PublicLobbyLanguage) ? "ja" : PublicLobbyLanguage,
         PublicLobbyMods = PublicLobbyMods ?? "NONE"

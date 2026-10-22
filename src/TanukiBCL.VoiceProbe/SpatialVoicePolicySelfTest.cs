@@ -751,6 +751,12 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS Citrus: switch disables disguise", true,
             VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
                 new LobbySettings { NosCitrusVoiceEffect = false }, 0, true, false) is null);
+        Check("NoS Citrus: configured strength", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                new LobbySettings { NosCitrusVoiceEffectStrength = 35 }, 0, true, false)?.Strength == 0.35d);
+        Check("NoS Citrus: zero strength disables disguise", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                new LobbySettings { NosCitrusVoiceEffectStrength = 0 }, 0, true, false) is null);
         var disguisedSpeaker = new Player
         {
             Name = "base", AppearanceName = "disguised", IsImpostor = true
@@ -1344,7 +1350,7 @@ internal static class SpatialVoicePolicySelfTest
             };
             releasedWireFields.UnionWith([
                 "nosRokurokubiVoiceEffect", "nosBerserkerVoiceEffect",
-                "nosCitrusVoiceEffect", "nosRainbowStarEcho", "nosFixerJammingLowpass"
+                "nosCitrusVoiceEffect", "nosCitrusVoiceEffectStrength", "nosRainbowStarEcho", "nosFixerJammingLowpass"
             ]);
             Check("lobby wire: released 3.2.21 field set", true,
                 releasedWireFields.SetEquals(document.RootElement.EnumerateObject()
