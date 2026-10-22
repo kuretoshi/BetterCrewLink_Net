@@ -86,7 +86,7 @@ public partial class SettingsWindow
         foreach (var toggle in LogicalDescendants<CheckBox>(VoiceLobbyControlsPanel))
             toggle.Click += (_, _) => QueueLobbyCommit();
         foreach (var slider in LogicalDescendants<Slider>(VoiceLobbyControlsPanel))
-            slider.ValueChanged += (_, _) => QueueLobbyCommit();
+            slider.ValueChanged += (_, _) => QueueVoiceEffectStrengthCommit();
         DistanceSlider.ValueChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyTitleBox.TextChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyLanguageCombo.SelectionChanged += (_, _) => QueueLobbyCommit();
@@ -164,6 +164,26 @@ public partial class SettingsWindow
     {
         if (!settingsReady || loadingLobbyControls || showingCurrentLobby || !lobbySettingsEditable) return;
         lobbyDraft = ReadLobbyControls();
+        lobbyPending = true;
+        lobbyCommitTimer.Stop();
+        lobbyCommitTimer.Start();
+    }
+
+    private void QueueVoiceEffectStrengthCommit()
+    {
+        if (!settingsReady || loadingLobbyControls || showingCurrentLobby) return;
+        lobbyDraft = lobbyDraft with
+        {
+            SnrJumboVoiceEffectStrength = (int)SnrJumboVoiceEffectStrengthSlider.Value,
+            NosSizeVoiceEffectStrength = (int)NosSizeVoiceEffectStrengthSlider.Value,
+            NosRokurokubiVoiceEffectStrength = (int)NosRokurokubiVoiceEffectStrengthSlider.Value,
+            NosBerserkerVoiceEffectStrength = (int)NosBerserkerVoiceEffectStrengthSlider.Value,
+            NosCitrusVoiceEffectStrength = (int)NosCitrusVoiceEffectStrengthSlider.Value,
+            NosRainbowStarEchoStrength = (int)NosRainbowStarEchoStrengthSlider.Value,
+            NosVoiceJammingEffectStrength = (int)NosVoiceJammingEffectStrengthSlider.Value,
+            NosMegaphoneEffectStrength = (int)NosMegaphoneEffectStrengthSlider.Value,
+            NosBibiriEchoStrength = (int)NosBibiriEchoStrengthSlider.Value
+        };
         lobbyPending = true;
         lobbyCommitTimer.Stop();
         lobbyCommitTimer.Start();

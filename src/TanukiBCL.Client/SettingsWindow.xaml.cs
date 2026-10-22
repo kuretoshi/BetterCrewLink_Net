@@ -164,7 +164,7 @@ public partial class SettingsWindow : Window
         var wasEditable = lobbySettingsEditable;
         lobbySettingsEditable = state is not { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
-        VoiceLobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
+        VoiceLobbyControlsPanel.IsEnabled = !showingCurrentLobby;
         if (wasEditable != lobbySettingsEditable || showingCurrentLobby)
             ShowSelectedLobbySettings(reloadControls: wasEditable != lobbySettingsEditable);
         else UpdateLobbyNotice();
@@ -700,7 +700,7 @@ public partial class SettingsWindow : Window
         LobbyControlsPanel.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
         VoiceLobbyControlsPanel.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
-        VoiceLobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
+        VoiceLobbyControlsPanel.IsEnabled = !showingCurrentLobby;
         VoiceNoLobbyText.Visibility = showingCurrentLobby && !inLobby ? Visibility.Visible : Visibility.Collapsed;
         if (value is not null && (reloadControls || becameVisible)) LoadLobbyControls(value);
     }
@@ -755,6 +755,12 @@ public partial class SettingsWindow : Window
         SnrVoiceControlsPanel.Visibility = mod == AmongUsModType.SuperNewRoles
             ? Visibility.Visible : Visibility.Collapsed;
         NosVoiceControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip
+            ? Visibility.Visible : Visibility.Collapsed;
+        UchuLobbyEffectControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip &&
+            currentGameState?.NosAddonIds.Contains("UchuAddon", StringComparer.Ordinal) == true
+            ? Visibility.Visible : Visibility.Collapsed;
+        TanukiAddonVoiceControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip &&
+            currentGameState?.NosAddonIds.Contains("tanuki.bcl.roles", StringComparer.Ordinal) == true
             ? Visibility.Visible : Visibility.Collapsed;
         UchuControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip &&
             currentGameState?.NosAddonIds.Contains("UchuAddon", StringComparer.Ordinal) == true
@@ -917,7 +923,7 @@ public partial class SettingsWindow : Window
         MeetingGhostOnlyCheck.IsEnabled = regularSettingsEnabled;
         JackalRadioCheck.IsEnabled = regularSettingsEnabled;
         SnrJumboVoiceCheck.IsEnabled = regularSettingsEnabled;
-        SnrJumboVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.SnrJumboVoice;
+        SnrJumboVoiceEffectStrengthSlider.IsEnabled = true;
         SnrJackalRadioCheck.IsEnabled = regularSettingsEnabled;
         SnrJackalHearOutsideVentsCheck.IsEnabled = regularSettingsEnabled;
         SnrJackalTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
@@ -925,18 +931,18 @@ public partial class SettingsWindow : Window
         SnrSidekickTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
         NosVoicePositionsCheck.IsEnabled = regularSettingsEnabled;
         NosSizeVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
-        NosSizeVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosSizeVoiceEffect;
+        NosSizeVoiceEffectStrengthSlider.IsEnabled = true;
         NosRokurokubiVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
-        NosRokurokubiVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosRokurokubiVoiceEffect;
+        NosRokurokubiVoiceEffectStrengthSlider.IsEnabled = true;
         NosBerserkerVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
-        NosBerserkerVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosBerserkerVoiceEffect;
+        NosBerserkerVoiceEffectStrengthSlider.IsEnabled = true;
         NosCitrusVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
-        NosCitrusVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosCitrusVoiceEffect;
+        NosCitrusVoiceEffectStrengthSlider.IsEnabled = true;
         NosRainbowStarEchoCheck.IsEnabled = regularSettingsEnabled;
-        NosRainbowStarEchoStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosRainbowStarEcho;
-        NosVoiceJammingEffectStrengthSlider.IsEnabled = regularSettingsEnabled;
-        NosMegaphoneEffectStrengthSlider.IsEnabled = regularSettingsEnabled;
-        NosBibiriEchoStrengthSlider.IsEnabled = regularSettingsEnabled;
+        NosRainbowStarEchoStrengthSlider.IsEnabled = true;
+        NosVoiceJammingEffectStrengthSlider.IsEnabled = true;
+        NosMegaphoneEffectStrengthSlider.IsEnabled = true;
+        NosBibiriEchoStrengthSlider.IsEnabled = true;
         NosFixerJammingVoiceBlockCheck.IsEnabled = regularSettingsEnabled;
         NosFixerJammingLowpassCheck.IsEnabled = regularSettingsEnabled;
     }
@@ -963,26 +969,6 @@ public partial class SettingsWindow : Window
     {
         if (DistanceTitleText is null) return;
         UpdateDistanceTitle();
-    }
-
-    private void NosCitrusVoiceEffectCheck_Changed(object sender, RoutedEventArgs e)
-    {
-        if (NosCitrusVoiceEffectStrengthSlider is not null && RadioOnlyCheck is not null)
-            NosCitrusVoiceEffectStrengthSlider.IsEnabled =
-                NosCitrusVoiceEffectCheck.IsChecked == true && RadioOnlyCheck.IsChecked != true;
-    }
-
-    private void ModVoiceEffectCheck_Changed(object sender, RoutedEventArgs e)
-    {
-        if (SnrJumboVoiceEffectStrengthSlider is null || NosSizeVoiceEffectStrengthSlider is null ||
-            NosRokurokubiVoiceEffectStrengthSlider is null || NosBerserkerVoiceEffectStrengthSlider is null ||
-            NosRainbowStarEchoStrengthSlider is null || RadioOnlyCheck is null) return;
-        var canEdit = RadioOnlyCheck.IsChecked != true;
-        SnrJumboVoiceEffectStrengthSlider.IsEnabled = canEdit && SnrJumboVoiceCheck.IsChecked == true;
-        NosSizeVoiceEffectStrengthSlider.IsEnabled = canEdit && NosSizeVoiceEffectCheck.IsChecked == true;
-        NosRokurokubiVoiceEffectStrengthSlider.IsEnabled = canEdit && NosRokurokubiVoiceEffectCheck.IsChecked == true;
-        NosBerserkerVoiceEffectStrengthSlider.IsEnabled = canEdit && NosBerserkerVoiceEffectCheck.IsChecked == true;
-        NosRainbowStarEchoStrengthSlider.IsEnabled = canEdit && NosRainbowStarEchoCheck.IsChecked == true;
     }
 
     private void UpdateDistanceTitle()
@@ -1210,6 +1196,21 @@ public partial class SettingsWindow : Window
                 window.SnrVoiceControlsPanel.Visibility != Visibility.Visible ||
                 window.VoiceMyLobbyTab.IsChecked != true)
                 throw new InvalidOperationException("Voice effects were not moved to the dedicated category");
+            window.UpdateCurrentGameState(new AmongUsState
+            {
+                Mod = AmongUsModType.NebulaOnTheShip,
+                InstalledMod = AmongUsModType.NebulaOnTheShip,
+                GameState = GameState.Tasks,
+                IsHost = true,
+                NosAddonIds = ["UchuAddon", "tanuki.bcl.roles"]
+            });
+            if (window.LobbyControlsPanel.IsEnabled || !window.VoiceLobbyControlsPanel.IsEnabled ||
+                window.UchuLobbyEffectControlsPanel.Visibility != Visibility.Visible ||
+                window.TanukiAddonVoiceControlsPanel.Visibility != Visibility.Visible)
+                throw new InvalidOperationException("Game-time effect strength editing or addon controls are unavailable");
+            window.NosSizeVoiceEffectStrengthSlider.Value = 40;
+            if (window.lobbyDraft.NosSizeVoiceEffectStrength != 40)
+                throw new InvalidOperationException("Game-time effect strength was not saved to the lobby draft");
             window.CategoryList.SelectedIndex = 1;
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.TownOfHostForE });
             if (window.TohControlsPanel.Visibility != Visibility.Visible ||
