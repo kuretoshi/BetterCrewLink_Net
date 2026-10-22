@@ -336,6 +336,8 @@ public partial class MainWindow : Window
         if (previous.MasterVolume != current.MasterVolume) activeProbe.SetMasterVolume(current.MasterVolume);
         if (previous.VoiceEffectStrength != current.VoiceEffectStrength)
             activeProbe.SetVoiceEffectStrength(current.VoiceEffectStrength);
+        if (previous.LocalVoiceEffectStrengths != current.LocalVoiceEffectStrengths)
+            activeProbe.SetLocalVoiceEffectStrengths(current.LocalVoiceEffectStrengths);
         if (previous.CrewVolumeAsGhost != current.CrewVolumeAsGhost ||
             previous.GhostVolumeAsImpostor != current.GhostVolumeAsImpostor)
             activeProbe.SetListenerVolumes(current.CrewVolumeAsGhost, current.GhostVolumeAsImpostor);
@@ -648,6 +650,7 @@ public partial class MainWindow : Window
         });
         activeProbe.SetMasterVolume(settings.MasterVolume);
         activeProbe.SetVoiceEffectStrength(settings.VoiceEffectStrength);
+        activeProbe.SetLocalVoiceEffectStrengths(settings.LocalVoiceEffectStrengths);
         activeProbe.SetPlayerConfigs(settings.PlayerConfigMap);
         activeProbe.SetListenerVolumes(settings.CrewVolumeAsGhost, settings.GhostVolumeAsImpostor);
         activeProbe.SetSpatialAudio(settings.EnableSpatialAudio);

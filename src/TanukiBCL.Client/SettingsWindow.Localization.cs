@@ -118,9 +118,9 @@ public partial class SettingsWindow
                 $"extent={window.SettingsPageScrollViewer.ExtentHeight}, " +
                 $"viewport={window.SettingsPageScrollViewer.ViewportHeight}");
         if (window.AudioPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 4 ||
-            window.VoiceEffectsPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 1 ||
+            window.VoiceEffectsPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 2 ||
             window.MicrophoneLevelStatus.Visibility != System.Windows.Visibility.Collapsed)
-            throw new InvalidOperationException("Released audio settings card layout was not applied");
+            throw new InvalidOperationException("Audio settings and separate effect test cards were not applied");
         if (window.OverlayPositionCombo.Style != window.MicrophoneCombo.Style ||
             window.ServerUrlBox.Style != window.MicrophoneCombo.Style ||
             (window.OverlayPositionCombo.SelectedItem as ComboBoxItem)?.Tag as string != "right" ||

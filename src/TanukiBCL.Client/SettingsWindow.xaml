@@ -917,19 +917,8 @@
                                             ValueChanged="VolumeSlider_ValueChanged" />
                                     <TextBlock x:Name="VoiceEffectStrengthValue" Grid.Column="2" TextAlignment="Right" />
                                 </Grid>
-                                <Button x:Name="TestVoiceEffectButton" Content="ボイスエフェクトテスト"
-                                        Width="240" Height="36" HorizontalAlignment="Center" Margin="0,16,0,6"
-                                        Click="TestVoiceEffectButton_Click" />
                             </StackPanel>
                         </Border>
-                        <StackPanel Orientation="Horizontal" Margin="0,24,0,8">
-                            <RadioButton x:Name="VoiceCurrentLobbyTab" Content="現在のロビー" GroupName="VoiceLobbyView"
-                                         Checked="VoiceLobbyTab_Changed" Style="{StaticResource LobbyTabStyle}" />
-                            <RadioButton x:Name="VoiceMyLobbyTab" Content="自分の設定" GroupName="VoiceLobbyView"
-                                         Checked="VoiceLobbyTab_Changed" Style="{StaticResource LobbyTabStyle}" />
-                        </StackPanel>
-                        <TextBlock x:Name="VoiceNoLobbyText" Text="ロビーに未接続です。参加または作成すると設定を確認できます。"
-                                   Foreground="#80D8FF" TextWrapping="Wrap" Visibility="Collapsed" Margin="4,0,4,8" />
                         <StackPanel x:Name="VoiceLobbyControlsPanel">
                         <StackPanel x:Name="SnrVoiceControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">
                             <TextBlock Text="SNRボイスエフェクト" Foreground="#B7AABD" Margin="16,12,0,2" />
@@ -980,7 +969,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="48" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="シトラス感染時のボイスチェンジャーの強さ" FontSize="14"
+                                    <TextBlock Text="シトラス感染時の強さ" FontSize="14"
                                                TextWrapping="Wrap" VerticalAlignment="Center" />
                                     <Slider x:Name="NosCitrusVoiceEffectStrengthSlider" Grid.Column="1"
                                             Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
@@ -997,6 +986,18 @@
                             </StackPanel>
                         </StackPanel>
                         </StackPanel>
+                        <TextBlock Text="エフェクトテスト" FontSize="12" Foreground="#B7AABD" Margin="4,24,0,8" />
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" Padding="16,12">
+                            <StackPanel>
+                                <ComboBox x:Name="VoiceEffectPreviewCombo" Width="240" Height="32"
+                                          HorizontalAlignment="Center"
+                                          SelectionChanged="VoiceEffectPreviewCombo_SelectionChanged" />
+                                <Button x:Name="TestVoiceEffectButton" Content="ボイスエフェクトテスト"
+                                        Width="240" Height="36" HorizontalAlignment="Center" Margin="0,12,0,0"
+                                        Click="TestVoiceEffectButton_Click" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                     <StackPanel x:Name="KeybindsPanel" Visibility="Collapsed">
                         <Border Background="#071B25" CornerRadius="4" MinHeight="68"

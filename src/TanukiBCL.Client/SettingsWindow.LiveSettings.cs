@@ -71,6 +71,15 @@ public partial class SettingsWindow
         BindShortcut(DeafenShortcutBox, nameof(ClientSettings.DeafenShortcut));
         BindSlider(MasterVolumeSlider, nameof(ClientSettings.MasterVolume));
         BindSlider(VoiceEffectStrengthSlider, nameof(ClientSettings.VoiceEffectStrength));
+        BindSlider(SnrJumboVoiceEffectStrengthSlider, nameof(ClientSettings.SnrJumboVoiceEffectStrength));
+        BindSlider(NosSizeVoiceEffectStrengthSlider, nameof(ClientSettings.NosSizeVoiceEffectStrength));
+        BindSlider(NosRokurokubiVoiceEffectStrengthSlider, nameof(ClientSettings.NosRokurokubiVoiceEffectStrength));
+        BindSlider(NosBerserkerVoiceEffectStrengthSlider, nameof(ClientSettings.NosBerserkerVoiceEffectStrength));
+        BindSlider(NosCitrusVoiceEffectStrengthSlider, nameof(ClientSettings.NosCitrusVoiceEffectStrength));
+        BindSlider(NosRainbowStarEchoStrengthSlider, nameof(ClientSettings.NosRainbowStarEchoStrength));
+        BindSlider(NosVoiceJammingEffectStrengthSlider, nameof(ClientSettings.NosVoiceJammingEffectStrength));
+        BindSlider(NosMegaphoneEffectStrengthSlider, nameof(ClientSettings.NosMegaphoneEffectStrength));
+        BindSlider(NosBibiriEchoStrengthSlider, nameof(ClientSettings.NosBibiriEchoStrength));
         BindSlider(CrewVolumeAsGhostSlider, nameof(ClientSettings.CrewVolumeAsGhost));
         BindSlider(GhostVolumeAsImpostorSlider, nameof(ClientSettings.GhostVolumeAsImpostor));
         BindSlider(MicrophoneGainSlider, nameof(ClientSettings.MicrophoneGain));
@@ -85,8 +94,6 @@ public partial class SettingsWindow
         }
         foreach (var toggle in LogicalDescendants<CheckBox>(VoiceLobbyControlsPanel))
             toggle.Click += (_, _) => QueueLobbyCommit();
-        foreach (var slider in LogicalDescendants<Slider>(VoiceLobbyControlsPanel))
-            slider.ValueChanged += (_, _) => QueueVoiceEffectStrengthCommit();
         DistanceSlider.ValueChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyTitleBox.TextChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyLanguageCombo.SelectionChanged += (_, _) => QueueLobbyCommit();
@@ -164,26 +171,6 @@ public partial class SettingsWindow
     {
         if (!settingsReady || loadingLobbyControls || showingCurrentLobby || !lobbySettingsEditable) return;
         lobbyDraft = ReadLobbyControls();
-        lobbyPending = true;
-        lobbyCommitTimer.Stop();
-        lobbyCommitTimer.Start();
-    }
-
-    private void QueueVoiceEffectStrengthCommit()
-    {
-        if (!settingsReady || loadingLobbyControls || showingCurrentLobby) return;
-        lobbyDraft = lobbyDraft with
-        {
-            SnrJumboVoiceEffectStrength = (int)SnrJumboVoiceEffectStrengthSlider.Value,
-            NosSizeVoiceEffectStrength = (int)NosSizeVoiceEffectStrengthSlider.Value,
-            NosRokurokubiVoiceEffectStrength = (int)NosRokurokubiVoiceEffectStrengthSlider.Value,
-            NosBerserkerVoiceEffectStrength = (int)NosBerserkerVoiceEffectStrengthSlider.Value,
-            NosCitrusVoiceEffectStrength = (int)NosCitrusVoiceEffectStrengthSlider.Value,
-            NosRainbowStarEchoStrength = (int)NosRainbowStarEchoStrengthSlider.Value,
-            NosVoiceJammingEffectStrength = (int)NosVoiceJammingEffectStrengthSlider.Value,
-            NosMegaphoneEffectStrength = (int)NosMegaphoneEffectStrengthSlider.Value,
-            NosBibiriEchoStrength = (int)NosBibiriEchoStrengthSlider.Value
-        };
         lobbyPending = true;
         lobbyCommitTimer.Stop();
         lobbyCommitTimer.Start();

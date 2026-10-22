@@ -761,6 +761,11 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS Citrus: configured strength", true,
             VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
                 new LobbySettings { NosCitrusVoiceEffectStrength = 35 }, 0, true, false)?.Strength == 0.35d);
+        var listenerEffects = new VoiceEffectStrengths { NosCitrusVoiceEffectStrength = 35 }
+            .ApplyTo(new LobbySettings { NosCitrusVoiceEffectStrength = 0 });
+        Check("NoS Citrus: listener strength overrides host strength", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                listenerEffects, 0, true, false)?.Strength == 0.35d);
         Check("NoS Citrus: zero strength disables disguise", true,
             VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
                 new LobbySettings { NosCitrusVoiceEffectStrength = 0 }, 0, true, false) is null);

@@ -44,6 +44,29 @@ internal sealed class ClientSettings
     public Dictionary<string, GameLaunchPlatform> CustomPlatforms { get; set; } = [];
     public int MasterVolume { get; set; } = 100;
     public int VoiceEffectStrength { get; set; } = 100;
+    public int SnrJumboVoiceEffectStrength { get; set; } = 100;
+    public int NosSizeVoiceEffectStrength { get; set; } = 100;
+    public int NosRokurokubiVoiceEffectStrength { get; set; } = 100;
+    public int NosBerserkerVoiceEffectStrength { get; set; } = 100;
+    public int NosCitrusVoiceEffectStrength { get; set; } = 100;
+    public int NosRainbowStarEchoStrength { get; set; } = 100;
+    public int NosVoiceJammingEffectStrength { get; set; } = 100;
+    public int NosMegaphoneEffectStrength { get; set; } = 100;
+    public int NosBibiriEchoStrength { get; set; } = 100;
+
+    [JsonIgnore]
+    public VoiceEffectStrengths LocalVoiceEffectStrengths => new()
+    {
+        SnrJumboVoiceEffectStrength = SnrJumboVoiceEffectStrength,
+        NosSizeVoiceEffectStrength = NosSizeVoiceEffectStrength,
+        NosRokurokubiVoiceEffectStrength = NosRokurokubiVoiceEffectStrength,
+        NosBerserkerVoiceEffectStrength = NosBerserkerVoiceEffectStrength,
+        NosCitrusVoiceEffectStrength = NosCitrusVoiceEffectStrength,
+        NosRainbowStarEchoStrength = NosRainbowStarEchoStrength,
+        NosVoiceJammingEffectStrength = NosVoiceJammingEffectStrength,
+        NosMegaphoneEffectStrength = NosMegaphoneEffectStrength,
+        NosBibiriEchoStrength = NosBibiriEchoStrength
+    };
     public int CrewVolumeAsGhost { get; set; } = 100;
     public int GhostVolumeAsImpostor { get; set; } = 10;
     public int MicrophoneGain { get; set; } = 100;
@@ -99,6 +122,15 @@ internal sealed class ClientSettings
             .ToList();
         MasterVolume = Math.Clamp(MasterVolume, 0, 200);
         VoiceEffectStrength = Math.Clamp(VoiceEffectStrength, 0, 100);
+        SnrJumboVoiceEffectStrength = Math.Clamp(SnrJumboVoiceEffectStrength, 0, 100);
+        NosSizeVoiceEffectStrength = Math.Clamp(NosSizeVoiceEffectStrength, 0, 100);
+        NosRokurokubiVoiceEffectStrength = Math.Clamp(NosRokurokubiVoiceEffectStrength, 0, 100);
+        NosBerserkerVoiceEffectStrength = Math.Clamp(NosBerserkerVoiceEffectStrength, 0, 100);
+        NosCitrusVoiceEffectStrength = Math.Clamp(NosCitrusVoiceEffectStrength, 0, 100);
+        NosRainbowStarEchoStrength = Math.Clamp(NosRainbowStarEchoStrength, 0, 100);
+        NosVoiceJammingEffectStrength = Math.Clamp(NosVoiceJammingEffectStrength, 0, 100);
+        NosMegaphoneEffectStrength = Math.Clamp(NosMegaphoneEffectStrength, 0, 100);
+        NosBibiriEchoStrength = Math.Clamp(NosBibiriEchoStrength, 0, 100);
         CrewVolumeAsGhost = Math.Clamp(CrewVolumeAsGhost, 0, 100);
         GhostVolumeAsImpostor = Math.Clamp(GhostVolumeAsImpostor, 0, 100);
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);
@@ -143,9 +175,32 @@ internal static class ClientSettingsStore
         {
             if (File.Exists(SettingsPath))
             {
-                var settings = JsonSerializer.Deserialize<ClientSettings>(File.ReadAllText(SettingsPath));
+                var json = File.ReadAllText(SettingsPath);
+                var settings = JsonSerializer.Deserialize<ClientSettings>(json);
                 if (settings is not null)
                 {
+                    settings.Normalize();
+                    using var document = JsonDocument.Parse(json);
+                    var fields = document.RootElement;
+                    var previous = settings.MyLobbySettings;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.SnrJumboVoiceEffectStrength), out _))
+                        settings.SnrJumboVoiceEffectStrength = previous.SnrJumboVoiceEffectStrength;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.NosSizeVoiceEffectStrength), out _))
+                        settings.NosSizeVoiceEffectStrength = previous.NosSizeVoiceEffectStrength;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.NosRokurokubiVoiceEffectStrength), out _))
+                        settings.NosRokurokubiVoiceEffectStrength = previous.NosRokurokubiVoiceEffectStrength;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.NosBerserkerVoiceEffectStrength), out _))
+                        settings.NosBerserkerVoiceEffectStrength = previous.NosBerserkerVoiceEffectStrength;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.NosCitrusVoiceEffectStrength), out _))
+                        settings.NosCitrusVoiceEffectStrength = previous.NosCitrusVoiceEffectStrength;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.NosRainbowStarEchoStrength), out _))
+                        settings.NosRainbowStarEchoStrength = previous.NosRainbowStarEchoStrength;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.NosVoiceJammingEffectStrength), out _))
+                        settings.NosVoiceJammingEffectStrength = previous.NosVoiceJammingEffectStrength;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.NosMegaphoneEffectStrength), out _))
+                        settings.NosMegaphoneEffectStrength = previous.NosMegaphoneEffectStrength;
+                    if (!fields.TryGetProperty(nameof(ClientSettings.NosBibiriEchoStrength), out _))
+                        settings.NosBibiriEchoStrength = previous.NosBibiriEchoStrength;
                     settings.Normalize();
                     return settings;
                 }

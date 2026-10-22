@@ -64,6 +64,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private bool deafened;
     private double masterVolume = 100d;
     private int voiceEffectStrength = 100;
+    private VoiceEffectStrengths localVoiceEffectStrengths = new();
     private double crewVolumeAsGhost = 1d;
     private double ghostVolumeAsImpostor = 0.1d;
     private double microphoneGain = 100d;
@@ -664,6 +665,12 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     public void SetVoiceEffectStrength(int strengthPercent)
     {
         voiceEffectStrength = Math.Clamp(strengthPercent, 0, 100);
+        RefreshPeerMixes();
+    }
+
+    public void SetLocalVoiceEffectStrengths(VoiceEffectStrengths strengths)
+    {
+        localVoiceEffectStrengths = strengths;
         RefreshPeerMixes();
     }
 
@@ -2046,20 +2053,21 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var playerConfig = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs));
         audioSession?.SetInterviewPeer(socketId, other.Id, !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d);
         mix = playerConfig.Apply(mix);
+        var effectLobby = localVoiceEffectStrengths.ApplyTo(activeLobbySettings);
         var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
-            activeLobbySettings, voiceEffectStrength, mix.Audible, IsImpostorRadioActive(clientId));
+            effectLobby, voiceEffectStrength, mix.Audible, IsImpostorRadioActive(clientId));
         var starEcho = VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(currentGameState, other,
-            activeLobbySettings);
+            effectLobby);
         var deathEchoActive = currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
-            activeLobbySettings.NosBibiriEchoStrength > 0 &&
+            effectLobby.NosBibiriEchoStrength > 0 &&
             currentGameState.GameState is GameState.Tasks or GameState.Discussion &&
             !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d && !deafened;
         var deathEchoEvent = currentGameState.NosBibiriEchoes
             .FirstOrDefault(item => item.PlayerId == other.Id)?.UnixMs;
         audioSession?.SetPeerMix(socketId, mix, effect, starEcho,
             deathEchoActive, other.IsDead, deathEchoEvent,
-            Math.Clamp(activeLobbySettings.NosRainbowStarEchoStrength, 0, 100) / 100f,
-            Math.Clamp(activeLobbySettings.NosBibiriEchoStrength, 0, 100) / 100f);
+            Math.Clamp(effectLobby.NosRainbowStarEchoStrength, 0, 100) / 100f,
+            Math.Clamp(effectLobby.NosBibiriEchoStrength, 0, 100) / 100f);
         audioSession?.UpdatePeerMegaphoneRecording(socketId,
             currentGameState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == other.Id),
             currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
