@@ -1,5 +1,6 @@
 {
 	"settings": {
+		"voice_effects": { "title": "Voice Effects", "disguise_strength": "Disguise and mushroom effect strength" },
 		"title": "Settings",
 		"language": "Language",
 		"warning": "Are you sure?",

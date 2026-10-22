@@ -49,11 +49,11 @@ public partial class SettingsWindow
         var settings = new ClientSettings();
         var window = new SettingsWindow(settings, true, null, false, null, (_, _, _) => { }, _ => { });
         window.ApplyTemplate();
-        window.CategoryList.SelectedIndex = 9;
+        window.CategoryList.SelectedIndex = 10;
         if (window.InquiryPanel.Visibility != System.Windows.Visibility.Visible ||
             window.SettingsPageScrollViewer.Visibility != System.Windows.Visibility.Collapsed ||
             window.StreamingPanel.Visibility != System.Windows.Visibility.Collapsed ||
-            window.CategoryList.Items[9] is not ListBoxItem { Content: "問い合わせ" })
+            window.CategoryList.Items[10] is not ListBoxItem { Content: "問い合わせ" })
             throw new InvalidOperationException("3.2.17 inquiry was not embedded in settings navigation");
         window.CategoryList.SelectedIndex = 0;
         bool OverlayLabelsMatch(string language)
@@ -95,7 +95,7 @@ public partial class SettingsWindow
             window.SettingsPageScrollViewer.Content is not Grid scrollContent ||
             scrollContent.Margin.Right != 24d)
             throw new InvalidOperationException("Released settings scrollbar did not reach the window edge");
-        window.CategoryList.SelectedIndex = 6;
+        window.CategoryList.SelectedIndex = 7;
         window.SettingsPageScrollViewer.Measure(new System.Windows.Size(550, 500));
         window.SettingsPageScrollViewer.Arrange(new System.Windows.Rect(0, 0, 550, 500));
         window.ApplySettingsPageScrollBarStyle();
@@ -117,7 +117,8 @@ public partial class SettingsWindow
             throw new InvalidOperationException($"Advanced settings page did not expose a scrollable range: " +
                 $"extent={window.SettingsPageScrollViewer.ExtentHeight}, " +
                 $"viewport={window.SettingsPageScrollViewer.ViewportHeight}");
-        if (window.AudioPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 5 ||
+        if (window.AudioPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 4 ||
+            window.VoiceEffectsPanel.Children.OfType<System.Windows.Controls.Border>().Count() != 1 ||
             window.MicrophoneLevelStatus.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Released audio settings card layout was not applied");
         if (window.OverlayPositionCombo.Style != window.MicrophoneCombo.Style ||
@@ -151,7 +152,7 @@ public partial class SettingsWindow
             hintContent.Children.OfType<Viewbox>().Count() != 1 ||
             hintContent.Children.OfType<System.Windows.Controls.TextBlock>().Count() != 1)
             throw new InvalidOperationException("Released keyboard shortcut information banner was not applied");
-        window.CategoryList.SelectedIndex = 4;
+        window.CategoryList.SelectedIndex = 5;
         if (window.SettingsContent.Margin.Top != 16)
             throw new InvalidOperationException("Keyboard shortcut alert did not align to the released top inset");
         window.CategoryList.SelectedIndex = 0;
@@ -227,7 +228,7 @@ public partial class SettingsWindow
         if (settings.Language != "en" || window.Title != "Settings" ||
             window.LanguageLabel.Text != "Language" ||
             window.CategoryList.Items[0] is not System.Windows.Controls.ListBoxItem { Content: "General" } ||
-            window.CategoryList.Items[4] is not System.Windows.Controls.ListBoxItem
+            window.CategoryList.Items[5] is not System.Windows.Controls.ListBoxItem
                 { Content: "Keyboard Shortcuts" } ||
             !Equals(window.VoiceModeRadio.Content, UiLocalization.Translate("en", "settings.audio.voice_activity")) ||
             window.NatFixLabel.Text != UiLocalization.Translate("en", "settings.advanced.nat_fix") ||

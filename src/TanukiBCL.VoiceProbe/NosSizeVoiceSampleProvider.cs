@@ -50,15 +50,16 @@ internal sealed class NosSizeVoiceSampleProvider(ISampleProvider source) : ISamp
             if (effect.MegaphoneEnergy is { } energy)
             {
                 var wave = Math.Sin(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000d * Math.PI * 8d);
-                sourceFilter!.SetParameters(0.85d + wave * (0.12d + energy * 0.2d),
-                    0.75d + wave * 0.12d, 0.65d);
+                var amount = Math.Clamp(effect.MegaphoneStrength, 0d, 1d);
+                sourceFilter!.SetParameters(1d + (0.85d + wave * (0.12d + energy * 0.2d) - 1d) * amount,
+                    1d + (0.75d + wave * 0.12d - 1d) * amount, 0.65d * amount);
             }
             sourceFilter!.Process(buffer, offset, read);
             return read;
         }
         if (effect.Mode == NosSizeEffectMode.Berserker)
         {
-            berserker!.Process(buffer, offset, read);
+            berserker!.Process(buffer, offset, read, effect.Strength);
             return read;
         }
 

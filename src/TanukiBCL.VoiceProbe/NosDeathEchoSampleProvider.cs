@@ -15,12 +15,13 @@ internal sealed class NosDeathEchoSampleProvider : ISampleProvider
     private bool wasAlive;
     private bool active;
     private bool dead;
+    private float strength = 1f;
 
     public NosDeathEchoSampleProvider(ISampleProvider source) => this.source = source;
 
     public WaveFormat WaveFormat => source.WaveFormat;
 
-    public void Update(bool enabled, bool isDead, long? eventUnixMs, long now)
+    public void Update(bool enabled, bool isDead, long? eventUnixMs, long now, float effectStrength = 1f)
     {
         lock (gate)
         {
@@ -32,6 +33,7 @@ internal sealed class NosDeathEchoSampleProvider : ISampleProvider
             }
             active = true;
             dead = isDead;
+            strength = Math.Clamp(effectStrength, 0f, 1f);
             if (isDead && wasAlive && eventUnixMs is { } timestamp && timestamp != seen &&
                 now - timestamp <= 1500 && now >= timestamp - 100)
             {
@@ -78,7 +80,7 @@ internal sealed class NosDeathEchoSampleProvider : ISampleProvider
         if (remaining > 0)
         {
             var progress = 1d - remaining / (double)total;
-            var decay = 0.65d * Math.Exp(Math.Log(0.001d / 0.65d) * progress);
+            var decay = 0.65d * strength * Math.Exp(Math.Log(0.001d / 0.65d) * progress);
             buffer[index] = input + (float)(previous * decay);
             remaining--;
         }

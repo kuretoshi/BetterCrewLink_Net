@@ -2051,12 +2051,15 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var starEcho = VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(currentGameState, other,
             activeLobbySettings);
         var deathEchoActive = currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
+            activeLobbySettings.NosBibiriEchoStrength > 0 &&
             currentGameState.GameState is GameState.Tasks or GameState.Discussion &&
             !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d && !deafened;
         var deathEchoEvent = currentGameState.NosBibiriEchoes
             .FirstOrDefault(item => item.PlayerId == other.Id)?.UnixMs;
         audioSession?.SetPeerMix(socketId, mix, effect, starEcho,
-            deathEchoActive, other.IsDead, deathEchoEvent);
+            deathEchoActive, other.IsDead, deathEchoEvent,
+            Math.Clamp(activeLobbySettings.NosRainbowStarEchoStrength, 0, 100) / 100f,
+            Math.Clamp(activeLobbySettings.NosBibiriEchoStrength, 0, 100) / 100f);
         audioSession?.UpdatePeerMegaphoneRecording(socketId,
             currentGameState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == other.Id),
             currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&

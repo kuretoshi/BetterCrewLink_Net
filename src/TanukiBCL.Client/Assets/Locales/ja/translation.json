@@ -1,5 +1,6 @@
 {
 	"settings": {
+		"voice_effects": { "title": "ボイスエフェクト", "disguise_strength": "変装・キノコ混乱などの強さ" },
 		"title": "設定",
 		"language": "言語",
 		"warning": "よろしいですか？",

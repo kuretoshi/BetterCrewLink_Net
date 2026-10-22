@@ -28,8 +28,9 @@ internal sealed class BerserkerDsp
         release = 1f - MathF.Exp(-1f / (sampleRate * 0.08f));
     }
 
-    public void Process(float[] samples, int offset, int count)
+    public void Process(float[] samples, int offset, int count, double strength)
     {
+        var amount = (float)Math.Clamp(strength, 0d, 1d);
         for (var index = offset; index < offset + count; index++)
         {
             var dry = float.IsFinite(samples[index]) ? samples[index] : 0f;
@@ -39,7 +40,7 @@ internal sealed class BerserkerDsp
             room[cursor] = filtered;
             var reverberant = RoomSample();
             var mixed = high * 0.8f + filtered * 0.12f + reverberant * 0.06f;
-            samples[index] = Math.Clamp(Compress(mixed) * 0.78f, -1f, 1f);
+            samples[index] = Math.Clamp(dry * (1f - amount) + Compress(mixed) * 0.78f * amount, -1f, 1f);
             cursor = (cursor + 1) % room.Length;
         }
     }

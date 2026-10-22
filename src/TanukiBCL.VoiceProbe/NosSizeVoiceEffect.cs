@@ -17,6 +17,7 @@ internal static class VoiceDisguiseEffectPolicy
 {
     public static bool ShouldApplyRainbowStarEcho(AmongUsState state, Player speaker, LobbySettings lobby) =>
         state.Mod == AmongUsModType.NebulaOnTheShip && lobby.NosRainbowStarEcho &&
+        lobby.NosRainbowStarEchoStrength > 0 &&
         state.GameState is GameState.Tasks or GameState.Discussion &&
         !speaker.IsDead && !speaker.Disconnected && !speaker.Bugged && !speaker.IsDummy &&
         speaker.NosRole?.IsRainbowStar == true;
@@ -28,13 +29,16 @@ internal static class VoiceDisguiseEffectPolicy
     {
         var jamming = VoiceJammingPolicy.For(state, speaker.Id);
         if (audible && jamming is { Pitch: not 1d } && !speaker.Disconnected && !speaker.Bugged && !speaker.IsDummy)
-            return new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d, Pitch: jamming.Pitch);
+            return ScaledFilter(jamming.Pitch, 1d, 0d, lobby.NosVoiceJammingEffectStrength);
         var megaphone = NosMegaphoneVoice.Charging(state, speaker);
         if (audible && megaphone is { VoiceEffect: not false })
         {
-            return new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d,
-                Squash: 0.65d, Pitch: 0.85d, Formant: 0.75d,
-                MegaphoneEnergy: megaphone.Energy);
+            return lobby.NosMegaphoneEffectStrength > 0
+                ? new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d,
+                    Squash: 0.65d, Pitch: 0.85d, Formant: 0.75d,
+                    MegaphoneEnergy: megaphone.Energy,
+                    MegaphoneStrength: Math.Clamp(lobby.NosMegaphoneEffectStrength, 0, 100) / 100d)
+                : null;
         }
         if (!audible || speaker.IsDead || speaker.Disconnected || speaker.Bugged || speaker.IsDummy)
             return null;
@@ -54,7 +58,10 @@ internal static class VoiceDisguiseEffectPolicy
             (speaker.NosPlayer?.BodyType is { } bodyType
                 ? bodyType == 2
                 : speaker.NosRole.BodyType == 2 && speaker.NosRole.IsBerserking == true))
-            return new NosSizeVoiceEffect(NosSizeEffectMode.Berserker, 1d, 1d);
+            return lobby.NosBerserkerVoiceEffectStrength > 0
+                ? new NosSizeVoiceEffect(NosSizeEffectMode.Berserker,
+                    Math.Clamp(lobby.NosBerserkerVoiceEffectStrength, 0, 100) / 100d, 1d)
+                : null;
         if (state.Mod == AmongUsModType.NebulaOnTheShip && lobby.NosRokurokubiVoiceEffect &&
             speaker.NosPlayer is { BodyType: 3, NeckLength: { } length } &&
             double.IsFinite(length) && length > 0d)
@@ -63,8 +70,7 @@ internal static class VoiceDisguiseEffectPolicy
             var x = speaker.NosPlayer.BodyRateX;
             var formant = x is > 0d && double.IsFinite(x.Value)
                 ? Math.Clamp(1d / x.Value, 0.55d, 1.7d) : 1d;
-            return new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d,
-                Pitch: pitch, Formant: formant);
+            return ScaledFilter(pitch, formant, 0d, lobby.NosRokurokubiVoiceEffectStrength);
         }
         var sizeEffect = NosSizeVoiceEffectPolicy.Select(state, speaker, lobby, audible);
         if (sizeEffect is not null) return sizeEffect;
@@ -83,8 +89,8 @@ internal static class VoiceDisguiseEffectPolicy
                 current <= 0d || max <= 0d)
                 return null;
             var growth = Math.Min(1d, current / max);
-            return new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d,
-                Pitch: 1d - growth * 0.6d, Formant: 1d - growth * 0.45d);
+            return ScaledFilter(1d - growth * 0.6d, 1d - growth * 0.45d, 0d,
+                lobby.SnrJumboVoiceEffectStrength);
         }
 
         if (!audible || state.GameState != GameState.Tasks || speaker.IsDead ||
@@ -109,11 +115,22 @@ internal static class VoiceDisguiseEffectPolicy
         return new NosSizeVoiceEffect(NosSizeEffectMode.Disguise,
             Math.Clamp(strengthPercent, 0, 100) / 100d, 1d);
     }
+
+    internal static NosSizeVoiceEffect? ScaledFilter(double pitch, double formant, double squash,
+        int strengthPercent)
+    {
+        var strength = Math.Clamp(strengthPercent, 0, 100) / 100d;
+        return strength > 0d
+            ? new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d,
+                Squash: squash * strength, Pitch: 1d + (pitch - 1d) * strength,
+                Formant: 1d + (formant - 1d) * strength)
+            : null;
+    }
 }
 
 internal sealed record NosSizeVoiceEffect(NosSizeEffectMode Mode, double Strength, double ToneRate,
     double Squash = 0d, double Pitch = 1d, double Formant = 1d,
-    double? MegaphoneEnergy = null);
+    double? MegaphoneEnergy = null, double MegaphoneStrength = 1d);
 
 internal static class NosSizeVoiceEffectPolicy
 {
@@ -135,8 +152,8 @@ internal static class NosSizeVoiceEffectPolicy
         {
             var amount = 1d - y;
             var squash = amount * amount * (3d - 2d * amount);
-            return new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d,
-                Squash: squash, Pitch: 1d + squash * 0.25d);
+            return VoiceDisguiseEffectPolicy.ScaledFilter(1d + squash * 0.25d, 1d, squash,
+                lobby.NosSizeVoiceEffectStrength);
         }
         var pitch = y < 0.98d
             ? 1d + Math.Min(1d, Math.Log(1d / Math.Max(0.1d, y)) / Math.Log(10d))
@@ -144,8 +161,8 @@ internal static class NosSizeVoiceEffectPolicy
                 ? 1d - Math.Min(1d, Math.Log(y) / Math.Log(5d)) * 0.6d
                 : 1d;
         if (pitch != 1d || x < 0.98d || x > 1.02d)
-            return new NosSizeVoiceEffect(NosSizeEffectMode.SourceFilter, 0d, 1d,
-                Pitch: pitch, Formant: formant);
+            return VoiceDisguiseEffectPolicy.ScaledFilter(pitch, formant, 0d,
+                lobby.NosSizeVoiceEffectStrength);
         return null;
     }
 }

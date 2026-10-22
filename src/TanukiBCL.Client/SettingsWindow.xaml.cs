@@ -164,6 +164,7 @@ public partial class SettingsWindow : Window
         var wasEditable = lobbySettingsEditable;
         lobbySettingsEditable = state is not { IsHost: true, GameState: GameState.Tasks or GameState.Discussion };
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
+        VoiceLobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
         if (wasEditable != lobbySettingsEditable || showingCurrentLobby)
             ShowSelectedLobbySettings(reloadControls: wasEditable != lobbySettingsEditable);
         else UpdateLobbyNotice();
@@ -309,23 +310,24 @@ public partial class SettingsWindow : Window
         LobbyPanel.Visibility = CategoryList.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         PlayersPanel.Visibility = CategoryList.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
         AudioPanel.Visibility = CategoryList.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
-        KeybindsPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
-        SettingsContent.Margin = new Thickness(26, CategoryList.SelectedIndex == 4 ? 16 : 24, 24, 24);
-        OverlayPanel.Visibility = CategoryList.SelectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
-        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
-        UpdatePanel.Visibility = CategoryList.SelectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
-        StreamingPanel.Visibility = CategoryList.SelectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;
-        InquiryPanel.Visibility = CategoryList.SelectedIndex == 9 ? Visibility.Visible : Visibility.Collapsed;
-        SettingsPageScrollViewer.Visibility = CategoryList.SelectedIndex == 9 ? Visibility.Collapsed : Visibility.Visible;
-        if (CategoryList.SelectedIndex == 8) UpdateObsUrl();
+        VoiceEffectsPanel.Visibility = CategoryList.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
+        KeybindsPanel.Visibility = CategoryList.SelectedIndex == 5 ? Visibility.Visible : Visibility.Collapsed;
+        SettingsContent.Margin = new Thickness(26, CategoryList.SelectedIndex == 5 ? 16 : 24, 24, 24);
+        OverlayPanel.Visibility = CategoryList.SelectedIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
+        AdvancedPanel.Visibility = CategoryList.SelectedIndex == 7 ? Visibility.Visible : Visibility.Collapsed;
+        UpdatePanel.Visibility = CategoryList.SelectedIndex == 8 ? Visibility.Visible : Visibility.Collapsed;
+        StreamingPanel.Visibility = CategoryList.SelectedIndex == 9 ? Visibility.Visible : Visibility.Collapsed;
+        InquiryPanel.Visibility = CategoryList.SelectedIndex == 10 ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPageScrollViewer.Visibility = CategoryList.SelectedIndex == 10 ? Visibility.Collapsed : Visibility.Visible;
+        if (CategoryList.SelectedIndex == 9) UpdateObsUrl();
         if (IsLoaded)
         {
             UpdateMicrophoneLevelSession();
             if (CategoryList.SelectedIndex != 3)
             {
                 StopSpeakerTest();
-                StopVoiceEffectPreview();
             }
+            if (CategoryList.SelectedIndex != 4) StopVoiceEffectPreview();
         }
     }
 
@@ -659,6 +661,11 @@ public partial class SettingsWindow : Window
     {
         if (LobbyControlsPanel is null || loadingLobbyControls) return;
         var nextCurrent = CurrentLobbyTab.IsChecked == true;
+        if (VoiceCurrentLobbyTab is not null && VoiceMyLobbyTab is not null)
+        {
+            if (nextCurrent) VoiceCurrentLobbyTab.IsChecked = true;
+            else VoiceMyLobbyTab.IsChecked = true;
+        }
         if (nextCurrent == showingCurrentLobby) return;
         if (!showingCurrentLobby)
         {
@@ -667,6 +674,13 @@ public partial class SettingsWindow : Window
         }
         showingCurrentLobby = nextCurrent;
         ShowSelectedLobbySettings();
+    }
+
+    private void VoiceLobbyTab_Changed(object sender, RoutedEventArgs e)
+    {
+        if (CurrentLobbyTab is null || MyLobbyTab is null || loadingLobbyControls) return;
+        if (VoiceCurrentLobbyTab.IsChecked == true) CurrentLobbyTab.IsChecked = true;
+        else if (VoiceMyLobbyTab.IsChecked == true) MyLobbyTab.IsChecked = true;
     }
 
     private void ShowSelectedLobbySettings(bool reloadControls = true)
@@ -685,6 +699,9 @@ public partial class SettingsWindow : Window
         var becameVisible = value is not null && LobbyControlsPanel.Visibility != Visibility.Visible;
         LobbyControlsPanel.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
         LobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
+        VoiceLobbyControlsPanel.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
+        VoiceLobbyControlsPanel.IsEnabled = !showingCurrentLobby && lobbySettingsEditable;
+        VoiceNoLobbyText.Visibility = showingCurrentLobby && !inLobby ? Visibility.Visible : Visibility.Collapsed;
         if (value is not null && (reloadControls || becameVisible)) LoadLobbyControls(value);
     }
 
@@ -734,6 +751,10 @@ public partial class SettingsWindow : Window
         TohControlsPanel.Visibility = mod == AmongUsModType.TownOfHostForE
             ? Visibility.Visible : Visibility.Collapsed;
         NosControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip
+            ? Visibility.Visible : Visibility.Collapsed;
+        SnrVoiceControlsPanel.Visibility = mod == AmongUsModType.SuperNewRoles
+            ? Visibility.Visible : Visibility.Collapsed;
+        NosVoiceControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip
             ? Visibility.Visible : Visibility.Collapsed;
         UchuControlsPanel.Visibility = mod == AmongUsModType.NebulaOnTheShip &&
             currentGameState?.NosAddonIds.Contains("UchuAddon", StringComparer.Ordinal) == true
@@ -798,6 +819,7 @@ public partial class SettingsWindow : Window
         DeadOnly = DeadOnlyCheck.IsChecked == true,
         MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true,
         SnrJumboVoice = SnrJumboVoiceCheck.IsChecked == true,
+        SnrJumboVoiceEffectStrength = (int)SnrJumboVoiceEffectStrengthSlider.Value,
         JackalHaunting = SnrJackalHauntingCheck.IsChecked == true,
         JackalRadioEnabled = currentGameState?.Mod == AmongUsModType.SuperNewRoles
             ? SnrJackalRadioCheck.IsChecked == true : JackalRadioCheck.IsChecked == true,
@@ -810,11 +832,18 @@ public partial class SettingsWindow : Window
         NosNeutralKillerHaunting = NosNeutralKillerHauntingCheck.IsChecked == true,
         NosVoicePositions = NosVoicePositionsCheck.IsChecked == true,
         NosSizeVoiceEffect = NosSizeVoiceEffectCheck.IsChecked == true,
+        NosSizeVoiceEffectStrength = (int)NosSizeVoiceEffectStrengthSlider.Value,
         NosRokurokubiVoiceEffect = NosRokurokubiVoiceEffectCheck.IsChecked == true,
+        NosRokurokubiVoiceEffectStrength = (int)NosRokurokubiVoiceEffectStrengthSlider.Value,
         NosBerserkerVoiceEffect = NosBerserkerVoiceEffectCheck.IsChecked == true,
+        NosBerserkerVoiceEffectStrength = (int)NosBerserkerVoiceEffectStrengthSlider.Value,
         NosCitrusVoiceEffect = NosCitrusVoiceEffectCheck.IsChecked == true,
         NosCitrusVoiceEffectStrength = (int)NosCitrusVoiceEffectStrengthSlider.Value,
         NosRainbowStarEcho = NosRainbowStarEchoCheck.IsChecked == true,
+        NosRainbowStarEchoStrength = (int)NosRainbowStarEchoStrengthSlider.Value,
+        NosVoiceJammingEffectStrength = (int)NosVoiceJammingEffectStrengthSlider.Value,
+        NosMegaphoneEffectStrength = (int)NosMegaphoneEffectStrengthSlider.Value,
+        NosBibiriEchoStrength = (int)NosBibiriEchoStrengthSlider.Value,
         NosFixerJammingVoiceBlock = NosFixerJammingVoiceBlockCheck.IsChecked == true,
         NosFixerJammingLowpass = NosFixerJammingLowpassCheck.IsChecked == true,
         PublicLobbyOn = PublicLobbyOnCheck.IsChecked == true,
@@ -839,6 +868,7 @@ public partial class SettingsWindow : Window
         DeadOnlyCheck.IsChecked = value.DeadOnly;
         MeetingGhostOnlyCheck.IsChecked = value.MeetingGhostOnly;
         SnrJumboVoiceCheck.IsChecked = value.SnrJumboVoice;
+        SnrJumboVoiceEffectStrengthSlider.Value = value.SnrJumboVoiceEffectStrength;
         SnrJackalHauntingCheck.IsChecked = value.JackalHaunting;
         SnrJackalRadioCheck.IsChecked = value.JackalRadioEnabled;
         SnrJackalHearOutsideVentsCheck.IsChecked = value.JackalHearOutsideVents;
@@ -851,11 +881,18 @@ public partial class SettingsWindow : Window
         NosNeutralKillerHauntingCheck.IsChecked = value.NosNeutralKillerHaunting;
         NosVoicePositionsCheck.IsChecked = value.NosVoicePositions;
         NosSizeVoiceEffectCheck.IsChecked = value.NosSizeVoiceEffect;
+        NosSizeVoiceEffectStrengthSlider.Value = value.NosSizeVoiceEffectStrength;
         NosRokurokubiVoiceEffectCheck.IsChecked = value.NosRokurokubiVoiceEffect;
+        NosRokurokubiVoiceEffectStrengthSlider.Value = value.NosRokurokubiVoiceEffectStrength;
         NosBerserkerVoiceEffectCheck.IsChecked = value.NosBerserkerVoiceEffect;
+        NosBerserkerVoiceEffectStrengthSlider.Value = value.NosBerserkerVoiceEffectStrength;
         NosCitrusVoiceEffectCheck.IsChecked = value.NosCitrusVoiceEffect;
         NosCitrusVoiceEffectStrengthSlider.Value = value.NosCitrusVoiceEffectStrength;
         NosRainbowStarEchoCheck.IsChecked = value.NosRainbowStarEcho;
+        NosRainbowStarEchoStrengthSlider.Value = value.NosRainbowStarEchoStrength;
+        NosVoiceJammingEffectStrengthSlider.Value = value.NosVoiceJammingEffectStrength;
+        NosMegaphoneEffectStrengthSlider.Value = value.NosMegaphoneEffectStrength;
+        NosBibiriEchoStrengthSlider.Value = value.NosBibiriEchoStrength;
         NosFixerJammingVoiceBlockCheck.IsChecked = value.NosFixerJammingVoiceBlock;
         NosFixerJammingLowpassCheck.IsChecked = value.NosFixerJammingLowpass && !value.NosFixerJammingVoiceBlock;
         PublicLobbyOnCheck.IsChecked = value.PublicLobbyOn;
@@ -880,6 +917,7 @@ public partial class SettingsWindow : Window
         MeetingGhostOnlyCheck.IsEnabled = regularSettingsEnabled;
         JackalRadioCheck.IsEnabled = regularSettingsEnabled;
         SnrJumboVoiceCheck.IsEnabled = regularSettingsEnabled;
+        SnrJumboVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.SnrJumboVoice;
         SnrJackalRadioCheck.IsEnabled = regularSettingsEnabled;
         SnrJackalHearOutsideVentsCheck.IsEnabled = regularSettingsEnabled;
         SnrJackalTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
@@ -887,11 +925,18 @@ public partial class SettingsWindow : Window
         SnrSidekickTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
         NosVoicePositionsCheck.IsEnabled = regularSettingsEnabled;
         NosSizeVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
+        NosSizeVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosSizeVoiceEffect;
         NosRokurokubiVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
+        NosRokurokubiVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosRokurokubiVoiceEffect;
         NosBerserkerVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
+        NosBerserkerVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosBerserkerVoiceEffect;
         NosCitrusVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
         NosCitrusVoiceEffectStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosCitrusVoiceEffect;
         NosRainbowStarEchoCheck.IsEnabled = regularSettingsEnabled;
+        NosRainbowStarEchoStrengthSlider.IsEnabled = regularSettingsEnabled && value.NosRainbowStarEcho;
+        NosVoiceJammingEffectStrengthSlider.IsEnabled = regularSettingsEnabled;
+        NosMegaphoneEffectStrengthSlider.IsEnabled = regularSettingsEnabled;
+        NosBibiriEchoStrengthSlider.IsEnabled = regularSettingsEnabled;
         NosFixerJammingVoiceBlockCheck.IsEnabled = regularSettingsEnabled;
         NosFixerJammingLowpassCheck.IsEnabled = regularSettingsEnabled;
     }
@@ -927,6 +972,19 @@ public partial class SettingsWindow : Window
                 NosCitrusVoiceEffectCheck.IsChecked == true && RadioOnlyCheck.IsChecked != true;
     }
 
+    private void ModVoiceEffectCheck_Changed(object sender, RoutedEventArgs e)
+    {
+        if (SnrJumboVoiceEffectStrengthSlider is null || NosSizeVoiceEffectStrengthSlider is null ||
+            NosRokurokubiVoiceEffectStrengthSlider is null || NosBerserkerVoiceEffectStrengthSlider is null ||
+            NosRainbowStarEchoStrengthSlider is null || RadioOnlyCheck is null) return;
+        var canEdit = RadioOnlyCheck.IsChecked != true;
+        SnrJumboVoiceEffectStrengthSlider.IsEnabled = canEdit && SnrJumboVoiceCheck.IsChecked == true;
+        NosSizeVoiceEffectStrengthSlider.IsEnabled = canEdit && NosSizeVoiceEffectCheck.IsChecked == true;
+        NosRokurokubiVoiceEffectStrengthSlider.IsEnabled = canEdit && NosRokurokubiVoiceEffectCheck.IsChecked == true;
+        NosBerserkerVoiceEffectStrengthSlider.IsEnabled = canEdit && NosBerserkerVoiceEffectCheck.IsChecked == true;
+        NosRainbowStarEchoStrengthSlider.IsEnabled = canEdit && NosRainbowStarEchoCheck.IsChecked == true;
+    }
+
     private void UpdateDistanceTitle()
     {
         DistanceTitleText.Text = UiLocalization.Translate(settings.Language,
@@ -948,6 +1006,22 @@ public partial class SettingsWindow : Window
         DistanceValue.Text = $"{DistanceSlider.Value:0.0}";
         if (NosCitrusVoiceEffectStrengthValue is not null)
             NosCitrusVoiceEffectStrengthValue.Text = $"{NosCitrusVoiceEffectStrengthSlider.Value:0}%";
+        if (SnrJumboVoiceEffectStrengthValue is not null)
+            SnrJumboVoiceEffectStrengthValue.Text = $"{SnrJumboVoiceEffectStrengthSlider.Value:0}%";
+        if (NosSizeVoiceEffectStrengthValue is not null)
+            NosSizeVoiceEffectStrengthValue.Text = $"{NosSizeVoiceEffectStrengthSlider.Value:0}%";
+        if (NosRokurokubiVoiceEffectStrengthValue is not null)
+            NosRokurokubiVoiceEffectStrengthValue.Text = $"{NosRokurokubiVoiceEffectStrengthSlider.Value:0}%";
+        if (NosBerserkerVoiceEffectStrengthValue is not null)
+            NosBerserkerVoiceEffectStrengthValue.Text = $"{NosBerserkerVoiceEffectStrengthSlider.Value:0}%";
+        if (NosRainbowStarEchoStrengthValue is not null)
+            NosRainbowStarEchoStrengthValue.Text = $"{NosRainbowStarEchoStrengthSlider.Value:0}%";
+        if (NosVoiceJammingEffectStrengthValue is not null)
+            NosVoiceJammingEffectStrengthValue.Text = $"{NosVoiceJammingEffectStrengthSlider.Value:0}%";
+        if (NosMegaphoneEffectStrengthValue is not null)
+            NosMegaphoneEffectStrengthValue.Text = $"{NosMegaphoneEffectStrengthSlider.Value:0}%";
+        if (NosBibiriEchoStrengthValue is not null)
+            NosBibiriEchoStrengthValue.Text = $"{NosBibiriEchoStrengthSlider.Value:0}%";
     }
 
     private ClientSettings ReadSettingsControls()
@@ -1063,7 +1137,7 @@ public partial class SettingsWindow : Window
         var window = new SettingsWindow(new ClientSettings(), true, null, false, null, (_, _, _) => { }, _ => { });
         try
         {
-            window.CategoryList.SelectedIndex = 6;
+            window.CategoryList.SelectedIndex = 7;
             window.ChangeServerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var root = (FrameworkElement)window.Content;
             foreach (var size in new[] { new Size(760, 620), new Size(650, 500) })
@@ -1098,7 +1172,12 @@ public partial class SettingsWindow : Window
             JackalHearOutsideVents = true, JackalTalkInVents = true,
             SidekickHaunting = true, SidekickHearOutsideVents = true,
             SidekickTalkInVents = true, TohNeutralKillerHaunting = true,
-            NosNeutralKillerHaunting = true
+            NosNeutralKillerHaunting = true,
+            SnrJumboVoiceEffectStrength = 55, NosSizeVoiceEffectStrength = 60,
+            NosRokurokubiVoiceEffectStrength = 65, NosBerserkerVoiceEffectStrength = 70,
+            NosCitrusVoiceEffectStrength = 75, NosRainbowStarEchoStrength = 80,
+            NosVoiceJammingEffectStrength = 85, NosMegaphoneEffectStrength = 90,
+            NosBibiriEchoStrength = 95
         };
         var settings = new ClientSettings { MyLobbySettings = lobby };
         var window = new SettingsWindow(settings, true, null, false,
@@ -1111,6 +1190,11 @@ public partial class SettingsWindow : Window
                 !read.SidekickHaunting || !read.SidekickHearOutsideVents ||
                 !read.SidekickTalkInVents || !read.TohNeutralKillerHaunting ||
                 !read.NosNeutralKillerHaunting ||
+                read.SnrJumboVoiceEffectStrength != 55 || read.NosSizeVoiceEffectStrength != 60 ||
+                read.NosRokurokubiVoiceEffectStrength != 65 || read.NosBerserkerVoiceEffectStrength != 70 ||
+                read.NosCitrusVoiceEffectStrength != 75 || read.NosRainbowStarEchoStrength != 80 ||
+                read.NosVoiceJammingEffectStrength != 85 || read.NosMegaphoneEffectStrength != 90 ||
+                read.NosBibiriEchoStrength != 95 ||
                 window.SnrControlsPanel.Visibility != Visibility.Visible)
                 throw new InvalidOperationException("MOD lobby controls did not round-trip");
             if (window.SnrControlsPanel.Children.OfType<Border>().Count() != 1 ||
@@ -1120,6 +1204,13 @@ public partial class SettingsWindow : Window
                 window.TohNeutralKillerHauntingCheck.Style != window.RadioOnlyCheck.Style ||
                 window.NosVoicePositionsCheck.Style != window.RadioOnlyCheck.Style)
                 throw new InvalidOperationException("MOD lobby cards did not use the released switch layout");
+            window.CategoryList.SelectedIndex = 4;
+            if (window.VoiceEffectsPanel.Visibility != Visibility.Visible ||
+                window.AudioPanel.Visibility != Visibility.Collapsed ||
+                window.SnrVoiceControlsPanel.Visibility != Visibility.Visible ||
+                window.VoiceMyLobbyTab.IsChecked != true)
+                throw new InvalidOperationException("Voice effects were not moved to the dedicated category");
+            window.CategoryList.SelectedIndex = 1;
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.TownOfHostForE });
             if (window.TohControlsPanel.Visibility != Visibility.Visible ||
                 window.SnrControlsPanel.Visibility != Visibility.Collapsed ||
@@ -1176,7 +1267,7 @@ public partial class SettingsWindow : Window
             window.UpdateCurrentGameState(new AmongUsState { Mod = AmongUsModType.SuperNewRoles });
             if (window.ReadLobbyControls().JackalRadioEnabled || window.SnrJackalRadioCheck.IsChecked != false)
                 throw new InvalidOperationException("Shared Jackal radio setting did not follow MOD switch");
-            window.CategoryList.SelectedIndex = 7;
+            window.CategoryList.SelectedIndex = 8;
             if (window.UpdatePanel.Visibility != Visibility.Visible || window.StartUpdateButton.IsEnabled ||
                 window.UpdateVersionText.Visibility != Visibility.Collapsed ||
                 window.UpdateStatusText.Visibility != Visibility.Visible ||
@@ -1211,7 +1302,7 @@ public partial class SettingsWindow : Window
             if (window.ManualUpdateDownloadButton.Visibility != Visibility.Collapsed ||
                 window.StartUpdateButton.IsEnabled || window.UpdateProgress.IsIndeterminate)
                 throw new InvalidOperationException("Manual download fallback survived update reset");
-            window.CategoryList.SelectedIndex = 8;
+            window.CategoryList.SelectedIndex = 9;
             window.ObsOverlayCheck.IsChecked = true;
             if (window.StreamingPanel.Visibility != Visibility.Visible ||
                 !StreamingSettings.IsValidSecret(window.obsSecretDraft) ||
@@ -1238,7 +1329,7 @@ public partial class SettingsWindow : Window
             if (restored is null || !restored.HideCode || !restored.ObsOverlay ||
                 restored.ObsSecret != window.obsSecretDraft)
                 throw new InvalidOperationException("Streaming settings did not persist");
-            window.CategoryList.SelectedIndex = 6;
+            window.CategoryList.SelectedIndex = 7;
             window.ChangeServerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             if (window.ServerDialogBackdrop.Visibility != Visibility.Visible ||
                 window.SettingsContent.IsEnabled || window.SettingsNavigation.IsEnabled ||

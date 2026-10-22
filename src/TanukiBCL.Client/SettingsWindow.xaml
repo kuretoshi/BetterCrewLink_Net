@@ -450,6 +450,7 @@
                     <ListBoxItem Content="ロビー設定" Tag="{StaticResource GroupsIcon}" Style="{StaticResource CategoryItemStyle}" />
                     <ListBoxItem Content="プレイヤー" Tag="{StaticResource PersonIcon}" Style="{StaticResource CategoryItemStyle}" />
                     <ListBoxItem Content="オーディオ" Tag="{StaticResource VolumeIcon}" Style="{StaticResource CategoryItemStyle}" />
+                    <ListBoxItem Content="ボイスエフェクト" Tag="{StaticResource VolumeIcon}" Style="{StaticResource CategoryItemStyle}" />
                     <ListBoxItem Content="キー割り当て" Tag="{StaticResource KeyboardIcon}" Style="{StaticResource CategoryItemStyle}" />
                     <ListBoxItem Content="オーバーレイ" Tag="{StaticResource LayersIcon}" Style="{StaticResource CategoryItemStyle}" />
                     <ListBoxItem Content="詳細設定" Tag="{StaticResource ScienceIcon}" Style="{StaticResource CategoryItemStyle}" />
@@ -649,8 +650,6 @@
                             <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                     CornerRadius="8" ClipToBounds="True">
                                 <StackPanel>
-                            <CheckBox x:Name="SnrJumboVoiceCheck" Content="ジャンボ役職の時、大きくなるほど声を太くする"
-                                      Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrJackalHauntingCheck" Content="第三陣営のキルできる役職が幽霊の声も聞こえる"
                                       Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrJackalRadioCheck" Content="ジャッカルラジオ"
@@ -702,12 +701,6 @@
                             <CheckBox x:Name="NosVoicePositionsCheck" Style="{StaticResource LobbySwitchStyle}">
                                 <TextBlock Text="プレイヤーらのスピーカー位置(話している位置)と、自身のマイク位置(収音する位置)をNoSのデータに含まれている座標に変更" TextWrapping="Wrap" />
                             </CheckBox>
-                            <CheckBox x:Name="NosSizeVoiceEffectCheck" Content="大きさが変化した場合にエフェクトをかける"
-                                      Style="{StaticResource LobbySwitchStyle}" />
-                            <CheckBox x:Name="NosRokurokubiVoiceEffectCheck" Content="ろくろ首の首が伸びるほど声を高くする"
-                                      Style="{StaticResource LobbySwitchStyle}" />
-                            <CheckBox x:Name="NosBerserkerVoiceEffectCheck" Content="バーサーカーの暴走中に声へゆがみと残響を加える"
-                                      Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="NosFixerJammingVoiceBlockCheck" Content="フィクサーの妨害を受けた際に音声を遮断する"
                                       Style="{StaticResource LobbySwitchStyle}"
                                       Checked="NosFixerMode_Changed" Unchecked="NosFixerMode_Changed" />
@@ -716,28 +709,6 @@
                                       Checked="NosFixerMode_Changed" Unchecked="NosFixerMode_Changed" />
                             <TextBlock Text="妨害中は聞く声と聞かれる声がこもります。ONにすると音声遮断はOFFになります。"
                                        Foreground="#B7AABD" FontSize="11" Margin="12,0,12,8" TextWrapping="Wrap" />
-                            <StackPanel x:Name="UchuControlsPanel" Visibility="Collapsed">
-                                <CheckBox x:Name="NosCitrusVoiceEffectCheck" Content="シトラスの柑橘状態で声を高い犯人声にする（UchuAddon）"
-                                          Style="{StaticResource LobbySwitchStyle}"
-                                          Checked="NosCitrusVoiceEffectCheck_Changed" Unchecked="NosCitrusVoiceEffectCheck_Changed" />
-                                <Grid Height="64" Margin="16,0" VerticalAlignment="Center">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="180" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="48" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="シトラス感染時のボイスチェンジャーの強さ" FontSize="14"
-                                               TextWrapping="Wrap" VerticalAlignment="Center" />
-                                    <Slider x:Name="NosCitrusVoiceEffectStrengthSlider" Grid.Column="1"
-                                            Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
-                                            ValueChanged="VolumeSlider_ValueChanged" Margin="0,0,12,0"
-                                            VerticalAlignment="Center" />
-                                    <TextBlock x:Name="NosCitrusVoiceEffectStrengthValue" Grid.Column="2"
-                                               TextAlignment="Right" VerticalAlignment="Center" />
-                                </Grid>
-                                <CheckBox x:Name="NosRainbowStarEchoCheck" Content="虹色スターの声に薄いエコーを加える（UchuAddon）"
-                                          Style="{StaticResource LobbySwitchStyle}" />
-                            </StackPanel>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -914,6 +885,9 @@
                                 </Grid>
                             </StackPanel>
                         </Border>
+                    </StackPanel>
+                    <StackPanel x:Name="VoiceEffectsPanel" Visibility="Collapsed">
+                        <TextBlock Text="ボイスエフェクト" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                 CornerRadius="8" Margin="0,24,0,0" Padding="16,10">
                             <StackPanel>
@@ -923,7 +897,7 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="44" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="ボイスエフェクトの強さ" FontWeight="SemiBold" />
+                                    <TextBlock Text="変装・キノコ混乱などの強さ" FontWeight="SemiBold" />
                                     <Slider x:Name="VoiceEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100"
                                             TickFrequency="1" IsSnapToTickEnabled="True" Margin="10,0"
                                             ValueChanged="VolumeSlider_ValueChanged" />
@@ -934,6 +908,92 @@
                                         Click="TestVoiceEffectButton_Click" />
                             </StackPanel>
                         </Border>
+                        <StackPanel Orientation="Horizontal" Margin="0,24,0,8">
+                            <RadioButton x:Name="VoiceCurrentLobbyTab" Content="現在のロビー" GroupName="VoiceLobbyView"
+                                         Checked="VoiceLobbyTab_Changed" Style="{StaticResource LobbyTabStyle}" />
+                            <RadioButton x:Name="VoiceMyLobbyTab" Content="自分の設定" GroupName="VoiceLobbyView"
+                                         Checked="VoiceLobbyTab_Changed" Style="{StaticResource LobbyTabStyle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="VoiceNoLobbyText" Text="ロビーに未接続です。参加または作成すると設定を確認できます。"
+                                   Foreground="#80D8FF" TextWrapping="Wrap" Visibility="Collapsed" Margin="4,0,4,8" />
+                        <StackPanel x:Name="VoiceLobbyControlsPanel">
+                        <StackPanel x:Name="SnrVoiceControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">
+                            <TextBlock Text="SNRボイスエフェクト" Foreground="#B7AABD" Margin="16,12,0,2" />
+                            <CheckBox x:Name="SnrJumboVoiceCheck" Content="ジャンボ役職の時、大きくなるほど声を太くする"
+                                      Style="{StaticResource LobbySwitchStyle}" Checked="ModVoiceEffectCheck_Changed" Unchecked="ModVoiceEffectCheck_Changed" />
+                            <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="ジャンボの強さ" VerticalAlignment="Center"/>
+                                <Slider x:Name="SnrJumboVoiceEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="SnrJumboVoiceEffectStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                        </StackPanel>
+                        <StackPanel x:Name="NosVoiceControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">
+                            <TextBlock Text="NoSボイスエフェクト" Foreground="#B7AABD" Margin="16,12,0,2" />
+                            <CheckBox x:Name="NosSizeVoiceEffectCheck" Content="大きさが変化した場合にエフェクトをかける"
+                                      Style="{StaticResource LobbySwitchStyle}" Checked="ModVoiceEffectCheck_Changed" Unchecked="ModVoiceEffectCheck_Changed" />
+                            <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="サイズ変化の強さ" VerticalAlignment="Center"/>
+                                <Slider x:Name="NosSizeVoiceEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NosSizeVoiceEffectStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <CheckBox x:Name="NosRokurokubiVoiceEffectCheck" Content="ろくろ首の首が伸びるほど声を高くする"
+                                      Style="{StaticResource LobbySwitchStyle}" Checked="ModVoiceEffectCheck_Changed" Unchecked="ModVoiceEffectCheck_Changed" />
+                            <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="ろくろ首の強さ" VerticalAlignment="Center"/>
+                                <Slider x:Name="NosRokurokubiVoiceEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NosRokurokubiVoiceEffectStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <CheckBox x:Name="NosBerserkerVoiceEffectCheck" Content="バーサーカーの暴走中に声へゆがみと残響を加える"
+                                      Style="{StaticResource LobbySwitchStyle}" Checked="ModVoiceEffectCheck_Changed" Unchecked="ModVoiceEffectCheck_Changed" />
+                            <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="バーサーカーの強さ" VerticalAlignment="Center"/>
+                                <Slider x:Name="NosBerserkerVoiceEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NosBerserkerVoiceEffectStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="ボイスジャミンガーの強さ" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                <Slider x:Name="NosVoiceJammingEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NosVoiceJammingEffectStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="メガホン充電中の声の強さ" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                <Slider x:Name="NosMegaphoneEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NosMegaphoneEffectStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="ビビリ死亡時のエコーの強さ" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                <Slider x:Name="NosBibiriEchoStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="NosBibiriEchoStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                            <StackPanel x:Name="UchuControlsPanel" Visibility="Collapsed">
+                                <CheckBox x:Name="NosCitrusVoiceEffectCheck" Content="シトラスの柑橘状態で声を高い犯人声にする（UchuAddon）"
+                                          Style="{StaticResource LobbySwitchStyle}"
+                                          Checked="NosCitrusVoiceEffectCheck_Changed" Unchecked="NosCitrusVoiceEffectCheck_Changed" />
+                                <Grid Height="64" Margin="16,0" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="48" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="シトラス感染時のボイスチェンジャーの強さ" FontSize="14"
+                                               TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    <Slider x:Name="NosCitrusVoiceEffectStrengthSlider" Grid.Column="1"
+                                            Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
+                                            ValueChanged="VolumeSlider_ValueChanged" Margin="0,0,12,0"
+                                            VerticalAlignment="Center" />
+                                    <TextBlock x:Name="NosCitrusVoiceEffectStrengthValue" Grid.Column="2"
+                                               TextAlignment="Right" VerticalAlignment="Center" />
+                                </Grid>
+                                <CheckBox x:Name="NosRainbowStarEchoCheck" Content="虹色スターの声に薄いエコーを加える（UchuAddon）"
+                                          Style="{StaticResource LobbySwitchStyle}" Checked="ModVoiceEffectCheck_Changed" Unchecked="ModVoiceEffectCheck_Changed" />
+                                <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                    <TextBlock Text="虹色スターのエコーの強さ" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                    <Slider x:Name="NosRainbowStarEchoStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NosRainbowStarEchoStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+                        </StackPanel>
                     </StackPanel>
                     <StackPanel x:Name="KeybindsPanel" Visibility="Collapsed">
                         <Border Background="#071B25" CornerRadius="4" MinHeight="68"

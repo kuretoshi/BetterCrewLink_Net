@@ -83,6 +83,10 @@ public partial class SettingsWindow
             if (toggle == DeadOnlyCheck || toggle == MeetingGhostOnlyCheck || toggle == PublicLobbyOnCheck) continue;
             toggle.Click += (_, _) => QueueLobbyCommit();
         }
+        foreach (var toggle in LogicalDescendants<CheckBox>(VoiceLobbyControlsPanel))
+            toggle.Click += (_, _) => QueueLobbyCommit();
+        foreach (var slider in LogicalDescendants<Slider>(VoiceLobbyControlsPanel))
+            slider.ValueChanged += (_, _) => QueueLobbyCommit();
         DistanceSlider.ValueChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyTitleBox.TextChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyLanguageCombo.SelectionChanged += (_, _) => QueueLobbyCommit();

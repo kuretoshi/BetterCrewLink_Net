@@ -85,7 +85,7 @@ public partial class SettingsWindow
             RequireLive(watch.ElapsedMilliseconds >= 740 && settings.MyLobbySettings.MaxDistance == 8 &&
                 writes.Count == count + 1, $"Debounced lobby change was not persisted exactly once (elapsed={watch.ElapsedMilliseconds}, distance={settings.MyLobbySettings.MaxDistance}, writes={writes.Count}, previous={count}, pending={window.lobbyPending})");
             window.DistanceSlider.Value = 7;
-            window.CategoryList.SelectedIndex = 6;
+            window.CategoryList.SelectedIndex = 7;
             RequireLive(settings.MyLobbySettings.MaxDistance == 7, "Leaving lobby category did not flush its draft");
 
             window.CategoryList.SelectedIndex = 1;
@@ -118,7 +118,7 @@ public partial class SettingsWindow
             window.PublicLobbyTitleBox.Text = "互換テスト";
             window.PublicLobbyLanguageCombo.SelectedItem = UiLocalization.Languages
                 .First(language => language.Code == "en");
-            window.CategoryList.SelectedIndex = 6;
+            window.CategoryList.SelectedIndex = 7;
             RequireLive(settings.MyLobbySettings.PublicLobbyOn &&
                 settings.MyLobbySettings.PublicLobbyTitle == "互換テスト" &&
                 settings.MyLobbySettings.PublicLobbyLanguage == "en" &&
@@ -182,7 +182,7 @@ public partial class SettingsWindow
             Click(window.DeadOnlyCheck);
             RequireLive(!settings.MyLobbySettings.DeadOnly, "Ghost-only mode applied before confirmation");
             Click(window.ConfirmDialog.ConfirmButton);
-            window.CategoryList.SelectedIndex = 6;
+            window.CategoryList.SelectedIndex = 7;
             RequireLive(settings.MyLobbySettings.DeadOnly && !settings.MyLobbySettings.MeetingGhostOnly,
                 "Exclusive lobby mode was not committed");
 

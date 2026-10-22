@@ -711,7 +711,7 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS DSP: source-filter output remains finite", true,
             sourceFilterAudio.All(float.IsFinite) && Rms(sourceFilterAudio) > 0.001d);
         var berserkerAudio = CreateSizeEffectAudio(new NosSizeVoiceEffect(
-            NosSizeEffectMode.Berserker, 0d, 1d));
+            NosSizeEffectMode.Berserker, 1d, 1d));
         Check("NoS DSP: Berserker saturation changes voice", true,
             berserkerAudio.All(float.IsFinite) && ToneAmplitude(berserkerAudio, 1320d) > 0.001d);
         var specialSpeaker = new Player { NosRole = new NosRoleData(1, "berserker", "Berserker",
@@ -727,6 +727,10 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS Rokurokubi: 40 neck units add one octave", true,
             VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
                 new LobbySettings(), 0, true, false) is { Mode: NosSizeEffectMode.SourceFilter, Pitch: 2d });
+        Check("NoS Rokurokubi: half strength halves pitch change", true,
+            VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
+                new LobbySettings { NosRokurokubiVoiceEffectStrength = 50 }, 0, true, false)
+                is { Mode: NosSizeEffectMode.SourceFilter, Pitch: 1.5d });
         Check("NoS Rokurokubi: switch disables effect", true,
             VoiceDisguiseEffectPolicy.Select(nosTasks, new Player(), specialSpeaker,
                 new LobbySettings { NosRokurokubiVoiceEffect = false, NosSizeVoiceEffect = false },
@@ -741,6 +745,9 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS Rainbow Star: switch disables echo", false,
             VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(nosTasks, specialSpeaker,
                 new LobbySettings { NosRainbowStarEcho = false }));
+        Check("NoS Rainbow Star: zero strength disables echo", false,
+            VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(nosTasks, specialSpeaker,
+                new LobbySettings { NosRainbowStarEchoStrength = 0 }));
         specialSpeaker.NosPlayer = new NosPlayerData
             { Hat = new NosCostumeData("noshat_catudon_Citrus_Orange") };
         Check("NoS Citrus: disguise persists during meetings", true,
@@ -1350,7 +1357,11 @@ internal static class SpatialVoicePolicySelfTest
             };
             releasedWireFields.UnionWith([
                 "nosRokurokubiVoiceEffect", "nosBerserkerVoiceEffect",
-                "nosCitrusVoiceEffect", "nosCitrusVoiceEffectStrength", "nosRainbowStarEcho", "nosFixerJammingLowpass"
+                "nosCitrusVoiceEffect", "nosCitrusVoiceEffectStrength", "nosRainbowStarEcho", "nosFixerJammingLowpass",
+                "snrJumboVoiceEffectStrength", "nosSizeVoiceEffectStrength",
+                "nosRokurokubiVoiceEffectStrength", "nosBerserkerVoiceEffectStrength",
+                "nosRainbowStarEchoStrength", "nosVoiceJammingEffectStrength",
+                "nosMegaphoneEffectStrength", "nosBibiriEchoStrength"
             ]);
             Check("lobby wire: released 3.2.21 field set", true,
                 releasedWireFields.SetEquals(document.RootElement.EnumerateObject()

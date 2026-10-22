@@ -263,7 +263,7 @@ internal sealed class AudioDeviceSession : IDisposable
 
     public void SetPeerMix(string peerId, PeerVoiceMix mix, NosSizeVoiceEffect? nosSizeEffect = null,
         bool starEcho = false, bool deathEchoActive = false, bool peerDead = false,
-        long? deathEchoEvent = null)
+        long? deathEchoEvent = null, float starEchoStrength = 1f, float deathEchoStrength = 1f)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
@@ -276,8 +276,9 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.GhostReverb.Enabled = mix.Reverb && mix.Audible;
         if (!peerDead && !mix.Reverb) peer.GhostReverb.ReleaseInactiveHistory();
         peer.StarEcho.Enabled = starEcho && mix.Audible;
+        peer.StarEcho.Strength = starEchoStrength;
         peer.DeathEcho.Update(deathEchoActive, peerDead, deathEchoEvent,
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), deathEchoStrength);
         peer.NosSizeEffect.SetEffect(nosSizeEffect);
     }
 

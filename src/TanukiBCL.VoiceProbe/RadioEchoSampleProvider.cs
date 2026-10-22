@@ -14,6 +14,7 @@ internal sealed class RadioEchoSampleProvider : ISampleProvider
     private int delayPosition;
     private bool wasEnabled;
     public volatile bool Enabled;
+    public volatile float Strength = 1f;
 
     public RadioEchoSampleProvider(ISampleProvider source, double delaySeconds = 0.09d,
         float dryGain = 0.92f, float wetGain = 0.2f, float feedbackGain = 0.12f)
@@ -42,12 +43,13 @@ internal sealed class RadioEchoSampleProvider : ISampleProvider
         if (!enabled) return read;
 
         var line = delayLine!;
+        var strength = Math.Clamp(Strength, 0f, 1f);
         for (var index = offset; index < offset + read; index++)
         {
             var input = buffer[index];
             var delayed = line[delayPosition];
             line[delayPosition] = input + feedbackGain * delayed;
-            buffer[index] = dryGain * input + wetGain * delayed;
+            buffer[index] = (1f - (1f - dryGain) * strength) * input + wetGain * strength * delayed;
             if (++delayPosition == line.Length) delayPosition = 0;
         }
         return read;

@@ -13,6 +13,7 @@ internal sealed record LobbySettings
     public bool VisionHearing { get; init; }
     public bool Haunting { get; init; }
     public bool SnrJumboVoice { get; init; }
+    public int SnrJumboVoiceEffectStrength { get; init; } = 100;
     public bool JackalHaunting { get; init; }
     public bool JackalHearOutsideVents { get; init; }
     public bool JackalTalkInVents { get; init; }
@@ -23,11 +24,18 @@ internal sealed record LobbySettings
     public bool NosNeutralKillerHaunting { get; init; }
     public bool NosVoicePositions { get; init; }
     public bool NosSizeVoiceEffect { get; init; } = true;
+    public int NosSizeVoiceEffectStrength { get; init; } = 100;
     public bool NosRokurokubiVoiceEffect { get; init; } = true;
+    public int NosRokurokubiVoiceEffectStrength { get; init; } = 100;
     public bool NosBerserkerVoiceEffect { get; init; } = true;
+    public int NosBerserkerVoiceEffectStrength { get; init; } = 100;
     public bool NosCitrusVoiceEffect { get; init; } = true;
     public int NosCitrusVoiceEffectStrength { get; init; } = 100;
     public bool NosRainbowStarEcho { get; init; } = true;
+    public int NosRainbowStarEchoStrength { get; init; } = 100;
+    public int NosVoiceJammingEffectStrength { get; init; } = 100;
+    public int NosMegaphoneEffectStrength { get; init; } = 100;
+    public int NosBibiriEchoStrength { get; init; } = 100;
     public bool NosFixerJammingVoiceBlock { get; init; } = true;
     public bool NosFixerJammingLowpass { get; init; }
     public bool TohNeutralKillerHaunting { get; init; }
@@ -60,6 +68,14 @@ internal sealed record LobbySettings
     {
         MaxDistance = double.IsFinite(MaxDistance) ? Math.Clamp(MaxDistance, 1d, 10d) : 5.32d,
         NosCitrusVoiceEffectStrength = Math.Clamp(NosCitrusVoiceEffectStrength, 0, 100),
+        SnrJumboVoiceEffectStrength = Math.Clamp(SnrJumboVoiceEffectStrength, 0, 100),
+        NosSizeVoiceEffectStrength = Math.Clamp(NosSizeVoiceEffectStrength, 0, 100),
+        NosRokurokubiVoiceEffectStrength = Math.Clamp(NosRokurokubiVoiceEffectStrength, 0, 100),
+        NosBerserkerVoiceEffectStrength = Math.Clamp(NosBerserkerVoiceEffectStrength, 0, 100),
+        NosRainbowStarEchoStrength = Math.Clamp(NosRainbowStarEchoStrength, 0, 100),
+        NosVoiceJammingEffectStrength = Math.Clamp(NosVoiceJammingEffectStrength, 0, 100),
+        NosMegaphoneEffectStrength = Math.Clamp(NosMegaphoneEffectStrength, 0, 100),
+        NosBibiriEchoStrength = Math.Clamp(NosBibiriEchoStrength, 0, 100),
         PublicLobbyTitle = PublicLobbyTitle ?? string.Empty,
         PublicLobbyLanguage = string.IsNullOrWhiteSpace(PublicLobbyLanguage) ? "ja" : PublicLobbyLanguage,
         PublicLobbyMods = PublicLobbyMods ?? "NONE"
