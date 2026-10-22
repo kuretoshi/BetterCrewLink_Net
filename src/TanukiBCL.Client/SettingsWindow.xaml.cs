@@ -1232,7 +1232,8 @@ public partial class SettingsWindow : Window
                 throw new InvalidOperationException("Vanilla own settings copied the remote TOH host marker");
             window.CurrentLobbyTab.IsChecked = true;
             if (window.TohControlsPanel.Visibility != Visibility.Visible ||
-                window.SnrControlsPanel.Visibility != Visibility.Collapsed)
+                window.SnrControlsPanel.Visibility != Visibility.Collapsed ||
+                window.LobbyControlsPanel.IsEnabled || !window.TohGhostRoleButton.IsEnabled)
                 throw new InvalidOperationException("Current lobby did not detect the TOH host name");
             window.UpdateCurrentGameState(new AmongUsState
             {

@@ -588,6 +588,20 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                        <StackPanel x:Name="TohControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">
+                            <TextBlock Text="【MOD】TOH4E／TOH4E_EM設定" FontSize="12"
+                                       Foreground="#B7AABD" Margin="4,0,0,8" />
+                            <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                    CornerRadius="8" ClipToBounds="True">
+                                <StackPanel>
+                                    <CheckBox x:Name="TohNeutralKillerHauntingCheck"
+                                              Content="第三陣営・アニマル陣営のキルできる役職が幽霊の声も聞こえる"
+                                              Visibility="Collapsed" Style="{StaticResource LobbySwitchStyle}" />
+                                    <Button x:Name="TohGhostRoleButton" Content="幽霊の声が聞こえる役職設定" Margin="10,8"
+                                            Padding="12,8" Click="TohGhostRoleButton_Click" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                         <StackPanel x:Name="LobbyControlsPanel">
                         <TextBlock Text="ロビー設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,8" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
@@ -669,20 +683,6 @@
                             <CheckBox x:Name="SnrSidekickTalkInVentsCheck"
                                       Content="サイドキックもジャッカル陣営同士でベント内で会話ができる"
                                       Style="{StaticResource LobbySwitchStyle}" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                        <StackPanel x:Name="TohControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">
-                            <TextBlock Text="【MOD】TOH4E／TOH4E_EM設定" FontSize="12"
-                                       Foreground="#B7AABD" Margin="4,0,0,8" />
-                            <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
-                                    CornerRadius="8" ClipToBounds="True">
-                                <StackPanel>
-                                <CheckBox x:Name="TohNeutralKillerHauntingCheck"
-                                          Content="第三陣営・アニマル陣営のキルできる役職が幽霊の声も聞こえる"
-                                          Visibility="Collapsed" Style="{StaticResource LobbySwitchStyle}" />
-                                <Button Content="幽霊の声が聞こえる役職設定" Margin="10,8"
-                                        Padding="12,8" Click="TohGhostRoleButton_Click" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
