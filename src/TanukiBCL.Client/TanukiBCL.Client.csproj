@@ -6,7 +6,7 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>3.2.44-net-beta.1</Version>
+    <Version>3.2.45-net-beta.1</Version>
     <ApplicationIcon>..\..\tools\installer-icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
@@ -66,3 +66,4 @@
     </ItemGroup>
   </Target>
 </Project>
+
