@@ -90,12 +90,15 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     // Let the audio callback release its own buffers to avoid racing a concurrent Read.
     internal void ReleaseInactiveHistory() => Volatile.Write(ref releaseInactiveHistory, 1);
 
+    public float Strength { get; set; } = 1f;
+
     public int Read(float[] buffer, int offset, int count)
     {
         var read = source.Read(buffer, offset, count);
         if ((read & 1) != 0)
             throw new InvalidOperationException("Stereo playback must contain complete frames.");
 
+        var strength = float.IsFinite(Strength) ? Math.Clamp(Strength, 0f, 1f) : 1f;
         var enabled = Enabled;
         if (enabled != wasEnabled)
         {
@@ -129,8 +132,8 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
             var position = framePosition * 2;
             var left = buffer[index];
             var right = buffer[index + 1];
-            buffer[index] = output[position];
-            buffer[index + 1] = output[position + 1];
+            buffer[index] = output[position] * strength + left * (1f - strength);
+            buffer[index + 1] = output[position + 1] * strength + right * (1f - strength);
             input[position] = left;
             input[position + 1] = right;
             if (++framePosition == BlockFrames)

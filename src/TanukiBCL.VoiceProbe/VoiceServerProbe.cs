@@ -1812,6 +1812,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             CommsSabotage = next.CommsSabotage,
             HearThroughCameras = next.HearThroughCameras,
             WallsBlockAudio = next.WallsBlockAudio,
+            SnrPushReverb = next.SnrPushReverb,
             Haunting = next.Haunting,
             DeadOnly = next.DeadOnly,
             MeetingGhostOnly = next.MeetingGhostOnly,
@@ -2047,7 +2048,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             return;
         }
 
-        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings,
+        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings with { SnrPushReverbStrength = localVoiceEffectStrengths.SnrPushReverbStrength },
             IsImpostorRadioActive(clientId), CanHearNosRadio(currentGameState, other, me),
             airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
         var playerConfig = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs));

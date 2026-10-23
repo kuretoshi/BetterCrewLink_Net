@@ -947,6 +947,12 @@ internal static class SpatialVoicePolicySelfTest
             new SpatialVoiceSettings(MaxDistance: 5d));
         Check("SNR push: falling voice uses origin and adds reverb", true,
             fallingMix.Audible && fallingMix.Reverb && fallingMix.Distance == 1d);
+        var dryFalling = SpatialVoicePolicy.Calculate(fallingState, new Player(), fallingSpeaker,
+            new SpatialVoiceSettings(MaxDistance: 5d, SnrPushReverb: false));
+        Check("SNR push: disabling reverb preserves speech", true, dryFalling.Audible && !dryFalling.Reverb);
+        var softFalling = SpatialVoicePolicy.Calculate(fallingState, new Player(), fallingSpeaker,
+            new SpatialVoiceSettings(MaxDistance: 5d, SnrPushReverbStrength: 25));
+        Check("SNR push: personal strength reaches audio mix", true, softFalling.ReverbStrength == 25 && softFalling.Audible);
         fallingSpeaker.SnrPushedFalling = false;
         Check("SNR push: final death restores ghost hearing rule", false,
             SpatialVoicePolicy.Calculate(fallingState, new Player(), fallingSpeaker,
@@ -1349,7 +1355,7 @@ internal static class SpatialVoicePolicySelfTest
             // TanukiBCL 3.2.8 ILobbySettings, plus its public-lobby MOD wire extension.
             var releasedWireFields = new HashSet<string>(StringComparer.Ordinal)
             {
-                "maxDistance", "visionHearing", "haunting", "snrJumboVoice",
+                "maxDistance", "visionHearing", "haunting", "snrJumboVoice", "snrPushReverb",
                 "jackalHaunting", "jackalHearOutsideVents", "jackalTalkInVents",
                 "jackalRadioEnabled", "sidekickHaunting", "sidekickHearOutsideVents",
                 "sidekickTalkInVents", "nosNeutralKillerHaunting", "nosVoicePositions",

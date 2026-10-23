@@ -88,6 +88,7 @@ public partial class SettingsWindow : Window
         MasterVolumeSlider.Value = settings.MasterVolume;
         VoiceEffectStrengthSlider.Value = settings.VoiceEffectStrength;
         SnrJumboVoiceEffectStrengthSlider.Value = settings.SnrJumboVoiceEffectStrength;
+        SnrPushReverbStrengthSlider.Value = settings.SnrPushReverbStrength;
         NosSizeVoiceEffectStrengthSlider.Value = settings.NosSizeVoiceEffectStrength;
         NosRokurokubiVoiceEffectStrengthSlider.Value = settings.NosRokurokubiVoiceEffectStrength;
         NosBerserkerVoiceEffectStrengthSlider.Value = settings.NosBerserkerVoiceEffectStrength;
@@ -881,6 +882,7 @@ public partial class SettingsWindow : Window
         DeadOnly = DeadOnlyCheck.IsChecked == true,
         MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true,
         SnrJumboVoice = SnrJumboVoiceCheck.IsChecked == true,
+        SnrPushReverb = SnrPushReverbCheck.IsChecked == true,
         JackalHaunting = SnrJackalHauntingCheck.IsChecked == true,
         JackalRadioEnabled = currentGameState?.Mod == AmongUsModType.SuperNewRoles
             ? SnrJackalRadioCheck.IsChecked == true : JackalRadioCheck.IsChecked == true,
@@ -921,6 +923,7 @@ public partial class SettingsWindow : Window
         DeadOnlyCheck.IsChecked = value.DeadOnly;
         MeetingGhostOnlyCheck.IsChecked = value.MeetingGhostOnly;
         SnrJumboVoiceCheck.IsChecked = value.SnrJumboVoice;
+        SnrPushReverbCheck.IsChecked = value.SnrPushReverb;
         SnrJackalHauntingCheck.IsChecked = value.JackalHaunting;
         SnrJackalRadioCheck.IsChecked = value.JackalRadioEnabled;
         SnrJackalHearOutsideVentsCheck.IsChecked = value.JackalHearOutsideVents;
@@ -961,7 +964,9 @@ public partial class SettingsWindow : Window
         MeetingGhostOnlyCheck.IsEnabled = regularSettingsEnabled;
         JackalRadioCheck.IsEnabled = regularSettingsEnabled;
         SnrJumboVoiceCheck.IsEnabled = regularSettingsEnabled;
+        SnrPushReverbCheck.IsEnabled = regularSettingsEnabled;
         SnrJumboVoiceEffectStrengthSlider.IsEnabled = true;
+        SnrPushReverbStrengthSlider.IsEnabled = true;
         SnrJackalRadioCheck.IsEnabled = regularSettingsEnabled;
         SnrJackalHearOutsideVentsCheck.IsEnabled = regularSettingsEnabled;
         SnrJackalTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
@@ -1032,6 +1037,8 @@ public partial class SettingsWindow : Window
             NosCitrusVoiceEffectStrengthValue.Text = $"{NosCitrusVoiceEffectStrengthSlider.Value:0}%";
         if (SnrJumboVoiceEffectStrengthValue is not null)
             SnrJumboVoiceEffectStrengthValue.Text = $"{SnrJumboVoiceEffectStrengthSlider.Value:0}%";
+        if (SnrPushReverbStrengthValue is not null)
+            SnrPushReverbStrengthValue.Text = $"{SnrPushReverbStrengthSlider.Value:0}%";
         if (NosSizeVoiceEffectStrengthValue is not null)
             NosSizeVoiceEffectStrengthValue.Text = $"{NosSizeVoiceEffectStrengthSlider.Value:0}%";
         if (NosRokurokubiVoiceEffectStrengthValue is not null)
@@ -1082,6 +1089,7 @@ public partial class SettingsWindow : Window
             MasterVolume = (int)MasterVolumeSlider.Value,
             VoiceEffectStrength = (int)VoiceEffectStrengthSlider.Value,
             SnrJumboVoiceEffectStrength = (int)SnrJumboVoiceEffectStrengthSlider.Value,
+            SnrPushReverbStrength = (int)SnrPushReverbStrengthSlider.Value,
             NosSizeVoiceEffectStrength = (int)NosSizeVoiceEffectStrengthSlider.Value,
             NosRokurokubiVoiceEffectStrength = (int)NosRokurokubiVoiceEffectStrengthSlider.Value,
             NosBerserkerVoiceEffectStrength = (int)NosBerserkerVoiceEffectStrengthSlider.Value,

@@ -664,6 +664,7 @@
                             <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                     CornerRadius="8" ClipToBounds="True">
                                 <StackPanel>
+                            <CheckBox x:Name="SnrPushReverbCheck" Content="突き落とされて落下中の声に残響を付ける" Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrJumboVoiceCheck" Content="ジャンボ役職の時、大きくなるほど声を太くする"
                                       Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="SnrJackalHauntingCheck" Content="第三陣営のキルできる役職が幽霊の声も聞こえる"
@@ -926,6 +927,11 @@
                                 <TextBlock Text="ジャンボの強さ" VerticalAlignment="Center"/>
                                 <Slider x:Name="SnrJumboVoiceEffectStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
                                 <TextBlock x:Name="SnrJumboVoiceEffectStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+<Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="突き落とし時の残響" VerticalAlignment="Center"/>
+                                <Slider x:Name="SnrPushReverbStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="SnrPushReverbStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
                             </Grid>
                         </StackPanel>
                         <StackPanel x:Name="NosVoiceControlsPanel" Visibility="Collapsed" Margin="0,24,0,0">

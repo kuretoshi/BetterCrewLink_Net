@@ -5,6 +5,8 @@ namespace TanukiBCL.VoiceProbe;
 internal sealed record SpatialVoiceSettings(
     double MaxDistance = 5.32d,
     bool SpatialAudio = true,
+    bool SnrPushReverb = true,
+    int SnrPushReverbStrength = 100,
     bool HearImpostorsInVents = false,
     bool ImpostorsHearImpostorsInVents = false,
     bool ImpostorRadioEnabled = false,
@@ -42,6 +44,7 @@ internal sealed record PeerVoiceMix(
     bool RadioEcho = false,
     bool CameraMuffled = false,
     bool Reverb = false,
+    int ReverbStrength = 100,
     bool FixerLowpass = false)
 {
     public bool Audible => Gain > 0.0001d;
@@ -68,7 +71,7 @@ internal static class SpatialVoicePolicy
         if (jamming?.Muted == true) return mix with { Gain = 0d, Reason = "voice-jamminger" };
         if (jamming?.Lowpass == true) mix = mix with { FixerLowpass = true, Muffled = false, CameraMuffled = false };
         if (mix.Audible && voiceOther != other && !state.AirshipMeetingByOutfit)
-            mix = mix with { Reverb = true };
+            mix = mix with { Reverb = settings.SnrPushReverb, ReverbStrength = settings.SnrPushReverbStrength };
         return mix.Audible && state.Mod == AmongUsModType.NebulaOnTheShip &&
             settings.NosFixerJammingLowpass && !settings.NosFixerJammingVoiceBlock &&
             (me.NosPlayer?.IsJammed == true || other.NosPlayer?.IsJammed == true)

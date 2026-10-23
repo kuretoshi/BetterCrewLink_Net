@@ -72,6 +72,7 @@ public partial class SettingsWindow
         BindSlider(MasterVolumeSlider, nameof(ClientSettings.MasterVolume));
         BindSlider(VoiceEffectStrengthSlider, nameof(ClientSettings.VoiceEffectStrength));
         BindSlider(SnrJumboVoiceEffectStrengthSlider, nameof(ClientSettings.SnrJumboVoiceEffectStrength));
+        BindSlider(SnrPushReverbStrengthSlider, nameof(ClientSettings.SnrPushReverbStrength));
         BindSlider(NosSizeVoiceEffectStrengthSlider, nameof(ClientSettings.NosSizeVoiceEffectStrength));
         BindSlider(NosRokurokubiVoiceEffectStrengthSlider, nameof(ClientSettings.NosRokurokubiVoiceEffectStrength));
         BindSlider(NosBerserkerVoiceEffectStrengthSlider, nameof(ClientSettings.NosBerserkerVoiceEffectStrength));

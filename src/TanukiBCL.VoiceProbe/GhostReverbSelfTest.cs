@@ -7,6 +7,11 @@ internal static class GhostReverbSelfTest
 {
     public static bool Verify()
     {
+        var drySource = new ImpulseSource();
+        var dryReverb = new GhostReverbSampleProvider(drySource, new float[] { 1f, 1f }) { Enabled = true, Strength = 0f };
+        var dry = new float[2];
+        dryReverb.Read(dry, 0, 2);
+        if (!Near(dry[0], 1f) || !Near(dry[1], 1f)) return false;
         var source = new ImpulseSource();
         var impulse = new float[1026 * 2];
         impulse[0] = 1f;

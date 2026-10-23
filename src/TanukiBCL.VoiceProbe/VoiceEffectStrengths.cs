@@ -3,6 +3,7 @@ namespace TanukiBCL.VoiceProbe;
 // Strength is chosen by each listener. The lobby still supplies effect enable switches.
 internal sealed record VoiceEffectStrengths
 {
+    public int SnrPushReverbStrength { get; init; } = 100;
     public int SnrJumboVoiceEffectStrength { get; init; } = 100;
     public int NosSizeVoiceEffectStrength { get; init; } = 100;
     public int NosRokurokubiVoiceEffectStrength { get; init; } = 100;

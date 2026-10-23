@@ -273,6 +273,7 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.RadioHighPass.Enabled = mix.RadioHighPass;
         peer.RadioEcho.Enabled = mix.RadioEcho;
         peer.CameraMuffle.Enabled = mix.CameraMuffled && !mix.FixerLowpass;
+        peer.GhostReverb.Strength = Math.Clamp(mix.ReverbStrength, 0, 100) / 100f;
         peer.GhostReverb.Enabled = mix.Reverb && mix.Audible;
         if (!peerDead && !mix.Reverb) peer.GhostReverb.ReleaseInactiveHistory();
         peer.StarEcho.Enabled = starEcho && mix.Audible;

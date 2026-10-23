@@ -44,6 +44,7 @@ internal sealed class ClientSettings
     public Dictionary<string, GameLaunchPlatform> CustomPlatforms { get; set; } = [];
     public int MasterVolume { get; set; } = 100;
     public int VoiceEffectStrength { get; set; } = 100;
+    public int SnrPushReverbStrength { get; set; } = 100;
     public int SnrJumboVoiceEffectStrength { get; set; } = 100;
     public int NosSizeVoiceEffectStrength { get; set; } = 100;
     public int NosRokurokubiVoiceEffectStrength { get; set; } = 100;
@@ -57,6 +58,7 @@ internal sealed class ClientSettings
     [JsonIgnore]
     public VoiceEffectStrengths LocalVoiceEffectStrengths => new()
     {
+        SnrPushReverbStrength = Math.Clamp(SnrPushReverbStrength, 0, 100),
         SnrJumboVoiceEffectStrength = SnrJumboVoiceEffectStrength,
         NosSizeVoiceEffectStrength = NosSizeVoiceEffectStrength,
         NosRokurokubiVoiceEffectStrength = NosRokurokubiVoiceEffectStrength,
@@ -122,6 +124,7 @@ internal sealed class ClientSettings
             .ToList();
         MasterVolume = Math.Clamp(MasterVolume, 0, 200);
         VoiceEffectStrength = Math.Clamp(VoiceEffectStrength, 0, 100);
+        SnrPushReverbStrength = Math.Clamp(SnrPushReverbStrength, 0, 100);
         SnrJumboVoiceEffectStrength = Math.Clamp(SnrJumboVoiceEffectStrength, 0, 100);
         NosSizeVoiceEffectStrength = Math.Clamp(NosSizeVoiceEffectStrength, 0, 100);
         NosRokurokubiVoiceEffectStrength = Math.Clamp(NosRokurokubiVoiceEffectStrength, 0, 100);

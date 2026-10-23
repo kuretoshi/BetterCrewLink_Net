@@ -13,6 +13,7 @@ internal sealed record LobbySettings
     public bool VisionHearing { get; init; }
     public bool Haunting { get; init; }
     public bool SnrJumboVoice { get; init; }
+    public bool SnrPushReverb { get; init; } = true;
     public int SnrJumboVoiceEffectStrength { get; init; } = 100;
     public bool JackalHaunting { get; init; }
     public bool JackalHearOutsideVents { get; init; }
@@ -121,6 +122,7 @@ internal sealed record LobbySettings
             CommsSabotage = backup.CommsSabotage,
             HearThroughCameras = backup.HearThroughCameras,
             SnrJumboVoice = backup.SnrJumboVoice,
+            SnrPushReverb = backup.SnrPushReverb,
             JackalHearOutsideVents = backup.JackalHearOutsideVents,
             JackalTalkInVents = backup.JackalTalkInVents,
             JackalRadioEnabled = backup.JackalRadioEnabled,
