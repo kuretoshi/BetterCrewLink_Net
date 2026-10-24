@@ -42,6 +42,9 @@ internal static class VoiceDisguiseEffectPolicy
         }
         if (!audible || speaker.IsDead || speaker.Disconnected || speaker.Bugged || speaker.IsDummy)
             return null;
+        // The Hero transformation costume preserves the speaker's normal voice.
+        if (state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState == GameState.Tasks &&
+            state.NosHeroTransforms.Any(entry => entry.IsValid && entry.PlayerId == speaker.Id)) return null;
         if (state.Mod == AmongUsModType.NebulaOnTheShip && lobby.NosCitrusVoiceEffect &&
             state.GameState is GameState.Tasks or GameState.Discussion &&
             speaker.NosPlayer?.Hat?.Name is "noshat_catudon_Citrus_Orange" or "noshat_catudon_Citrus_Lemon")

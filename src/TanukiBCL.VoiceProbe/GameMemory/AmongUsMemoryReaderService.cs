@@ -458,6 +458,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                 ? NosVoiceRoleStateReader.ReadInterviews(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosVoiceJamming = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadVoiceJamming(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
+            NosHeroTransforms = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Tasks
+                ? NosVoiceRoleStateReader.ReadHeroTransforms(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosDyingVoices = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadDyingVoices(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],

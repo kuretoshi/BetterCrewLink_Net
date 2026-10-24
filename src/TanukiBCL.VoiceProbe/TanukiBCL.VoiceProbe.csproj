@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Include="..\..\resources\speech\model\**\*" Link="Speech\model\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\licenses\Vosk-Apache-2.0.txt" Link="Licenses\Vosk-Apache-2.0.txt"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\resources\speech\THIRD-PARTY-NOTICES.md" Link="Speech\THIRD-PARTY-NOTICES.md"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="Assets\ColliderMap.v3.2.7.json" />
     <EmbeddedResource Include="Assets\Audio\reverb.48k.wav" />
     <PackageReference Include="Concentus" Version="2.2.2" />
@@ -20,5 +26,6 @@
     <PackageReference Include="System.Net.Http" Version="4.3.4" />
     <PackageReference Include="System.Text.Json" Version="8.0.6" />
     <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+    <PackageReference Include="Vosk" Version="0.3.38" />
   </ItemGroup>
 </Project>

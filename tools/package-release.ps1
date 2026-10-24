@@ -49,6 +49,7 @@ if (-not [string]::IsNullOrWhiteSpace($DebugAuthFile)) {
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+& (Join-Path $PSScriptRoot 'prepare-speech.ps1')
 $destination = Join-Path $repoRoot (Join-Path 'dist' $Version)
 $archivePath = Join-Path $destination 'TanukiBCL.Net-win-x64.zip'
 if (Test-Path -LiteralPath $destination) {
@@ -84,7 +85,8 @@ $required = @(
     'Updater/TanukiBCL.Updater.exe', 'NoSReader/TbclSnapshotReader.exe',
     'RoleReaders/SnrRoleReader.exe', 'README.md', 'LICENSE',
     'Licenses/SourceCodePro-OFL.md', 'Licenses/OpusSharp.Natives.LICENSE.txt',
-    'opus.dll', 'speexdsp.dll'
+    'opus.dll', 'speexdsp.dll', 'libvosk.dll', 'Speech/model/am/final.mdl',
+    'Speech/model/graph/HCLr.fst', 'Speech/THIRD-PARTY-NOTICES.md', 'Licenses/Vosk-Apache-2.0.txt'
 )
 if ($resolvedDebugAuthFile -or $debugAuthJson) { $required += 'debug-auth.json' }
 foreach ($item in $required) {

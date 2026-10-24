@@ -16,6 +16,8 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly VolumeSampleProvider masterMix;
     private readonly NosMegaphoneRecording localMegaphoneRecording = new();
     private readonly NosInterviewerRecording interviews = new();
+    private readonly NosHeroSpeech heroSpeech = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> heroInputs = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> interviewInputs = new();
     private int interviewLocalId = -1;
     private readonly Dictionary<string, PeerPlayback> peerPlayback = [];
@@ -227,6 +229,7 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         var peer = GetOrCreatePeerPlayback(peerId);
+        if (heroInputs.TryGetValue(peerId, out var heroId)) heroSpeech.Record(heroId, stereoPcm, 2);
         if (!deafened && interviewInputs.TryGetValue(peerId, out var interviewId)) interviews.Record(interviewId, stereoPcm, 2);
         peer.MegaphoneRecording.RecordStereoPcm16(stereoPcm);
         peer.DyingVoiceRecording.RecordStereoPcm16(stereoPcm);
@@ -315,6 +318,12 @@ internal sealed class AudioDeviceSession : IDisposable
             state.GameState == GameState.Discussion, !deafened && masterVolume > 0,
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
+    public void UpdateHeroSpeech(int pid, AmongUsState state) => heroSpeech.Update(pid, state, heroInputs.Values);
+    public void SetHeroPeer(string peerId, int id, bool alive)
+    {
+        if (alive) heroInputs[peerId] = id;
+        else heroInputs.TryRemove(peerId, out _);
+    }
     public void SetInterviewPeer(string peerId, int id, bool enabled)
     {
         if (enabled) interviewInputs[peerId] = id;
@@ -323,6 +332,7 @@ internal sealed class AudioDeviceSession : IDisposable
 
     public void RemovePeer(string peerId)
     {
+        heroInputs.TryRemove(peerId, out _);
         interviewInputs.TryRemove(peerId, out _);
         lock (playbackGate)
         {
@@ -426,6 +436,7 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         interviews.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1);
+        heroSpeech.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1, audioAllowed);
         localMegaphoneRecording.RecordMonoPcm16(buffer);
         onCaptured(buffer);
     }
@@ -524,6 +535,8 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         disposed = true;
+        heroSpeech.Dispose();
+        heroInputs.Clear();
         interviews.Clear();
         interviewInputs.Clear();
         lock (playbackGate)

@@ -21,6 +21,7 @@ internal static class VoiceRoleReleaseSelfTest
         DyingVoiceSelfTest.Verify(check);
         InterviewerSelfTest.Verify(check);
         VoiceJammingSelfTest.Verify(check);
+        HeroCostumeVoiceSelfTest.Verify(check);
         VerifyNosRadioGap(check);
     }
 

@@ -12,6 +12,7 @@ internal static class Program
 
         try
         {
+            if (args.Contains("--distributed-speech-self-test")) return DistributedSpeechSelfTest.Run();
             if (args.Contains("--dtls-trace"))
                 SIPSorcery.LogFactory.Set(new DtlsTraceLoggerFactory());
 

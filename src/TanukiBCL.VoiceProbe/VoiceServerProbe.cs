@@ -29,6 +29,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
     private readonly ConcurrentDictionary<int, NosRadioReport> nosRadioReports = new();
     private readonly ConcurrentDictionary<string, string> peerAppVersions = new();
+    private readonly ConcurrentDictionary<string, (string Lobby, string Platform, long Until)> peerSpeechPlatforms = new();
     private DateTimeOffset appVersionSentAt;
     private string appVersionSession = string.Empty;
     private string versionWarning = string.Empty;
@@ -525,6 +526,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         }
         currentGameState = state;
         audioSession?.UpdateInterviews(state);
+        audioSession?.UpdateHeroSpeech(options.GameProcessId ?? 0, state);
         if (state.Mod != AmongUsModType.NebulaOnTheShip || state.GameState is not (GameState.Tasks or GameState.Discussion))
             audioSession?.ClearDyingVoiceRecordings();
         var localPlayer = state.Players.FirstOrDefault(player => player.IsLocal);
@@ -851,6 +853,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         failedReconnectAttempts.Clear();
         pendingOfferFallbacks.Clear();
         peerAppVersions.Clear();
+        peerSpeechPlatforms.Clear();
         tohRoleSent.Clear();
         appVersionSentAt = default;
         UpdateVersionWarning();
@@ -925,6 +928,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (currentGameState is { } initialState)
             {
                 audioSession.UpdateInterviews(initialState);
+                audioSession.UpdateHeroSpeech(options.GameProcessId ?? 0, initialState);
                 var local = initialState.Players.FirstOrDefault(player => player.IsLocal);
                 audioSession.UpdateLocalMegaphoneRecording(
                     initialState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == local?.Id),
@@ -1228,6 +1232,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         failedReconnectAttempts.TryRemove(socketId, out _);
         pendingOfferFallbacks.TryRemove(socketId, out _);
         peerAppVersions.TryRemove(socketId, out _);
+        peerSpeechPlatforms.TryRemove(socketId, out _);
         tohRoleSent.TryRemove(socketId, out _);
         peerManager.RemovePeer(socketId);
         audioSession?.RemovePeer(socketId);
@@ -1584,6 +1589,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         if (inactive || session != appVersionSession)
         {
             peerAppVersions.Clear();
+        peerSpeechPlatforms.Clear();
             appVersionSentAt = default;
             appVersionSession = session;
         }
@@ -1592,7 +1598,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         {
             var payload = JsonSerializer.Serialize(new
             {
-                type = "app-version", lobbyCode = state.LobbyCode, version = AppVersion
+                type = "app-version", lobbyCode = state.LobbyCode, version = AppVersion, platform = "desktop"
             });
             foreach (var socketId in peerClientIds.Keys)
                 peerManager.TrySendPeerData(socketId, payload);
@@ -1615,6 +1621,10 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             !state.Players.Any(player => player.ClientId == clientId && !player.Disconnected))
             return;
         peerAppVersions[remoteSocketId] = version;
+        if (data.TryGetProperty("platform", out var platform) && platform.ValueKind == JsonValueKind.String &&
+            platform.GetString() is "desktop" or "web" or "mobile")
+            peerSpeechPlatforms[remoteSocketId] = (state.LobbyCode, platform.GetString()!, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 6500);
+        else peerSpeechPlatforms.TryRemove(remoteSocketId, out _);
         UpdateVersionWarning();
     }
 
@@ -2019,6 +2029,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private void RefreshPeerMix(string socketId, int clientId)
     {
         audioSession?.SetInterviewPeer(socketId, -1, false);
+        audioSession?.SetHeroPeer(socketId, -1, false);
         if (currentGameState is null)
         {
             return;
@@ -2053,6 +2064,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
         var playerConfig = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs));
         audioSession?.SetInterviewPeer(socketId, other.Id, !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d);
+        bool webSpeech = peerSpeechPlatforms.TryGetValue(socketId, out var speechPeer) && speechPeer.Lobby == currentGameState.LobbyCode &&
+            speechPeer.Until > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && NosHeroSpeech.RecogniseHere(false, currentGameState.IsHost, speechPeer.Platform);
+        audioSession?.SetHeroPeer(socketId, other.Id, webSpeech && !other.Disconnected && !other.IsDead);
         mix = playerConfig.Apply(mix);
         var effectLobby = localVoiceEffectStrengths.ApplyTo(activeLobbySettings);
         var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
