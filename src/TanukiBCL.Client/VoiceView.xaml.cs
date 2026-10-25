@@ -911,8 +911,20 @@ public partial class VoiceView : UserControl
     private void DiscordButton_Click(object sender, RoutedEventArgs e) =>
         OpenLink("https://discord.gg/jEyDrpBsmJ");
 
-    private void KofiButton_Click(object sender, RoutedEventArgs e) =>
+    private void SupportButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { ContextMenu: { } menu } button)
+        {
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
+        }
+    }
+
+    private void KofiMenuItem_Click(object sender, RoutedEventArgs e) =>
         OpenLink("https://ko-fi.com/kuretoshi");
+
+    private void GithubSponsorsMenuItem_Click(object sender, RoutedEventArgs e) =>
+        OpenLink("https://github.com/sponsors/kuretoshi");
 
     private void XButton_Click(object sender, RoutedEventArgs e) =>
         OpenLink("https://x.com/tanukibcl?s=11");

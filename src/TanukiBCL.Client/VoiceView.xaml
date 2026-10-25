@@ -204,8 +204,14 @@
                         </Canvas>
                     </Viewbox>
                 </Button>
-                <Button x:Name="KofiButton" Width="44" Height="36" Margin="4,0" ToolTip="お賽銭で開発を支援する"
-                        Background="Transparent" BorderThickness="0" Click="KofiButton_Click">
+                <Button x:Name="SupportButton" Width="44" Height="36" Margin="4,0" ToolTip="開発の支援先を選ぶ"
+                        Background="Transparent" BorderThickness="0" Click="SupportButton_Click">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Ko-fiで支援する" Click="KofiMenuItem_Click" />
+                            <MenuItem Header="GitHub Sponsorsで支援する" Click="GithubSponsorsMenuItem_Click" />
+                        </ContextMenu>
+                    </Button.ContextMenu>
                     <Viewbox Width="36" Height="36">
                         <Canvas Width="48" Height="48">
                             <Ellipse Canvas.Left="19" Canvas.Top="2" Width="10" Height="10" Fill="#F6D46B" Stroke="#5B371F" StrokeThickness="1.5" />
