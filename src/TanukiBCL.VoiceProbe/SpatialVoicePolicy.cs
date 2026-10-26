@@ -6,6 +6,7 @@ internal sealed record SpatialVoiceSettings(
     double MaxDistance = 5.32d,
     bool SpatialAudio = true,
     bool SnrPushReverb = true,
+    bool SnrBuskerReviveHideVoice = false,
     int SnrPushReverbStrength = 100,
     bool HearImpostorsInVents = false,
     bool ImpostorsHearImpostorsInVents = false,
@@ -31,6 +32,7 @@ internal sealed record SpatialVoiceSettings(
     bool SidekickTalkInVents = false,
     bool TohNeutralKillerHaunting = false,
     bool NosNeutralKillerHaunting = false,
+    bool NosBuskerReviveHideVoice = false,
     bool VisionHearing = false,
     IReadOnlyDictionary<string, bool>? TohGhostRoles = null);
 
@@ -107,6 +109,12 @@ internal static class SpatialVoicePolicy
         var isSnr = state.Mod == AmongUsModType.SuperNewRoles;
         var isToh = state.Mod == AmongUsModType.TownOfHostForE;
         var meImpostor = IsImpostor(state, me);
+        if (state.GameState == GameState.Tasks && meImpostor && other.IsDead &&
+            (isSnr && settings.SnrBuskerReviveHideVoice && other.SnrRole is
+                { RoleName: "Busker", BuskerReviveRemaining: > 0 } ||
+             isNos && settings.NosBuskerReviveHideVoice && other.NosRole is
+                { RoleName: "busker", BuskerReviveRemaining: > 0 }))
+            return Muted(0d, 0d, "busker-revive-hidden-from-impostor");
         var meJackal = isSnr && me.SnrRole?.IsJackal == true;
         var meSidekick = isSnr && me.SnrRole?.IsSidekick == true;
         var meJackalTeam = meJackal || meSidekick;

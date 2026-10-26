@@ -12,6 +12,30 @@ internal static class SpatialVoicePolicySelfTest
     {
         PublicLobbyAnnouncement.Verify();
         var failures = 0;
+        var buskerListener = new Player { Id = 1, ClientId = 1, IsImpostor = true };
+        var snrBusker = new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
+            SnrRole = new SnrRoleData(1, "Busker", null, null, null, null,
+                BuskerReviveRemaining: 5) };
+        var snrBuskerState = new AmongUsState { GameState = GameState.Tasks,
+            Mod = AmongUsModType.SuperNewRoles };
+        var snrBuskerSettings = new SpatialVoiceSettings(Haunting: true,
+            SnrBuskerReviveHideVoice: true);
+        Check("SNR Busker revive window is hidden only while active", true,
+            !SpatialVoicePolicy.Calculate(snrBuskerState, buskerListener, snrBusker, snrBuskerSettings).Audible &&
+            SpatialVoicePolicy.Calculate(snrBuskerState, buskerListener,
+                new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
+                    SnrRole = snrBusker.SnrRole with { BuskerReviveRemaining = null } },
+                snrBuskerSettings).Audible);
+        var nosBusker = new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
+            NosRole = new NosRoleData(1, "busker", "バスカー", "Busker.Ability", false,
+                BuskerReviveRemaining: 5) };
+        var nosBuskerState = new AmongUsState { GameState = GameState.Tasks,
+            Mod = AmongUsModType.NebulaOnTheShip };
+        Check("NoS Busker revive window is hidden only while active", true,
+            !SpatialVoicePolicy.Calculate(nosBuskerState, buskerListener, nosBusker,
+                new SpatialVoiceSettings(Haunting: true, NosBuskerReviveHideVoice: true)).Audible &&
+            SpatialVoicePolicy.Calculate(nosBuskerState, buskerListener, nosBusker,
+                new SpatialVoiceSettings(Haunting: true)).Audible);
         var duplicateClientState = new AmongUsState { ClientId = 2 };
         Check("duplicate voice sessions on one game client stay muted", true,
             VoiceServerProbe.IsOwnClientPeer(duplicateClientState, 2) &&
@@ -1356,6 +1380,7 @@ internal static class SpatialVoicePolicySelfTest
             var releasedWireFields = new HashSet<string>(StringComparer.Ordinal)
             {
                 "maxDistance", "visionHearing", "haunting", "snrJumboVoice", "snrPushReverb",
+                "snrBuskerReviveHideVoice", "nosBuskerReviveHideVoice",
                 "jackalHaunting", "jackalHearOutsideVents", "jackalTalkInVents",
                 "jackalRadioEnabled", "sidekickHaunting", "sidekickHearOutsideVents",
                 "sidekickTalkInVents", "nosNeutralKillerHaunting", "nosVoicePositions",
@@ -1374,7 +1399,7 @@ internal static class SpatialVoicePolicySelfTest
                 "nosRainbowStarEchoStrength", "nosVoiceJammingEffectStrength",
                 "nosMegaphoneEffectStrength", "nosBibiriEchoStrength"
             ]);
-            Check("lobby wire: released 3.2.21 field set", true,
+            Check("lobby wire: complete field set", true,
                 releasedWireFields.SetEquals(document.RootElement.EnumerateObject()
                     .Select(property => property.Name)));
             Check("lobby wire: publicLobby_on", true,

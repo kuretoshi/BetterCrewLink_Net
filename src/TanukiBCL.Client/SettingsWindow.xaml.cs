@@ -883,6 +883,7 @@ public partial class SettingsWindow : Window
         MeetingGhostOnly = MeetingGhostOnlyCheck.IsChecked == true,
         SnrJumboVoice = SnrJumboVoiceCheck.IsChecked == true,
         SnrPushReverb = SnrPushReverbCheck.IsChecked == true,
+        SnrBuskerReviveHideVoice = SnrBuskerReviveHideVoiceCheck.IsChecked == true,
         JackalHaunting = SnrJackalHauntingCheck.IsChecked == true,
         JackalRadioEnabled = currentGameState?.Mod == AmongUsModType.SuperNewRoles
             ? SnrJackalRadioCheck.IsChecked == true : JackalRadioCheck.IsChecked == true,
@@ -893,6 +894,7 @@ public partial class SettingsWindow : Window
         SidekickTalkInVents = SnrSidekickTalkInVentsCheck.IsChecked == true,
         TohNeutralKillerHaunting = TohNeutralKillerHauntingCheck.IsChecked == true,
         NosNeutralKillerHaunting = NosNeutralKillerHauntingCheck.IsChecked == true,
+        NosBuskerReviveHideVoice = NosBuskerReviveHideVoiceCheck.IsChecked == true,
         NosVoicePositions = NosVoicePositionsCheck.IsChecked == true,
         NosSizeVoiceEffect = NosSizeVoiceEffectCheck.IsChecked == true,
         NosRokurokubiVoiceEffect = NosRokurokubiVoiceEffectCheck.IsChecked == true,
@@ -924,6 +926,7 @@ public partial class SettingsWindow : Window
         MeetingGhostOnlyCheck.IsChecked = value.MeetingGhostOnly;
         SnrJumboVoiceCheck.IsChecked = value.SnrJumboVoice;
         SnrPushReverbCheck.IsChecked = value.SnrPushReverb;
+        SnrBuskerReviveHideVoiceCheck.IsChecked = value.SnrBuskerReviveHideVoice;
         SnrJackalHauntingCheck.IsChecked = value.JackalHaunting;
         SnrJackalRadioCheck.IsChecked = value.JackalRadioEnabled;
         SnrJackalHearOutsideVentsCheck.IsChecked = value.JackalHearOutsideVents;
@@ -934,6 +937,7 @@ public partial class SettingsWindow : Window
         TohNeutralKillerHauntingCheck.IsChecked = value.TohNeutralKillerHaunting;
         JackalRadioCheck.IsChecked = value.JackalRadioEnabled;
         NosNeutralKillerHauntingCheck.IsChecked = value.NosNeutralKillerHaunting;
+        NosBuskerReviveHideVoiceCheck.IsChecked = value.NosBuskerReviveHideVoice;
         NosVoicePositionsCheck.IsChecked = value.NosVoicePositions;
         NosSizeVoiceEffectCheck.IsChecked = value.NosSizeVoiceEffect;
         NosRokurokubiVoiceEffectCheck.IsChecked = value.NosRokurokubiVoiceEffect;
@@ -965,6 +969,8 @@ public partial class SettingsWindow : Window
         JackalRadioCheck.IsEnabled = regularSettingsEnabled;
         SnrJumboVoiceCheck.IsEnabled = regularSettingsEnabled;
         SnrPushReverbCheck.IsEnabled = regularSettingsEnabled;
+        SnrBuskerReviveHideVoiceCheck.IsEnabled = regularSettingsEnabled;
+        NosBuskerReviveHideVoiceCheck.IsEnabled = regularSettingsEnabled;
         SnrJumboVoiceEffectStrengthSlider.IsEnabled = true;
         SnrPushReverbStrengthSlider.IsEnabled = true;
         SnrJackalRadioCheck.IsEnabled = regularSettingsEnabled;

@@ -1823,6 +1823,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             HearThroughCameras = next.HearThroughCameras,
             WallsBlockAudio = next.WallsBlockAudio,
             SnrPushReverb = next.SnrPushReverb,
+            SnrBuskerReviveHideVoice = next.SnrBuskerReviveHideVoice,
             Haunting = next.Haunting,
             DeadOnly = next.DeadOnly,
             MeetingGhostOnly = next.MeetingGhostOnly,
@@ -1838,7 +1839,8 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             SidekickTalkInVents = next.SidekickTalkInVents,
             TohNeutralKillerHaunting = next.TohNeutralKillerHaunting,
             TohGhostRoles = next.TohGhostRoles,
-            NosNeutralKillerHaunting = next.NosNeutralKillerHaunting
+            NosNeutralKillerHaunting = next.NosNeutralKillerHaunting,
+            NosBuskerReviveHideVoice = next.NosBuskerReviveHideVoice
         };
         RefreshHeldNosRadio();
         if (options.AutoRadioTone && !impostorRadioTransmitting && !nosRadioPending && CanUseImpostorRadio)

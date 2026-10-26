@@ -14,6 +14,7 @@ internal sealed record LobbySettings
     public bool Haunting { get; init; }
     public bool SnrJumboVoice { get; init; }
     public bool SnrPushReverb { get; init; } = true;
+    public bool SnrBuskerReviveHideVoice { get; init; }
     public int SnrJumboVoiceEffectStrength { get; init; } = 100;
     public bool JackalHaunting { get; init; }
     public bool JackalHearOutsideVents { get; init; }
@@ -23,6 +24,7 @@ internal sealed record LobbySettings
     public bool SidekickHearOutsideVents { get; init; }
     public bool SidekickTalkInVents { get; init; }
     public bool NosNeutralKillerHaunting { get; init; }
+    public bool NosBuskerReviveHideVoice { get; init; }
     public bool NosVoicePositions { get; init; }
     public bool NosSizeVoiceEffect { get; init; } = true;
     public int NosSizeVoiceEffectStrength { get; init; } = 100;

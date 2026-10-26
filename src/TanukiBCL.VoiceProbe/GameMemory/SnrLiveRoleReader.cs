@@ -8,7 +8,8 @@ public sealed record SnrRoleData(int RoleId, string? RoleName, int? ModifierId,
     string? ModifierName, int? GhostRoleId, string? GhostRoleName,
     bool? IsNeutral = null, bool? CanKill = null, double? JumboCurrentSize = null,
     double? JumboMaxSize = null, string? Hat2Id = null, string? Visor2Id = null,
-    SnrTeamValue? AssignedTeam = null, SnrTeamValue? WinnerTeam = null, SnrTeamValue? TeamTag = null)
+    SnrTeamValue? AssignedTeam = null, SnrTeamValue? WinnerTeam = null, SnrTeamValue? TeamTag = null,
+    double? BuskerReviveRemaining = null)
 {
     public bool IsJackal => RoleName is "Jackal" or "WaveCannonJackal";
     public bool IsSidekick => RoleName is "Sidekick" or "SidekickWaveCannon";
@@ -111,6 +112,7 @@ internal sealed class SnrLiveRoleReader
                     needMetadata |= !role.IsJackal;
                 }
                 needJumboLayout |= role.HasJumbo && layout.Jumbo is null;
+				needJumboLayout |= role.RoleName == "Busker" && layout.Busker is null;
             }
             if (needMetadata || needJumboLayout)
                 nextDiscoveryAt = DateTimeOffset.UtcNow.AddSeconds(1);
@@ -222,6 +224,8 @@ internal sealed class SnrLiveRoleReader
                 ghost is null ? null : checked((int)ghost.Value.Value), ghost?.Name);
             if (value.HasJumbo && layout.Jumbo is { } jumbo && ReadJumbo(player, jumbo, layout.PlayerType, read) is { } sizes)
                 value = value with { JumboCurrentSize = sizes.Current, JumboMaxSize = sizes.Max };
+            if (value.RoleName == "Busker" && layout.Busker is { } busker)
+                value = value with { BuskerReviveRemaining = ReadBusker(player, busker, layout.PlayerType, read) };
             result.Add(id, value);
         }
         if (Pointer(layout.ArraySlot) != array ||
@@ -268,6 +272,39 @@ internal sealed class SnrLiveRoleReader
         {
             // A moving Jumbo ability must not hide otherwise valid roles.
         }
+        return null;
+    }
+
+    private static double? ReadBusker(ulong player, SnrBuskerLayout busker, ulong playerType,
+        Func<long, int, byte[]> read)
+    {
+        static bool Valid(ulong pointer) => pointer >= 0x10000 && pointer <= long.MaxValue && pointer % 8 == 0;
+        ulong Pointer(ulong address) => BitConverter.ToUInt64(read(checked((long)address), 8));
+        int Count(ulong address) => BitConverter.ToInt32(read(checked((long)address), 4));
+        try
+        {
+            var list = Pointer(player + (ulong)busker.AbilitiesOffset);
+            if (!Valid(list) || Pointer(list) != busker.ListType) return null;
+            var items = Pointer(list + (ulong)busker.ItemsOffset);
+            var count = Count(list + (ulong)busker.CountOffset);
+            if (!Valid(items) || Pointer(items) != busker.ItemsType || count is < 0 or > 512 ||
+                count > Count(items + 8)) return null;
+            var entries = read(checked((long)(items + 16)), count * 8);
+            for (var i = 0; i < count; i++)
+            {
+                var ability = BitConverter.ToUInt64(entries, i * 8);
+                if (!Valid(ability) || Pointer(ability) != busker.AbilityType) continue;
+                var active = read(checked((long)(ability + (ulong)busker.ActiveOffset)), 1)[0] == 1;
+                var remaining = BitConverter.ToSingle(read(checked((long)(ability + (ulong)busker.TimerOffset)), 4));
+                if (Pointer(player) != playerType || Pointer(player + (ulong)busker.AbilitiesOffset) != list ||
+                    Pointer(list) != busker.ListType || Pointer(list + (ulong)busker.ItemsOffset) != items ||
+                    Count(list + (ulong)busker.CountOffset) != count || Pointer(items) != busker.ItemsType ||
+                    !read(checked((long)(items + 16)), entries.Length).AsSpan().SequenceEqual(entries) ||
+                    Pointer(ability) != busker.AbilityType) return null;
+                return active && float.IsFinite(remaining) && remaining is > 0f and <= 60f ? remaining : null;
+            }
+        }
+        catch { }
         return null;
     }
 
@@ -345,6 +382,7 @@ internal sealed class SnrLiveLayout
     public int ArrayLengthOffset { get; set; }
     public int ArrayDataOffset { get; set; }
     public SnrJumboLayout? Jumbo { get; set; }
+    public SnrBuskerLayout? Busker { get; set; }
     public SnrLiveFields Fields { get; set; } = new();
 
     public void Validate(int expectedPid)
@@ -366,6 +404,10 @@ internal sealed class SnrLiveLayout
             new[] { jumbo.AbilitiesOffset, jumbo.ItemsOffset, jumbo.CountOffset, jumbo.CurrentOffset,
                 jumbo.DataOffset, jumbo.MaxOffset }.Any(offset => offset is < 8 or > 4096 || offset % 4 != 0)))
             throw new InvalidDataException("Invalid SNR Jumbo layout");
+        if (Busker is { } busker && (!Pointer(busker.AbilityType) || !Pointer(busker.ListType) ||
+            !Pointer(busker.ItemsType) || new[] { busker.AbilitiesOffset, busker.ItemsOffset,
+                busker.CountOffset, busker.ActiveOffset, busker.TimerOffset }.Any(offset => offset is < 8 or > 4096)))
+            throw new InvalidDataException("Invalid SNR Busker layout");
     }
 }
 
@@ -397,4 +439,16 @@ internal sealed class SnrJumboLayout
     public int CurrentOffset { get; set; }
     public int DataOffset { get; set; }
     public int MaxOffset { get; set; }
+}
+
+internal sealed class SnrBuskerLayout
+{
+    public ulong AbilityType { get; set; }
+    public ulong ListType { get; set; }
+    public ulong ItemsType { get; set; }
+    public int AbilitiesOffset { get; set; }
+    public int ItemsOffset { get; set; }
+    public int CountOffset { get; set; }
+    public int ActiveOffset { get; set; }
+    public int TimerOffset { get; set; }
 }

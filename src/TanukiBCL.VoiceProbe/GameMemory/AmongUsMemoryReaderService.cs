@@ -320,7 +320,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         if (mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion)
         {
             var roles = nosRoleReader.Update(currentProcess.ProcessId, $"{lobbyCode}:{nosRound}",
-                nosReader.SchemaVersion != 20261009, currentContext.ReadBytes);
+                nosReader.SchemaVersion != 20261009, currentContext.ReadBytes, gameState, players);
             foreach (var player in players)
             {
                 if (player.Disconnected || !roles.TryGetValue(player.Id, out var role)) continue;
