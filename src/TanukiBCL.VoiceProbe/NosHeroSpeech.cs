@@ -154,7 +154,7 @@ internal sealed class NosHeroSpeech : IDisposable
     private void Accept(Capture capture, PlayerRequest job, string text, bool final)
     {
         if (job.Expires <= Now || handled.Contains(Key(job))) return;
-        bool matched = job.Kind == "ng" ? HeardForbiddenWord(text, job.Words, final) : HeardHenshin(text, final);
+        bool matched = job.Kind == "ng" ? HeardForbiddenWord(text, job.Words, final) : HeardTransformation(text, job.Words, final);
         if (!matched) { if (job.Kind == "hero") capture.PartialAt = 0; return; }
         if (!final && capture.PartialAt == 0) { capture.PartialAt = Now; return; }
         if (!final && Now - capture.PartialAt < 180) return;
@@ -170,6 +170,15 @@ internal sealed class NosHeroSpeech : IDisposable
     {
         string normalized = Regex.Replace(text.Normalize(NormalizationForm.FormKC), @"[\s、。！!？?・]", "");
         return normalized.Contains("変身") || normalized.Contains("へんしん") || normalized.Contains("ヘンシン") || final && normalized == "返信";
+    }
+    internal static bool HeardTransformation(string text, string[] words, bool final = true)
+    {
+        if (words.Length == 0) return HeardHenshin(text, final);
+        if (text.Length > 4096) return false;
+        if (words[0] == "変身" && HeardHenshin(text, final)) return true;
+        string normal = Normalise(text);
+        if (words.Any(w => Normalise(w).Length >= 2 && normal.Contains(Normalise(w)))) return true;
+        return false;
     }
     internal static byte[] Downsample(short[] pcm, int channels)
     {
