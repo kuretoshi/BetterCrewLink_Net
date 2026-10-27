@@ -26,6 +26,11 @@ public partial class MainWindow : Window
     private readonly CoalescedSessionRestart settingsRestarts = new();
     private readonly DispatcherTimer gameDetectionTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer audioUiTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private readonly DispatcherTimer playerBanTimer = new() { Interval = TimeSpan.FromSeconds(15) };
+    private string playerBanUid = string.Empty;
+    private string playerBanStatus = "clear";
+    private int? playerBanPid;
+    private long playerBanGeneration;
     private AudioUiFrameBatch? audioUiFrames;
     private VoiceServerProbe? probe;
     private SettingsWindow? settingsWindow;
@@ -118,6 +123,8 @@ public partial class MainWindow : Window
             if (!processSwitchInProgress && settingsWindow is null) TryAutomaticConnection();
         };
         audioUiTimer.Tick += (_, _) => FlushAudioUi();
+        playerBanTimer.Tick += (_, _) => { if (playerBanUid.Length > 0) _ = CheckPlayerBanAsync(playerBanUid, playerBanGeneration); };
+        playerBanTimer.Start();
         Loaded += (_, _) =>
         {
             TryAutomaticConnection();
@@ -128,6 +135,7 @@ public partial class MainWindow : Window
         {
             gameDetectionTimer.Stop();
             audioUiTimer.Stop();
+            playerBanTimer.Stop();
         };
     }
 
@@ -430,6 +438,9 @@ public partial class MainWindow : Window
         if (isClosing || Dispatcher.HasShutdownStarted || sessions.Current is not null || reloadInProgress)
             return;
         RefreshProcesses();
+        if (playerBanPid is not null && (ProcessCombo.SelectedItem is not ProcessChoice selected || playerBanPid != selected.Id))
+            ClearPlayerBan();
+        if (playerBanStatus != "clear") return;
         if (ProcessCombo.SelectedItem is not ProcessChoice choice)
         {
             lastAutomaticPid = null;
@@ -524,6 +535,7 @@ public partial class MainWindow : Window
 
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
+        if (playerBanStatus != "clear") return;
         if (isClosing || sessions.Current is not null) return;
         if (ProcessCombo.SelectedItem is not ProcessChoice process ||
             InputCombo.SelectedItem is not AudioDeviceInfo input ||
@@ -905,6 +917,16 @@ public partial class MainWindow : Window
 
     private void ShowGameState(AmongUsState state)
     {
+        var uid = state.Players.FirstOrDefault(player => player.IsLocal)?.PlayerUid?.Trim() ?? string.Empty;
+        if (uid.Length > 0 && uid != playerBanUid)
+        {
+            playerBanUid = uid;
+            playerBanPid = activeGamePid;
+            playerBanStatus = "checking";
+            UpdatePlayerBanPanel();
+            sessions.Current?.RequestStop();
+            _ = CheckPlayerBanAsync(uid, ++playerBanGeneration);
+        }
         var previousGameState = currentState?.GameState;
         var leavingNos = currentState?.Mod == AmongUsModType.NebulaOnTheShip &&
             state.Mod != AmongUsModType.NebulaOnTheShip;
@@ -937,6 +959,44 @@ public partial class MainWindow : Window
             CosmeticImages.ReleaseCachedImages();
         }
     }
+
+    private void ClearPlayerBan()
+    {
+        playerBanGeneration++;
+        playerBanUid = string.Empty;
+        playerBanPid = null;
+        playerBanStatus = "clear";
+        UpdatePlayerBanPanel();
+    }
+
+    private async Task CheckPlayerBanAsync(string uid, long generation)
+    {
+        var status = await PlayerBanClient.CheckAsync(uid);
+        if (isClosing || Dispatcher.HasShutdownStarted || generation != playerBanGeneration || uid != playerBanUid)
+            return;
+        playerBanStatus = status;
+        UpdatePlayerBanPanel();
+        if (status != "clear") sessions.Current?.RequestStop();
+        else
+        {
+            await Task.Delay(500);
+            if (!isClosing && !Dispatcher.HasShutdownStarted && generation == playerBanGeneration)
+                TryAutomaticConnection(force: true);
+        }
+    }
+
+    private void UpdatePlayerBanPanel()
+    {
+        PlayerBanPanel.Visibility = playerBanStatus == "clear" ? Visibility.Collapsed : Visibility.Visible;
+        PlayerBanText.Text = playerBanStatus switch
+        {
+            "banned" => "BANされているため使用できません。",
+            "checking" => "利用資格を確認しています…",
+            _ => "利用資格を確認できません。しばらくしてから再試行します。"
+        };
+    }
+
+    private void PlayerBanClose_Click(object sender, RoutedEventArgs e) => Close();
 
     private void UpdatePeerMix(int clientId, PeerVoiceMix mix)
     {

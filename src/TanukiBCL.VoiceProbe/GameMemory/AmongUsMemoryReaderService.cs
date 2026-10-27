@@ -680,6 +680,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             Id = unchecked((int)data.Id),
             ClientId = clientId,
             Name = cleanName,
+            PlayerUid = playerUid,
             NameHash = nameHash,
             PlayerConfigId = string.IsNullOrEmpty(playerUid) ? nameHash : HashCode(playerUid),
             ColorId = color,

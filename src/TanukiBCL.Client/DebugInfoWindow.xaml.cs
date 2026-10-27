@@ -90,6 +90,7 @@ public partial class DebugInfoWindow : Window
                 : new SolidColorBrush(Color.FromRgb(0x1D, 0x30, 0x47));
             NosNoticePanel.Visibility = mod == AmongUsModType.NebulaOnTheShip ? Visibility.Visible : Visibility.Collapsed;
             RenderPlayers(snapshot);
+            RenderBanPlayers(snapshot.State);
             SnrHintText.Visibility = SnrExpander.Visibility =
                 mod == AmongUsModType.SuperNewRoles ? Visibility.Visible : Visibility.Collapsed;
             NosExpander.Visibility = mod == AmongUsModType.NebulaOnTheShip ? Visibility.Visible : Visibility.Collapsed;
@@ -107,6 +108,68 @@ public partial class DebugInfoWindow : Window
     }
 
     private static string PlayerKey(AmongUsState state, Player player) => $"{state.LobbyCode}:{player.ClientId}:{player.Id}";
+
+    private void RenderBanPlayers(AmongUsState? state)
+    {
+        var signature = string.Join('|', state?.Players.Select(player => $"{player.Id}:{player.PlayerUid}:{player.Name}") ?? []);
+        if (signature == banPlayerSignature) return;
+        banPlayerSignature = signature;
+        BanPlayerRows.Children.Clear();
+        foreach (var player in state?.Players.Where(player => !string.IsNullOrWhiteSpace(player.PlayerUid)) ?? [])
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var button = new Button { Content = "BAN登録", Tag = player.PlayerUid, Padding = new Thickness(8, 4, 8, 4) };
+            button.Click += async (_, _) =>
+            {
+                if (confirmBanUid != player.PlayerUid)
+                {
+                    confirmBanUid = player.PlayerUid;
+                    BanMessage.Text = $"{player.Name}をBANする場合は、もう一度押してください。";
+                    return;
+                }
+                await ManageBanAsync(new { password = BanPassword.Password, action = "add", playerUid = player.PlayerUid,
+                    displayName = player.Name, reason = BanReason.Text });
+                confirmBanUid = string.Empty;
+            };
+            DockPanel.SetDock(button, Dock.Right);
+            row.Children.Add(button);
+            row.Children.Add(new TextBlock { Text = player.Name + (player.IsLocal ? "（自分）" : ""),
+                VerticalAlignment = VerticalAlignment.Center });
+            BanPlayerRows.Children.Add(row);
+        }
+    }
+
+    private string banPlayerSignature = string.Empty;
+    private string confirmBanUid = string.Empty;
+
+    private async void BanList_Click(object sender, RoutedEventArgs e) =>
+        await ManageBanAsync(new { password = BanPassword.Password, action = "list" });
+
+    private async Task ManageBanAsync(object payload)
+    {
+        if (string.IsNullOrEmpty(BanPassword.Password))
+        {
+            BanMessage.Text = "管理者パスワードを入力してください。";
+            return;
+        }
+        BanMessage.Text = "確認しています…";
+        var (bans, error) = await PlayerBanClient.ManageAsync(payload);
+        if (error is not null) { BanMessage.Text = error; return; }
+        BanMessage.Text = "BAN一覧を更新しました。";
+        BanRecords.Children.Clear();
+        foreach (var ban in bans ?? [])
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var button = new Button { Content = "解除", Padding = new Thickness(8, 4, 8, 4) };
+            button.Click += async (_, _) => await ManageBanAsync(new { password = BanPassword.Password,
+                action = "remove", uidDigest = ban.UidDigest });
+            DockPanel.SetDock(button, Dock.Right);
+            row.Children.Add(button);
+            row.Children.Add(new TextBlock { Text = $"{ban.DisplayName} ／ {ban.Reason}",
+                VerticalAlignment = VerticalAlignment.Center });
+            BanRecords.Children.Add(row);
+        }
+    }
 
     private void RenderPlayers(DebugInfoSnapshot snapshot)
     {

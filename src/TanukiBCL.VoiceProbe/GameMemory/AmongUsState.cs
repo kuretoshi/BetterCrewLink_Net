@@ -41,6 +41,8 @@ public sealed class Player
 
     public string Name { get; set; } = string.Empty;
 
+    public string PlayerUid { get; set; } = string.Empty;
+
     public int NameHash { get; set; }
 
     public int PlayerConfigId { get; set; }

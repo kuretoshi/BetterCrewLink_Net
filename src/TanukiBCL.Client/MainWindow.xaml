@@ -124,5 +124,14 @@
           </StackPanel>
         </StackPanel>
       </Grid>
+      <Border x:Name="PlayerBanPanel" Background="#F0221E26" Visibility="Collapsed" Panel.ZIndex="100">
+        <Grid>
+          <Button Content="×" Width="38" Height="32" HorizontalAlignment="Right" VerticalAlignment="Top"
+                  Click="PlayerBanClose_Click" />
+          <TextBlock x:Name="PlayerBanText" FontSize="17" FontWeight="Bold" TextAlignment="Center"
+                     TextWrapping="Wrap" Foreground="White" HorizontalAlignment="Center"
+                     VerticalAlignment="Center" MaxWidth="230" />
+        </Grid>
+      </Border>
     </Grid>
 </Window>

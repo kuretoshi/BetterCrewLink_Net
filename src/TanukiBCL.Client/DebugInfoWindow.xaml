@@ -94,6 +94,18 @@
                 </WrapPanel>
                 <StackPanel x:Name="PlayerCards" />
                 <TextBlock x:Name="EmptyPlayersText" Margin="0,8" Visibility="Collapsed" />
+                <Expander Header="ユーザーBAN管理">
+                    <StackPanel Margin="10">
+                        <TextBlock Text="現在のプレイヤーから対象を選択してください。" />
+                        <PasswordBox x:Name="BanPassword" Margin="0,8,0,4" MaxLength="1024" />
+                        <Button Content="BAN一覧を読み込む" Click="BanList_Click" HorizontalAlignment="Left" />
+                        <TextBox x:Name="BanReason" Margin="0,8,0,4" MaxLength="500" />
+                        <TextBlock x:Name="BanMessage" Text="管理者パスワードを入力してください。" TextWrapping="Wrap" />
+                        <StackPanel x:Name="BanPlayerRows" />
+                        <TextBlock Text="登録済み" Margin="0,12,0,4" />
+                        <StackPanel x:Name="BanRecords" />
+                    </StackPanel>
+                </Expander>
                 <TextBlock x:Name="SnrHintText" Margin="0,4,0,8" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed"
                            Text="SNRの詳細な割り当て陣営・勝利陣営は下の「SNR：役職・割り当て陣営・勝利陣営」で自動更新されます。" />
                 <Expander x:Name="NosExpander" Header="NoS：コスチューム・無線・一覧ファイル" Visibility="Collapsed"
