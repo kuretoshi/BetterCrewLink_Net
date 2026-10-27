@@ -96,12 +96,17 @@
                 <TextBlock x:Name="EmptyPlayersText" Margin="0,8" Visibility="Collapsed" />
                 <Expander Header="ユーザーBAN管理">
                     <StackPanel Margin="10">
-                        <TextBlock Text="現在のプレイヤーから対象を選択してください。" />
+                        <TextBlock Text="UIDが分かるプレイヤーは直接登録できます。名前登録は完全一致で、同名の別人が先に接続するとそのUIDが登録されます。" TextWrapping="Wrap" />
                         <PasswordBox x:Name="BanPassword" Margin="0,8,0,4" MaxLength="1024" />
                         <Button Content="BAN一覧を読み込む" Click="BanList_Click" HorizontalAlignment="Left" />
                         <TextBox x:Name="BanReason" Margin="0,8,0,4" MaxLength="500" />
+                        <TextBlock Text="UID待ちのプレイヤー名" Margin="0,8,0,2" />
+                        <TextBox x:Name="BanName" MaxLength="80" />
+                        <Button Content="名前で登録（2回押して確定）" Click="BanName_Click" HorizontalAlignment="Left" />
                         <TextBlock x:Name="BanMessage" Text="管理者パスワードを入力してください。" TextWrapping="Wrap" />
                         <StackPanel x:Name="BanPlayerRows" />
+                        <TextBlock Text="UID待ち" Margin="0,12,0,4" />
+                        <StackPanel x:Name="BanPendingRows" />
                         <TextBlock Text="登録済み" Margin="0,12,0,4" />
                         <StackPanel x:Name="BanRecords" />
                     </StackPanel>

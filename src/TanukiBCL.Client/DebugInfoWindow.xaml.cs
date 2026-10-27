@@ -141,9 +141,25 @@ public partial class DebugInfoWindow : Window
 
     private string banPlayerSignature = string.Empty;
     private string confirmBanUid = string.Empty;
+    private string confirmBanName = string.Empty;
 
     private async void BanList_Click(object sender, RoutedEventArgs e) =>
         await ManageBanAsync(new { password = BanPassword.Password, action = "list" });
+
+    private async void BanName_Click(object sender, RoutedEventArgs e)
+    {
+        var name = BanName.Text.Trim();
+        if (name.Length == 0) { BanMessage.Text = "プレイヤー名を入力してください。"; return; }
+        if (confirmBanName != name)
+        {
+            confirmBanName = name;
+            BanMessage.Text = $"{name}を名前で登録する場合は、もう一度押してください。";
+            return;
+        }
+        await ManageBanAsync(new { password = BanPassword.Password, action = "add-name",
+            playerName = name, reason = BanReason.Text });
+        confirmBanName = string.Empty;
+    }
 
     private async Task ManageBanAsync(object payload)
     {
@@ -153,9 +169,22 @@ public partial class DebugInfoWindow : Window
             return;
         }
         BanMessage.Text = "確認しています…";
-        var (bans, error) = await PlayerBanClient.ManageAsync(payload);
+        var (bans, pending, error) = await PlayerBanClient.ManageAsync(payload);
         if (error is not null) { BanMessage.Text = error; return; }
         BanMessage.Text = "BAN一覧を更新しました。";
+        BanPendingRows.Children.Clear();
+        foreach (var item in pending ?? [])
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
+            var button = new Button { Content = "解除", Padding = new Thickness(8, 4, 8, 4) };
+            button.Click += async (_, _) => await ManageBanAsync(new { password = BanPassword.Password,
+                action = "remove-name", playerName = item.PlayerName });
+            DockPanel.SetDock(button, Dock.Right);
+            row.Children.Add(button);
+            row.Children.Add(new TextBlock { Text = $"{item.PlayerName} ／ {item.Reason}",
+                VerticalAlignment = VerticalAlignment.Center });
+            BanPendingRows.Children.Add(row);
+        }
         BanRecords.Children.Clear();
         foreach (var ban in bans ?? [])
         {
@@ -165,7 +194,7 @@ public partial class DebugInfoWindow : Window
                 action = "remove", uidDigest = ban.UidDigest });
             DockPanel.SetDock(button, Dock.Right);
             row.Children.Add(button);
-            row.Children.Add(new TextBlock { Text = $"{ban.DisplayName} ／ {ban.Reason}",
+            row.Children.Add(new TextBlock { Text = $"{ban.DisplayName} ／ UID: {ban.PlayerUid} ／ {ban.Reason}",
                 VerticalAlignment = VerticalAlignment.Center });
             BanRecords.Children.Add(row);
         }

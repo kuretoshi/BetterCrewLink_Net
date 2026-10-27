@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer audioUiTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private readonly DispatcherTimer playerBanTimer = new() { Interval = TimeSpan.FromSeconds(15) };
     private string playerBanUid = string.Empty;
+    private string playerBanName = string.Empty;
     private string playerBanStatus = "clear";
     private int? playerBanPid;
     private long playerBanGeneration;
@@ -123,7 +124,7 @@ public partial class MainWindow : Window
             if (!processSwitchInProgress && settingsWindow is null) TryAutomaticConnection();
         };
         audioUiTimer.Tick += (_, _) => FlushAudioUi();
-        playerBanTimer.Tick += (_, _) => { if (playerBanUid.Length > 0) _ = CheckPlayerBanAsync(playerBanUid, playerBanGeneration); };
+        playerBanTimer.Tick += (_, _) => { if (playerBanUid.Length > 0) _ = CheckPlayerBanAsync(playerBanUid, playerBanName, playerBanGeneration); };
         playerBanTimer.Start();
         Loaded += (_, _) =>
         {
@@ -917,15 +918,18 @@ public partial class MainWindow : Window
 
     private void ShowGameState(AmongUsState state)
     {
-        var uid = state.Players.FirstOrDefault(player => player.IsLocal)?.PlayerUid?.Trim() ?? string.Empty;
-        if (uid.Length > 0 && uid != playerBanUid)
+        var localPlayer = state.Players.FirstOrDefault(player => player.IsLocal);
+        var uid = localPlayer?.PlayerUid?.Trim() ?? string.Empty;
+        var name = localPlayer?.Name?.Trim() ?? string.Empty;
+        if (uid.Length > 0 && (uid != playerBanUid || name != playerBanName))
         {
             playerBanUid = uid;
+            playerBanName = name;
             playerBanPid = activeGamePid;
             playerBanStatus = "checking";
             UpdatePlayerBanPanel();
             sessions.Current?.RequestStop();
-            _ = CheckPlayerBanAsync(uid, ++playerBanGeneration);
+            _ = CheckPlayerBanAsync(uid, name, ++playerBanGeneration, ObservedPlayers(state));
         }
         var previousGameState = currentState?.GameState;
         var leavingNos = currentState?.Mod == AmongUsModType.NebulaOnTheShip &&
@@ -964,15 +968,23 @@ public partial class MainWindow : Window
     {
         playerBanGeneration++;
         playerBanUid = string.Empty;
+        playerBanName = string.Empty;
         playerBanPid = null;
         playerBanStatus = "clear";
         UpdatePlayerBanPanel();
     }
 
-    private async Task CheckPlayerBanAsync(string uid, long generation)
+    private static object[] ObservedPlayers(AmongUsState? state) =>
+        state?.Players.Where(player => !player.IsLocal && !player.Disconnected &&
+                !string.IsNullOrWhiteSpace(player.PlayerUid) && !string.IsNullOrWhiteSpace(player.Name))
+            .Take(14)
+            .Select(player => (object)new { playerUid = player.PlayerUid.Trim(), playerName = player.Name.Trim() })
+            .ToArray() ?? [];
+
+    private async Task CheckPlayerBanAsync(string uid, string name, long generation, object[]? observedPlayers = null)
     {
-        var status = await PlayerBanClient.CheckAsync(uid);
-        if (isClosing || Dispatcher.HasShutdownStarted || generation != playerBanGeneration || uid != playerBanUid)
+        var status = await PlayerBanClient.CheckAsync(uid, name, observedPlayers ?? ObservedPlayers(currentState));
+        if (isClosing || Dispatcher.HasShutdownStarted || generation != playerBanGeneration || uid != playerBanUid || name != playerBanName)
             return;
         playerBanStatus = status;
         UpdatePlayerBanPanel();

@@ -7,8 +7,13 @@ namespace TanukiBCL.Client;
 
 internal sealed record PlayerBanRecord(
     [property: JsonPropertyName("uid_digest")] string UidDigest,
+    [property: JsonPropertyName("player_uid")] string PlayerUid,
     [property: JsonPropertyName("display_name")] string DisplayName,
     [property: JsonPropertyName("friend_code")] string FriendCode,
+    [property: JsonPropertyName("reason")] string Reason);
+
+internal sealed record PendingPlayerNameBan(
+    [property: JsonPropertyName("player_name")] string PlayerName,
     [property: JsonPropertyName("reason")] string Reason);
 
 internal static class PlayerBanClient
@@ -20,12 +25,12 @@ internal static class PlayerBanClient
     }) { Timeout = TimeSpan.FromSeconds(7) };
     private const string BaseUrl = "https://debug-auth.kuretoshi.work/v1/player-bans/";
 
-    internal static async Task<string> CheckAsync(string uid)
+    internal static async Task<string> CheckAsync(string uid, string name, object[] observedPlayers)
     {
-        if (string.IsNullOrWhiteSpace(uid) || uid.Length > 256) return "unavailable";
+        if (string.IsNullOrWhiteSpace(uid) || uid.Length > 256 || name.Length > 80) return "unavailable";
         try
         {
-            using var response = await Client.PostAsJsonAsync(BaseUrl + "check", new { playerUid = uid });
+            using var response = await Client.PostAsJsonAsync(BaseUrl + "check", new { playerUid = uid, playerName = name, observedPlayers });
             if (!response.IsSuccessStatusCode) return "unavailable";
             using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
             if (!body.RootElement.TryGetProperty("banned", out var banned)) return "unavailable";
@@ -38,22 +43,24 @@ internal static class PlayerBanClient
         }
     }
 
-    internal static async Task<(PlayerBanRecord[]? Bans, string? Error)> ManageAsync(object payload)
+    internal static async Task<(PlayerBanRecord[]? Bans, PendingPlayerNameBan[]? Pending, string? Error)> ManageAsync(object payload)
     {
         try
         {
             using var response = await Client.PostAsJsonAsync(BaseUrl + "manage", payload);
             using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
             if (!response.IsSuccessStatusCode)
-                return (null, body.RootElement.TryGetProperty("error", out var error)
+                return (null, null, body.RootElement.TryGetProperty("error", out var error)
                     ? error.GetString() : "BAN管理サーバーに接続できませんでした。");
             if (!body.RootElement.TryGetProperty("bans", out var bans) || bans.ValueKind != JsonValueKind.Array)
-                return (null, "BAN一覧を取得できませんでした。");
-            return (bans.Deserialize<PlayerBanRecord[]>() ?? [], null);
+                return (null, null, "BAN一覧を取得できませんでした。");
+            if (!body.RootElement.TryGetProperty("pending", out var pending) || pending.ValueKind != JsonValueKind.Array)
+                return (null, null, "UID待ち一覧を取得できませんでした。");
+            return (bans.Deserialize<PlayerBanRecord[]>() ?? [], pending.Deserialize<PendingPlayerNameBan[]>() ?? [], null);
         }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException)
         {
-            return (null, "BAN管理サーバーに接続できませんでした。");
+            return (null, null, "BAN管理サーバーに接続できませんでした。");
         }
     }
 }
