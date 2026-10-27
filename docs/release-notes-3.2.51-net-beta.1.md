@@ -1,4 +1,3 @@
 # TanukiBCL.Net 3.2.51 β1
 
 - 動作改善。
-- Windows x64用インストーラーと.NETランタイム同梱ZIPを配布します。
