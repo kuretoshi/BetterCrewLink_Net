@@ -16,6 +16,14 @@ internal sealed record PendingPlayerNameBan(
     [property: JsonPropertyName("player_name")] string PlayerName,
     [property: JsonPropertyName("reason")] string Reason);
 
+internal sealed record PlayerHistoryRecord(
+    [property: JsonPropertyName("uid_digest")] string UidDigest,
+    [property: JsonPropertyName("display_name")] string DisplayName,
+    [property: JsonPropertyName("friend_code")] string FriendCode,
+    [property: JsonPropertyName("first_seen_at")] long FirstSeenAt,
+    [property: JsonPropertyName("last_seen_at")] long LastSeenAt,
+    [property: JsonPropertyName("is_banned")] int IsBanned);
+
 internal static class PlayerBanClient
 {
     private static readonly HttpClient Client = new(new SocketsHttpHandler
@@ -43,24 +51,30 @@ internal static class PlayerBanClient
         }
     }
 
-    internal static async Task<(PlayerBanRecord[]? Bans, PendingPlayerNameBan[]? Pending, string? Error)> ManageAsync(object payload)
+    internal static async Task<(PlayerBanRecord[]? Bans, PendingPlayerNameBan[]? Pending,
+        PlayerHistoryRecord[]? History, int HistoryTotal, string? Error)> ManageAsync(object payload)
     {
         try
         {
             using var response = await Client.PostAsJsonAsync(BaseUrl + "manage", payload);
             using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
             if (!response.IsSuccessStatusCode)
-                return (null, null, body.RootElement.TryGetProperty("error", out var error)
+                return (null, null, null, 0, body.RootElement.TryGetProperty("error", out var error)
                     ? error.GetString() : "BAN管理サーバーに接続できませんでした。");
             if (!body.RootElement.TryGetProperty("bans", out var bans) || bans.ValueKind != JsonValueKind.Array)
-                return (null, null, "BAN一覧を取得できませんでした。");
+                return (null, null, null, 0, "BAN一覧を取得できませんでした。");
             if (!body.RootElement.TryGetProperty("pending", out var pending) || pending.ValueKind != JsonValueKind.Array)
-                return (null, null, "UID待ち一覧を取得できませんでした。");
-            return (bans.Deserialize<PlayerBanRecord[]>() ?? [], pending.Deserialize<PendingPlayerNameBan[]>() ?? [], null);
+                return (null, null, null, 0, "UID待ち一覧を取得できませんでした。");
+            if (!body.RootElement.TryGetProperty("history", out var history) || history.ValueKind != JsonValueKind.Array ||
+                !body.RootElement.TryGetProperty("historyTotal", out var total) || total.ValueKind != JsonValueKind.Number)
+                return (bans.Deserialize<PlayerBanRecord[]>() ?? [], pending.Deserialize<PendingPlayerNameBan[]>() ?? [],
+                    null, 0, null);
+            return (bans.Deserialize<PlayerBanRecord[]>() ?? [], pending.Deserialize<PendingPlayerNameBan[]>() ?? [],
+                history.Deserialize<PlayerHistoryRecord[]>() ?? [], total.GetInt32(), null);
         }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException)
         {
-            return (null, null, "BAN管理サーバーに接続できませんでした。");
+            return (null, null, null, 0, "BAN管理サーバーに接続できませんでした。");
         }
     }
 }

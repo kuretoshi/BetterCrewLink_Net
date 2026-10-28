@@ -1,0 +1,61 @@
+<Window x:Class="TanukiBCL.Client.PlayerHistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="プレイヤー履歴・BAN管理" Width="900" Height="700" MinWidth="640" MinHeight="440"
+        Background="#25232A" Foreground="#F5F1F7" WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#1D1A23" />
+            <Setter Property="Foreground" Value="#F5F1F7" />
+            <Setter Property="CaretBrush" Value="#F5F1F7" />
+            <Setter Property="BorderBrush" Value="#5C565F" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="10,6" />
+        </Style>
+    </Window.Resources>
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top">
+            <TextBlock Text="過去に同じロビーで確認したプレイヤー" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="初回・最終日時は、アプリが同じロビーで確認した時刻です。日付検索は最終確認日を対象にします。"
+                       Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,4,0,12" />
+            <WrapPanel Margin="0,0,0,8">
+                <StackPanel Margin="0,0,8,0">
+                    <TextBlock Text="BAN管理者パスワード" />
+                    <PasswordBox x:Name="BanPassword" Width="200" MaxLength="1024" Padding="8,6" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="登録理由（任意）" />
+                    <TextBox x:Name="BanReason" Width="260" MaxLength="500" />
+                </StackPanel>
+            </WrapPanel>
+            <WrapPanel Margin="0,0,0,8">
+                <StackPanel Margin="0,0,8,0">
+                    <TextBlock Text="名前で検索" />
+                    <TextBox x:Name="SearchName" Width="190" MaxLength="80" KeyDown="SearchName_KeyDown" />
+                </StackPanel>
+                <StackPanel Margin="0,0,8,0">
+                    <TextBlock Text="最終確認日（開始）" />
+                    <DatePicker x:Name="FromDate" Width="160" />
+                </StackPanel>
+                <StackPanel Margin="0,0,8,0">
+                    <TextBlock Text="最終確認日（終了）" />
+                    <DatePicker x:Name="ToDate" Width="160" />
+                </StackPanel>
+                <Button Content="検索" Click="Search_Click" VerticalAlignment="Bottom" />
+            </WrapPanel>
+            <TextBlock x:Name="StatusText" Text="管理者パスワードを入力し、検索してください。"
+                       TextWrapping="Wrap" Margin="0,4,0,8" />
+            <TextBlock x:Name="TotalText" Text="該当: 0人" Margin="0,0,0,8" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+            <Button x:Name="PreviousButton" Content="前へ" Click="Previous_Click" IsEnabled="False" />
+            <TextBlock x:Name="PageText" Margin="8,0" VerticalAlignment="Center" />
+            <Button x:Name="NextButton" Content="次へ" Click="Next_Click" IsEnabled="False" />
+        </StackPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="HistoryRows" />
+        </ScrollViewer>
+    </DockPanel>
+</Window>

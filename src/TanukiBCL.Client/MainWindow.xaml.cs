@@ -977,7 +977,7 @@ public partial class MainWindow : Window
     private static object[] ObservedPlayers(AmongUsState? state) =>
         state?.Players.Where(player => !player.IsLocal && !player.Disconnected &&
                 !string.IsNullOrWhiteSpace(player.PlayerUid) && !string.IsNullOrWhiteSpace(player.Name))
-            .Take(14)
+            .Take(29)
             .Select(player => (object)new { playerUid = player.PlayerUid.Trim(), playerName = player.Name.Trim() })
             .ToArray() ?? [];
 

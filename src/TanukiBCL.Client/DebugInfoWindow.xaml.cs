@@ -142,9 +142,22 @@ public partial class DebugInfoWindow : Window
     private string banPlayerSignature = string.Empty;
     private string confirmBanUid = string.Empty;
     private string confirmBanName = string.Empty;
+    private PlayerHistoryWindow? playerHistoryWindow;
 
     private async void BanList_Click(object sender, RoutedEventArgs e) =>
         await ManageBanAsync(new { password = BanPassword.Password, action = "list" });
+
+    private void BanHistoryWindow_Click(object sender, RoutedEventArgs e)
+    {
+        if (playerHistoryWindow is not null)
+        {
+            playerHistoryWindow.Activate();
+            return;
+        }
+        playerHistoryWindow = new PlayerHistoryWindow { Owner = this };
+        playerHistoryWindow.Closed += (_, _) => playerHistoryWindow = null;
+        playerHistoryWindow.Show();
+    }
 
     private async void BanName_Click(object sender, RoutedEventArgs e)
     {
@@ -169,7 +182,7 @@ public partial class DebugInfoWindow : Window
             return;
         }
         BanMessage.Text = "確認しています…";
-        var (bans, pending, error) = await PlayerBanClient.ManageAsync(payload);
+        var (bans, pending, _, _, error) = await PlayerBanClient.ManageAsync(payload);
         if (error is not null) { BanMessage.Text = error; return; }
         BanMessage.Text = "BAN一覧を更新しました。";
         BanPendingRows.Children.Clear();
