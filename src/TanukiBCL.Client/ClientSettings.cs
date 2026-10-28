@@ -183,27 +183,7 @@ internal static class ClientSettingsStore
                 if (settings is not null)
                 {
                     settings.Normalize();
-                    using var document = JsonDocument.Parse(json);
-                    var fields = document.RootElement;
-                    var previous = settings.MyLobbySettings;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.SnrJumboVoiceEffectStrength), out _))
-                        settings.SnrJumboVoiceEffectStrength = previous.SnrJumboVoiceEffectStrength;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.NosSizeVoiceEffectStrength), out _))
-                        settings.NosSizeVoiceEffectStrength = previous.NosSizeVoiceEffectStrength;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.NosRokurokubiVoiceEffectStrength), out _))
-                        settings.NosRokurokubiVoiceEffectStrength = previous.NosRokurokubiVoiceEffectStrength;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.NosBerserkerVoiceEffectStrength), out _))
-                        settings.NosBerserkerVoiceEffectStrength = previous.NosBerserkerVoiceEffectStrength;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.NosCitrusVoiceEffectStrength), out _))
-                        settings.NosCitrusVoiceEffectStrength = previous.NosCitrusVoiceEffectStrength;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.NosRainbowStarEchoStrength), out _))
-                        settings.NosRainbowStarEchoStrength = previous.NosRainbowStarEchoStrength;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.NosVoiceJammingEffectStrength), out _))
-                        settings.NosVoiceJammingEffectStrength = previous.NosVoiceJammingEffectStrength;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.NosMegaphoneEffectStrength), out _))
-                        settings.NosMegaphoneEffectStrength = previous.NosMegaphoneEffectStrength;
-                    if (!fields.TryGetProperty(nameof(ClientSettings.NosBibiriEchoStrength), out _))
-                        settings.NosBibiriEchoStrength = previous.NosBibiriEchoStrength;
+                    RestoreVoiceEffectSettings(settings, json);
                     settings.Normalize();
                     return settings;
                 }
@@ -220,6 +200,31 @@ internal static class ClientSettingsStore
         }
 
         return new ClientSettings();
+    }
+
+    private static void RestoreVoiceEffectSettings(ClientSettings settings, string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var fields = document.RootElement;
+        var previous = settings.MyLobbySettings;
+        if (!fields.TryGetProperty(nameof(ClientSettings.SnrJumboVoiceEffectStrength), out _))
+            settings.SnrJumboVoiceEffectStrength = previous.SnrJumboVoiceEffectStrength;
+        if (!fields.TryGetProperty(nameof(ClientSettings.NosSizeVoiceEffectStrength), out _))
+            settings.NosSizeVoiceEffectStrength = previous.NosSizeVoiceEffectStrength;
+        if (!fields.TryGetProperty(nameof(ClientSettings.NosRokurokubiVoiceEffectStrength), out _))
+            settings.NosRokurokubiVoiceEffectStrength = previous.NosRokurokubiVoiceEffectStrength;
+        if (!fields.TryGetProperty(nameof(ClientSettings.NosBerserkerVoiceEffectStrength), out _))
+            settings.NosBerserkerVoiceEffectStrength = previous.NosBerserkerVoiceEffectStrength;
+        if (!fields.TryGetProperty(nameof(ClientSettings.NosCitrusVoiceEffectStrength), out _))
+            settings.NosCitrusVoiceEffectStrength = previous.NosCitrusVoiceEffectStrength;
+        if (!fields.TryGetProperty(nameof(ClientSettings.NosRainbowStarEchoStrength), out _))
+            settings.NosRainbowStarEchoStrength = previous.NosRainbowStarEchoStrength;
+        if (!fields.TryGetProperty(nameof(ClientSettings.NosVoiceJammingEffectStrength), out _))
+            settings.NosVoiceJammingEffectStrength = previous.NosVoiceJammingEffectStrength;
+        if (!fields.TryGetProperty(nameof(ClientSettings.NosMegaphoneEffectStrength), out _))
+            settings.NosMegaphoneEffectStrength = previous.NosMegaphoneEffectStrength;
+        if (!fields.TryGetProperty(nameof(ClientSettings.NosBibiriEchoStrength), out _))
+            settings.NosBibiriEchoStrength = previous.NosBibiriEchoStrength;
     }
 
     public static void Save(ClientSettings settings)
