@@ -404,9 +404,8 @@ public partial class VoiceView : UserControl
             return;
         }
 
-        // Released VoiceController changes otherDead only on a game-state
-        // transition: entering Lobby clears it; entering Discussion captures it.
-        // Audio policy continues to use the live death bit.
+        // Keep task deaths hidden until the meeting, then follow deaths during
+        // the meeting without waiting for another game-state transition.
         UpdateDeathDisplayState(game);
 
         var hideAppearance = game.GameState == GameState.Tasks;
@@ -423,7 +422,7 @@ public partial class VoiceView : UserControl
 
     private void UpdateDeathDisplayState(AmongUsState game)
     {
-        if (game.GameState == previousDeathDisplayState) return;
+        if (game.GameState == previousDeathDisplayState && game.GameState != GameState.Discussion) return;
         previousDeathDisplayState = game.GameState;
         if (game.GameState == GameState.Lobby)
         {
@@ -734,9 +733,12 @@ public partial class VoiceView : UserControl
 
         remote.IsDead = false;
         view.Update(game, true, false, false, false, peers);
-        if (!view.remoteAvatars[remote.Id].IsGhostVisual)
-            throw new InvalidOperationException("Remote death snapshot changed without a state transition");
+        if (view.remoteAvatars[remote.Id].IsGhostVisual)
+            throw new InvalidOperationException("Discussion did not restore a revived player avatar");
         remote.IsDead = true;
+        view.Update(game, true, false, false, false, peers);
+        if (!view.remoteAvatars[remote.Id].IsGhostVisual)
+            throw new InvalidOperationException("Discussion death did not immediately show a ghost avatar");
 
         game.GameState = GameState.Tasks;
         view.Update(game, true, false, false, false, peers);
@@ -748,7 +750,7 @@ public partial class VoiceView : UserControl
         if (view.remoteAvatars[remote.Id].IsGhostVisual)
             throw new InvalidOperationException("New lobby did not clear the remote death snapshot");
         view.popupCloseTimer.Stop();
-        Console.WriteLine("[PASS] Remote death avatar timing matches released Tasks/Discussion/Lobby transitions");
+        Console.WriteLine("[PASS] Remote death avatar follows meeting deaths while hiding task deaths");
     }
 
     public void SetError(string? error)
