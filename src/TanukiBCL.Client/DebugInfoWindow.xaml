@@ -108,6 +108,11 @@
                         <StackPanel x:Name="BanPlayerRows" />
                         <Button Content="プレイヤー履歴を別ウィンドウで開く" Click="BanHistoryWindow_Click"
                                 HorizontalAlignment="Left" Margin="0,12,0,4" />
+                        <TextBlock x:Name="BanDbHistoryTitle" Text="DB登録済みプレイヤー（未読み込み）" Margin="0,12,0,4" />
+                        <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="BanDbHistoryRows" />
+                        </ScrollViewer>
                         <TextBlock Text="UID待ち" Margin="0,12,0,4" />
                         <StackPanel x:Name="BanPendingRows" />
                         <TextBlock Text="登録済み" Margin="0,12,0,4" />

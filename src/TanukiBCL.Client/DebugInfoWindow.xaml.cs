@@ -127,7 +127,8 @@ public partial class DebugInfoWindow : Window
                     BanMessage.Text = $"{player.Name}をBANする場合は、もう一度押してください。";
                     return;
                 }
-                await ManageBanAsync(new { password = BanPassword.Password, action = "add", playerUid = player.PlayerUid,
+                await ManageBanAsync(new { password = BanPassword.Password, action = "add", historyAll = true,
+                    playerUid = player.PlayerUid,
                     displayName = player.Name, reason = BanReason.Text });
                 confirmBanUid = string.Empty;
             };
@@ -145,7 +146,7 @@ public partial class DebugInfoWindow : Window
     private PlayerHistoryWindow? playerHistoryWindow;
 
     private async void BanList_Click(object sender, RoutedEventArgs e) =>
-        await ManageBanAsync(new { password = BanPassword.Password, action = "list" });
+        await ManageBanAsync(new { password = BanPassword.Password, action = "list", historyAll = true });
 
     private void BanHistoryWindow_Click(object sender, RoutedEventArgs e)
     {
@@ -169,7 +170,7 @@ public partial class DebugInfoWindow : Window
             BanMessage.Text = $"{name}を名前で登録する場合は、もう一度押してください。";
             return;
         }
-        await ManageBanAsync(new { password = BanPassword.Password, action = "add-name",
+        await ManageBanAsync(new { password = BanPassword.Password, action = "add-name", historyAll = true,
             playerName = name, reason = BanReason.Text });
         confirmBanName = string.Empty;
     }
@@ -182,15 +183,35 @@ public partial class DebugInfoWindow : Window
             return;
         }
         BanMessage.Text = "確認しています…";
-        var (bans, pending, _, _, error) = await PlayerBanClient.ManageAsync(payload);
+        var (bans, pending, history, historyTotal, error) = await PlayerBanClient.ManageAsync(payload);
         if (error is not null) { BanMessage.Text = error; return; }
         BanMessage.Text = "BAN一覧を更新しました。";
+        BanDbHistoryRows.Children.Clear();
+        BanDbHistoryTitle.Text = history is null ? "DB登録済みプレイヤー（サーバー未対応）" :
+            $"DB登録済みプレイヤー（{historyTotal}人）";
+        if (history is not null && history.Length < historyTotal)
+            BanDbHistoryRows.Children.Add(new TextBlock { Text = "一部のみ取得できました。サーバーの更新を確認してください。" });
+        if (history is { Length: 0 })
+            BanDbHistoryRows.Children.Add(new TextBlock { Text = "記録されたプレイヤーはまだいません。" });
+        foreach (var item in history ?? [])
+        {
+            var first = DateTimeOffset.FromUnixTimeSeconds(item.FirstSeenAt).ToLocalTime().ToString("yyyy/MM/dd HH:mm");
+            var last = DateTimeOffset.FromUnixTimeSeconds(item.LastSeenAt).ToLocalTime().ToString("yyyy/MM/dd HH:mm");
+            BanDbHistoryRows.Children.Add(new TextBlock
+            {
+                Text = $"{item.DisplayName} ／ ID: …{item.UidDigest[^8..]}" +
+                    (item.FriendCode.Length > 0 ? $" ／ {item.FriendCode}" : "") +
+                    $" ／ {(item.IsBanned != 0 ? "BAN済み" : "未BAN")}\n初回: {first} ／ 最終: {last}",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 3, 0, 6)
+            });
+        }
         BanPendingRows.Children.Clear();
         foreach (var item in pending ?? [])
         {
             var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
             var button = new Button { Content = "解除", Padding = new Thickness(8, 4, 8, 4) };
-            button.Click += async (_, _) => await ManageBanAsync(new { password = BanPassword.Password,
+            button.Click += async (_, _) => await ManageBanAsync(new { password = BanPassword.Password, historyAll = true,
                 action = "remove-name", playerName = item.PlayerName });
             DockPanel.SetDock(button, Dock.Right);
             row.Children.Add(button);
@@ -203,7 +224,7 @@ public partial class DebugInfoWindow : Window
         {
             var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
             var button = new Button { Content = "解除", Padding = new Thickness(8, 4, 8, 4) };
-            button.Click += async (_, _) => await ManageBanAsync(new { password = BanPassword.Password,
+            button.Click += async (_, _) => await ManageBanAsync(new { password = BanPassword.Password, historyAll = true,
                 action = "remove", uidDigest = ban.UidDigest });
             DockPanel.SetDock(button, Dock.Right);
             row.Children.Add(button);
