@@ -41,6 +41,7 @@ public partial class OverlayWindow : Window
     private IReadOnlyDictionary<int, bool>? remoteDeadForDisplay;
     private sealed record MeetingParticipant(int Id, int ClientId, int ColorId, bool IsLocal);
     private List<MeetingParticipant> meetingOrder = [];
+    private DateTime meetingStartedAt;
     private readonly Dictionary<int, MeetingVoiceBorder> meetingSlots = [];
     private sealed class AvatarRow
     {
@@ -149,9 +150,22 @@ public partial class OverlayWindow : Window
         {
             meetingSlots.Clear();
             MeetingCanvas.Children.Clear();
+            meetingStartedAt = DateTime.UtcNow;
             meetingOrder = gameState.Players.OrderBy(player => player.Disconnected || player.IsDead)
                 .ThenBy(player => player.Id)
                 .Select(player => new MeetingParticipant(player.Id, player.ClientId, player.ColorId, player.IsLocal)).ToList();
+        }
+        else if (gameState?.GameState == GameState.Discussion &&
+                 DateTime.UtcNow - meetingStartedAt <= TimeSpan.FromSeconds(4))
+        {
+            // The mod can finalize an ability kill after discussion begins. Follow the
+            // tablet's initial resort without replacing participant/voice identities.
+            var live = new Dictionary<int, Player>();
+            foreach (var player in gameState.Players) live.TryAdd(player.Id, player);
+            if (meetingOrder.All(player => live.ContainsKey(player.Id)))
+                meetingOrder = meetingOrder
+                    .OrderBy(player => live[player.Id].Disconnected || live[player.Id].IsDead)
+                    .ThenBy(player => player.Id).ToList();
         }
         else if (gameState?.GameState != GameState.Discussion) meetingOrder.Clear();
         previousGameState = gameState?.GameState ?? GameState.Unknown;
@@ -477,6 +491,7 @@ public partial class OverlayWindow : Window
         MeetingOverlayLayout.Verify();
         MeetingVoiceBorder.Verify();
         VerifyMeetingSnapshot();
+        VerifyMeetingLateDeathOrder();
         VerifyAvatarSizingAndBackground();
         VerifyAvatarRowPersistence();
         VerifyAlternateSidePlacement();
@@ -1018,6 +1033,38 @@ public partial class OverlayWindow : Window
             if (Tint() != Color.FromRgb(0xc5, 0x11, 0x11))
                 throw new InvalidOperationException("Missing meeting palette entry must use released red fallback");
             Console.WriteLine("[PASS] Meeting snapshot identity/palette, live NoS RGB, missing participant and red fallback");
+        }
+        finally { window.Close(); }
+    }
+
+    private static void VerifyMeetingLateDeathOrder()
+    {
+        var window = new OverlayWindow(0, new ClientSettings { EnableOverlay = true, MeetingOverlay = true })
+            { Width = 1280, Height = 720 };
+        try
+        {
+            var players = new List<Player>
+            {
+                new() { Id = 1, ClientId = 11 },
+                new() { Id = 2, ClientId = 22 },
+                new() { Id = 3, ClientId = 33 }
+            };
+            var state = new AmongUsState { GameState = GameState.Discussion, Players = players };
+            var peers = new Dictionary<int, OverlayPeerStatus>();
+            window.Update(state, peers, false, false, false);
+            var lateVictimSlot = window.meetingSlots[2];
+            players[1].IsDead = true;
+            window.Update(state, peers, false, false, false);
+            if (!window.meetingOrder.Select(player => player.Id).SequenceEqual([1, 3, 2]) ||
+                !ReferenceEquals(lateVictimSlot, window.meetingSlots[2]))
+                throw new InvalidOperationException("Late meeting death did not move its existing voice frame to the dead slot");
+
+            window.meetingStartedAt = DateTime.UtcNow - TimeSpan.FromSeconds(5);
+            players[0].IsDead = true;
+            window.Update(state, peers, false, false, false);
+            if (!window.meetingOrder.Select(player => player.Id).SequenceEqual([1, 3, 2]))
+                throw new InvalidOperationException("Meeting voice frames moved after the opening resort window");
+            Console.WriteLine("[PASS] Late ability death updates meeting voice frame order, then freezes it");
         }
         finally { window.Close(); }
     }
