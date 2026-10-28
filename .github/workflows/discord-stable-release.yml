@@ -17,7 +17,7 @@ jobs:
   notify:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (!github.event.release.prerelease && contains(github.event.release.tag_name, '-net.'))
+      contains(github.event.release.tag_name, '-net.')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

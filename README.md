@@ -102,6 +102,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/create-debug-auth.ps1 
 
 GitHubリポジトリの「Settings → Secrets and variables → Actions」に、β版の通知先を`DISCORD_BETA_WEBHOOK_URL`、通常リリースの通知先を`DISCORD_RELEASE_WEBHOOK_URL`という2つのRepository secretとして登録します。`.NET`ベータ版プレリリースと通常リリースは、それぞれ別のワークフローから対応するWebhookにだけ通知します。値にはDiscordの通常のIncoming Webhook URLを指定してください（GitHub直結用の末尾`/github`は付けません）。URLはチャットやGitに貼らず、GitHubのSecret入力欄に直接登録してください。既存のpush通知用Webhook設定は変更しません。
 
+`-net-beta.`タグはGitHub Releaseを必ずプレリリースとして公開します。CLIでは`gh release create`に`--prerelease`を付けます。タグと公開区分が一致しない場合、通知ワークフローは失敗として表示され、Discordへ投稿しません。
+
 ワークフロー追加前に公開済みの`v3.2.24-net-beta.2`を通知する場合は、β版Secret登録後にGitHubの「Actions → Notify Discord of .NET beta release → Run workflow」で`release_tag`に`v3.2.24-net-beta.2`を指定します。通常リリース用の手動実行も別にあります。手動実行は同じ通知を再送するため、重複投稿に注意してください。
 
 ### サーバー接続だけを確認
