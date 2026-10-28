@@ -5,8 +5,7 @@ using System.Text.Json;
 namespace TanukiBCL.VoiceProbe.GameMemory;
 
 public sealed record NosRoleData(int? RoleId, string? RoleName, string? DisplayName,
-    string RuntimeClass, bool? IsRainbowStar, int? BodyType = null, bool? IsBerserking = null,
-    double? BuskerReviveRemaining = null)
+    string RuntimeClass, bool? IsRainbowStar, int? BodyType = null, bool? IsBerserking = null)
 {
     public string Label => $"NoS: {DisplayName ?? RoleName ?? "役職名未取得"}";
 }
@@ -20,7 +19,6 @@ internal sealed class NosLiveRoleReader
     private DateTimeOffset nextReadAt;
     private DateTimeOffset receivedAt;
     private Dictionary<int, NosHelperRole> roles = [];
-    private readonly HashSet<int> cancelledBuskers = [];
 
     public string Status { get; private set; } = "NoS役職未取得";
 
@@ -32,13 +30,11 @@ internal sealed class NosLiveRoleReader
         nextReadAt = default;
         receivedAt = default;
         roles = [];
-        cancelledBuskers.Clear();
         Status = "NoS役職未取得";
     }
 
     public IReadOnlyDictionary<int, NosRoleData> Update(int processId, string round,
-        bool useNativeBody, Func<long, int, byte[]> read,
-        GameState gameState = GameState.Unknown, IReadOnlyList<Player>? players = null)
+        bool useNativeBody, Func<long, int, byte[]> read)
     {
         if (pid != processId || session != round)
         {
@@ -58,18 +54,10 @@ internal sealed class NosLiveRoleReader
         var result = new Dictionary<int, NosRoleData>(roles.Count);
         foreach (var (id, row) in roles)
         {
-            var player = players?.FirstOrDefault(candidate => candidate.Id == id);
-            if (player is { IsDead: false }) cancelledBuskers.Remove(id);
-            if (gameState == GameState.Discussion && row.Role is
-                { RoleName: "busker", BuskerReviveRemaining: > 0 }) cancelledBuskers.Add(id);
             var bodyType = useNativeBody ? ReadBodyType(row.BodyLayout, id, read) : null;
             result[id] = row.Role! with
             {
                 BodyType = bodyType,
-                BuskerReviveRemaining = !cancelledBuskers.Contains(id) &&
-                    row.Role!.BuskerReviveRemaining is > 0 and <= 60 &&
-                    row.Role.BuskerReviveRemaining - (DateTimeOffset.UtcNow - receivedAt).TotalSeconds > 0
-                    ? row.Role.BuskerReviveRemaining - (DateTimeOffset.UtcNow - receivedAt).TotalSeconds : null,
                 IsBerserking = row.Role!.RoleName == "berserker" && bodyType.HasValue
                     ? bodyType == 2 : null
             };

@@ -109,11 +109,13 @@ internal static class SpatialVoicePolicy
         var isSnr = state.Mod == AmongUsModType.SuperNewRoles;
         var isToh = state.Mod == AmongUsModType.TownOfHostForE;
         var meImpostor = IsImpostor(state, me);
-        if (state.GameState == GameState.Tasks && meImpostor && other.IsDead &&
+        if (state.GameState == GameState.Tasks && meImpostor &&
             (isSnr && settings.SnrBuskerReviveHideVoice && other.SnrRole is
-                { RoleName: "Busker", BuskerReviveRemaining: > 0 } ||
+                { RoleName: "Busker" } &&
+                other.SnrRole.BuskerPseudocideActive == true ||
              isNos && settings.NosBuskerReviveHideVoice && other.NosRole is
-                { RoleName: "busker", BuskerReviveRemaining: > 0 }))
+                { RoleName: "busker" } &&
+                other.NosIsPseudocide == true))
             return Muted(0d, 0d, "busker-revive-hidden-from-impostor");
         var meJackal = isSnr && me.SnrRole?.IsJackal == true;
         var meSidekick = isSnr && me.SnrRole?.IsSidekick == true;

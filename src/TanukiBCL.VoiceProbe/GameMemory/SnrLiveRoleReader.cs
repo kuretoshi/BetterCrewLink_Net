@@ -9,7 +9,7 @@ public sealed record SnrRoleData(int RoleId, string? RoleName, int? ModifierId,
     bool? IsNeutral = null, bool? CanKill = null, double? JumboCurrentSize = null,
     double? JumboMaxSize = null, string? Hat2Id = null, string? Visor2Id = null,
     SnrTeamValue? AssignedTeam = null, SnrTeamValue? WinnerTeam = null, SnrTeamValue? TeamTag = null,
-    double? BuskerReviveRemaining = null)
+    bool? BuskerPseudocideActive = null)
 {
     public bool IsJackal => RoleName is "Jackal" or "WaveCannonJackal";
     public bool IsSidekick => RoleName is "Sidekick" or "SidekickWaveCannon";
@@ -225,7 +225,9 @@ internal sealed class SnrLiveRoleReader
             if (value.HasJumbo && layout.Jumbo is { } jumbo && ReadJumbo(player, jumbo, layout.PlayerType, read) is { } sizes)
                 value = value with { JumboCurrentSize = sizes.Current, JumboMaxSize = sizes.Max };
             if (value.RoleName == "Busker" && layout.Busker is { } busker)
-                value = value with { BuskerReviveRemaining = ReadBusker(player, busker, layout.PlayerType, read) };
+            {
+                value = value with { BuskerPseudocideActive = ReadBusker(player, busker, layout.PlayerType, read) };
+            }
             result.Add(id, value);
         }
         if (Pointer(layout.ArraySlot) != array ||
@@ -275,7 +277,7 @@ internal sealed class SnrLiveRoleReader
         return null;
     }
 
-    private static double? ReadBusker(ulong player, SnrBuskerLayout busker, ulong playerType,
+    private static bool? ReadBusker(ulong player, SnrBuskerLayout busker, ulong playerType,
         Func<long, int, byte[]> read)
     {
         static bool Valid(ulong pointer) => pointer >= 0x10000 && pointer <= long.MaxValue && pointer % 8 == 0;
@@ -294,14 +296,16 @@ internal sealed class SnrLiveRoleReader
             {
                 var ability = BitConverter.ToUInt64(entries, i * 8);
                 if (!Valid(ability) || Pointer(ability) != busker.AbilityType) continue;
-                var active = read(checked((long)(ability + (ulong)busker.ActiveOffset)), 1)[0] == 1;
-                var remaining = BitConverter.ToSingle(read(checked((long)(ability + (ulong)busker.TimerOffset)), 4));
+                var activeByte = read(checked((long)(ability + (ulong)busker.ActiveOffset)), 1)[0];
+                if (activeByte > 1) return null;
                 if (Pointer(player) != playerType || Pointer(player + (ulong)busker.AbilitiesOffset) != list ||
                     Pointer(list) != busker.ListType || Pointer(list + (ulong)busker.ItemsOffset) != items ||
                     Count(list + (ulong)busker.CountOffset) != count || Pointer(items) != busker.ItemsType ||
                     !read(checked((long)(items + 16)), entries.Length).AsSpan().SequenceEqual(entries) ||
-                    Pointer(ability) != busker.AbilityType) return null;
-                return active && float.IsFinite(remaining) && remaining is > 0f and <= 60f ? remaining : null;
+                    Pointer(ability) != busker.AbilityType ||
+                    read(checked((long)(ability + (ulong)busker.ActiveOffset)), 1)[0] != activeByte)
+                    return null;
+                return activeByte == 1;
             }
         }
         catch { }
@@ -406,7 +410,7 @@ internal sealed class SnrLiveLayout
             throw new InvalidDataException("Invalid SNR Jumbo layout");
         if (Busker is { } busker && (!Pointer(busker.AbilityType) || !Pointer(busker.ListType) ||
             !Pointer(busker.ItemsType) || new[] { busker.AbilitiesOffset, busker.ItemsOffset,
-                busker.CountOffset, busker.ActiveOffset, busker.TimerOffset }.Any(offset => offset is < 8 or > 4096)))
+                busker.CountOffset, busker.ActiveOffset }.Any(offset => offset is < 8 or > 4096)))
             throw new InvalidDataException("Invalid SNR Busker layout");
     }
 }
@@ -450,5 +454,4 @@ internal sealed class SnrBuskerLayout
     public int ItemsOffset { get; set; }
     public int CountOffset { get; set; }
     public int ActiveOffset { get; set; }
-    public int TimerOffset { get; set; }
 }

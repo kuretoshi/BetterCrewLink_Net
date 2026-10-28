@@ -28,6 +28,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private readonly ConcurrentDictionary<string, byte> pendingOfferFallbacks = new();
     private readonly ConcurrentDictionary<int, RadioStatus> impostorRadioStates = new();
     private readonly ConcurrentDictionary<int, NosRadioReport> nosRadioReports = new();
+    private readonly ConcurrentDictionary<int, (int ClientId, bool Active, DateTimeOffset ReceivedAt)> nosPseudocideReports = new();
     private readonly ConcurrentDictionary<string, string> peerAppVersions = new();
     private readonly ConcurrentDictionary<string, (string Lobby, string Platform, long Until)> peerSpeechPlatforms = new();
     private DateTimeOffset appVersionSentAt;
@@ -88,6 +89,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private string nosRadioSession = string.Empty;
     private string lastNosRadioSignature = string.Empty;
     private DateTimeOffset lastNosRadioSentAt;
+    private string nosPseudocideSession = string.Empty;
+    private bool? lastNosPseudocideSent;
+    private DateTimeOffset lastNosPseudocideSentAt;
     private bool tohLobbyEnabled;
     private string tohLobbyCode = string.Empty;
     private TohRoleData? tohRoleOverride;
@@ -180,6 +184,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (IsCurrentHost)
                 SendLobbySettingsToPeer(remoteSocketId);
             SendNosRadioReportToPeer(remoteSocketId);
+            SendNosPseudocideToPeer(remoteSocketId);
             appVersionSentAt = default;
             if (peerClientIds.TryGetValue(remoteSocketId, out var clientId))
             {
@@ -537,6 +542,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         UpdateLocalJamming();
         UpdateLocalVadVisibility();
         SyncNosRadioReports(state);
+        SyncNosPseudocide(state);
         SyncAppVersion(state);
         SyncTohReports(state);
         if (state.HostId > 0)
@@ -1006,6 +1012,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             hasActiveLobbySettings = false;
             impostorRadioStates.Clear();
             nosRadioReports.Clear();
+            nosPseudocideReports.Clear();
             LobbySettingsChanged?.Invoke(null);
             mobileRunning = false;
             obsPayloadCache.Reset();
@@ -1082,6 +1089,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     if (staleClientId == hostClientId) ClearTohHostReports();
                     impostorRadioStates.TryRemove(staleClientId, out _);
                     nosRadioReports.TryRemove(staleClientId, out _);
+                    ClearNosPseudocideForClient(staleClientId);
                     PeerVadChanged?.Invoke(staleClientId, false);
                     PeerConnectionStatusChanged?.Invoke(staleClientId, "closed");
                 }
@@ -1109,6 +1117,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
                     ClearTohHostReports();
                 impostorRadioStates.TryRemove(departedClientId, out _);
                 nosRadioReports.TryRemove(departedClientId, out _);
+                ClearNosPseudocideForClient(departedClientId);
                 PeerVadChanged?.Invoke(departedClientId, false);
                 PeerConnectionStatusChanged?.Invoke(departedClientId, "closed");
             }
@@ -1379,6 +1388,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (type.ValueKind == JsonValueKind.String && type.GetString() == "nos-radio-data")
             {
                 ApplyNosRadioReport(clientId, data);
+                return;
+            }
+            if (type.ValueKind == JsonValueKind.String && type.GetString() == "nos-pseudocide")
+            {
+                ApplyNosPseudocide(clientId, data);
                 return;
             }
 
@@ -1681,6 +1695,80 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             SendNosRadioReportToPeer(socketId);
         lastNosRadioSignature = signature;
         lastNosRadioSentAt = now;
+    }
+
+    private void SyncNosPseudocide(AmongUsState state)
+    {
+        var local = state.Players.FirstOrDefault(player => player.IsLocal);
+        var active = state.Mod == AmongUsModType.NebulaOnTheShip &&
+            state.GameState is GameState.Tasks or GameState.Discussion && local is not null;
+        var session = active ? $"{state.LobbyCode}|{state.ClientId}" : string.Empty;
+        if (nosPseudocideSession != session)
+        {
+            nosPseudocideSession = session;
+            nosPseudocideReports.Clear();
+            lastNosPseudocideSent = null;
+            lastNosPseudocideSentAt = default;
+        }
+        var now = DateTimeOffset.UtcNow;
+        foreach (var (playerId, report) in nosPseudocideReports)
+            if (now - report.ReceivedAt >= TimeSpan.FromSeconds(10) ||
+                !state.Players.Any(player => player.Id == playerId && player.ClientId == report.ClientId &&
+                    !player.Disconnected))
+                nosPseudocideReports.TryRemove(playerId, out _);
+        foreach (var player in state.Players)
+            player.NosIsPseudocide = active && player.IsLocal ? state.NosLocalIsPseudocide :
+                active && nosPseudocideReports.TryGetValue(player.Id, out var report) &&
+                report.ClientId == player.ClientId ? report.Active : null;
+        if (!active || !state.NosLocalIsPseudocide.HasValue) return;
+        if (lastNosPseudocideSent == state.NosLocalIsPseudocide &&
+            now - lastNosPseudocideSentAt < TimeSpan.FromSeconds(3)) return;
+        foreach (var socketId in peerClientIds.Keys)
+            SendNosPseudocideToPeer(socketId);
+        lastNosPseudocideSent = state.NosLocalIsPseudocide;
+        lastNosPseudocideSentAt = now;
+    }
+
+    private void SendNosPseudocideToPeer(string remoteSocketId)
+    {
+        var state = currentGameState;
+        var local = state?.Players.FirstOrDefault(player => player.IsLocal);
+        if (state is null || local is null || state.Mod != AmongUsModType.NebulaOnTheShip ||
+            state.GameState is not (GameState.Tasks or GameState.Discussion) ||
+            !state.NosLocalIsPseudocide.HasValue || !peerClientIds.ContainsKey(remoteSocketId)) return;
+        peerManager.TrySendPeerData(remoteSocketId, JsonSerializer.Serialize(new
+        {
+            type = "nos-pseudocide",
+            lobbyCode = state.LobbyCode,
+            playerId = local.Id,
+            active = state.NosLocalIsPseudocide.Value
+        }));
+    }
+
+    private void ApplyNosPseudocide(int clientId, JsonElement data)
+    {
+        var state = currentGameState;
+        var sender = state?.Players.FirstOrDefault(player => player.ClientId == clientId);
+        if (state is null || state.Mod != AmongUsModType.NebulaOnTheShip ||
+            state.GameState is not (GameState.Tasks or GameState.Discussion) ||
+            sender is null || sender.IsLocal || sender.Disconnected ||
+            !data.TryGetProperty("lobbyCode", out var lobbyCode) ||
+            lobbyCode.ValueKind != JsonValueKind.String || lobbyCode.GetString() != state.LobbyCode ||
+            !data.TryGetProperty("playerId", out var playerId) ||
+            !playerId.TryGetInt32(out var parsedPlayerId) || parsedPlayerId != sender.Id ||
+            !data.TryGetProperty("active", out var flag) ||
+            flag.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return;
+        var active = flag.GetBoolean();
+        var changed = sender.NosIsPseudocide != active;
+        sender.NosIsPseudocide = active;
+        nosPseudocideReports[sender.Id] = (sender.ClientId, active, DateTimeOffset.UtcNow);
+        if (changed) RefreshPeerMixes();
+    }
+
+    private void ClearNosPseudocideForClient(int clientId)
+    {
+        foreach (var (playerId, report) in nosPseudocideReports)
+            if (report.ClientId == clientId) nosPseudocideReports.TryRemove(playerId, out _);
     }
 
     private void SendNosRadioReportToPeer(string remoteSocketId)
@@ -2190,7 +2278,9 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         hostClientId = state.HostId > 0 ? state.HostId : null;
         impostorRadioStates.Clear();
         nosRadioReports.Clear();
+        nosPseudocideReports.Clear();
         nosRadioSession = string.Empty;
+        nosPseudocideSession = string.Empty;
         if (targetLobby == "MENU")
         {
             Log("INFO", "ゲーム状態に追従してロビー退出");

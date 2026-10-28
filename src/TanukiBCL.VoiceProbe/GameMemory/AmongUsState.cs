@@ -103,6 +103,7 @@ public sealed class Player
 
     public NosPlayerData? NosPlayer { get; set; }
     public NosRoleData? NosRole { get; set; }
+    public bool? NosIsPseudocide { get; set; }
     public string? NosLobbyColor { get; set; }
 
     public SnrRoleData? SnrRole { get; set; }
@@ -242,6 +243,7 @@ public sealed class AmongUsState
     public List<TohRoleDefinition> TohRoleCatalog { get; set; } = [];
 
     public VoicePosition? NosLocalMicPosition { get; set; }
+    public bool? NosLocalIsPseudocide { get; set; }
 
     public List<NosRadioData> NosRadios { get; set; } = [];
 

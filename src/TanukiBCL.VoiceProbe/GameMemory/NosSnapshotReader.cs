@@ -244,8 +244,11 @@ internal sealed class NosSnapshotReader
         var p = layout.PlayerData;
         var headerSize = new[] { s.LocalMicPositionX + 4, s.LocalMicPositionY + 4,
             s.PlayersLength + 4, s.Players + layout.PointerSize,
-            (s.RadiosLength ?? 0) + 4, (s.Radios ?? 0) + layout.PointerSize }.Max();
+            (s.RadiosLength ?? 0) + 4, (s.Radios ?? 0) + layout.PointerSize,
+            (s.LocalIsPseudocide ?? 0) + 1 }.Max();
         var header = read(checked((long)pointer), headerSize);
+        bool? localIsPseudocide = s.LocalIsPseudocide is int pseudocideOffset
+            ? Flag(header[pseudocideOffset]) : null;
         ulong HeaderPointer(int offset) => layout.PointerSize == 4
             ? BitConverter.ToUInt32(header, offset) : BitConverter.ToUInt64(header, offset);
         var count = BitConverter.ToInt32(header, s.PlayersLength);
@@ -337,7 +340,8 @@ internal sealed class NosSnapshotReader
             throw new InvalidDataException("NoS snapshot changed during read");
         return new NosSnapshot(pointer,
             new VoicePosition(Finite(BitConverter.ToSingle(header, s.LocalMicPositionX)),
-                Finite(BitConverter.ToSingle(header, s.LocalMicPositionY))), players, radios);
+                Finite(BitConverter.ToSingle(header, s.LocalMicPositionY))), players, radios,
+            localIsPseudocide);
     }
 
     private sealed class ResolveResult
@@ -350,7 +354,8 @@ internal sealed class NosSnapshotReader
 }
 
 internal sealed record NosSnapshot(ulong Publication, VoicePosition LocalMicPosition,
-    IReadOnlyDictionary<int, NosPlayerData> Players, List<NosRadioData> Radios);
+    IReadOnlyDictionary<int, NosPlayerData> Players, List<NosRadioData> Radios,
+    bool? LocalIsPseudocide);
 
 internal sealed class NosLayout
 {
@@ -365,7 +370,9 @@ internal sealed class NosLayout
     public void Validate(int pid)
     {
         static bool Field(int offset, int size, int limit) => size > 0 && offset >= 0 && offset + size <= limit;
-        if (Pid != pid || PointerSize != 8 || SchemaVersion is not (20260918 or 20260928 or 20261005 or 20261009) ||
+        if (Pid != pid || PointerSize != 8 ||
+            SchemaVersion is not (20260918 or 20260928 or 20261005) &&
+            (SchemaVersion < 20261009 || SchemaVersion > 20991231) ||
             LatestSlotAddress is < 0x10000 or > long.MaxValue ||
             LatestSlotAddress % (ulong)PointerSize != 0 ||
             PlayerData.Size is < 96 or > 4096)
@@ -374,6 +381,7 @@ internal sealed class NosLayout
         var p = PlayerData;
         if (!Field(s.LocalMicPositionX, 4, 256) || !Field(s.LocalMicPositionY, 4, 256) ||
             !Field(s.PlayersLength, 4, 256) || !Field(s.Players, PointerSize, 256) ||
+            s.LocalIsPseudocide.HasValue && !Field(s.LocalIsPseudocide.Value, 1, 256) ||
             !Field(p.PlayerId, 1, p.Size) || !Field(p.IsKiller, 1, p.Size) ||
             !Field(p.IsImpostor, 1, p.Size) || !Field(p.IsCrewmate, 1, p.Size) ||
             !Field(p.IsNeutral, 1, p.Size) || !Field(p.IsImpostorlike, 1, p.Size) ||
@@ -388,7 +396,7 @@ internal sealed class NosLayout
             p.BodyType.HasValue != p.NeckLength.HasValue ||
             p.BodyType.HasValue && !Field(p.BodyType.Value, 4, p.Size) ||
             p.NeckLength.HasValue && !Field(p.NeckLength.Value, 4, p.Size) ||
-            SchemaVersion == 20261009 && (!p.BodyType.HasValue || !p.BodyRateX.HasValue))
+            SchemaVersion >= 20261009 && (!p.BodyType.HasValue || !p.BodyRateX.HasValue))
             throw new InvalidDataException("Invalid NoS field layout");
         NosCostumeLayout?[] costumes = [p.Skin, p.Hat, p.Visor];
         var costumeCount = costumes.Count(costume => costume is not null);
@@ -415,6 +423,7 @@ internal sealed class NosSnapshotLayout
     public int Players { get; set; }
     public int? RadiosLength { get; set; }
     public int? Radios { get; set; }
+    public int? LocalIsPseudocide { get; set; }
 }
 
 internal sealed class NosPlayerLayout

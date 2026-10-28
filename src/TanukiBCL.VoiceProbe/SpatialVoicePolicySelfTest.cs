@@ -15,27 +15,50 @@ internal static class SpatialVoicePolicySelfTest
         var buskerListener = new Player { Id = 1, ClientId = 1, IsImpostor = true };
         var snrBusker = new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
             SnrRole = new SnrRoleData(1, "Busker", null, null, null, null,
-                BuskerReviveRemaining: 5) };
+                BuskerPseudocideActive: true) };
         var snrBuskerState = new AmongUsState { GameState = GameState.Tasks,
             Mod = AmongUsModType.SuperNewRoles };
         var snrBuskerSettings = new SpatialVoiceSettings(Haunting: true,
             SnrBuskerReviveHideVoice: true);
-        Check("SNR Busker revive window is hidden only while active", true,
+        Check("SNR Busker effect state is required", true,
             !SpatialVoicePolicy.Calculate(snrBuskerState, buskerListener, snrBusker, snrBuskerSettings).Audible &&
             SpatialVoicePolicy.Calculate(snrBuskerState, buskerListener,
                 new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
-                    SnrRole = snrBusker.SnrRole with { BuskerReviveRemaining = null } },
+                    SnrRole = snrBusker.SnrRole with { BuskerPseudocideActive = null } },
+                snrBuskerSettings).Audible);
+        Check("SNR Busker effect state controls fake death", true,
+            SpatialVoicePolicy.Calculate(snrBuskerState, buskerListener,
+                new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
+                    SnrRole = snrBusker.SnrRole with { BuskerPseudocideActive = false } },
+                snrBuskerSettings).Audible &&
+            !SpatialVoicePolicy.Calculate(snrBuskerState, buskerListener,
+                new Player { Id = 2, ClientId = 2, X = 1, IsDead = false,
+                    SnrRole = snrBusker.SnrRole with { BuskerPseudocideActive = true } },
                 snrBuskerSettings).Audible);
         var nosBusker = new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
-            NosRole = new NosRoleData(1, "busker", "バスカー", "Busker.Ability", false,
-                BuskerReviveRemaining: 5) };
+            NosRole = new NosRoleData(1, "busker", "バスカー", "Busker.Ability", false),
+            NosIsPseudocide = true };
         var nosBuskerState = new AmongUsState { GameState = GameState.Tasks,
             Mod = AmongUsModType.NebulaOnTheShip };
-        Check("NoS Busker revive window is hidden only while active", true,
+        Check("NoS Busker fake death is hidden only while active", true,
             !SpatialVoicePolicy.Calculate(nosBuskerState, buskerListener, nosBusker,
                 new SpatialVoiceSettings(Haunting: true, NosBuskerReviveHideVoice: true)).Audible &&
             SpatialVoicePolicy.Calculate(nosBuskerState, buskerListener, nosBusker,
                 new SpatialVoiceSettings(Haunting: true)).Audible);
+        Check("NoS published pseudocide is required", true,
+            SpatialVoicePolicy.Calculate(nosBuskerState, buskerListener,
+                new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
+                    NosRole = nosBusker.NosRole, NosIsPseudocide = false },
+                new SpatialVoiceSettings(Haunting: true, NosBuskerReviveHideVoice: true)).Audible &&
+            SpatialVoicePolicy.Calculate(nosBuskerState, buskerListener,
+                new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
+                    NosRole = nosBusker.NosRole },
+                new SpatialVoiceSettings(Haunting: true, NosBuskerReviveHideVoice: true)).Audible &&
+            !SpatialVoicePolicy.Calculate(nosBuskerState, buskerListener,
+                new Player { Id = 2, ClientId = 2, X = 1, IsDead = false,
+                    NosRole = nosBusker.NosRole,
+                    NosIsPseudocide = true },
+                new SpatialVoiceSettings(Haunting: true, NosBuskerReviveHideVoice: true)).Audible);
         var duplicateClientState = new AmongUsState { ClientId = 2 };
         Check("duplicate voice sessions on one game client stay muted", true,
             VoiceServerProbe.IsOwnClientPeer(duplicateClientState, 2) &&
@@ -344,6 +367,7 @@ internal static class SpatialVoicePolicySelfTest
         Check("SNR live reader: role and modifier names", true, snrReader.Role);
         Check("SNR live reader: Jumbo size", true, snrReader.Jumbo);
         Check("SNR live reader: torn role sample rejected", true, snrReader.TornSampleRejected);
+        Check("SNR live reader: Busker effect state", true, snrReader.Busker);
         var tohReader = TohLiveRoleReaderSelfTest.Verify();
         Check("TOH live reader: Opportunist and CanKill", true, tohReader.Role);
         Check("TOH live reader: active IKiller", true, tohReader.Killer);

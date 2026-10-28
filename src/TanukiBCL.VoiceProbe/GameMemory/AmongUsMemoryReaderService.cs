@@ -320,7 +320,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         if (mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion)
         {
             var roles = nosRoleReader.Update(currentProcess.ProcessId, $"{lobbyCode}:{nosRound}",
-                nosReader.SchemaVersion != 20261009, currentContext.ReadBytes, gameState, players);
+                nosReader.SchemaVersion != 20261009, currentContext.ReadBytes);
             foreach (var player in players)
             {
                 if (player.Disconnected || !roles.TryGetValue(player.Id, out var role)) continue;
@@ -454,6 +454,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             TohRoleCatalog = mod == AmongUsModType.TownOfHostForE
                 ? tohReader.RoleCatalog.ToList() : [],
             NosLocalMicPosition = nos?.LocalMicPosition,
+            NosLocalIsPseudocide = nos?.LocalIsPseudocide,
             NosInterviews = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadInterviews(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosVoiceJamming = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Discussion

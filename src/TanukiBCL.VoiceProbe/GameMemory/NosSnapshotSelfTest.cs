@@ -68,7 +68,7 @@ internal static class NosSnapshotSelfTest
             var bytes = address switch
             {
                 slot => slotBytes.ToArray(),
-                snapshotAddress => header.ToArray(),
+                snapshotAddress => header.Take(size).ToArray(),
                 playersAddress => player.ToArray(),
                 radiosAddress => radio.ToArray(),
                 _ => throw new InvalidOperationException($"Unexpected address {address:X}")
@@ -93,6 +93,28 @@ internal static class NosSnapshotSelfTest
         var bodySnapshot = NosSnapshotReader.ReadSnapshot(layout, Read);
         if (bodySnapshot.Players[7].BodyType != 3 || bodySnapshot.Players[7].NeckLength != 24d)
             throw new InvalidOperationException("TBCLFields 20261009 body state was not read");
+        if (bodySnapshot.LocalIsPseudocide is not null)
+            throw new InvalidOperationException("Old NoS snapshot unexpectedly has pseudocide state");
+        layout.SchemaVersion = 20261030;
+        layout.Snapshot.LocalIsPseudocide = 40;
+        Array.Resize(ref header, 41);
+        header[40] = 1;
+        layout.Validate(42);
+        if (NosSnapshotReader.ReadSnapshot(layout, Read).LocalIsPseudocide != true)
+            throw new InvalidOperationException("NoS pseudocide flag was not read");
+        header[40] = 0;
+        if (NosSnapshotReader.ReadSnapshot(layout, Read).LocalIsPseudocide != false)
+            throw new InvalidOperationException("NoS pseudocide false flag was not read");
+        header[40] = 2;
+        try
+        {
+            NosSnapshotReader.ReadSnapshot(layout, Read);
+            throw new InvalidOperationException("Invalid NoS pseudocide flag accepted");
+        }
+        catch (InvalidDataException) { }
+        header[40] = 0;
+        layout.Snapshot.LocalIsPseudocide = null;
+        layout.SchemaVersion = 20261009;
         BitConverter.GetBytes(float.NaN).CopyTo(player, 164);
         try
         {

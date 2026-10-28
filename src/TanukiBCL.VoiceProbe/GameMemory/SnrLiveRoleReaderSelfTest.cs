@@ -2,7 +2,7 @@ namespace TanukiBCL.VoiceProbe.GameMemory;
 
 internal static class SnrLiveRoleReaderSelfTest
 {
-    public static (bool Role, bool Jumbo, bool TornSampleRejected) Verify()
+    public static (bool Role, bool Jumbo, bool TornSampleRejected, bool Busker) Verify()
     {
         const ulong baseAddress = 0x1_0000_0000;
         const ulong arraySlot = baseAddress + 0x10000, array = baseAddress + 0x20000,
@@ -56,7 +56,7 @@ internal static class SnrLiveRoleReaderSelfTest
             {
                 PlayerId = new SnrNumberField { Offset = 150, Size = 1 },
                 Role = new SnrNumberField { Offset = 144, Size = 2,
-                    Names = new Dictionary<string, string> { ["7"] = "Jackal", ["9"] = "Sidekick" } },
+                    Names = new Dictionary<string, string> { ["7"] = "Jackal", ["9"] = "Sidekick", ["12"] = "Busker" } },
                 Modifier = new SnrNumberField { Offset = 146, Size = 2,
                     Names = new Dictionary<string, string> { ["1"] = "Other", ["4"] = "JumboModifier" } },
                 GhostRole = new SnrNumberField { Offset = 148, Size = 2 }
@@ -66,6 +66,12 @@ internal static class SnrLiveRoleReaderSelfTest
                 AbilityType = abilityType, DataType = dataType, ListType = listType,
                 ItemsType = itemsType, AbilitiesOffset = 72, ItemsOffset = 8,
                 CountOffset = 16, CurrentOffset = 36, DataOffset = 40, MaxOffset = 8
+            },
+            Busker = new SnrBuskerLayout
+            {
+                AbilityType = abilityType, ListType = listType, ItemsType = itemsType,
+                AbilitiesOffset = 72, ItemsOffset = 8, CountOffset = 16,
+                ActiveOffset = 44
             }
         };
         layout.Validate(123);
@@ -97,6 +103,13 @@ internal static class SnrLiveRoleReaderSelfTest
         var rejected = false;
         try { SnrLiveRoleReader.ReadRoles(layout, TornRead); }
         catch (InvalidDataException) { rejected = true; }
-        return (roleOk, jumboOk, rejected);
+        BitConverter.GetBytes((short)12).CopyTo(memory[player], 144);
+        memory[ability][44] = 1;
+        var active = SnrLiveRoleReader.ReadRoles(layout, Read)[5];
+        memory[ability][44] = 0;
+        var inactive = SnrLiveRoleReader.ReadRoles(layout, Read)[5];
+        var buskerOk = active.BuskerPseudocideActive == true &&
+            inactive.BuskerPseudocideActive == false;
+        return (roleOk, jumboOk, rejected, buskerOk);
     }
 }
