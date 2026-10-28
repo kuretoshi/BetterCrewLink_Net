@@ -65,8 +65,8 @@ public partial class SettingsWindow
             window.MasterVolumeSlider.Value = 61;
             RequireLive(settings.MasterVolume == 61 && changes.Count == 1 && writes.Count == 0,
                 "Volume preview was not live-only");
-            window.OverlayAlwaysOnTopCheck.IsChecked = true;
-            Click(window.OverlayAlwaysOnTopCheck);
+            window.GeneralAlwaysOnTopCheck.IsChecked = true;
+            Click(window.GeneralAlwaysOnTopCheck);
             RequireLive(settings.AlwaysOnTop && writes.Last().AlwaysOnTop && writes.Last().MasterVolume == 100,
                 "Checkbox save included another control's uncommitted slider");
             window.MasterVolumeSlider.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0)
@@ -187,8 +187,8 @@ public partial class SettingsWindow
                 "Exclusive lobby mode was not committed");
 
             failSave = true;
-            window.OverlayAlwaysOnTopCheck.IsChecked = false;
-            Click(window.OverlayAlwaysOnTopCheck);
+            window.GeneralAlwaysOnTopCheck.IsChecked = false;
+            Click(window.GeneralAlwaysOnTopCheck);
             RequireLive(settings.AlwaysOnTop, "Failed save changed the shared setting");
             var closing = new CancelEventArgs();
             window.OnClosing(closing);

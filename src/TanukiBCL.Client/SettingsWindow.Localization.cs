@@ -59,7 +59,7 @@ public partial class SettingsWindow
         bool OverlayLabelsMatch(string language)
         {
             var locations = window.OverlayPositionCombo.Items.OfType<ComboBoxItem>().ToArray();
-            return Equals(window.OverlayAlwaysOnTopCheck.Content,
+            return Equals(window.GeneralAlwaysOnTopCheck.Content,
                        UiLocalization.Translate(language, "settings.overlay.always_on_top")) &&
                    Equals(window.EnableOverlayCheck.Content,
                        UiLocalization.Translate(language, "settings.overlay.enabled")) &&
@@ -76,7 +76,7 @@ public partial class SettingsWindow
         }
         if (!OverlayLabelsMatch("ja"))
             throw new InvalidOperationException("Released Japanese overlay settings labels were not applied: " +
-                $"top={window.OverlayAlwaysOnTopCheck.Content}, enabled={window.EnableOverlayCheck.Content}, " +
+                $"top={window.GeneralAlwaysOnTopCheck.Content}, enabled={window.EnableOverlayCheck.Content}, " +
                 $"compact={window.CompactOverlayCheck.Content}, meeting={window.MeetingOverlayCheck.Content}, " +
                 $"position={window.OverlayPositionLabel.Text}, locations=" +
                 string.Join("|", window.OverlayPositionCombo.Items.OfType<ComboBoxItem>()
@@ -172,7 +172,7 @@ public partial class SettingsWindow
         if (prompt.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Shortcut recording prompt did not close");
         if (window.AdvancedPanel.Children.OfType<Border>().Count() != 3 ||
-            window.NatFixCheck.Style != window.OverlayAlwaysOnTopCheck.Style ||
+            window.NatFixCheck.Style != window.GeneralAlwaysOnTopCheck.Style ||
             window.OpenDebugButton.Style != window.Resources["DebugOutlinedButtonStyle"] ||
             window.OpenDebugButton.Width != 145 || window.OpenDebugButton.Height != 60 ||
             window.OpenDebugButton.ContentTemplate?.LoadContent() is not TextBlock
@@ -220,9 +220,9 @@ public partial class SettingsWindow
         if (generalItem.Template.FindName("NavIcon", generalItem) is not System.Windows.Shapes.Path
             { Data: not null })
             throw new InvalidOperationException("Settings navigation icon template was not applied");
-        window.OverlayAlwaysOnTopCheck.ApplyTemplate();
-        if (window.OverlayAlwaysOnTopCheck.Template.FindName("SwitchTrack",
-                window.OverlayAlwaysOnTopCheck) is not System.Windows.Controls.Border)
+        window.GeneralAlwaysOnTopCheck.ApplyTemplate();
+        if (window.GeneralAlwaysOnTopCheck.Template.FindName("SwitchTrack",
+                window.GeneralAlwaysOnTopCheck) is not System.Windows.Controls.Border)
             throw new InvalidOperationException("Overlay switch template was not applied");
         window.LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == "en");
         if (settings.Language != "en" || window.Title != "Settings" ||

@@ -78,7 +78,7 @@ public partial class SettingsWindow : Window
             MicrophoneCombo.Items.Cast<AudioDeviceInfo>(), settings.MicrophoneName, settings.MicrophoneDeviceId);
         SpeakerCombo.SelectedItem = ((IEnumerable<AudioDeviceInfo>)SpeakerCombo.ItemsSource)
             .FirstOrDefault(device => device.Name == settings.SpeakerName) ?? SpeakerCombo.Items.Cast<AudioDeviceInfo>().FirstOrDefault();
-        OverlayAlwaysOnTopCheck.IsChecked = settings.AlwaysOnTop;
+        GeneralAlwaysOnTopCheck.IsChecked = settings.AlwaysOnTop;
         EnableOverlayCheck.IsChecked = settings.EnableOverlay;
         CompactOverlayCheck.IsChecked = settings.CompactOverlay;
         MeetingOverlayCheck.IsChecked = settings.MeetingOverlay;
@@ -1084,7 +1084,7 @@ public partial class SettingsWindow : Window
             MicrophoneName = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Name,
             MicrophoneDeviceId = (MicrophoneCombo.SelectedItem as AudioDeviceInfo)?.Id,
             SpeakerName = (SpeakerCombo.SelectedItem as AudioDeviceInfo)?.Name,
-            AlwaysOnTop = OverlayAlwaysOnTopCheck.IsChecked == true,
+            AlwaysOnTop = GeneralAlwaysOnTopCheck.IsChecked == true,
             EnableOverlay = EnableOverlayCheck.IsChecked == true,
             CompactOverlay = CompactOverlayCheck.IsChecked == true,
             MeetingOverlay = MeetingOverlayCheck.IsChecked == true,

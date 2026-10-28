@@ -521,6 +521,11 @@
                                 </ComboBox>
                             </Grid>
                         </Border>
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" Padding="16,5" Margin="0,8,0,0">
+                            <CheckBox x:Name="GeneralAlwaysOnTopCheck" Content="ベタクル本体を最前面に表示"
+                                      Style="{StaticResource OverlaySwitchStyle}" />
+                        </Border>
                         <TextBlock Text="トラブルシューティング" FontSize="12" Foreground="#B7AABD" Margin="4,28,0,15" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                 CornerRadius="8" Padding="16,10">
@@ -1092,10 +1097,6 @@
                         <TextBlock Text="オーバーレイ" FontSize="13" FontWeight="SemiBold" Foreground="#B7AABD" Margin="4,0,0,13" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>
-                                <Border Padding="16,5" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
-                                    <CheckBox x:Name="OverlayAlwaysOnTopCheck" Content="最前面に表示"
-                                              Style="{StaticResource OverlaySwitchStyle}" />
-                                </Border>
                                 <Border Padding="16,5" BorderBrush="#3C3741" BorderThickness="0,0,0,1">
                                     <CheckBox x:Name="EnableOverlayCheck" Content="オーバーレイを有効化"
                                               Style="{StaticResource OverlaySwitchStyle}" />
