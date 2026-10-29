@@ -116,6 +116,7 @@ public partial class MainWindow : Window
         CompactVoiceView.EditCustomGameRequested += platform => EditCustomGameLauncher(platform);
         RefreshGameLaunchers();
         CompactVoiceView.SetLanguage(settings.Language);
+        CompactVoiceView.SetPlayerLayout(settings.AppPlayerLayout);
         CompactVoiceView.PlayerConfigChanged += ApplyPlayerConfig;
         UpdateCompactView();
         gameDetectionTimer.Tick += (_, _) =>
@@ -300,6 +301,7 @@ public partial class MainWindow : Window
         hotkeys?.UpdateBindings(settings);
         RefreshGameLaunchers();
         CompactVoiceView.SetLanguage(settings.Language);
+        CompactVoiceView.SetPlayerLayout(settings.AppPlayerLayout);
         if (!isClosing && sessions.Current is { AcceptsCallbacks: true } session)
             RequestSettingsRestart(session);
     }
@@ -314,6 +316,7 @@ public partial class MainWindow : Window
             if (previous.HardwareAcceleration != current.HardwareAcceleration)
                 QueueApplicationRelaunch();
             Topmost = current.AlwaysOnTop;
+            CompactVoiceView.SetPlayerLayout(current.AppPlayerLayout);
             if (previous.Language != current.Language) CompactVoiceView.SetLanguage(current.Language);
             if (previous.MicrophoneName != current.MicrophoneName ||
                 previous.MicrophoneDeviceId != current.MicrophoneDeviceId ||

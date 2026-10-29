@@ -13,6 +13,12 @@ public partial class SettingsWindow
     private void InitializeImmediateSettings()
     {
         BindToggle(GeneralAlwaysOnTopCheck, nameof(ClientSettings.AlwaysOnTop));
+        AppPlayerLayoutCombo.SelectionChanged += (_, _) =>
+        {
+            if (!settingsReady) return;
+            if (!ApplyControls(true, nameof(ClientSettings.AppPlayerLayout)))
+                AppPlayerLayoutCombo.SelectedIndex = settings.AppPlayerLayout == "aliveAboveGhosts" ? 1 : 0;
+        };
         LanguageCombo.SelectionChanged += (_, _) =>
         {
             if (!settingsReady) return;

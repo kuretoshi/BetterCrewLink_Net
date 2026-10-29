@@ -28,7 +28,7 @@ internal sealed class NosHostVoiceAdmission
         int knownClientId, out NosHostVoiceSample? sample, long? timestamp)
     {
         sample = null;
-        if (state is not { IsHost: true, Mod: AmongUsModType.NebulaOnTheShip } ||
+        if (!TanukiAddon.IsEnabled(state) || state is not { IsHost: true, Mod: AmongUsModType.NebulaOnTheShip } ||
             state.Players is not { } players ||
             client.ValueKind != JsonValueKind.Object || data.ValueKind != JsonValueKind.Object ||
             !Int(client, "playerId", out var playerId) || !Int(client, "clientId", out var clientId) ||
@@ -105,7 +105,7 @@ internal sealed class NosHostVoiceRelay : IDisposable
     {
         NumberHandling = JsonNumberHandling.Strict
     };
-    private readonly UdpClient socket = new(AddressFamily.InterNetwork);
+    private UdpClient? socket;
     private readonly Func<int, string> descriptorPath;
     private long sequence;
     private long lastRead;
@@ -116,7 +116,7 @@ internal sealed class NosHostVoiceRelay : IDisposable
 
     public void Send(NosHostVoiceSample sample, int pid, AmongUsState? state, string appVersion = "")
     {
-        if (state is not { IsHost: true, Mod: AmongUsModType.NebulaOnTheShip } || pid <= 0 ||
+        if (!TanukiAddon.IsEnabled(state) || state is not { IsHost: true, Mod: AmongUsModType.NebulaOnTheShip } || pid <= 0 ||
             state.Players is not { } players ||
             !players.Any(player => player.Id == sample.PlayerId &&
                 !player.IsDead && !player.Disconnected)) return;
@@ -135,7 +135,7 @@ internal sealed class NosHostVoiceRelay : IDisposable
         try
         {
             var bytes = Encoding.UTF8.GetBytes(payload);
-            socket.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, descriptor.Port));
+            (socket ??= new UdpClient(AddressFamily.InterNetwork)).Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, descriptor.Port));
         }
         catch (SocketException) { }
     }
@@ -157,7 +157,14 @@ internal sealed class NosHostVoiceRelay : IDisposable
         }
     }
 
-    public void Dispose() => socket.Dispose();
+    public void Dispose()
+    {
+        socket?.Dispose();
+        socket = null;
+        descriptor = null;
+        knownPid = 0;
+        lastRead = 0;
+    }
 
     private static string DefaultPath(int pid) => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

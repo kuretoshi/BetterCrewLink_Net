@@ -42,6 +42,7 @@ internal sealed class NosVoiceRoleSender : IDisposable
     public void Send(double rms, bool active, int pid, AmongUsState? state, string appVersion = "")
     {
         if (!double.IsFinite(rms) || rms is < 0d or > 1d ||
+            !TanukiAddon.IsEnabled(state) ||
             state?.Mod != AmongUsModType.NebulaOnTheShip ||
             state.GameState is not (GameState.Tasks or GameState.Discussion or GameState.Lobby) ||
             state.Players is not { } players) return;

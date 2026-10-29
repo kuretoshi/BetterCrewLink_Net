@@ -169,7 +169,17 @@
                           SizeChanged="OtherPlayersScroll_SizeChanged"
                           ScrollChanged="OtherPlayersScroll_ScrollChanged"
                           Margin="0,4,0,0">
-                <WrapPanel x:Name="OtherPlayersPanel" Width="225" HorizontalAlignment="Center" />
+                <StackPanel>
+                    <WrapPanel x:Name="OtherPlayersPanel" Width="225" HorizontalAlignment="Center" />
+                    <StackPanel x:Name="GroupedPlayersPanel" Visibility="Collapsed" HorizontalAlignment="Center">
+                        <TextBlock x:Name="AlivePlayersHeader" Text="生存者" Height="24" Foreground="#D1C6D6" />
+                        <WrapPanel x:Name="AlivePlayersPanel" />
+                        <Border BorderBrush="#716777" BorderThickness="0,1,0,0" Height="28" Padding="0,3,0,0">
+                            <TextBlock x:Name="GhostPlayersHeader" Text="霊界" Foreground="#D1C6D6" />
+                        </Border>
+                        <WrapPanel x:Name="GhostPlayersPanel" />
+                    </StackPanel>
+                </StackPanel>
             </ScrollViewer>
         </Grid>
 

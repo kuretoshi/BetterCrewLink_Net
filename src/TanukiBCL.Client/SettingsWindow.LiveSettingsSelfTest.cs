@@ -198,6 +198,14 @@ public partial class SettingsWindow
             window.OnClosing(closing);
             RequireLive(!closing.Cancel && !settings.AlwaysOnTop && !writes.Last().AlwaysOnTop,
                 "Closing did not retry the failed setting write");
+            window.AppPlayerLayoutCombo.SelectedIndex = 1;
+            RequireLive(settings.AppPlayerLayout == "aliveAboveGhosts" &&
+                writes.Last().AppPlayerLayout == "aliveAboveGhosts" &&
+                settings.Clone().AppPlayerLayout == "aliveAboveGhosts",
+                "Player layout did not apply and persist immediately");
+            window.AppPlayerLayoutCombo.SelectedIndex = 0;
+            RequireLive(settings.AppPlayerLayout == "standard" && writes.Last().AppPlayerLayout == "standard",
+                "Standard player layout did not persist");
         }
         finally
         {

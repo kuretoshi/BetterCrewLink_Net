@@ -16,7 +16,8 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly VolumeSampleProvider masterMix;
     private readonly NosMegaphoneRecording localMegaphoneRecording = new();
     private readonly NosInterviewerRecording interviews = new();
-    private readonly NosHeroSpeech heroSpeech = new();
+    private NosHeroSpeech? heroSpeech;
+    private volatile bool tanukiAddonEnabled;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> heroInputs = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> interviewInputs = new();
     private int interviewLocalId = -1;
@@ -78,8 +79,6 @@ internal sealed class AudioDeviceSession : IDisposable
             {
                 ReadFully = true
             };
-            playbackMixer.AddMixerInput(localMegaphoneRecording);
-            playbackMixer.AddMixerInput(interviews);
             masterMix = new VolumeSampleProvider(playbackMixer);
             playback = new WaveOutEvent
             {
@@ -229,10 +228,13 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         var peer = GetOrCreatePeerPlayback(peerId);
-        if (heroInputs.TryGetValue(peerId, out var heroId)) heroSpeech.Record(heroId, stereoPcm, 2);
-        if (!deafened && interviewInputs.TryGetValue(peerId, out var interviewId)) interviews.Record(interviewId, stereoPcm, 2);
-        peer.MegaphoneRecording.RecordStereoPcm16(stereoPcm);
-        peer.DyingVoiceRecording.RecordStereoPcm16(stereoPcm);
+        if (tanukiAddonEnabled)
+        {
+            if (heroInputs.TryGetValue(peerId, out var heroId)) heroSpeech?.Record(heroId, stereoPcm, 2);
+            if (!deafened && interviewInputs.TryGetValue(peerId, out var interviewId)) interviews.Record(interviewId, stereoPcm, 2);
+            peer.MegaphoneRecording.RecordStereoPcm16(stereoPcm);
+            peer.DyingVoiceRecording.RecordStereoPcm16(stereoPcm);
+        }
         lock (peer.PlaybackWriteGate)
             AddPlaybackSamples(peer.Buffer, stereoPcm, ref peer.PlaybackScratch);
     }
@@ -311,6 +313,25 @@ internal sealed class AudioDeviceSession : IDisposable
 
     public void UpdateInterviews(AmongUsState state)
     {
+        var enabled = TanukiAddon.IsEnabled(state);
+        if (tanukiAddonEnabled != enabled)
+        {
+            tanukiAddonEnabled = enabled;
+            if (enabled)
+            {
+                playbackMixer.AddMixerInput(localMegaphoneRecording);
+                playbackMixer.AddMixerInput(interviews);
+            }
+            else
+            {
+                localMegaphoneRecording.Cancel();
+                interviews.Clear();
+                ClearDyingVoiceRecordings();
+                playbackMixer.RemoveMixerInput(localMegaphoneRecording);
+                playbackMixer.RemoveMixerInput(interviews);
+            }
+        }
+        if (!enabled) return;
         var local = state.Players.FirstOrDefault(p => p.IsLocal);
         Volatile.Write(ref interviewLocalId, local?.Id ?? -1);
         interviews.Update(state.NosInterviews, state.Mod == AmongUsModType.NebulaOnTheShip &&
@@ -318,7 +339,15 @@ internal sealed class AudioDeviceSession : IDisposable
             state.GameState == GameState.Discussion, !deafened && masterVolume > 0,
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
-    public void UpdateHeroSpeech(int pid, AmongUsState state) => heroSpeech.Update(pid, state, heroInputs.Values);
+    public void UpdateHeroSpeech(int pid, AmongUsState state)
+    {
+        if (!TanukiAddon.IsEnabled(state))
+        {
+            Interlocked.Exchange(ref heroSpeech, null)?.Dispose();
+            return;
+        }
+        (heroSpeech ??= new NosHeroSpeech()).Update(pid, state, heroInputs.Values);
+    }
     public void SetHeroPeer(string peerId, int id, bool alive)
     {
         if (alive) heroInputs[peerId] = id;
@@ -435,15 +464,18 @@ internal sealed class AudioDeviceSession : IDisposable
             onVadChanged(transmittedTalking);
         }
 
-        interviews.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1);
-        heroSpeech.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1, audioAllowed);
-        localMegaphoneRecording.RecordMonoPcm16(buffer);
+        if (tanukiAddonEnabled)
+        {
+            interviews.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1);
+            heroSpeech?.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1, audioAllowed);
+            localMegaphoneRecording.RecordMonoPcm16(buffer);
+        }
         onCaptured(buffer);
     }
 
     private void PublishVoiceRoleSample(byte[] buffer)
     {
-        if (onVoiceRoleSample is null) return;
+        if (!tanukiAddonEnabled || onVoiceRoleSample is null) return;
         var now = Environment.TickCount64;
         if (now - lastVoiceRoleSampleAt < 50) return;
         lastVoiceRoleSampleAt = lastVoiceRoleSampleAt == 0 || now - lastVoiceRoleSampleAt > 100
@@ -535,7 +567,7 @@ internal sealed class AudioDeviceSession : IDisposable
         }
 
         disposed = true;
-        heroSpeech.Dispose();
+        heroSpeech?.Dispose();
         heroInputs.Clear();
         interviews.Clear();
         interviewInputs.Clear();

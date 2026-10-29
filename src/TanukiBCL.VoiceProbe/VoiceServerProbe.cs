@@ -530,6 +530,11 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             lastMobileFrameSentAt = default;
         }
         currentGameState = state;
+        if (!TanukiAddon.IsEnabled(state))
+        {
+            nosVoiceRoleSender.Dispose();
+            nosHostVoiceRelay.Dispose();
+        }
         audioSession?.UpdateInterviews(state);
         audioSession?.UpdateHeroSpeech(options.GameProcessId ?? 0, state);
         if (state.Mod != AmongUsModType.NebulaOnTheShip || state.GameState is not (GameState.Tasks or GameState.Discussion))

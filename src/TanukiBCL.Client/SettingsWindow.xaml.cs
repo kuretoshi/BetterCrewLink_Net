@@ -69,6 +69,7 @@ public partial class SettingsWindow : Window
         this.onPlayerConfigChanged = onPlayerConfigChanged;
         LanguageCombo.ItemsSource = UiLocalization.Languages;
         LanguageCombo.SelectedItem = UiLocalization.Languages.First(language => language.Code == settings.Language);
+        AppPlayerLayoutCombo.SelectedIndex = settings.AppPlayerLayout == "aliveAboveGhosts" ? 1 : 0;
         PublicLobbyLanguageCombo.ItemsSource = UiLocalization.Languages;
         lobbyDraft = settings.MyLobbySettings;
         radioOnlyBackup = settings.RadioOnlyBackup;
@@ -1070,6 +1071,7 @@ public partial class SettingsWindow : Window
         return new ClientSettings
         {
             Language = (LanguageCombo.SelectedItem as UiLanguage)?.Code ?? "ja",
+            AppPlayerLayout = AppPlayerLayoutCombo.SelectedIndex == 1 ? "aliveAboveGhosts" : "standard",
             ServerUrl = serverUrl,
             ServerUrls = serverUrlDrafts.Append(serverUrl)
                 .Distinct(StringComparer.Ordinal).ToList(),

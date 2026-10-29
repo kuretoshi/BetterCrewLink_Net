@@ -1,4 +1,4 @@
-Unicode true
+﻿Unicode true
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 
@@ -10,6 +10,7 @@ SetCompressor /SOLID lzma
 !define MUI_ICON "${ICON_FILE}"
 !define MUI_UNICON "${ICON_FILE}"
 !define MUI_ABORTWARNING
+!define MUI_COMPONENTSPAGE_NODESC
 
 Name "TanukiBCL.Net ${VERSION}"
 OutFile "${OUTPUT_FILE}"
@@ -26,6 +27,7 @@ VIAddVersionKey "CompanyName" "kuretoshi"
 VIAddVersionKey "LegalCopyright" "Copyright (c) kuretoshi"
 
 !insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -33,6 +35,9 @@ VIAddVersionKey "LegalCopyright" "Copyright (c) kuretoshi"
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "Japanese"
 !insertmacro MUI_LANGUAGE "English"
+
+LangString DesktopShortcutLabel ${LANG_JAPANESE} "デスクトップにショートカットを作成する"
+LangString DesktopShortcutLabel ${LANG_ENGLISH} "Create a desktop shortcut"
 
 Function .onInit
   SetShellVarContext current
@@ -53,6 +58,7 @@ Function un.onInit
 FunctionEnd
 
 Section "TanukiBCL.Net" SEC_APP
+  SectionIn RO
   SetOutPath "$INSTDIR"
   File /r "${PUBLISH_DIR}\*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -70,7 +76,12 @@ Section "TanukiBCL.Net" SEC_APP
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "EstimatedSize" ${INSTALL_SIZE_KB}
 SectionEnd
 
+Section /o "$(DesktopShortcutLabel)" SEC_DESKTOP_SHORTCUT
+  CreateShortCut "$DESKTOP\TanukiBCL.Net.lnk" "$INSTDIR\TanukiBCL.Net.exe"
+SectionEnd
+
 Section "Uninstall"
+  Delete "$DESKTOP\TanukiBCL.Net.lnk"
   Delete "$SMPROGRAMS\TanukiBCL.Net.lnk"
   !include "${UNINSTALL_INCLUDE}"
   Delete "$INSTDIR\Uninstall.exe"

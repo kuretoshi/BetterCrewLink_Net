@@ -33,7 +33,7 @@ internal static class VoiceRoleReleaseSelfTest
         try
         {
             var local = new Player { Id = 2, ClientId = 19, IsLocal = true, IsImpostor = true };
-            var state = new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
+            var state = new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip, NosAddonIds = ["tanuki.bcl.roles"],
                 GameState = GameState.Tasks, LobbyCode = "ABCDEF", ClientId = 19, HostId = 19,
                 IsHost = true, Players = [local],
                 NosRadios = [new NosRadioData(NosRadioRules.ImpostorKind, 1 << 2, "")] };
@@ -68,7 +68,7 @@ internal static class VoiceRoleReleaseSelfTest
         var speaker = new Player { Id = 1, X = 8d, Y = 0d };
         var state = new AmongUsState
         {
-            Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Tasks,
+            Mod = AmongUsModType.NebulaOnTheShip, NosAddonIds = ["tanuki.bcl.roles"], GameState = GameState.Tasks,
             NosMegaphones = [new NosMegaphoneState { PlayerId = 1, Energy = 0.5d, Range = 10d }],
             NosPortableMegaphones = [new NosPortableMegaphoneState { PlayerId = 1, ExtraRange = 5d }]
         };
@@ -170,7 +170,7 @@ internal static class VoiceRoleReleaseSelfTest
     {
         var state = new AmongUsState
         {
-            IsHost = true, Mod = AmongUsModType.NebulaOnTheShip,
+            IsHost = true, Mod = AmongUsModType.NebulaOnTheShip, NosAddonIds = ["tanuki.bcl.roles"],
             GameState = GameState.Tasks, LobbyCode = "ABCDEF",
             Players = [new Player { Id = 4, ClientId = 7 }]
         };
@@ -325,7 +325,7 @@ internal static class VoiceRoleReleaseSelfTest
         var port = ((IPEndPoint)receiver.Client.LocalEndPoint!).Port;
         var state = new AmongUsState
         {
-            IsHost = true, Mod = AmongUsModType.NebulaOnTheShip,
+            IsHost = true, Mod = AmongUsModType.NebulaOnTheShip, NosAddonIds = ["tanuki.bcl.roles"],
             GameState = GameState.Tasks, Players = [new Player { Id = 4, ClientId = 7, IsLocal = true }]
         };
         try
@@ -335,6 +335,13 @@ internal static class VoiceRoleReleaseSelfTest
             File.WriteAllText(hostPath, "{\"protocol\":1," +
                 $"\"pid\":123,\"port\":{port},\"token\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}");
             using var sender = new NosVoiceRoleSender(voicePath);
+            state.NosAddonIds.Clear();
+            sender.Send(0.25d, true, 123, state);
+            using (var inactiveRelay = new NosHostVoiceRelay(_ =>
+                throw new InvalidOperationException("Undetected addon read a descriptor")))
+                inactiveRelay.Send(new NosHostVoiceSample(4, 0.25d, true), 123, state);
+            check("NoS voice role: undetected addon emits no UDP or descriptor reads", false, receiver.Available > 0);
+            state.NosAddonIds = ["tanuki.bcl.roles"];
             sender.Send(0.25d, true, 123, state);
             var endpoint = new IPEndPoint(IPAddress.Any, 0);
             var local = Encoding.UTF8.GetString(receiver.Receive(ref endpoint));
@@ -344,7 +351,7 @@ internal static class VoiceRoleReleaseSelfTest
                 local.EndsWith("|0.25|1", StringComparison.Ordinal));
             var missingPlayers = new AmongUsState
             {
-                IsHost = true, Mod = AmongUsModType.NebulaOnTheShip,
+                IsHost = true, Mod = AmongUsModType.NebulaOnTheShip, NosAddonIds = ["tanuki.bcl.roles"],
                 GameState = GameState.Tasks, Players = null!
             };
             sender.Send(0.25d, true, 123, missingPlayers);

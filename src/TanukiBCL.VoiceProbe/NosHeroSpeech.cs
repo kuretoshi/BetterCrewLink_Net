@@ -47,7 +47,7 @@ internal sealed class NosHeroSpeech : IDisposable
     public void Update(int gamePid, AmongUsState state, IEnumerable<int> webPlayers)
     {
         var local = state.Players.FirstOrDefault(p => p.IsLocal && !p.IsDead && !p.Disconnected);
-        bool enabled = state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState is GameState.Tasks or GameState.Discussion;
+        bool enabled = TanukiAddon.IsEnabled(state) && state.GameState is GameState.Tasks or GameState.Discussion;
         var selected = local is null ? Array.Empty<int>() : new[] { local.Id };
         if (state.IsHost) selected = selected.Concat(webPlayers).Distinct().ToArray();
         Volatile.Write(ref selectedPlayers, enabled ? selected : []);

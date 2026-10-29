@@ -422,6 +422,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         oldGameState = gameState;
         lastStateLobbyCodeInt = lobbyCodeInt;
 
+        var tanukiAddonDetected = mod == AmongUsModType.NebulaOnTheShip &&
+            nosAddonIds.Contains("tanuki.bcl.roles", StringComparer.Ordinal);
+
         return new AmongUsState
         {
             GameExecutablePath = currentProcess.ProcessPath,
@@ -455,23 +458,23 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                 ? tohReader.RoleCatalog.ToList() : [],
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosLocalIsPseudocide = nos?.LocalIsPseudocide,
-            NosInterviews = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
+            NosInterviews = tanukiAddonDetected && gameState is GameState.Tasks or GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadInterviews(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
-            NosVoiceJamming = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Discussion
+            NosVoiceJamming = tanukiAddonDetected && gameState == GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadVoiceJamming(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
-            NosHeroTransforms = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Tasks
+            NosHeroTransforms = tanukiAddonDetected && gameState == GameState.Tasks
                 ? NosVoiceRoleStateReader.ReadHeroTransforms(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
-            NosDyingVoices = mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion
+            NosDyingVoices = tanukiAddonDetected && gameState is GameState.Tasks or GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadDyingVoices(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosRadios = nos?.Radios ?? [],
-            NosMegaphones = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Tasks
+            NosMegaphones = tanukiAddonDetected && gameState == GameState.Tasks
                 ? NosVoiceRoleStateReader.ReadMegaphones(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
-            NosPortableMegaphones = mod == AmongUsModType.NebulaOnTheShip && gameState == GameState.Tasks
+            NosPortableMegaphones = tanukiAddonDetected && gameState == GameState.Tasks
                 ? NosVoiceRoleStateReader.ReadPortable(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
-            NosBibiriEchoes = mod == AmongUsModType.NebulaOnTheShip &&
+            NosBibiriEchoes = tanukiAddonDetected &&
                 gameState is GameState.Tasks or GameState.Discussion
                 ? NosVoiceRoleStateReader.ReadBibiri(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],

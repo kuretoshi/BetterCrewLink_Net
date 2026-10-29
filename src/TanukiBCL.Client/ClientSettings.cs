@@ -20,6 +20,7 @@ internal sealed class ClientSettings
 
     public string ServerUrl { get; set; } = "https://bettercrewl.ink";
     public string Language { get; set; } = "ja";
+    public string AppPlayerLayout { get; set; } = "standard";
     public List<string> ServerUrls { get; set; } = ["https://bettercrewl.ink"];
     public string? MicrophoneName { get; set; }
     public int? MicrophoneDeviceId { get; set; }
@@ -111,6 +112,7 @@ internal sealed class ClientSettings
     {
         ServerUrl = string.IsNullOrWhiteSpace(ServerUrl) ? "https://bettercrewl.ink" : ServerUrl.Trim();
         Language = UiLocalization.Normalize(Language);
+        if (AppPlayerLayout != "aliveAboveGhosts") AppPlayerLayout = "standard";
         if (!Uri.TryCreate(ServerUrl, UriKind.Absolute, out var parsed) ||
             parsed.Scheme is not ("http" or "https"))
         {

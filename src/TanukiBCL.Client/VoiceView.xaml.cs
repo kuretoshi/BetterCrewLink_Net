@@ -38,6 +38,29 @@ public partial class VoiceView : UserControl
     private bool popupDirty;
     private bool configuringLaunchPlatforms;
     private string uiLanguage = "ja";
+    private bool groupPlayersByDeath;
+
+    internal void SetPlayerLayout(string layout)
+    {
+        groupPlayersByDeath = layout == "aliveAboveGhosts";
+        ArrangePlayerGroups();
+        ApplyPlayerLayout();
+    }
+
+    private void ArrangePlayerGroups()
+    {
+        OtherPlayersPanel.Visibility = groupPlayersByDeath ? Visibility.Collapsed : Visibility.Visible;
+        GroupedPlayersPanel.Visibility = groupPlayersByDeath ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var pair in remoteAvatars)
+        {
+            var ghost = displayedPlayers.TryGetValue(pair.Key, out var player) &&
+                remoteDeadForDisplay.TryGetValue(player.ClientId, out var dead) && dead;
+            var target = !groupPlayersByDeath ? OtherPlayersPanel : ghost ? GhostPlayersPanel : AlivePlayersPanel;
+            if (pair.Value.Parent == target) continue;
+            (pair.Value.Parent as Panel)?.Children.Remove(pair.Value);
+            target.Children.Add(pair.Value);
+        }
+    }
     private bool showingGameMenu;
 
     public VoiceView()
@@ -399,6 +422,8 @@ public partial class VoiceView : UserControl
             previousDeathDisplayState = GameState.Unknown;
             ClosePlayerConfigPopup();
             OtherPlayersPanel.Children.Clear();
+            AlivePlayersPanel.Children.Clear();
+            GhostPlayersPanel.Children.Clear();
             remoteAvatars.Clear();
             displayedPlayers.Clear();
             return;
@@ -444,7 +469,7 @@ public partial class VoiceView : UserControl
         foreach (var player in others) displayedPlayers[player.Id] = player;
         foreach (var stale in remoteAvatars.Keys.Where(id => others.All(player => player.Id != id)).ToArray())
         {
-            OtherPlayersPanel.Children.Remove(remoteAvatars[stale]);
+            (remoteAvatars[stale].Parent as Panel)?.Children.Remove(remoteAvatars[stale]);
             remoteAvatars.Remove(stale);
         }
 
@@ -473,15 +498,19 @@ public partial class VoiceView : UserControl
                 status.UsingRadio && !player.Disconnected && !player.Bugged,
                 ResolvePeerQuality(status.Quality, serverQuality), bugged: player.Bugged);
         }
+        ArrangePlayerGroups();
         ApplyPlayerLayout();
     }
 
-    private static (int Columns, double AvatarSize) CalculatePlayerLayout(double gridWidth, double gridHeight, int playerCount)
+    private static (int Columns, double AvatarSize) CalculatePlayerLayout(double gridWidth, double gridHeight, int playerCount,
+        int? aliveCount = null)
     {
         var best = (Columns: 1, AvatarSize: 0d);
         for (var columns = 1; columns <= Math.Min(12, Math.Max(1, playerCount)); columns++)
         {
-            var rows = Math.Max(1, (int)Math.Ceiling((double)playerCount / columns));
+            var rows = Math.Max(1, aliveCount is int alive
+                ? (int)Math.Ceiling((double)alive / columns) + (int)Math.Ceiling((double)(playerCount - alive) / columns)
+                : (int)Math.Ceiling((double)playerCount / columns));
             var size = Math.Min(100d, Math.Min(gridWidth / columns, gridHeight / rows) - 8d);
             if (size > best.AvatarSize) best = (columns, size);
         }
@@ -493,9 +522,11 @@ public partial class VoiceView : UserControl
         var viewport = OtherPlayersScroll.ViewportWidth > 0d
             ? OtherPlayersScroll.ViewportWidth : OtherPlayersScroll.ActualWidth;
         var gridWidth = viewport > 0d ? Math.Max(1d, viewport - 48d) : 225d;
-        var gridHeight = Math.Max(1d, OtherPlayersScroll.ActualHeight - 1d);
-        var (columns, avatarSize) = CalculatePlayerLayout(gridWidth, gridHeight, remoteAvatars.Count);
+        var gridHeight = Math.Max(1d, OtherPlayersScroll.ActualHeight - 1d - (groupPlayersByDeath ? 52d : 0d));
+        var (columns, avatarSize) = CalculatePlayerLayout(gridWidth, gridHeight, remoteAvatars.Count,
+            groupPlayersByDeath ? AlivePlayersPanel.Children.Count : null);
         OtherPlayersPanel.Width = (avatarSize + 8d) * columns + 0.01d;
+        AlivePlayersPanel.Width = GhostPlayersPanel.Width = OtherPlayersPanel.Width;
         foreach (var avatar in remoteAvatars.Values)
             avatar.Width = avatar.Height = avatarSize;
     }
@@ -715,7 +746,11 @@ public partial class VoiceView : UserControl
             Players = [local, remote]
         };
         var peers = new Dictionary<int, VoicePlayerStatus>();
+        view.SetPlayerLayout("aliveAboveGhosts");
         view.Update(game, true, false, false, false, peers);
+        var avatar = view.remoteAvatars[remote.Id];
+        if (view.AlivePlayersPanel.Children.Count != 1 || view.GhostPlayersPanel.Children.Count != 0)
+            throw new InvalidOperationException("Grouped layout did not start with survivors");
         if (view.remoteAvatars[remote.Id].IsGhostVisual)
             throw new InvalidOperationException("Lobby avatar started as a ghost");
 
@@ -725,16 +760,22 @@ public partial class VoiceView : UserControl
         view.Update(game, true, false, false, false, peers);
         if (view.remoteAvatars[remote.Id].IsGhostVisual || !view.LocalAvatar.IsGhostVisual)
             throw new InvalidOperationException("Tasks avatar death presentation differs from released VoiceController");
+        if (avatar.Parent != view.AlivePlayersPanel)
+            throw new InvalidOperationException("Grouped layout leaked a hidden task death");
 
         game.GameState = GameState.Discussion;
         view.Update(game, true, false, false, false, peers);
         if (!view.remoteAvatars[remote.Id].IsGhostVisual)
             throw new InvalidOperationException("Discussion did not reveal the remote ghost avatar");
+        if (avatar.Parent != view.GhostPlayersPanel || !ReferenceEquals(avatar, view.remoteAvatars[remote.Id]))
+            throw new InvalidOperationException("Revealed ghost did not move without replacing the avatar");
 
         remote.IsDead = false;
         view.Update(game, true, false, false, false, peers);
         if (view.remoteAvatars[remote.Id].IsGhostVisual)
             throw new InvalidOperationException("Discussion did not restore a revived player avatar");
+        if (avatar.Parent != view.AlivePlayersPanel)
+            throw new InvalidOperationException("Revived player remained in the afterlife group");
         remote.IsDead = true;
         view.Update(game, true, false, false, false, peers);
         if (!view.remoteAvatars[remote.Id].IsGhostVisual)
@@ -749,8 +790,18 @@ public partial class VoiceView : UserControl
         view.Update(game, true, false, false, false, peers);
         if (view.remoteAvatars[remote.Id].IsGhostVisual)
             throw new InvalidOperationException("New lobby did not clear the remote death snapshot");
+        view.SetPlayerLayout("standard");
+        if (avatar.Parent != view.OtherPlayersPanel || view.GroupedPlayersPanel.Visibility != Visibility.Collapsed)
+            throw new InvalidOperationException("Returning to the standard layout did not retain the avatar");
+        foreach (var alive in new[] { 0, 1, 7, 14, 15 })
+        {
+            var (columns, size) = CalculatePlayerLayout(225d, 130d, 15, alive);
+            var rows = Math.Ceiling((double)alive / columns) + Math.Ceiling((double)(15 - alive) / columns);
+            if ((size + 8d) * columns > 225.01d || (size + 8d) * rows > 130.01d)
+                throw new InvalidOperationException("Grouped player grid exceeded its available bounds");
+        }
         view.popupCloseTimer.Stop();
-        Console.WriteLine("[PASS] Remote death avatar follows meeting deaths while hiding task deaths");
+        Console.WriteLine("[PASS] Survivor/afterlife and standard layouts preserve avatars, hide task deaths, follow meeting deaths/revival and fit 15 players");
     }
 
     public void SetError(string? error)

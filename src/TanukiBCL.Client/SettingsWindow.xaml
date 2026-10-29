@@ -526,6 +526,21 @@
                             <CheckBox x:Name="GeneralAlwaysOnTopCheck" Content="ベタクル本体を最前面に表示"
                                       Style="{StaticResource OverlaySwitchStyle}" />
                         </Border>
+                        <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
+                                CornerRadius="8" Padding="16,10" Margin="0,8,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="280" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="画面レイアウト" FontSize="14" FontWeight="SemiBold" />
+                                <ComboBox x:Name="AppPlayerLayoutCombo" Grid.Column="1" FontSize="14"
+                                          Style="{StaticResource DarkAudioComboStyle}">
+                                    <ComboBoxItem Content="デフォルト" />
+                                    <ComboBoxItem Content="生存者・霊界を分ける" />
+                                </ComboBox>
+                            </Grid>
+                        </Border>
                         <TextBlock Text="トラブルシューティング" FontSize="12" Foreground="#B7AABD" Margin="4,28,0,15" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                 CornerRadius="8" Padding="16,10">
