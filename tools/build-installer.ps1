@@ -5,8 +5,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)-net-beta\.(\d+)$') {
-    throw 'Installer version must be a net-beta version, for example 3.2.8-net-beta.1.'
+if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)-net(?:-beta)?\.(\d+)$') {
+    throw 'Installer version must be a .NET release version, for example 3.2.57-net.1 or 3.2.57-net-beta.1.'
 }
 $numericVersion = @($Matches[1], $Matches[2], $Matches[3], $Matches[4])
 if ($numericVersion | Where-Object { [int]$_ -gt 65535 }) {

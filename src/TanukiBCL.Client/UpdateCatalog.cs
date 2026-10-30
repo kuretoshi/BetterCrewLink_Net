@@ -132,6 +132,7 @@ internal static partial class UpdateCatalog
             throw new InvalidOperationException("Manual update fallback must include pre-releases");
         if (await CheckAsync(client, "3.2.7-net.2", new Uri("https://example.invalid/releases")) is not null)
             throw new InvalidOperationException("Same version was offered as an update");
+        await VerifyStablePromotionAsync(client, handler, json);
         if (CompareVersions("v3.2.8-net-beta.1", "3.2.8-netdev.0") <= 0 ||
             CompareVersions("v3.2.8-netdev.1", "3.2.8-net-beta.1") >= 0 ||
             CompareVersions("v3.2.8-net-beta.2", "3.2.8-net-beta.1") <= 0 ||
@@ -167,6 +168,25 @@ internal static partial class UpdateCatalog
         if (await CheckAsync(client, "3.2.7-net.1", new Uri("https://example.invalid/releases")) is not null)
             throw new InvalidOperationException("Missing release was reported as an update");
         Console.WriteLine("[PASS] .NET release updater selects a newer verified asset and rejects invalid/missing releases");
+    }
+
+    private static async Task VerifyStablePromotionAsync(HttpClient client, CatalogHandler handler, string json)
+    {
+        var stableJson = json.Replace("v3.2.7-net.2", "v3.2.57-net.1")
+            .Replace("\"prerelease\":true", "\"prerelease\":false");
+        handler.Body = stableJson;
+        foreach (var installed in new[] { "3.2.56-net-beta.1", "3.2.57-net-beta.1" })
+        {
+            if ((await CheckAsync(client, installed, new Uri("https://example.invalid/releases")))?.Version != "v3.2.57-net.1")
+                throw new InvalidOperationException("A released beta did not receive the stable .NET update.");
+        }
+        if (await CheckAsync(client, "3.2.57-net.1", new Uri("https://example.invalid/releases")) is not null)
+            throw new InvalidOperationException("The installed stable .NET version was offered again.");
+        handler.Body = stableJson.Replace("\"draft\":false", "\"draft\":true");
+        if (await CheckAsync(client, "3.2.57-net-beta.1", new Uri("https://example.invalid/releases")) is not null)
+            throw new InvalidOperationException("A draft stable .NET version was offered.");
+        handler.Body = json;
+        Console.WriteLine("[PASS] Existing betas receive the stable release; installed stable and draft releases are not offered");
     }
 
     internal static async Task VerifyLiveAsync(string currentVersion, string expectedTag)
