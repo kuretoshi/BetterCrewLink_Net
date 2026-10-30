@@ -9,10 +9,37 @@ public partial class OverlayWindow
 {
     private static void VerifyLargeNosMeetings()
     {
+        VerifyGhostMeetingVoicePrivacy();
         foreach (var (width, height) in new[] { (1920d, 1080d), (1280d, 720d), (1024d, 768d) })
         foreach (var count in new[] { 15, 16, 18, 19, 24 })
             VerifyMeetingLayoutCase(width, height, count);
         Console.WriteLine("[PASS] WPF NoS meeting slots, viewport bounds, frozen identities and late-death reorder across 15 cases");
+    }
+
+    private static void VerifyGhostMeetingVoicePrivacy()
+    {
+        foreach (var (localDead, remoteDead, expectedOpacity) in new[]
+                 { (false, true, 0d), (false, false, 1d), (true, true, 1d) })
+        {
+            var window = new OverlayWindow(0, new ClientSettings
+                { EnableOverlay = true, MeetingOverlay = true }) { Width = 1280, Height = 720 };
+            window.placementTimer.Stop();
+            try
+            {
+                var state = new AmongUsState { GameState = GameState.Discussion, Players =
+                [
+                    new Player { Id = 0, ClientId = 10, IsLocal = true, IsDead = localDead },
+                    new Player { Id = 1, ClientId = 11, IsDead = remoteDead }
+                ] };
+                var peers = new Dictionary<int, OverlayPeerStatus> { [11] = new(true, true, false) };
+                window.Update(state, peers, false, false, false, false,
+                    new Dictionary<int, bool> { [11] = remoteDead });
+                if (window.meetingSlots[1].Opacity != expectedOpacity)
+                    throw new InvalidOperationException("Meeting voice frame ignored local/remote death privacy");
+            }
+            finally { window.Close(); }
+        }
+        Console.WriteLine("[PASS] Living meeting viewers cannot see ghost voice activity; ghosts retain it");
     }
 
     private static void VerifyMeetingLayoutCase(double width, double height, int count)

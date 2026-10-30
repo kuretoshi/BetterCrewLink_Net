@@ -435,12 +435,17 @@ public partial class OverlayWindow : Window
         MeetingCanvas.Height = hudHeight;
         Canvas.SetLeft(MeetingCanvas, (Width - hudWidth) / 2d);
         Canvas.SetTop(MeetingCanvas, (Height - hudHeight) / 2d);
+        var localAlive = state.Players.FirstOrDefault(candidate => candidate.IsLocal)?.IsDead == false;
         for (var index = 0; index < meetingOrder.Count; index++)
         {
             var player = meetingOrder[index];
             var livePlayer = state.Players.FirstOrDefault(candidate => candidate.Id == player.Id);
             peers.TryGetValue(player.ClientId, out var peer);
-            var talking = player.IsLocal ? localTalking && !microphoneMuted : peer?.VoiceActive == true;
+            var remoteDead = remoteDeadForDisplay is null
+                ? livePlayer?.IsDead == true
+                : remoteDeadForDisplay.TryGetValue(player.ClientId, out var dead) && dead;
+            var talking = player.IsLocal ? localTalking && !microphoneMuted
+                : peer?.VoiceActive == true && (!localAlive || !remoteDead);
             var bounds = layout.Slot(index);
             var color = state.Mod == AmongUsModType.NebulaOnTheShip && livePlayer?.NosPlayer is { } nos &&
                 double.IsFinite(nos.ColorR) && double.IsFinite(nos.ColorG) && double.IsFinite(nos.ColorB)
