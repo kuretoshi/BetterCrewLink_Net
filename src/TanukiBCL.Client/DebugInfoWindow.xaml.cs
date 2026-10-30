@@ -111,7 +111,8 @@ public partial class DebugInfoWindow : Window
 
     private void RenderBanPlayers(AmongUsState? state)
     {
-        var signature = string.Join('|', state?.Players.Select(player => $"{player.Id}:{player.PlayerUid}:{player.Name}") ?? []);
+        var signature = BanType.SelectedIndex + ":" + string.Join('|',
+            state?.Players.Select(player => $"{player.Id}:{player.PlayerUid}:{player.Name}") ?? []);
         if (signature == banPlayerSignature) return;
         banPlayerSignature = signature;
         BanPlayerRows.Children.Clear();
@@ -124,10 +125,11 @@ public partial class DebugInfoWindow : Window
                 if (confirmBanUid != player.PlayerUid)
                 {
                     confirmBanUid = player.PlayerUid;
-                    BanMessage.Text = $"{player.Name}をBANする場合は、もう一度押してください。";
+                    BanMessage.Text = $"{player.Name}を{(BanType.SelectedIndex == 1 ? "IP" : "UID")}でBANする場合は、もう一度押してください。";
                     return;
                 }
-                await ManageBanAsync(new { password = BanPassword.Password, action = "add", historyAll = true,
+                await ManageBanAsync(new { password = BanPassword.Password,
+                    action = BanType.SelectedIndex == 1 ? "add-ip" : "add", historyAll = true,
                     playerUid = player.PlayerUid,
                     displayName = player.Name, reason = BanReason.Text });
                 confirmBanUid = string.Empty;
@@ -144,6 +146,12 @@ public partial class DebugInfoWindow : Window
     private string confirmBanUid = string.Empty;
     private string confirmBanName = string.Empty;
     private PlayerHistoryWindow? playerHistoryWindow;
+
+    private void BanType_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        confirmBanUid = string.Empty;
+        if (IsLoaded) RenderBanPlayers(capture().State);
+    }
 
     private async void BanList_Click(object sender, RoutedEventArgs e) =>
         await ManageBanAsync(new { password = BanPassword.Password, action = "list", historyAll = true });
@@ -183,8 +191,10 @@ public partial class DebugInfoWindow : Window
             return;
         }
         BanMessage.Text = "確認しています…";
-        var (bans, pending, history, historyTotal, error) = await PlayerBanClient.ManageAsync(payload);
+        var (bans, pending, history, historyTotal, ipBansAvailable, error) = await PlayerBanClient.ManageAsync(payload);
         if (error is not null) { BanMessage.Text = error; return; }
+        IpBanOption.IsEnabled = ipBansAvailable;
+        if (!ipBansAvailable) BanType.SelectedIndex = 0;
         BanMessage.Text = "BAN一覧を更新しました。";
         BanDbHistoryRows.Children.Clear();
         BanDbHistoryTitle.Text = history is null ? "DB登録済みプレイヤー（サーバー未対応）" :
@@ -201,7 +211,9 @@ public partial class DebugInfoWindow : Window
             {
                 Text = $"{item.DisplayName} ／ ID: …{item.UidDigest[^8..]}" +
                     (item.FriendCode.Length > 0 ? $" ／ {item.FriendCode}" : "") +
-                    $" ／ {(item.IsBanned != 0 ? "BAN済み" : "未BAN")}\n初回: {first} ／ 最終: {last}",
+                    $" ／ UID: {(item.IsUidBanned ? "BAN済み" : "未BAN")}" +
+                    $" ／ IP: {(item.PublicIp.Length > 0 ? item.PublicIp : "未確認")}" +
+                    (item.IpBanned != 0 ? "（BAN済み）" : "") + $"\n初回: {first} ／ 最終: {last}",
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 3, 0, 6)
             });
@@ -223,12 +235,13 @@ public partial class DebugInfoWindow : Window
         foreach (var ban in bans ?? [])
         {
             var row = new DockPanel { Margin = new Thickness(0, 4, 0, 0) };
-            var button = new Button { Content = "解除", Padding = new Thickness(8, 4, 8, 4) };
-            button.Click += async (_, _) => await ManageBanAsync(new { password = BanPassword.Password, historyAll = true,
-                action = "remove", uidDigest = ban.UidDigest });
+            var button = new Button { Content = "解除", Padding = new Thickness(8, 4, 8, 4),
+                IsEnabled = ban.BanType is "uid" or "ip" };
+            button.Click += async (_, _) => await ManageBanAsync(PlayerBanClient.RemovalRequest(BanPassword.Password, ban));
             DockPanel.SetDock(button, Dock.Right);
             row.Children.Add(button);
-            row.Children.Add(new TextBlock { Text = $"{ban.DisplayName} ／ UID: {ban.PlayerUid} ／ {ban.Reason}",
+            row.Children.Add(new TextBlock { Text = $"[{(ban.BanType == "ip" ? "IP" : "UID")}] {ban.DisplayName}" +
+                $" ／ UID: {ban.PlayerUid} ／ IP: {ban.PublicIp} ／ {ban.Reason}", TextWrapping = TextWrapping.Wrap,
                 VerticalAlignment = VerticalAlignment.Center });
             BanRecords.Children.Add(row);
         }

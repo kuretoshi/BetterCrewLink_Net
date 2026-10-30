@@ -2,6 +2,8 @@
 
 This helper follows the released upstream v3.2.21 `tools/TbclSnapshotReader` reader. `NosBody.cs` and `NosRoles.cs` are source copies from that release; `Program.cs` retains the .NET port's earlier schema and safety checks. It reads NoS `Nebula.Collab.TBCLFields` and managed roles without writing to the Among Us process. NoS v3.5.3.6 publishes schema `20261009` body fields.
 
+The role reader includes later non-suspending attachment and translation-read optimizations. It reads labels only for active roles and stops once they are resolved, retaining Guest > Current > Default language precedence and validating dictionary changes on each read.
+
 ```powershell
 TbclSnapshotReader.exe layout <PID>
 TbclSnapshotReader.exe palette <PID>

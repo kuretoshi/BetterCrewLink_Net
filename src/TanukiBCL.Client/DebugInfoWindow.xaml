@@ -99,8 +99,16 @@
                         <TextBlock Text="UIDが分かるプレイヤーは直接登録できます。名前登録は完全一致で、同名の別人が先に接続するとそのUIDが登録されます。" TextWrapping="Wrap" />
                         <PasswordBox x:Name="BanPassword" Margin="0,8,0,4" MaxLength="1024" />
                         <Button Content="BAN一覧を読み込む" Click="BanList_Click" HorizontalAlignment="Left" />
+                        <TextBlock Text="BANの対象" Margin="0,8,0,2" />
+                        <ComboBox x:Name="BanType" SelectedIndex="0" SelectionChanged="BanType_SelectionChanged"
+                                  HorizontalAlignment="Left" MinWidth="180">
+                            <ComboBoxItem Content="プレイヤー識別子（UID）" />
+                            <ComboBoxItem x:Name="IpBanOption" Content="グローバルIP" IsEnabled="False" />
+                        </ComboBox>
+                        <TextBlock Text="IP BANは、本人の接続で確認できたIPを対象にします。同じ回線の他のプレイヤーも対象になります。"
+                                   TextWrapping="Wrap" Margin="0,4,0,0" />
                         <TextBox x:Name="BanReason" Margin="0,8,0,4" MaxLength="500" />
-                        <TextBlock Text="UID待ちのプレイヤー名" Margin="0,8,0,2" />
+                        <TextBlock Text="UID待ちのプレイヤー名（名前登録はUID BANのみ）" Margin="0,8,0,2" />
                         <TextBox x:Name="BanName" MaxLength="80" />
                         <Button Content="名前で登録（2回押して確定）" Click="BanName_Click" HorizontalAlignment="Left" />
                         <TextBlock x:Name="BanMessage" Text="管理者パスワードを入力してください。" TextWrapping="Wrap" />

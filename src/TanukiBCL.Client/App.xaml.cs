@@ -28,7 +28,7 @@ public partial class App : Application
         System.Windows.Media.RenderOptions.ProcessRenderMode = ClientSettingsStore.Load().HardwareAcceleration
             ? System.Windows.Interop.RenderMode.Default : System.Windows.Interop.RenderMode.SoftwareOnly;
         if (e.Args.Contains("--cosmetics-self-test") || e.Args.Contains("--voice-view-self-test") || e.Args.Contains("--nos-avatar-self-test") || e.Args.Contains("--overlay-self-test") || e.Args.Contains("--settings-self-test") ||
-            e.Args.Contains("--session-lifecycle-self-test") ||
+            e.Args.Contains("--session-lifecycle-self-test") || e.Args.Contains("--player-ban-self-test") ||
             e.Args.Contains("--settings-application-self-test") || e.Args.Contains("--settings-transaction-self-test") ||
             e.Args.Contains("--audio-preview-self-test") ||
             e.Args.Contains("--input-processing-self-test") || e.Args.Contains("--inquiry-self-test") ||
@@ -115,6 +115,7 @@ public partial class App : Application
                         SettingsWindow.RenderServerDialogPreview(e.Args[previewIndex + 1]);
                 }
                 if (e.Args.Contains("--session-lifecycle-self-test")) ClientSessionLifecycleSelfTest.Run();
+                if (e.Args.Contains("--player-ban-self-test")) PlayerHistoryWindow.VerifyBanModes();
                 if (e.Args.Contains("--settings-application-self-test")) ClientSettingsApplicationSelfTest.Run();
                 if (e.Args.Contains("--settings-transaction-self-test") &&
                     ClientSettingsTransactionSelfTest.Run(e.Args.Contains("--settings-transaction-failure-exit")) != 0)

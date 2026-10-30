@@ -29,7 +29,17 @@
                     <TextBlock Text="登録理由（任意）" />
                     <TextBox x:Name="BanReason" Width="260" MaxLength="500" />
                 </StackPanel>
+                <StackPanel Margin="8,0,0,0">
+                    <TextBlock Text="BANの対象" />
+                    <ComboBox x:Name="BanType" SelectedIndex="0" MinWidth="180"
+                              SelectionChanged="BanType_SelectionChanged">
+                        <ComboBoxItem Content="プレイヤー識別子（UID）" />
+                        <ComboBoxItem x:Name="IpBanOption" Content="グローバルIP" IsEnabled="False" />
+                    </ComboBox>
+                </StackPanel>
             </WrapPanel>
+            <TextBlock Text="IPは本人の接続で確認したものです。IP BANは同じ回線の他のプレイヤーも対象になります。"
+                       Foreground="#B7AABD" TextWrapping="Wrap" Margin="0,0,0,8" />
             <WrapPanel Margin="0,0,0,8">
                 <StackPanel Margin="0,0,8,0">
                     <TextBlock Text="名前で検索" />
