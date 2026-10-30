@@ -22,7 +22,7 @@ VIProductVersion "${FILE_VERSION}"
 VIAddVersionKey "ProductName" "TanukiBCL.Net"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "FileVersion" "${FILE_VERSION}"
-VIAddVersionKey "FileDescription" "TanukiBCL.Net installer"
+VIAddVersionKey "FileDescription" "TanukiBCL.Net beta installer"
 VIAddVersionKey "CompanyName" "kuretoshi"
 VIAddVersionKey "LegalCopyright" "Copyright (c) kuretoshi"
 
