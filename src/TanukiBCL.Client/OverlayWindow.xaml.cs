@@ -427,7 +427,8 @@ public partial class OverlayWindow : Window
             MeetingCanvas.Visibility = Visibility.Collapsed;
             return;
         }
-        var layout = MeetingOverlayLayout.Create(Width, Height, state.OldMeetingHud);
+        var layout = MeetingOverlayLayout.Create(Width, Height, state.OldMeetingHud,
+            state.Mod == AmongUsModType.NebulaOnTheShip, meetingOrder.Count);
         var hudWidth = layout.Width;
         var hudHeight = layout.Height;
         MeetingCanvas.Width = hudWidth;
@@ -492,6 +493,7 @@ public partial class OverlayWindow : Window
         MeetingVoiceBorder.Verify();
         VerifyMeetingSnapshot();
         VerifyMeetingLateDeathOrder();
+        VerifyLargeNosMeetings();
         VerifyAvatarSizingAndBackground();
         VerifyAvatarRowPersistence();
         VerifyAlternateSidePlacement();

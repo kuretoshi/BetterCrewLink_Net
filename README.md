@@ -1,8 +1,8 @@
 # タヌキのベタクル .NET ベータ (TanukiBCL.Net)
 
-TanukiBCL.Netは、[タヌキのベタクル v3.2.58](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.58)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
+TanukiBCL.Netは、[タヌキのベタクル v3.2.59](https://github.com/kuretoshi/TanukiBCL/releases/tag/v3.2.59)をWindows向け.NET/WPFで作り直している、Among Us用の非公式近接ボイスチャットアプリです。[BetterCrewLink](https://github.com/OhMyGuus/BetterCrewLink)と[CrewLink](https://github.com/ottomated/CrewLink)に由来するプロジェクトですが、これらやAmong Us、Innerslothの公式版ではありません。
 
-現在の配布版は **`3.2.58-net-beta.1`（プレリリース）** です。フッターの支援ボタンからKo-fiとGitHub Sponsorsを選べます。タヌキ丼0.1.0-β16のヒーロー2役職とNGワードに対応し、各PCは自分のマイクを、ホストはWeb・モバイル参加者の声を追加で認識します。日本語音声認識はローカルで動作し、外部の認識サービスは使用しません。変身衣装によるボイスエフェクトを除外しました。ボイスエフェクトを独立した設定項目に移し、キノコカオス・変装、SNRジャンボ、NoSの役職・状態ごとに強さを調整できます。TOH4E参加者は幽霊の声が聞こえる役職設定を閲覧できます。各エフェクトの強さは個人設定で0～100%に調整でき、独立したエフェクトテスト区画で試せます。NoS以外ではアドオン一覧を調べず、NoSへ戻るとすぐ再検知します。タヌキ丼0.1.0-β14の新役職「ボイスジャミンガー」の強制ミュート・ローパス・時間制限付きランダムピッチに対応しました。公式タヌキのベタクルとの従来の通信・音声・ゲーム連動の主要経路は実機で相互確認しています。新役職の複数人での音声動作はベータテスト対象です。.NET版の報告はこのリポジトリのIssuesへ作成します。64ビット版Among Usのみ対応します。
+現在の配布版は **`3.2.59-net-beta.1`（プレリリース）** です。フッターの支援ボタンからKo-fiとGitHub Sponsorsを選べます。タヌキ丼0.1.0-β16のヒーロー2役職とNGワードに対応し、各PCは自分のマイクを、ホストはWeb・モバイル参加者の声を追加で認識します。日本語音声認識はローカルで動作し、外部の認識サービスは使用しません。変身衣装によるボイスエフェクトを除外しました。ボイスエフェクトを独立した設定項目に移し、キノコカオス・変装、SNRジャンボ、NoSの役職・状態ごとに強さを調整できます。TOH4E参加者は幽霊の声が聞こえる役職設定を閲覧できます。各エフェクトの強さは個人設定で0～100%に調整でき、独立したエフェクトテスト区画で試せます。NoS以外ではアドオン一覧を調べず、NoSへ戻るとすぐ再検知します。タヌキ丼0.1.0-β14の新役職「ボイスジャミンガー」の強制ミュート・ローパス・時間制限付きランダムピッチに対応しました。公式タヌキのベタクルとの従来の通信・音声・ゲーム連動の主要経路は実機で相互確認しています。新役職の複数人での音声動作はベータテスト対象です。.NET版の報告はこのリポジトリのIssuesへ作成します。64ビット版Among Usのみ対応します。
 
 一般設定の「画面レイアウト」で、生存者と霊界を分ける表示に切り替えられます。インストーラーではデスクトップショートカットの作成を選択できます。
 
@@ -20,7 +20,7 @@ TanukiBCL.Netは、[タヌキのベタクル v3.2.58](https://github.com/kuretos
 
 ## ダウンロード
 
-[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-Setup-3.2.58-net-beta.1.exe` をダウンロードして実行してください。ユーザー別のフォルダーへインストールされ、スタートメニューから起動・アンインストールできます。持ち運び用には `TanukiBCL.Net-win-x64.zip` も用意しています。ZIP版は任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。どちらも.NETランタイムを同梱しています。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
+[このリポジトリのReleases](https://github.com/kuretoshi/BetterCrewLink_Net/releases)から `TanukiBCL.Net-Setup-3.2.59-net-beta.1.exe` をダウンロードして実行してください。ユーザー別のフォルダーへインストールされ、スタートメニューから起動・アンインストールできます。持ち運び用には `TanukiBCL.Net-win-x64.zip` も用意しています。ZIP版は任意のフォルダーへ展開して `TanukiBCL.Net.exe` を実行してください。どちらも.NETランタイムを同梱しています。インストーラーはデジタル署名されていません。Windowsの警告やネットワーク許可画面が出た場合は、配布元と内容を確認してください。
 
 タヌキのベタクルのインストーラーやLite版とは別の配布物です。公式版は[こちら](https://github.com/kuretoshi/TanukiBCL/releases)から入手できます。
 
@@ -88,8 +88,8 @@ Windows向けのself-contained配布ZIPは、バージョンを指定してロ�
 3.2.9以降の配布版は、公式版と同じ招待コード方式のHTTPS認証（`https://debug-auth.kuretoshi.work/v1/debug-auth/verify`）でデバッグ画面を開きます。管理者が発行したコードで担当者が[登録ページ](https://debug-auth.kuretoshi.work/debug-register)からパスワードを登録します。パッケージ作成時は認証先URLだけを `debug-auth.json` に同梱し、パスワードのハッシュは同梱しません。認証先に接続できない場合もローカル認証へは切り替えません。
 
 ```powershell
-& tools/package-release.ps1 -Version 3.2.58-net-beta.1
-& tools/build-installer.ps1 -Version 3.2.58-net-beta.1
+& tools/package-release.ps1 -Version 3.2.59-net-beta.1
+& tools/build-installer.ps1 -Version 3.2.59-net-beta.1
 ```
 
 認証先は `-DebugAuthUrl` で変更できます。ローカル認証版を作る場合は `-DebugAuthUrl ''` と `-DebugAuthFile` を指定してください。ローカルのパスワードは配布者本人が以下で作成し、画面に表示されない入力欄へ16文字以上のパスワードを2回入力します。`-Add` を付けると既存のパスワードを残したまま確認担当者用を追加できます（最大16個）。パスワードをチャット・コマンド引数・Gitに記録しないでください。
@@ -97,7 +97,7 @@ Windows向けのself-contained配布ZIPは、バージョンを指定してロ�
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/create-debug-auth.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tools/create-debug-auth.ps1 -Add -Name tester
-& tools/package-release.ps1 -Version 3.2.58-net-beta.1 -DebugAuthUrl '' -DebugAuthFile (Join-Path $env:APPDATA 'TanukiBCL.Net\release-debug-auth.json')
+& tools/package-release.ps1 -Version 3.2.59-net-beta.1 -DebugAuthUrl '' -DebugAuthFile (Join-Path $env:APPDATA 'TanukiBCL.Net\release-debug-auth.json')
 ```
 
 ローカル認証版のZIPへはソルト付きPBKDF2-SHA256ハッシュのみを同梱します。ハッシュは配布物から解析できるため、十分長い独自のパスフレーズを使ってください。アプリは同梱設定を優先し、`TANUKI_DEBUG_AUTH_URL`／`TANUKI_DEBUG_AUTH` 環境変数は同梱設定のない開発環境でだけ使います。これは公式版と同様にアプリの操作制限であり、アプリや配布ファイルを改変する利用者を防ぐ仕組みではありません。
