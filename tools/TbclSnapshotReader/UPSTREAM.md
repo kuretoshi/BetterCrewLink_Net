@@ -4,6 +4,8 @@ This helper follows the released upstream v3.2.21 `tools/TbclSnapshotReader` rea
 
 The role reader includes later non-suspending attachment and translation-read optimizations. It reads labels only for active roles and stops once they are resolved, retaining Guest > Current > Default language precedence and validating dictionary changes on each read.
 
+NoS metadata and palette resolution also use non-suspending attachment. Resolution validates initialized static fields and stable static-slot addresses; palette resolution additionally checks the live array reference, method table and 32-color length before and after deriving its layout. A changed or unavailable publication is rejected instead of returning a mixed layout. This does not turn live ClrMD inspection into a coherent snapshot, and real-game timing remains unmeasured.
+
 ```powershell
 TbclSnapshotReader.exe layout <PID>
 TbclSnapshotReader.exe palette <PID>
