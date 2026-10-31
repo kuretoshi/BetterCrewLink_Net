@@ -12,6 +12,12 @@ public partial class SettingsWindow
     private readonly HashSet<string> failedSaveKeys = [];
     private void InitializeImmediateSettings()
     {
+        BindSlider(TuningPitchSlider, nameof(ClientSettings.VoiceEffectTunings));
+        BindSlider(TuningReverbSlider, nameof(ClientSettings.VoiceEffectTunings));
+        BindSlider(TuningEchoSlider, nameof(ClientSettings.VoiceEffectTunings));
+        BindSlider(RokuroHeadVolumeSlider, nameof(ClientSettings.RokuroVoice));
+        BindSlider(RokuroBodyVolumeSlider, nameof(ClientSettings.RokuroVoice));
+        BindSlider(RokuroBodyEchoSlider, nameof(ClientSettings.RokuroVoice));
         BindToggle(GeneralAlwaysOnTopCheck, nameof(ClientSettings.AlwaysOnTop));
         AppPlayerLayoutCombo.SelectionChanged += (_, _) =>
         {

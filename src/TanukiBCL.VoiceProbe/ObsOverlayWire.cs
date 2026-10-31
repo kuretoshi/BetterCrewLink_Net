@@ -47,6 +47,11 @@ internal static class ObsOverlayWire
         writer.WriteBoolean("localIsAlive", state.Players.FirstOrDefault(player => player.IsLocal)?.IsDead != true);
         writer.WriteString("mod", ModName(state.Mod));
         writer.WriteBoolean("oldMeetingHud", state.OldMeetingHud);
+        if (state.SnrMeeting is { } meeting)
+        {
+            writer.WritePropertyName("snrMeeting");
+            JsonSerializer.Serialize(writer, meeting);
+        }
         writer.WriteEndObject();
     }
 
@@ -194,7 +199,8 @@ internal static class ObsOverlayWire
             localTalking,
             localIsAlive = local?.IsDead != true,
             mod = ModName(state.Mod),
-            oldMeetingHud = state.OldMeetingHud
+            oldMeetingHud = state.OldMeetingHud,
+            snrMeeting = state.SnrMeeting
         };
         return payload;
     }

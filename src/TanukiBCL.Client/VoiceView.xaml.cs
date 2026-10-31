@@ -511,7 +511,8 @@ public partial class VoiceView : UserControl
             var rows = Math.Max(1, aliveCount is int alive
                 ? (int)Math.Ceiling((double)alive / columns) + (int)Math.Ceiling((double)(playerCount - alive) / columns)
                 : (int)Math.Ceiling((double)playerCount / columns));
-            var size = Math.Min(100d, Math.Min(gridWidth / columns, gridHeight / rows) - 8d);
+            var size = Math.Min(aliveCount.HasValue ? 90d : 100d,
+                Math.Min(gridWidth / columns, gridHeight / rows) - 8d);
             if (size > best.AvatarSize) best = (columns, size);
         }
         return (best.Columns, Math.Max(1d, best.AvatarSize));
@@ -736,6 +737,7 @@ public partial class VoiceView : UserControl
 
     internal static void VerifyRemoteDeathPresentation()
     {
+        VerifyGroupedRosterLayout();
         var view = new VoiceView();
         var local = new Player { Id = 0, ClientId = 10, IsLocal = true, Name = "Local" };
         var remote = new Player { Id = 1, ClientId = 11, Name = "Remote" };

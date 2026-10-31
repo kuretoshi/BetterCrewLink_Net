@@ -2154,30 +2154,30 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             return;
         }
 
-        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings with { SnrPushReverbStrength = localVoiceEffectStrengths.SnrPushReverbStrength },
+        var mix = SpatialVoicePolicy.Calculate(currentGameState, me, other, spatialVoiceSettings,
             IsImpostorRadioActive(clientId), CanHearNosRadio(currentGameState, other, me),
             airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
         var playerConfig = PlayerAudioConfig.For(other, Volatile.Read(ref playerConfigs));
+        mix = RokuroVoicePolicy.Apply(currentGameState, me, other, spatialVoiceSettings, mix,
+            localVoiceEffectStrengths.RokuroVoice, activeLobbySettings.NosRokurokubiVoiceEffect,
+            IsImpostorRadioActive(clientId), airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
         audioSession?.SetInterviewPeer(socketId, other.Id, !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d);
         bool webSpeech = peerSpeechPlatforms.TryGetValue(socketId, out var speechPeer) && speechPeer.Lobby == currentGameState.LobbyCode &&
             speechPeer.Until > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && NosHeroSpeech.RecogniseHere(false, currentGameState.IsHost, speechPeer.Platform);
         audioSession?.SetHeroPeer(socketId, other.Id, webSpeech && !other.Disconnected && !other.IsDead);
         mix = playerConfig.Apply(mix);
-        var effectLobby = localVoiceEffectStrengths.ApplyTo(activeLobbySettings);
-        var effect = VoiceDisguiseEffectPolicy.Select(currentGameState, me, other,
-            effectLobby, voiceEffectStrength, mix.Audible, IsImpostorRadioActive(clientId));
-        var starEcho = VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(currentGameState, other,
-            effectLobby);
-        var deathEchoActive = currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
-            effectLobby.NosBibiriEchoStrength > 0 &&
-            currentGameState.GameState is GameState.Tasks or GameState.Discussion &&
+        var effect = VoiceEffectRuntimePolicy.Select(currentGameState, me, other,
+            activeLobbySettings, spatialVoiceSettings, mix, localVoiceEffectStrengths,
+            voiceEffectStrength, IsImpostorRadioActive(clientId));
+        // The existing falling mix uses a living voice copy, so this reverb is
+        // the push effect, never the separate ghost-hearing response.
+        if (effect.PushActive) mix = mix with { Reverb = false };
+        var deathEchoActive = VoiceEffectRuntimePolicy.ShouldRecordBibiri(currentGameState, effect.BibiriTuning) &&
             !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d && !deafened;
         var deathEchoEvent = currentGameState.NosBibiriEchoes
             .FirstOrDefault(item => item.PlayerId == other.Id)?.UnixMs;
-        audioSession?.SetPeerMix(socketId, mix, effect, starEcho,
-            deathEchoActive, other.IsDead, deathEchoEvent,
-            Math.Clamp(effectLobby.NosRainbowStarEchoStrength, 0, 100) / 100f,
-            Math.Clamp(effectLobby.NosBibiriEchoStrength, 0, 100) / 100f);
+        audioSession?.SetPeerMix(socketId, mix, effect.Tuning, effect.Grit,
+            deathEchoActive, other.IsDead, deathEchoEvent, effect.BibiriTuning);
         audioSession?.UpdatePeerMegaphoneRecording(socketId,
             currentGameState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == other.Id),
             currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&

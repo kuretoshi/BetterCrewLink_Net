@@ -11,7 +11,14 @@ internal static class SpatialVoicePolicySelfTest
     public static int Run()
     {
         PublicLobbyAnnouncement.Verify();
+        RokuroVoiceSelfTest.Verify();
+        SnrMeetingSelfTest.Verify();
         var failures = 0;
+        Check("Voice tuning:11effects, signed pitch, independent axes, normalization and persistence", true,
+            VoiceEffectTuningSelfTest.Verify());
+        VoiceEffectRuntimeSelfTest.Verify(Check);
+        EffectTransitionSelfTest.Verify(Check);
+        EffectPeakSafetySelfTest.Verify(Check);
         var buskerListener = new Player { Id = 1, ClientId = 1, IsImpostor = true };
         var snrBusker = new Player { Id = 2, ClientId = 2, X = 1, IsDead = true,
             SnrRole = new SnrRoleData(1, "Busker", null, null, null, null,
@@ -421,6 +428,7 @@ internal static class SpatialVoicePolicySelfTest
             GameState = GameState.Tasks,
             NosLocalMicPosition = new VoicePosition(20d, 0d)
         };
+        Check("NoS role audio: head positions and Berserker echo", true, NosRoleAudioSelfTest.Verify());
         var nosSpeaker = new Player
         {
             X = 50d,
@@ -784,16 +792,16 @@ internal static class SpatialVoicePolicySelfTest
                 new LobbySettings { NosRokurokubiVoiceEffect = false, NosSizeVoiceEffect = false },
                 0, true, false) is null);
         specialSpeaker.NosRole = specialSpeaker.NosRole with { IsRainbowStar = true };
-        Check("NoS Rainbow Star: echo active during tasks", true,
+        Check("NoS Rainbow Star: reverb active during tasks", true,
             VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(nosTasks, specialSpeaker, new LobbySettings()));
-        Check("NoS Rainbow Star: echo active during meetings", true,
+        Check("NoS Rainbow Star: reverb active during meetings", true,
             VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(new AmongUsState
                 { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Discussion },
                 specialSpeaker, new LobbySettings()));
-        Check("NoS Rainbow Star: switch disables echo", false,
+        Check("NoS Rainbow Star: switch disables reverb", false,
             VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(nosTasks, specialSpeaker,
                 new LobbySettings { NosRainbowStarEcho = false }));
-        Check("NoS Rainbow Star: zero strength disables echo", false,
+        Check("NoS Rainbow Star: zero strength disables reverb", false,
             VoiceDisguiseEffectPolicy.ShouldApplyRainbowStarEcho(nosTasks, specialSpeaker,
                 new LobbySettings { NosRainbowStarEchoStrength = 0 }));
         specialSpeaker.NosPlayer = new NosPlayerData
@@ -1292,18 +1300,6 @@ internal static class SpatialVoicePolicySelfTest
         echo.Read(echoSamples, 0, 2);
         Check("radio echo DSP: re-enabling begins with a silent delay", true,
             echo.DelayCapacitySamples == 8_640 && echoSamples[0] == 0f);
-        var starEcho = new RadioEchoSampleProvider(new TestImpulseStereoSource(), 0.075d);
-        Check("NoS star echo DSP: idle peer has no delay buffer", true,
-            starEcho.DelayCapacitySamples == 0);
-        starEcho.Enabled = true;
-        starEcho.Read(echoSamples, 0, 2);
-        Check("NoS star echo DSP: active peer allocates the 75 ms buffer", true,
-            starEcho.DelayCapacitySamples == 7_200);
-        starEcho.Enabled = false;
-        starEcho.Read(echoSamples, 0, 2);
-        Check("NoS star echo DSP: disabling releases the buffer", true,
-            starEcho.DelayCapacitySamples == 0);
-
         var cameraPolicy = new SpatialVoiceSettings(HearThroughCameras: true);
         var airshipCamera = new AmongUsState
         {

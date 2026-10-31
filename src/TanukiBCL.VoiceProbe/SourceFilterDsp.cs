@@ -53,7 +53,7 @@ internal sealed class SourceFilterDsp
             var value = samples[index];
             input[Size - Hop + cursor] = float.IsFinite(value) ? value : 0d;
             var rendered = output[cursor];
-            samples[index] = double.IsFinite(rendered) ? (float)Math.Clamp(rendered, -1d, 1d) : 0f;
+            samples[index] = EffectPeakSafety.Apply(rendered);
             if (++cursor != Hop) continue;
             Array.Copy(output, Hop, output, 0, Size - Hop);
             Array.Clear(output, Size - Hop, Hop);

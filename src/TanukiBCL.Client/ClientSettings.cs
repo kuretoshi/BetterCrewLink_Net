@@ -55,10 +55,14 @@ internal sealed class ClientSettings
     public int NosVoiceJammingEffectStrength { get; set; } = 100;
     public int NosMegaphoneEffectStrength { get; set; } = 100;
     public int NosBibiriEchoStrength { get; set; } = 100;
+    public Dictionary<string, VoiceEffectTuningOverride> VoiceEffectTunings { get; set; } = [];
+    public RokuroVoiceSettings RokuroVoice { get; set; } = new();
 
     [JsonIgnore]
     public VoiceEffectStrengths LocalVoiceEffectStrengths => new()
     {
+        Tunings = VoiceEffectTunings,
+        RokuroVoice = RokuroVoice,
         SnrPushReverbStrength = Math.Clamp(SnrPushReverbStrength, 0, 100),
         SnrJumboVoiceEffectStrength = SnrJumboVoiceEffectStrength,
         NosSizeVoiceEffectStrength = NosSizeVoiceEffectStrength,
@@ -136,6 +140,8 @@ internal sealed class ClientSettings
         NosVoiceJammingEffectStrength = Math.Clamp(NosVoiceJammingEffectStrength, 0, 100);
         NosMegaphoneEffectStrength = Math.Clamp(NosMegaphoneEffectStrength, 0, 100);
         NosBibiriEchoStrength = Math.Clamp(NosBibiriEchoStrength, 0, 100);
+        VoiceEffectTunings ??= [];
+        RokuroVoice = (RokuroVoice ?? new()).Normalize();
         CrewVolumeAsGhost = Math.Clamp(CrewVolumeAsGhost, 0, 100);
         GhostVolumeAsImpostor = Math.Clamp(GhostVolumeAsImpostor, 0, 100);
         MicrophoneGain = Math.Clamp(MicrophoneGain, 0, 300);

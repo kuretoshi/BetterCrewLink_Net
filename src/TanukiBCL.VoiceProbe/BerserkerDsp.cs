@@ -2,46 +2,42 @@ using NAudio.Dsp;
 
 namespace TanukiBCL.VoiceProbe;
 
-// NoS Berserker's 80 Hz high-pass, saturation, 4.2 kHz low-pass and short room tail.
+// NoS Berserker's 80 Hz high-pass, saturation, 4.2 kHz low-pass colour. Room and echo are controlled by the shared effect chain.
 internal sealed class BerserkerDsp
 {
     private readonly BiQuadFilter highPass;
     private readonly BiQuadFilter lowPass;
-    private readonly float[] room;
-    private readonly int[] taps;
-    private readonly float[] weights = [0.48f, 0.29f, 0.17f, 0.09f];
-    private int cursor;
     private float previousHighPass;
     private float envelope;
     private readonly float attack;
     private readonly float release;
+    private float appliedStrength;
+    private readonly float strengthStep;
+    internal bool IsInactive => appliedStrength == 0;
 
     public BerserkerDsp(int sampleRate)
     {
+        strengthStep = 1f / Math.Max(1, sampleRate / 100);
         var q = WebAudioBiquadQ.ToLinear((float)Math.Sqrt(0.5d));
         highPass = BiQuadFilter.HighPassFilter(sampleRate, 80, q);
         lowPass = BiQuadFilter.LowPassFilter(sampleRate, 4_200, q);
-        room = new float[(int)(sampleRate * 0.24d)];
-        taps = new[] { 12, 53, 119, 211 }
-            .Select(milliseconds => sampleRate * milliseconds / 1000).ToArray();
         attack = 1f - MathF.Exp(-1f / (sampleRate * 0.005f));
         release = 1f - MathF.Exp(-1f / (sampleRate * 0.08f));
     }
 
-    public void Process(float[] samples, int offset, int count, double strength)
+    public void Process(float[] samples, int offset, int count, double strength, bool smoothStrength = false)
     {
-        var amount = (float)Math.Clamp(strength, 0d, 1d);
+        var target = (float)Math.Clamp(strength, 0d, 1d);
         for (var index = offset; index < offset + count; index++)
         {
+            appliedStrength = smoothStrength ? Math.Clamp(target, appliedStrength - strengthStep, appliedStrength + strengthStep) : target;
+            var amount = appliedStrength;
             var dry = float.IsFinite(samples[index]) ? samples[index] : 0f;
             var high = highPass.Transform(dry);
             var shaped = OversampledSaturation(high);
             var filtered = lowPass.Transform(shaped);
-            room[cursor] = filtered;
-            var reverberant = RoomSample();
-            var mixed = high * 0.8f + filtered * 0.12f + reverberant * 0.06f;
+            var mixed = high * 0.8f + filtered * 0.12f;
             samples[index] = Math.Clamp(dry * (1f - amount) + Compress(mixed) * 0.78f * amount, -1f, 1f);
-            cursor = (cursor + 1) % room.Length;
         }
     }
 
@@ -66,11 +62,4 @@ internal sealed class BerserkerDsp
         return sample * gain;
     }
 
-    private float RoomSample()
-    {
-        var sum = 0f;
-        for (var index = 0; index < taps.Length; index++)
-            sum += room[(cursor + room.Length - taps[index]) % room.Length] * weights[index];
-        return sum;
-    }
 }

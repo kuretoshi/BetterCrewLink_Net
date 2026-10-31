@@ -735,7 +735,7 @@
                             <StackPanel x:Name="UchuLobbyEffectControlsPanel" Visibility="Collapsed">
                                 <CheckBox x:Name="NosCitrusVoiceEffectCheck" Content="シトラスの柑橘状態で声を高い犯人声にする（UchuAddon）"
                                           Style="{StaticResource LobbySwitchStyle}" />
-                                <CheckBox x:Name="NosRainbowStarEchoCheck" Content="虹色スターの声に薄いエコーを加える（UchuAddon）"
+                                <CheckBox x:Name="NosRainbowStarEchoCheck" Content="虹色スターの声にリバーブを加える（UchuAddon）"
                                           Style="{StaticResource LobbySwitchStyle}" />
                             </StackPanel>
                             <CheckBox x:Name="NosFixerJammingVoiceBlockCheck" Content="フィクサーの妨害を受けた際に音声を遮断する"
@@ -925,6 +925,8 @@
                     </StackPanel>
                     <StackPanel x:Name="VoiceEffectsPanel" Visibility="Collapsed">
                         <TextBlock Text="ボイスエフェクト" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
+                        <!-- Retain legacy values for existing settings and migration; the selected effect editor is below. -->
+                        <StackPanel Visibility="Collapsed">
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                 CornerRadius="8" Margin="0,24,0,0" Padding="16,10">
                             <StackPanel>
@@ -1007,21 +1009,54 @@
                                                TextAlignment="Right" VerticalAlignment="Center" />
                                 </Grid>
                                 <Grid Height="58" Margin="16,0"><Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
-                                    <TextBlock Text="虹色スターのエコーの強さ" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                    <TextBlock Text="虹色スターのリバーブの強さ" TextWrapping="Wrap" VerticalAlignment="Center"/>
                                     <Slider x:Name="NosRainbowStarEchoStrengthSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="VolumeSlider_ValueChanged" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="NosRainbowStarEchoStrengthValue" Grid.Column="2" TextAlignment="Right" VerticalAlignment="Center"/>
                                 </Grid>
                             </StackPanel>
                         </StackPanel>
                         </StackPanel>
-                        <TextBlock Text="エフェクトテスト" FontSize="12" Foreground="#B7AABD" Margin="4,24,0,8" />
+                        </StackPanel>
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1"
                                 CornerRadius="8" Padding="16,12">
                             <StackPanel>
                                 <ComboBox x:Name="VoiceEffectPreviewCombo" Width="240" Height="32"
                                           HorizontalAlignment="Center"
                                           SelectionChanged="VoiceEffectPreviewCombo_SelectionChanged" />
-                                <Button x:Name="TestVoiceEffectButton" Content="ボイスエフェクトテスト"
+                                <TextBlock Text="ピッチ（低い ← 0: 元の声 → 高い）" Margin="0,16,0,4" />
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                    <Slider x:Name="TuningPitchSlider" Minimum="-100" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="TuningSlider_ValueChanged"/>
+                                    <TextBlock x:Name="TuningPitchValue" Grid.Column="1" TextAlignment="Right"/>
+                                </Grid>
+                                <TextBlock Text="リバーブ" Margin="0,12,0,4" />
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                    <Slider x:Name="TuningReverbSlider" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="TuningSlider_ValueChanged"/>
+                                    <TextBlock x:Name="TuningReverbValue" Grid.Column="1" TextAlignment="Right"/>
+                                </Grid>
+                                <TextBlock Text="エコー" Margin="0,12,0,4" />
+                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                    <Slider x:Name="TuningEchoSlider" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="TuningSlider_ValueChanged"/>
+                                    <TextBlock x:Name="TuningEchoValue" Grid.Column="1" TextAlignment="Right"/>
+                                </Grid>
+                                  <StackPanel x:Name="RokuroVoicePanel" Visibility="Collapsed" Margin="0,16,0,0">
+                                      <TextBlock Text="首が伸びている間は顔と身体の両方から声が聞こえます。身体はこもったエコー音声です。" TextWrapping="Wrap"/>
+                                      <TextBlock Text="顔の音量" Margin="0,12,0,4"/>
+                                      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                          <Slider x:Name="RokuroHeadVolumeSlider" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="RokuroSlider_ValueChanged"/>
+                                          <TextBlock x:Name="RokuroHeadVolumeValue" Grid.Column="1" TextAlignment="Right"/>
+                                      </Grid>
+                                      <TextBlock Text="身体の音量" Margin="0,12,0,4"/>
+                                      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                          <Slider x:Name="RokuroBodyVolumeSlider" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="RokuroSlider_ValueChanged"/>
+                                          <TextBlock x:Name="RokuroBodyVolumeValue" Grid.Column="1" TextAlignment="Right"/>
+                                      </Grid>
+                                      <TextBlock Text="身体のエコー" Margin="0,12,0,4"/>
+                                      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="48"/></Grid.ColumnDefinitions>
+                                          <Slider x:Name="RokuroBodyEchoSlider" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="RokuroSlider_ValueChanged"/>
+                                          <TextBlock x:Name="RokuroBodyEchoValue" Grid.Column="1" TextAlignment="Right"/>
+                                      </Grid>
+                                  </StackPanel>
+                                  <Button x:Name="TestVoiceEffectButton" Content="ボイスエフェクトテスト"
                                         Width="240" Height="36" HorizontalAlignment="Center" Margin="0,12,0,0"
                                         Click="TestVoiceEffectButton_Click" />
                             </StackPanel>

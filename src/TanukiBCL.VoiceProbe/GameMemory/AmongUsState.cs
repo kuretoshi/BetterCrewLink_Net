@@ -228,6 +228,7 @@ public sealed class AmongUsState
         Players.Any(player => !player.Disconnected && !player.Bugged && player.HasVisibleAppearanceChanged());
 
     public bool OldMeetingHud { get; set; }
+    public SnrMeetingData? SnrMeeting { get; set; }
 
     public CameraLocation CurrentCamera { get; set; } = CameraLocation.None;
 

@@ -95,7 +95,7 @@ internal static class NosSnapshotSelfTest
             throw new InvalidOperationException("TBCLFields 20261009 body state was not read");
         if (bodySnapshot.LocalIsPseudocide is not null)
             throw new InvalidOperationException("Old NoS snapshot unexpectedly has pseudocide state");
-        layout.SchemaVersion = 20261030;
+        layout.SchemaVersion = 20261029; // NoS v3.6.1 LocalIsPseudocide publication.
         layout.Snapshot.LocalIsPseudocide = 40;
         Array.Resize(ref header, 41);
         header[40] = 1;

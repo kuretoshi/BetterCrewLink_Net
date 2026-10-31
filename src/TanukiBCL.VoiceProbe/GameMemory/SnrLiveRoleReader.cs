@@ -33,6 +33,8 @@ internal sealed class SnrLiveRoleReader
 
     public string Status { get; private set; } = "SNR役職未取得";
 
+    public SnrMeetingData? ReadMeeting(Func<long, int, byte[]> read) => layout?.Meeting?.Read(read);
+
     public void Reset()
     {
         pid = -1;
@@ -378,6 +380,7 @@ internal sealed class SnrLiveRoleReader
 
 internal sealed class SnrLiveLayout
 {
+    public SnrMeetingLayout? Meeting { get; set; }
     public int Pid { get; set; }
     public int PointerSize { get; set; }
     public ulong ArraySlot { get; set; }

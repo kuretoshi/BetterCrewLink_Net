@@ -47,9 +47,11 @@ internal sealed record PeerVoiceMix(
     bool CameraMuffled = false,
     bool Reverb = false,
     int ReverbStrength = 100,
-    bool FixerLowpass = false)
+    bool FixerLowpass = false,
+    RokuroBodyMix? RokuroBody = null)
 {
-    public bool Audible => Gain > 0.0001d;
+    public double EffectiveGain => Math.Max(Gain, RokuroBody?.Gain ?? 0);
+    public bool Audible => EffectiveGain > 0.0001d;
 }
 
 internal static class SpatialVoicePolicy
@@ -63,12 +65,13 @@ internal static class SpatialVoicePolicy
         SpatialVoiceSettings settings,
         bool otherUsingImpostorRadio = false,
         bool nosJackalRadioHearable = false,
-        bool airshipSpawnFallback = false)
+        bool airshipSpawnFallback = false,
+        bool rokuroBodyOrigin = false)
     {
         var voiceMe = SNRVoicePlayer(state, me);
         var voiceOther = SNRVoicePlayer(state, other);
         var mix = CalculateCore(state, voiceMe, voiceOther, settings, otherUsingImpostorRadio,
-            nosJackalRadioHearable, airshipSpawnFallback);
+            nosJackalRadioHearable, airshipSpawnFallback, rokuroBodyOrigin);
         var jamming = VoiceJammingPolicy.For(state, other.Id);
         if (jamming?.Muted == true) return mix with { Gain = 0d, Reason = "voice-jamminger" };
         if (jamming?.Lowpass == true) mix = mix with { FixerLowpass = true, Muffled = false, CameraMuffled = false };
@@ -103,7 +106,7 @@ internal static class SpatialVoicePolicy
         SpatialVoiceSettings settings,
         bool otherUsingImpostorRadio,
         bool nosJackalRadioHearable,
-        bool airshipSpawnFallback)
+        bool airshipSpawnFallback, bool rokuroBodyOrigin)
     {
         var isNos = state.Mod == AmongUsModType.NebulaOnTheShip;
         var isSnr = state.Mod == AmongUsModType.SuperNewRoles;
@@ -139,10 +142,8 @@ internal static class SpatialVoicePolicy
         var postMeetingSpawnFallback = state.Map == MapType.Airship &&
             state.GameState == GameState.Tasks && airshipSpawnFallback;
         var useNosPositions = isNos && settings.NosVoicePositions;
-        var meX = useNosPositions ? state.NosLocalMicPosition?.X ?? me.X : me.X;
-        var meY = useNosPositions ? state.NosLocalMicPosition?.Y ?? me.Y : me.Y;
-        var otherX = useNosPositions ? other.NosPlayer?.SpeakerPositionX ?? other.X : other.X;
-        var otherY = useNosPositions ? other.NosPlayer?.SpeakerPositionY ?? other.Y : other.Y;
+        var (meX, meY) = ResolveNosPosition(state, me, useNosPositions, local: true);
+        var (otherX, otherY) = rokuroBodyOrigin ? (other.X, other.Y) : ResolveNosPosition(state, other, useNosPositions, local: false);
         var maxDistance = ResolveMaxDistance(state, me, settings) +
             (me.IsDead ? 0d : NosMegaphoneVoice.PortableExtraRange(state, other));
         var deltaX = otherX - meX;
@@ -368,6 +369,18 @@ internal static class SpatialVoicePolicy
             ? state.LightRadius + 0.5d : settings.MaxDistance;
         if (!double.IsFinite(maxDistance) || maxDistance <= 0.6d) return 1d;
         return maxDistance;
+    }
+
+    private static (double X, double Y) ResolveNosPosition(AmongUsState state, Player player, bool enabled, bool local)
+    {
+        var rokuro = state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState == GameState.Tasks &&
+            !player.IsDead && !player.Disconnected &&
+            (player.NosRole?.RoleName == "rokurokubi" || player.NosPlayer?.BodyType == 3);
+        if (!enabled && !rokuro) return (player.X, player.Y);
+        var x = local ? state.NosLocalMicPosition?.X : player.NosPlayer?.SpeakerPositionX;
+        var y = local ? state.NosLocalMicPosition?.Y : player.NosPlayer?.SpeakerPositionY;
+        return x is double px && y is double py && double.IsFinite(px) && double.IsFinite(py)
+            ? (px, py) : (player.X, player.Y);
     }
 
     private static double CalculatePan(double deltaX, bool spatialAudio, double maxDistance) =>

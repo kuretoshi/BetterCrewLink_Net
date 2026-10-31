@@ -266,26 +266,24 @@ internal sealed class AudioDeviceSession : IDisposable
         target.AddSamples(bytes, 0, pcmBytes.Length);
     }
 
-    public void SetPeerMix(string peerId, PeerVoiceMix mix, NosSizeVoiceEffect? nosSizeEffect = null,
-        bool starEcho = false, bool deathEchoActive = false, bool peerDead = false,
-        long? deathEchoEvent = null, float starEchoStrength = 1f, float deathEchoStrength = 1f)
+    public void SetPeerMix(string peerId, PeerVoiceMix mix, VoiceEffectTuning? tuning = null,
+        double grit = 0, bool deathEchoActive = false, bool peerDead = false,
+        long? deathEchoEvent = null, VoiceEffectTuning? deathEchoTuning = null)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
         peer.Panning.Pan = (float)Math.Clamp(mix.Pan, -1d, 1d);
+        peer.RokuroVoice.SetMix(mix.RokuroBody);
         peer.Muffle.Enabled = mix.Muffled && !mix.FixerLowpass;
         peer.FixerLowpass.Enabled = mix.FixerLowpass;
         peer.RadioHighPass.Enabled = mix.RadioHighPass;
         peer.RadioEcho.Enabled = mix.RadioEcho;
         peer.CameraMuffle.Enabled = mix.CameraMuffled && !mix.FixerLowpass;
-        peer.GhostReverb.Strength = Math.Clamp(mix.ReverbStrength, 0, 100) / 100f;
-        peer.GhostReverb.Enabled = mix.Reverb && mix.Audible;
-        if (!peerDead && !mix.Reverb) peer.GhostReverb.ReleaseInactiveHistory();
-        peer.StarEcho.Enabled = starEcho && mix.Audible;
-        peer.StarEcho.Strength = starEchoStrength;
+        peer.Effects.SetTuning(mix.Audible ? tuning ?? new VoiceEffectTuning() : new VoiceEffectTuning(),
+            mix.Audible ? grit : 0, mix.Reverb && mix.Audible ? Math.Clamp(mix.ReverbStrength, 0, 100) / 100d : 0,
+            immediate: !mix.Audible);
         peer.DeathEcho.Update(deathEchoActive, peerDead, deathEchoEvent,
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), deathEchoStrength);
-        peer.NosSizeEffect.SetEffect(nosSizeEffect);
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), deathEchoTuning ?? new VoiceEffectTuning());
     }
 
     public void UpdateLocalMegaphoneRecording(NosMegaphoneState? entry, bool active) =>
@@ -369,7 +367,7 @@ internal sealed class AudioDeviceSession : IDisposable
             {
                 peer.MegaphoneRecording.Cancel();
                 peer.DyingVoiceRecording.Cancel();
-                playbackMixer.RemoveMixerInput(peer.RadioEcho);
+                playbackMixer.RemoveMixerInput(peer.Output);
                 playbackMixer.RemoveMixerInput(peer.MegaphoneRecording);
                 playbackMixer.RemoveMixerInput(peer.DyingVoiceRecording);
             }
@@ -396,24 +394,25 @@ internal sealed class AudioDeviceSession : IDisposable
                 LeftVolume = 0.5f,
                 RightVolume = 0.5f
             };
-            var nosSizeEffect = new NosSizeVoiceSampleProvider(mono);
-            var muffle = new VentMuffleSampleProvider(nosSizeEffect);
+            var tap = new RokuroVoiceTap(mono);
+            var tone = new TunedVoiceSampleProvider(tap);
+            var muffle = new VentMuffleSampleProvider(tone);
             var fixerLowpass = new FixerLowpassSampleProvider(muffle);
             var radioHighPass = new RadioHighPassSampleProvider(fixerLowpass);
             var cameraMuffle = new CameraMuffleSampleProvider(radioHighPass);
             var panning = new PanningSampleProvider(cameraMuffle);
             var volume = new VolumeSampleProvider(panning);
-            var deathEcho = new NosDeathEchoSampleProvider(volume);
-            var ghostReverb = new GhostReverbSampleProvider(deathEcho);
-            var starEcho = new RadioEchoSampleProvider(ghostReverb, 0.075d, 0.94f, 0.08f, 0.08f);
-            var radioEcho = new RadioEchoSampleProvider(starEcho);
+            var deathEcho = new NosDeathEchoSampleProvider(volume, separateTail: true);
+            var effects = new VoiceEffectChain(deathEcho, toneProvider: tone);
+            var radioEcho = new RadioEchoSampleProvider(effects.Output);
+            var output = new RokuroVoiceSampleProvider(new BibiriTailMixSampleProvider(radioEcho, deathEcho), tap);
             var megaphoneRecording = new NosMegaphoneRecording();
             var dyingVoiceRecording = new NosDyingVoiceRecording();
-            var created = new PeerPlayback(buffer, nosSizeEffect, muffle, fixerLowpass, radioHighPass,
-                cameraMuffle, panning, volume, deathEcho, ghostReverb, starEcho, radioEcho,
-                megaphoneRecording, dyingVoiceRecording);
+            var created = new PeerPlayback(buffer, effects, muffle, fixerLowpass, radioHighPass,
+                cameraMuffle, panning, volume, deathEcho, output, radioEcho,
+                megaphoneRecording, dyingVoiceRecording, output);
             peerPlayback[peerId] = created;
-            playbackMixer.AddMixerInput(radioEcho);
+            playbackMixer.AddMixerInput(output);
             playbackMixer.AddMixerInput(megaphoneRecording);
             playbackMixer.AddMixerInput(dyingVoiceRecording);
             return created;
@@ -609,7 +608,7 @@ internal sealed class AudioDeviceSession : IDisposable
 
     private sealed record PeerPlayback(
         BufferedWaveProvider Buffer,
-        NosSizeVoiceSampleProvider NosSizeEffect,
+        VoiceEffectChain Effects,
         VentMuffleSampleProvider Muffle,
         FixerLowpassSampleProvider FixerLowpass,
         RadioHighPassSampleProvider RadioHighPass,
@@ -617,11 +616,11 @@ internal sealed class AudioDeviceSession : IDisposable
         PanningSampleProvider Panning,
         VolumeSampleProvider Volume,
         NosDeathEchoSampleProvider DeathEcho,
-        GhostReverbSampleProvider GhostReverb,
-        RadioEchoSampleProvider StarEcho,
+        ISampleProvider Output,
         RadioEchoSampleProvider RadioEcho,
         NosMegaphoneRecording MegaphoneRecording,
-        NosDyingVoiceRecording DyingVoiceRecording)
+        NosDyingVoiceRecording DyingVoiceRecording,
+        RokuroVoiceSampleProvider RokuroVoice)
     {
         internal readonly object PlaybackWriteGate = new();
         internal byte[]? PlaybackScratch;

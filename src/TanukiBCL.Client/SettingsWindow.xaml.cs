@@ -42,6 +42,8 @@ public partial class SettingsWindow : Window
     private Geometry? originalObsCopyIcon;
     private int obsCopyFeedbackVersion;
     private VoiceEffectPreviewSession? voiceEffectPreview;
+    private Dictionary<string, VoiceEffectTuningOverride> voiceTuningDraft = [];
+    private bool loadingVoiceTuning;
     private string? previewOptionsSignature;
     private MicrophoneLevelSession? microphoneLevelSession;
     private SpeakerTestSession? speakerTestSession;
@@ -61,6 +63,7 @@ public partial class SettingsWindow : Window
         PreviewKeyDown += DebugAuthPreviewKeyDown;
         InitializeUpdatePanel();
         this.settings = settings;
+        voiceTuningDraft = new(settings.VoiceEffectTunings);
         settingsTransaction = new ClientSettingsTransaction(settings, persistSettings ?? ClientSettingsStore.Save);
         settingsTransaction.Changed += change => SettingsApplied?.Invoke(change);
         this.lobbySettingsEditable = lobbySettingsEditable;
@@ -92,6 +95,9 @@ public partial class SettingsWindow : Window
         SnrPushReverbStrengthSlider.Value = settings.SnrPushReverbStrength;
         NosSizeVoiceEffectStrengthSlider.Value = settings.NosSizeVoiceEffectStrength;
         NosRokurokubiVoiceEffectStrengthSlider.Value = settings.NosRokurokubiVoiceEffectStrength;
+        RokuroHeadVolumeSlider.Value = settings.RokuroVoice.HeadVolume;
+        RokuroBodyVolumeSlider.Value = settings.RokuroVoice.BodyVolume;
+        RokuroBodyEchoSlider.Value = settings.RokuroVoice.BodyEcho;
         NosBerserkerVoiceEffectStrengthSlider.Value = settings.NosBerserkerVoiceEffectStrength;
         NosCitrusVoiceEffectStrengthSlider.Value = settings.NosCitrusVoiceEffectStrength;
         NosRainbowStarEchoStrengthSlider.Value = settings.NosRainbowStarEchoStrength;
@@ -528,7 +534,7 @@ public partial class SettingsWindow : Window
     {
         UpdateVolumeLabels();
         if (VoiceEffectPreviewCombo is not null && ReferenceEquals(sender, PreviewStrengthSlider()))
-            voiceEffectPreview?.SetStrength((int)PreviewStrengthSlider().Value);
+            voiceEffectPreview?.SetTuning(SelectedTuning);
     }
 
     private VoiceEffectPreviewKind SelectedPreviewKind =>
@@ -552,6 +558,56 @@ public partial class SettingsWindow : Window
     private void VoiceEffectPreviewCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (IsLoaded) StopVoiceEffectPreview();
+        LoadVoiceTuningControls();
+    }
+
+    private string SelectedTuningId => SelectedPreviewKind switch
+    {
+        VoiceEffectPreviewKind.Jumbo => "snrJumbo", VoiceEffectPreviewKind.Push => "snrPush",
+        VoiceEffectPreviewKind.Size => "nosSize", VoiceEffectPreviewKind.Rokurokubi => "nosRokurokubi",
+        VoiceEffectPreviewKind.Berserker => "nosBerserker", VoiceEffectPreviewKind.Citrus => "nosCitrus",
+        VoiceEffectPreviewKind.RainbowStar => "nosRainbowStar", VoiceEffectPreviewKind.VoiceJamming => "nosVoiceJamming",
+        VoiceEffectPreviewKind.Megaphone => "nosMegaphone", VoiceEffectPreviewKind.Bibiri => "nosBibiri", _ => "disguise"
+    };
+
+    private VoiceEffectTuning SelectedTuning => (settings.LocalVoiceEffectStrengths with { Tunings = voiceTuningDraft })
+        .Tuning(SelectedTuningId, settings.VoiceEffectStrength);
+
+    private void LoadVoiceTuningControls()
+    {
+        if (settings is null || TuningPitchSlider is null) return;
+        loadingVoiceTuning = true;
+        var tuning = SelectedTuning;
+        TuningPitchSlider.Value = tuning.Pitch;
+        TuningReverbSlider.Value = tuning.Reverb;
+        TuningEchoSlider.Value = tuning.Echo;
+        RokuroVoicePanel.Visibility = SelectedTuningId == "nosRokurokubi" ? Visibility.Visible : Visibility.Collapsed;
+        loadingVoiceTuning = false;
+        UpdateTuningLabels();
+    }
+
+    private void TuningSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!settingsReady || loadingVoiceTuning) return;
+        voiceTuningDraft[SelectedTuningId] = new VoiceEffectTuningOverride
+            { Pitch = TuningPitchSlider.Value, Reverb = TuningReverbSlider.Value, Echo = TuningEchoSlider.Value };
+        UpdateTuningLabels();
+        voiceEffectPreview?.SetTuning(SelectedTuning);
+    }
+
+    private void UpdateTuningLabels()
+    {
+        TuningPitchValue.Text = $"{TuningPitchSlider.Value:+0;-0;0}";
+        TuningReverbValue.Text = $"{TuningReverbSlider.Value:0}%";
+        TuningEchoValue.Text = $"{TuningEchoSlider.Value:0}%";
+    }
+
+    private void RokuroSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (RokuroHeadVolumeValue is null || RokuroBodyVolumeValue is null || RokuroBodyEchoValue is null) return;
+        RokuroHeadVolumeValue.Text = $"{RokuroHeadVolumeSlider.Value:0}%";
+        RokuroBodyVolumeValue.Text = $"{RokuroBodyVolumeSlider.Value:0}%";
+        RokuroBodyEchoValue.Text = $"{RokuroBodyEchoSlider.Value:0}%";
     }
 
     private void MicrophoneCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -663,7 +719,7 @@ public partial class SettingsWindow : Window
         try
         {
             voiceEffectPreview = VoiceEffectPreviewSession.Start(input.Id, output.Id,
-                SelectedPreviewKind, (int)PreviewStrengthSlider().Value);
+                SelectedPreviewKind, SelectedTuning);
             TestVoiceEffectButton.Content = "エフェクトテスト停止";
         }
         catch (Exception error)
@@ -802,7 +858,11 @@ public partial class SettingsWindow : Window
         void Add(VoiceEffectPreviewKind kind, string label) =>
             VoiceEffectPreviewCombo.Items.Add(new ComboBoxItem { Tag = kind, Content = label });
         Add(VoiceEffectPreviewKind.Disguise, "変装・キノコ混乱");
-        if (mod == AmongUsModType.SuperNewRoles) Add(VoiceEffectPreviewKind.Jumbo, "ジャンボ");
+        if (mod == AmongUsModType.SuperNewRoles)
+        {
+            Add(VoiceEffectPreviewKind.Jumbo, "ジャンボ");
+            Add(VoiceEffectPreviewKind.Push, "突き落とし時の残響");
+        }
         if (mod == AmongUsModType.NebulaOnTheShip)
         {
             Add(VoiceEffectPreviewKind.Size, "サイズ変化");
@@ -1106,6 +1166,8 @@ public partial class SettingsWindow : Window
             NosVoiceJammingEffectStrength = (int)NosVoiceJammingEffectStrengthSlider.Value,
             NosMegaphoneEffectStrength = (int)NosMegaphoneEffectStrengthSlider.Value,
             NosBibiriEchoStrength = (int)NosBibiriEchoStrengthSlider.Value,
+            VoiceEffectTunings = new(voiceTuningDraft),
+            RokuroVoice = new((int)RokuroHeadVolumeSlider.Value, (int)RokuroBodyVolumeSlider.Value, (int)RokuroBodyEchoSlider.Value),
             CrewVolumeAsGhost = (int)CrewVolumeAsGhostSlider.Value,
             GhostVolumeAsImpostor = (int)GhostVolumeAsImpostorSlider.Value,
             MicrophoneGain = (int)MicrophoneGainSlider.Value,
@@ -1209,6 +1271,7 @@ public partial class SettingsWindow : Window
 
     internal static void VerifyModControls()
     {
+        VerifyVoiceTuningControls();
         TohGhostRoleWindow.VerifyBehavior();
         ServerUrlDialog.VerifyBehavior();
         SettingsConfirmDialog.VerifyBehavior();

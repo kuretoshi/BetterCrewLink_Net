@@ -25,6 +25,7 @@ public sealed record PlayerAudioConfig(double Volume = 1d, bool IsMuted = false)
     internal PeerVoiceMix Apply(PeerVoiceMix mix) => mix with
     {
         Gain = IsMuted ? 0d : mix.Gain * Volume,
+        RokuroBody = mix.RokuroBody is { } body ? body with { Gain = IsMuted ? 0d : body.Gain * Volume } : null,
         Reason = IsMuted ? "player-muted" : Volume == 0d ? "player-volume-zero" : mix.Reason
     };
 }

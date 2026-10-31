@@ -1021,7 +1021,7 @@ public partial class MainWindow : Window
         row.Talking = row.VadActive && mix.Audible && player?.InVent != true;
         row.Voice = mix.Audible ? "聞こえる" : LocalizeReason(mix.Reason);
         row.Radio = probe?.IsRemoteRadioVisible(clientId) == true ? "送信中" : "—";
-        row.Gain = mix.Audible ? $"{mix.Gain * 100:0}%" : "0%";
+        row.Gain = mix.Audible ? $"{mix.EffectiveGain * 100:0}%" : "0%";
         UpdateCompactView();
     }
 

@@ -436,10 +436,23 @@ public partial class OverlayWindow : Window
         Canvas.SetLeft(MeetingCanvas, (Width - hudWidth) / 2d);
         Canvas.SetTop(MeetingCanvas, (Height - hudHeight) / 2d);
         var localAlive = state.Players.FirstOrDefault(candidate => candidate.IsLocal)?.IsDead == false;
-        for (var index = 0; index < meetingOrder.Count; index++)
+        var paged = state.Mod == AmongUsModType.SuperNewRoles &&
+            (state.SnrMeeting?.Enabled == true || meetingOrder.Count > 15);
+        var ids = paged ? state.SnrMeeting?.PageIds() ?? [] : meetingOrder.Select(player => player.Id).ToArray();
+        foreach (var id in meetingSlots.Keys.Where(id => !ids.Contains(id) ||
+            (paged && !state.Players.Any(player => player.Id == id))).ToArray())
         {
-            var player = meetingOrder[index];
-            var livePlayer = state.Players.FirstOrDefault(candidate => candidate.Id == player.Id);
+            MeetingCanvas.Children.Remove(meetingSlots[id]);
+            meetingSlots.Remove(id);
+        }
+        for (var index = 0; index < ids.Length; index++)
+        {
+            var livePlayer = state.Players.FirstOrDefault(candidate => candidate.Id == ids[index]);
+            if (paged && livePlayer is null) continue;
+            var player = meetingOrder.FirstOrDefault(candidate => candidate.Id == ids[index]);
+            if (paged && livePlayer is not null)
+                player = new MeetingParticipant(livePlayer.Id, livePlayer.ClientId, livePlayer.ColorId, livePlayer.IsLocal);
+            if (player is null) continue; // Preserve the slot index when a player is temporarily unreadable.
             peers.TryGetValue(player.ClientId, out var peer);
             var remoteDead = remoteDeadForDisplay is null
                 ? livePlayer?.IsDead == true
@@ -499,6 +512,7 @@ public partial class OverlayWindow : Window
         VerifyMeetingSnapshot();
         VerifyMeetingLateDeathOrder();
         VerifyLargeNosMeetings();
+        VerifySnrMeetingPages();
         VerifyAvatarSizingAndBackground();
         VerifyAvatarRowPersistence();
         VerifyAlternateSidePlacement();

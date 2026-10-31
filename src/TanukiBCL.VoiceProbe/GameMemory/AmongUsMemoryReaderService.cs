@@ -445,6 +445,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             Map = map,
             AirshipMeetingByOutfit = airshipMeetingByOutfit,
             OldMeetingHud = currentContext.Offsets.OldMeetingHud,
+            SnrMeeting = mod == AmongUsModType.SuperNewRoles && gameState == GameState.Discussion
+                ? snrReader.ReadMeeting(currentContext.ReadBytes) : null,
             NosReadStatus = nosReadStatus,
             RoleReaderStatus = mod switch
             {

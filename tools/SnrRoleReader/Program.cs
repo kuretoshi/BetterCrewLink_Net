@@ -38,7 +38,7 @@ try
         throw new InvalidOperationException("Selected SuperNewRoles module has no readable metadata file");
     string snrPath = module.Name;
     var enums = ReadEnums(snrPath);
-    var liveLayout = BuildLiveLayout(pid, source, target.DataReader.PointerSize, enums);
+    var liveLayout = BuildLiveLayout(pid, source, target, enums);
     var rows = new List<object>();
     for (int i = 0; i < array.Length; i++)
     {
@@ -75,9 +75,9 @@ catch (Exception error)
     Environment.ExitCode = 1;
 }
 
-static object? BuildLiveLayout(int pid, SnrPlayerSource source, int pointerSize, Dictionary<string, Dictionary<long,string>> enums)
+static object? BuildLiveLayout(int pid, SnrPlayerSource source, DataTarget target, Dictionary<string, Dictionary<long,string>> enums)
 {
-    // The .NET port targets the 64-bit Among Us process only.
+    int pointerSize = target.DataReader.PointerSize;
     if (pointerSize != 8) return null;
     object? DescribeField(string name)
     {
@@ -101,6 +101,7 @@ static object? BuildLiveLayout(int pid, SnrPlayerSource source, int pointerSize,
         arrayLengthOffset = pointerSize,
         arrayDataOffset = source.Array.Type.GetArrayElementAddress(source.Array.Address, 0) - source.Array.Address,
         jumbo = BuildJumboLayout(source), busker = BuildBuskerLayout(source),
+        meeting = SnrMeetingLayout.Resolve(target, source.Module),
         fields = new { playerId = DescribeField("PlayerId"), role = DescribeField("Role"),
             modifier = DescribeField("ModifierRole"), ghostRole = DescribeField("GhostRole") }
     };

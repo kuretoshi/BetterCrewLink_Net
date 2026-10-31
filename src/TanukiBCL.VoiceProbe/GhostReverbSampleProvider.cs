@@ -35,6 +35,10 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     private int releaseInactiveHistory;
     private bool wasEnabled;
     private volatile bool enabled;
+    private float appliedStrength;
+    private int warmupFrames;
+    private int resetRequested;
+    public bool SmoothTransitions { get; init; }
 
     public bool Enabled
     {
@@ -89,6 +93,8 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
     // A new round revives the peer, so its previous ghost convolution state cannot be reused.
     // Let the audio callback release its own buffers to avoid racing a concurrent Read.
     internal void ReleaseInactiveHistory() => Volatile.Write(ref releaseInactiveHistory, 1);
+    internal void ResetImmediately() => Volatile.Write(ref resetRequested, 1);
+    internal bool IsProcessing => Enabled || wasEnabled;
 
     public float Strength { get; set; } = 1f;
 
@@ -98,8 +104,17 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
         if ((read & 1) != 0)
             throw new InvalidOperationException("Stereo playback must contain complete frames.");
 
+        if (Interlocked.Exchange(ref resetRequested, 0) != 0)
+        {
+            ReleaseBuffers();
+            wasEnabled = false;
+            appliedStrength = 0;
+            warmupFrames = 0;
+        }
+
         var strength = float.IsFinite(Strength) ? Math.Clamp(Strength, 0f, 1f) : 1f;
-        var enabled = Enabled;
+        var requestedEnabled = Enabled;
+        var enabled = requestedEnabled || SmoothTransitions && wasEnabled && appliedStrength > 0;
         if (enabled != wasEnabled)
         {
             if (enabled)
@@ -111,6 +126,8 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
                     rightHistory = AllocateHistory(response.Right.Length);
                 }
                 if (leftFft.Length == 0) AllocateWorkingBuffers();
+                warmupFrames = SmoothTransitions ? BlockFrames : 0;
+                appliedStrength = 0;
             }
             Reset(clearHistory: enabled);
             disabledFrames = 0;
@@ -126,14 +143,19 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
             return read;
         }
         Interlocked.Exchange(ref releaseInactiveHistory, 0);
+        var transitionStep = 1f / Math.Max(1, WaveFormat.SampleRate / 100);
 
         for (var index = offset; index < offset + read; index += 2)
         {
+            var target = requestedEnabled ? strength : 0;
+            if (SmoothTransitions && warmupFrames > 0) { warmupFrames--; target = 0; }
+            appliedStrength = SmoothTransitions
+                ? Math.Clamp(target, appliedStrength - transitionStep, appliedStrength + transitionStep) : target;
             var position = framePosition * 2;
             var left = buffer[index];
             var right = buffer[index + 1];
-            buffer[index] = output[position] * strength + left * (1f - strength);
-            buffer[index + 1] = output[position + 1] * strength + right * (1f - strength);
+            buffer[index] = output[position] * appliedStrength + left * (1f - appliedStrength);
+            buffer[index + 1] = output[position + 1] * appliedStrength + right * (1f - appliedStrength);
             input[position] = left;
             input[position + 1] = right;
             if (++framePosition == BlockFrames)
@@ -141,6 +163,12 @@ internal sealed class GhostReverbSampleProvider : ISampleProvider
                 ProcessBlock();
                 framePosition = 0;
             }
+        }
+        if (!requestedEnabled && appliedStrength == 0)
+        {
+            Reset(clearHistory: false);
+            ReleaseBuffers();
+            wasEnabled = false;
         }
         return read;
     }
