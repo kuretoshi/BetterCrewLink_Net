@@ -21,6 +21,7 @@ internal sealed record SpatialVoiceSettings(
     bool DeadOnly = false,
     bool MeetingGhostOnly = false,
     bool NosVoicePositions = false,
+    string NosGluttonySwallowVoice = "mute",
     bool NosFixerJammingVoiceBlock = true,
     bool NosFixerJammingLowpass = false,
     bool JackalRadioEnabled = false,
@@ -48,6 +49,7 @@ internal sealed record PeerVoiceMix(
     bool Reverb = false,
     int ReverbStrength = 100,
     bool FixerLowpass = false,
+    bool GluttonyLowpass = false,
     RokuroBodyMix? RokuroBody = null)
 {
     public double EffectiveGain => Math.Max(Gain, RokuroBody?.Gain ?? 0);
@@ -70,6 +72,9 @@ internal static class SpatialVoicePolicy
     {
         var voiceMe = SNRVoicePlayer(state, me);
         var voiceOther = SNRVoicePlayer(state, other);
+        var swallowed = IsGluttonySwallowed(state, other);
+        if (swallowed && settings.NosGluttonySwallowVoice == "mute")
+            return new PeerVoiceMix(0d, 0d, 0d, "nos-gluttony-swallowed");
         var mix = CalculateCore(state, voiceMe, voiceOther, settings, otherUsingImpostorRadio,
             nosJackalRadioHearable, airshipSpawnFallback, rokuroBodyOrigin);
         var jamming = VoiceJammingPolicy.For(state, other.Id);
@@ -77,12 +82,22 @@ internal static class SpatialVoicePolicy
         if (jamming?.Lowpass == true) mix = mix with { FixerLowpass = true, Muffled = false, CameraMuffled = false };
         if (mix.Audible && voiceOther != other && !state.AirshipMeetingByOutfit)
             mix = mix with { Reverb = settings.SnrPushReverb, ReverbStrength = settings.SnrPushReverbStrength };
-        return mix.Audible && state.Mod == AmongUsModType.NebulaOnTheShip &&
+        mix = mix.Audible && state.Mod == AmongUsModType.NebulaOnTheShip &&
             settings.NosFixerJammingLowpass && !settings.NosFixerJammingVoiceBlock &&
             (me.NosPlayer?.IsJammed == true || other.NosPlayer?.IsJammed == true)
             ? mix with { FixerLowpass = true, Muffled = false, CameraMuffled = false }
             : mix;
+        return swallowed && settings.NosGluttonySwallowVoice == "quiet"
+            ? mix with { Gain = mix.Gain * 0.1d, GluttonyLowpass = true }
+            : mix;
     }
+
+    internal static bool IsGluttonySwallowed(AmongUsState state, Player other) =>
+        state.Mod == AmongUsModType.NebulaOnTheShip &&
+        state.GameState == GameState.Tasks &&
+        state.NosAddonIds.Contains("UchuAddon", StringComparer.Ordinal) &&
+        !other.IsDead && !other.Disconnected && !other.IsDummy &&
+        other.NosPlayer is { SpeakerPositionX: 1000d, SpeakerPositionY: 1000d };
 
     private static Player SNRVoicePlayer(AmongUsState state, Player player)
     {
@@ -141,9 +156,14 @@ internal static class SpatialVoicePolicy
         var airshipMeetingFallback = state.Map == MapType.Airship && state.AirshipMeetingByOutfit;
         var postMeetingSpawnFallback = state.Map == MapType.Airship &&
             state.GameState == GameState.Tasks && airshipSpawnFallback;
+        // UchuAddon publishes the swallow marker as a voice position, not an
+        // actual map coordinate. Use the player's game position for normal/quiet.
         var useNosPositions = isNos && settings.NosVoicePositions;
+        var swallowMarker = state.NosAddonIds.Contains("UchuAddon", StringComparer.Ordinal) &&
+            other.NosPlayer is { SpeakerPositionX: 1000d, SpeakerPositionY: 1000d };
         var (meX, meY) = ResolveNosPosition(state, me, useNosPositions, local: true);
-        var (otherX, otherY) = rokuroBodyOrigin ? (other.X, other.Y) : ResolveNosPosition(state, other, useNosPositions, local: false);
+        var (otherX, otherY) = rokuroBodyOrigin ? (other.X, other.Y) : ResolveNosPosition(state, other,
+            useNosPositions && !swallowMarker, local: false);
         var maxDistance = ResolveMaxDistance(state, me, settings) +
             (me.IsDead ? 0d : NosMegaphoneVoice.PortableExtraRange(state, other));
         var deltaX = otherX - meX;

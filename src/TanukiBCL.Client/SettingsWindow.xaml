@@ -733,6 +733,14 @@
                             <CheckBox x:Name="NosBerserkerVoiceEffectCheck" Content="バーサーカーの暴走中に声へゆがみと残響を加える"
                                       Style="{StaticResource LobbySwitchStyle}" />
                             <StackPanel x:Name="UchuLobbyEffectControlsPanel" Visibility="Collapsed">
+                                <TextBlock Text="グラトニーに飲み込まれたプレイヤーの声（グラトニー本人以外）"
+                                           Foreground="#F5F1F7" FontSize="12" Margin="16,12,16,6" TextWrapping="Wrap" />
+                                <ComboBox x:Name="NosGluttonySwallowVoiceCombo" Style="{StaticResource DarkAudioComboStyle}"
+                                          Margin="16,0,16,12" SelectedIndex="0">
+                                    <ComboBoxItem Tag="mute" Content="聞こえない" />
+                                    <ComboBoxItem Tag="quiet" Content="小さくこもって聞こえる" />
+                                    <ComboBoxItem Tag="normal" Content="通常どおり聞こえる" />
+                                </ComboBox>
                                 <CheckBox x:Name="NosCitrusVoiceEffectCheck" Content="シトラスの柑橘状態で声を高い犯人声にする（UchuAddon）"
                                           Style="{StaticResource LobbySwitchStyle}" />
                                 <CheckBox x:Name="NosRainbowStarEchoCheck" Content="虹色スターの声にリバーブを加える（UchuAddon）"

@@ -447,6 +447,43 @@ internal static class SpatialVoicePolicySelfTest
         Check("NoS: non-NoS game ignores published positions", false,
             SpatialVoicePolicy.Calculate(new AmongUsState { GameState = GameState.Tasks },
                 new Player(), nosSpeaker, nosPolicy).Audible);
+        var gluttonyState = new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
+            GameState = GameState.Tasks, NosAddonIds = ["UchuAddon"] };
+        var swallowedSpeaker = new Player { X = 1d, NosPlayer = new NosPlayerData
+            { SpeakerPositionX = 1000d, SpeakerPositionY = 1000d } };
+        var gluttonySettings = new SpatialVoiceSettings();
+        Check("Uchu Gluttony: default mutes swallowed voice", false,
+            SpatialVoicePolicy.Calculate(gluttonyState, new Player(), swallowedSpeaker, gluttonySettings).Audible);
+        var normalSwallowedMix = SpatialVoicePolicy.Calculate(gluttonyState, new Player(),
+            swallowedSpeaker, gluttonySettings with { NosGluttonySwallowVoice = "normal" });
+        var quietSwallowedMix = SpatialVoicePolicy.Calculate(gluttonyState, new Player(),
+            swallowedSpeaker, gluttonySettings with { NosGluttonySwallowVoice = "quiet" });
+        Check("Uchu Gluttony: quiet is one tenth of normal with low-pass", true,
+            normalSwallowedMix.Audible && quietSwallowedMix.Audible && quietSwallowedMix.GluttonyLowpass &&
+            Math.Abs(quietSwallowedMix.Gain - normalSwallowedMix.Gain * 0.1d) < 0.000001d);
+        Check("Uchu Gluttony: sentinel is not a map coordinate when NoS positions enabled", true,
+            SpatialVoicePolicy.Calculate(gluttonyState, new Player(), swallowedSpeaker,
+                gluttonySettings with { NosVoicePositions = true, NosGluttonySwallowVoice = "normal" }).Audible);
+        Check("Uchu Gluttony: other speaker unaffected", true,
+            SpatialVoicePolicy.Calculate(gluttonyState, new Player(), new Player { X = 1d }, gluttonySettings).Audible);
+        Check("Uchu Gluttony: no addon does not mute", true,
+            SpatialVoicePolicy.Calculate(new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
+                GameState = GameState.Tasks }, new Player(),
+                swallowedSpeaker, gluttonySettings).Audible);
+        Check("Uchu Gluttony: meeting does not mute", true,
+            SpatialVoicePolicy.Calculate(new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
+                GameState = GameState.Discussion, NosAddonIds = ["UchuAddon"] },
+                new Player(), swallowedSpeaker, gluttonySettings).Audible);
+        Check("Uchu Gluttony: dead speaker does not mute", true,
+            SpatialVoicePolicy.Calculate(gluttonyState, new Player { IsDead = true },
+                new Player { X = 1d, IsDead = true, NosPlayer = swallowedSpeaker.NosPlayer },
+                gluttonySettings).Audible);
+        Check("Uchu Gluttony: mute also wins over radio", false,
+            SpatialVoicePolicy.Calculate(gluttonyState, new Player { IsImpostor = true },
+                swallowedSpeaker, gluttonySettings with { ImpostorRadioEnabled = true },
+                otherUsingImpostorRadio: true).Audible);
+        Check("Uchu Gluttony DSP: 450 Hz low-pass attenuates 4 kHz", true,
+            MeasureGluttonyFilteredRms(4000d) < MeasureGluttonyFilteredRms(400d) * 0.15d);
         var jammedSpeaker = new Player { NosPlayer = new NosPlayerData { IsJammed = true } };
         var jammedListener = new Player { NosPlayer = new NosPlayerData { IsJammed = true } };
         Check("NoS: jammed speaker is silent in meeting", false,
@@ -1404,7 +1441,7 @@ internal static class SpatialVoicePolicySelfTest
                 "jackalHaunting", "jackalHearOutsideVents", "jackalTalkInVents",
                 "jackalRadioEnabled", "sidekickHaunting", "sidekickHearOutsideVents",
                 "sidekickTalkInVents", "nosNeutralKillerHaunting", "nosVoicePositions",
-                "nosSizeVoiceEffect", "nosFixerJammingVoiceBlock", "tohNeutralKillerHaunting",
+                "nosSizeVoiceEffect", "nosFixerJammingVoiceBlock", "nosGluttonySwallowVoice", "tohNeutralKillerHaunting",
                 "hearImpostorsInVents", "impostersHearImpostersInvent",
                 "impostorRadioEnabled", "impostorRadioOnlyMode", "commsSabotage",
                 "voiceEffectEnabled", "deadOnly", "meetingGhostOnly", "hearThroughCameras",
@@ -1433,6 +1470,13 @@ internal static class SpatialVoicePolicySelfTest
         }
         Check("lobby wire: round trip", true,
             JsonSerializer.Deserialize<LobbySettings>(wire, LobbySettings.WireJsonOptions) == lobbySettings);
+        Check("Uchu Gluttony lobby: legacy default and invalid mode are muted", true,
+            JsonSerializer.Deserialize<LobbySettings>("{}", LobbySettings.WireJsonOptions)?.NosGluttonySwallowVoice == "mute" &&
+            new LobbySettings { NosGluttonySwallowVoice = "invalid" }.Normalize().NosGluttonySwallowVoice == "mute");
+        Check("Uchu Gluttony lobby: quiet mode round-trips", true,
+            JsonSerializer.Deserialize<LobbySettings>(
+                new LobbySettings { NosGluttonySwallowVoice = "quiet" }.ToWireJson(),
+                LobbySettings.WireJsonOptions)?.NosGluttonySwallowVoice == "quiet");
         var importedMods = JsonSerializer.Deserialize<LobbySettings>(
             "{\"publicLobby_mods\":\"TOH4E\"}", LobbySettings.WireJsonOptions);
         Check("lobby wire: preserves imported publicLobby_mods", true,
@@ -1545,6 +1589,14 @@ internal static class SpatialVoicePolicySelfTest
     private static double MeasureFixerFilteredRms(double frequency)
     {
         var filter = new FixerLowpassSampleProvider(new TestSineSource(frequency)) { Enabled = true };
+        var samples = new float[4_800];
+        filter.Read(samples, 0, samples.Length);
+        return Rms(samples[2_400..]);
+    }
+
+    private static double MeasureGluttonyFilteredRms(double frequency)
+    {
+        var filter = new FixerLowpassSampleProvider(new TestSineSource(frequency), 450) { Enabled = true };
         var samples = new float[4_800];
         filter.Read(samples, 0, samples.Length);
         return Rms(samples[2_400..]);

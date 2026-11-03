@@ -1921,6 +1921,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             DeadOnly = next.DeadOnly,
             MeetingGhostOnly = next.MeetingGhostOnly,
             NosVoicePositions = next.NosVoicePositions,
+            NosGluttonySwallowVoice = next.NosGluttonySwallowVoice,
             NosFixerJammingVoiceBlock = next.NosFixerJammingVoiceBlock,
             NosFixerJammingLowpass = next.NosFixerJammingLowpass,
             JackalRadioEnabled = next.JackalRadioEnabled,
@@ -2181,8 +2182,14 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         audioSession?.UpdatePeerMegaphoneRecording(socketId,
             currentGameState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == other.Id),
             currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&
-            currentGameState.GameState == GameState.Tasks && !other.Disconnected,
-            playerConfig.IsMuted ? 0d : playerConfig.Volume);
+            currentGameState.GameState == GameState.Tasks && !other.Disconnected &&
+            !(SpatialVoicePolicy.IsGluttonySwallowed(currentGameState, other) &&
+              spatialVoiceSettings.NosGluttonySwallowVoice == "mute"),
+            playerConfig.IsMuted ? 0d : playerConfig.Volume *
+                (SpatialVoicePolicy.IsGluttonySwallowed(currentGameState, other) &&
+                 spatialVoiceSettings.NosGluttonySwallowVoice == "quiet" ? 0.1d : 1d),
+            SpatialVoicePolicy.IsGluttonySwallowed(currentGameState, other) &&
+            spatialVoiceSettings.NosGluttonySwallowVoice == "quiet");
         var dyingVoice = currentGameState.NosDyingVoices.FirstOrDefault(entry => entry.PlayerId == other.Id);
         audioSession?.UpdatePeerDyingVoice(socketId, dyingVoice,
             currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&

@@ -4,9 +4,9 @@ using NAudio.Wave;
 namespace TanukiBCL.VoiceProbe;
 
 // NoS v3.2.21: Web Audio 1.2 kHz low-pass, Q=sqrt(1/2).
-internal sealed class FixerLowpassSampleProvider(ISampleProvider source) : ISampleProvider
+internal sealed class FixerLowpassSampleProvider(ISampleProvider source, float cutoffHz = 1_200) : ISampleProvider
 {
-    private readonly BiQuadFilter filter = BiQuadFilter.LowPassFilter(48_000, 1_200,
+    private readonly BiQuadFilter filter = BiQuadFilter.LowPassFilter(48_000, cutoffHz,
         WebAudioBiquadQ.ToLinear((float)Math.Sqrt(0.5d)));
 
     public WaveFormat WaveFormat => source.WaveFormat;

@@ -276,6 +276,7 @@ internal sealed class AudioDeviceSession : IDisposable
         peer.RokuroVoice.SetMix(mix.RokuroBody);
         peer.Muffle.Enabled = mix.Muffled && !mix.FixerLowpass;
         peer.FixerLowpass.Enabled = mix.FixerLowpass;
+        peer.GluttonyLowpass.Enabled = mix.GluttonyLowpass;
         peer.RadioHighPass.Enabled = mix.RadioHighPass;
         peer.RadioEcho.Enabled = mix.RadioEcho;
         peer.CameraMuffle.Enabled = mix.CameraMuffled && !mix.FixerLowpass;
@@ -303,10 +304,10 @@ internal sealed class AudioDeviceSession : IDisposable
     }
 
     public void UpdatePeerMegaphoneRecording(string peerId, NosMegaphoneState? entry,
-        bool active, double volume)
+        bool active, double volume, bool gluttonyLowpass = false)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
-        peer.MegaphoneRecording.Update(entry, active && !deafened, volume);
+        peer.MegaphoneRecording.Update(entry, active && !deafened, volume, gluttonyLowpass);
     }
 
     public void UpdateInterviews(AmongUsState state)
@@ -398,7 +399,8 @@ internal sealed class AudioDeviceSession : IDisposable
             var tone = new TunedVoiceSampleProvider(tap);
             var muffle = new VentMuffleSampleProvider(tone);
             var fixerLowpass = new FixerLowpassSampleProvider(muffle);
-            var radioHighPass = new RadioHighPassSampleProvider(fixerLowpass);
+            var gluttonyLowpass = new FixerLowpassSampleProvider(fixerLowpass, 450);
+            var radioHighPass = new RadioHighPassSampleProvider(gluttonyLowpass);
             var cameraMuffle = new CameraMuffleSampleProvider(radioHighPass);
             var panning = new PanningSampleProvider(cameraMuffle);
             var volume = new VolumeSampleProvider(panning);
@@ -408,7 +410,7 @@ internal sealed class AudioDeviceSession : IDisposable
             var output = new RokuroVoiceSampleProvider(new BibiriTailMixSampleProvider(radioEcho, deathEcho), tap);
             var megaphoneRecording = new NosMegaphoneRecording();
             var dyingVoiceRecording = new NosDyingVoiceRecording();
-            var created = new PeerPlayback(buffer, effects, muffle, fixerLowpass, radioHighPass,
+            var created = new PeerPlayback(buffer, effects, muffle, fixerLowpass, gluttonyLowpass, radioHighPass,
                 cameraMuffle, panning, volume, deathEcho, output, radioEcho,
                 megaphoneRecording, dyingVoiceRecording, output);
             peerPlayback[peerId] = created;
@@ -611,6 +613,7 @@ internal sealed class AudioDeviceSession : IDisposable
         VoiceEffectChain Effects,
         VentMuffleSampleProvider Muffle,
         FixerLowpassSampleProvider FixerLowpass,
+        FixerLowpassSampleProvider GluttonyLowpass,
         RadioHighPassSampleProvider RadioHighPass,
         CameraMuffleSampleProvider CameraMuffle,
         PanningSampleProvider Panning,

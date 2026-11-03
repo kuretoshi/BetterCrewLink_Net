@@ -957,6 +957,7 @@ public partial class SettingsWindow : Window
         NosNeutralKillerHaunting = NosNeutralKillerHauntingCheck.IsChecked == true,
         NosBuskerReviveHideVoice = NosBuskerReviveHideVoiceCheck.IsChecked == true,
         NosVoicePositions = NosVoicePositionsCheck.IsChecked == true,
+        NosGluttonySwallowVoice = (NosGluttonySwallowVoiceCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "mute",
         NosSizeVoiceEffect = NosSizeVoiceEffectCheck.IsChecked == true,
         NosRokurokubiVoiceEffect = NosRokurokubiVoiceEffectCheck.IsChecked == true,
         NosBerserkerVoiceEffect = NosBerserkerVoiceEffectCheck.IsChecked == true,
@@ -1000,6 +1001,12 @@ public partial class SettingsWindow : Window
         NosNeutralKillerHauntingCheck.IsChecked = value.NosNeutralKillerHaunting;
         NosBuskerReviveHideVoiceCheck.IsChecked = value.NosBuskerReviveHideVoice;
         NosVoicePositionsCheck.IsChecked = value.NosVoicePositions;
+        NosGluttonySwallowVoiceCombo.SelectedIndex = value.NosGluttonySwallowVoice switch
+        {
+            "quiet" => 1,
+            "normal" => 2,
+            _ => 0
+        };
         NosSizeVoiceEffectCheck.IsChecked = value.NosSizeVoiceEffect;
         NosRokurokubiVoiceEffectCheck.IsChecked = value.NosRokurokubiVoiceEffect;
         NosBerserkerVoiceEffectCheck.IsChecked = value.NosBerserkerVoiceEffect;
@@ -1040,6 +1047,7 @@ public partial class SettingsWindow : Window
         SnrSidekickHearOutsideVentsCheck.IsEnabled = regularSettingsEnabled;
         SnrSidekickTalkInVentsCheck.IsEnabled = regularSettingsEnabled;
         NosVoicePositionsCheck.IsEnabled = regularSettingsEnabled;
+        NosGluttonySwallowVoiceCombo.IsEnabled = regularSettingsEnabled;
         NosSizeVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
         NosSizeVoiceEffectStrengthSlider.IsEnabled = true;
         NosRokurokubiVoiceEffectCheck.IsEnabled = regularSettingsEnabled;
@@ -1285,6 +1293,7 @@ public partial class SettingsWindow : Window
             SidekickHaunting = true, SidekickHearOutsideVents = true,
             SidekickTalkInVents = true, TohNeutralKillerHaunting = true,
             NosNeutralKillerHaunting = true,
+            NosGluttonySwallowVoice = "quiet",
             SnrJumboVoiceEffectStrength = 55, NosSizeVoiceEffectStrength = 60,
             NosRokurokubiVoiceEffectStrength = 65, NosBerserkerVoiceEffectStrength = 70,
             NosCitrusVoiceEffectStrength = 75, NosRainbowStarEchoStrength = 80,
@@ -1301,7 +1310,7 @@ public partial class SettingsWindow : Window
                 !read.JackalHearOutsideVents || !read.JackalTalkInVents ||
                 !read.SidekickHaunting || !read.SidekickHearOutsideVents ||
                 !read.SidekickTalkInVents || !read.TohNeutralKillerHaunting ||
-                !read.NosNeutralKillerHaunting ||
+                !read.NosNeutralKillerHaunting || read.NosGluttonySwallowVoice != "quiet" ||
                 read.SnrJumboVoiceEffectStrength != 55 || read.NosSizeVoiceEffectStrength != 60 ||
                 read.NosRokurokubiVoiceEffectStrength != 65 || read.NosBerserkerVoiceEffectStrength != 70 ||
                 read.NosCitrusVoiceEffectStrength != 75 || read.NosRainbowStarEchoStrength != 80 ||
@@ -1333,6 +1342,9 @@ public partial class SettingsWindow : Window
                 window.UchuLobbyEffectControlsPanel.Visibility != Visibility.Visible ||
                 window.TanukiAddonVoiceControlsPanel.Visibility != Visibility.Visible)
                 throw new InvalidOperationException("Game-time effect strength editing or addon controls are unavailable");
+            if (window.NosGluttonySwallowVoiceCombo.SelectedIndex != 1 ||
+                window.NosGluttonySwallowVoiceCombo.IsEnabled)
+                throw new InvalidOperationException("Uchu Gluttony lobby mode was not loaded as read-only in-game");
             window.NosSizeVoiceEffectStrengthSlider.Value = 40;
             if (window.settings.NosSizeVoiceEffectStrength != 40 ||
                 window.lobbyDraft.NosSizeVoiceEffectStrength == 40)

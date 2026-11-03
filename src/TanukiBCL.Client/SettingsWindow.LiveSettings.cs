@@ -110,6 +110,7 @@ public partial class SettingsWindow
         DistanceSlider.ValueChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyTitleBox.TextChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyLanguageCombo.SelectionChanged += (_, _) => QueueLobbyCommit();
+        NosGluttonySwallowVoiceCombo.SelectionChanged += (_, _) => QueueLobbyCommit();
         PublicLobbyOnCheck.Click += (_, _) => ChangePublicLobbyVisibility();
         DeadOnlyCheck.Click += (_, _) => ChangeExclusiveLobbyMode(true);
         MeetingGhostOnlyCheck.Click += (_, _) => ChangeExclusiveLobbyMode(false);

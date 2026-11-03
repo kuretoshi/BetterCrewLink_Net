@@ -1,3 +1,4 @@
+using NAudio.Dsp;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using TanukiBCL.VoiceProbe.GameMemory;
@@ -27,6 +28,9 @@ internal sealed class NosMegaphoneRecording : ISampleProvider
     private long shot;
     private long fired;
     private float volume = 1f;
+    private readonly BiQuadFilter gluttonyFilter = BiQuadFilter.LowPassFilter(SampleRate, 450,
+        WebAudioBiquadQ.ToLinear((float)Math.Sqrt(0.5d)));
+    private bool gluttonyLowpass;
 
     public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(SampleRate, 2);
 
@@ -37,12 +41,14 @@ internal sealed class NosMegaphoneRecording : ISampleProvider
     }
     internal bool IsPlaying { get { lock (gate) return playback is not null; } }
 
-    public void Update(NosMegaphoneState? entry, bool active, double playbackVolume)
+    public void Update(NosMegaphoneState? entry, bool active, double playbackVolume,
+        bool swallowedQuiet = false)
     {
         lock (gate)
         {
             volume = double.IsFinite(playbackVolume)
                 ? (float)Math.Clamp(playbackVolume, 0d, 2d) : 0f;
+            gluttonyLowpass = swallowedQuiet;
             if (!active)
             {
                 CancelCore();
@@ -131,6 +137,7 @@ internal sealed class NosMegaphoneRecording : ISampleProvider
                 }
                 if (playbackPosition >= playbackSamples && tailRemaining > 0) tailRemaining--;
                 mixed *= volume;
+                if (gluttonyLowpass) mixed = gluttonyFilter.Transform(mixed);
                 buffer[offset + index] = mixed;
                 buffer[offset + index + 1] = mixed;
                 if (playbackPosition < playbackSamples || tailRemaining > 0) continue;

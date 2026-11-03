@@ -26,6 +26,7 @@ internal sealed record LobbySettings
     public bool NosNeutralKillerHaunting { get; init; }
     public bool NosBuskerReviveHideVoice { get; init; }
     public bool NosVoicePositions { get; init; }
+    public string NosGluttonySwallowVoice { get; init; } = "mute";
     public bool NosSizeVoiceEffect { get; init; } = true;
     public int NosSizeVoiceEffectStrength { get; init; } = 100;
     public bool NosRokurokubiVoiceEffect { get; init; } = true;
@@ -79,6 +80,8 @@ internal sealed record LobbySettings
         NosVoiceJammingEffectStrength = Math.Clamp(NosVoiceJammingEffectStrength, 0, 100),
         NosMegaphoneEffectStrength = Math.Clamp(NosMegaphoneEffectStrength, 0, 100),
         NosBibiriEchoStrength = Math.Clamp(NosBibiriEchoStrength, 0, 100),
+        NosGluttonySwallowVoice = NosGluttonySwallowVoice is "normal" or "quiet" or "mute"
+            ? NosGluttonySwallowVoice : "mute",
         PublicLobbyTitle = PublicLobbyTitle ?? string.Empty,
         PublicLobbyLanguage = string.IsNullOrWhiteSpace(PublicLobbyLanguage) ? "ja" : PublicLobbyLanguage,
         PublicLobbyMods = PublicLobbyMods ?? "NONE"
