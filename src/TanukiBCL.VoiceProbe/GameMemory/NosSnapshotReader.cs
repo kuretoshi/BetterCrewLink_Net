@@ -245,7 +245,7 @@ internal sealed class NosSnapshotReader
         var headerSize = new[] { s.LocalMicPositionX + 4, s.LocalMicPositionY + 4,
             s.PlayersLength + 4, s.Players + layout.PointerSize,
             (s.RadiosLength ?? 0) + 4, (s.Radios ?? 0) + layout.PointerSize,
-            (s.LocalIsPseudocide ?? 0) + 1 }.Max();
+            (s.LocalIsPseudocide ?? 0) + 1, (s.AddonData ?? 0) + 4 }.Max();
         var header = read(checked((long)pointer), headerSize);
         bool? localIsPseudocide = s.LocalIsPseudocide is int pseudocideOffset
             ? Flag(header[pseudocideOffset]) : null;
@@ -295,6 +295,7 @@ internal sealed class NosSnapshotReader
                 throw new InvalidDataException("Invalid NoS player identity");
             players.Add(id, new NosPlayerData
             {
+                AddonData = p.AddonData.HasValue ? BitConverter.ToInt32(payload, start + p.AddonData.Value) : null,
                 PlayerId = id,
                 Name = Encoding.Unicode.GetString(payload, start + p.Name, nameLength * 2),
                 IsKiller = Flag(payload[start + p.IsKiller]),
@@ -341,7 +342,7 @@ internal sealed class NosSnapshotReader
         return new NosSnapshot(pointer,
             new VoicePosition(Finite(BitConverter.ToSingle(header, s.LocalMicPositionX)),
                 Finite(BitConverter.ToSingle(header, s.LocalMicPositionY))), players, radios,
-            localIsPseudocide);
+            localIsPseudocide, s.AddonData.HasValue ? BitConverter.ToInt32(header, s.AddonData.Value) : null);
     }
 
     private sealed class ResolveResult
@@ -355,7 +356,7 @@ internal sealed class NosSnapshotReader
 
 internal sealed record NosSnapshot(ulong Publication, VoicePosition LocalMicPosition,
     IReadOnlyDictionary<int, NosPlayerData> Players, List<NosRadioData> Radios,
-    bool? LocalIsPseudocide);
+    bool? LocalIsPseudocide, int? AddonData = null);
 
 internal sealed class NosLayout
 {
@@ -379,6 +380,10 @@ internal sealed class NosLayout
             throw new InvalidDataException("未対応のNoSスナップショット定義です");
         var s = Snapshot;
         var p = PlayerData;
+        if (s.AddonData.HasValue != p.AddonData.HasValue ||
+            s.AddonData.HasValue && !Field(s.AddonData.Value, 4, 256) ||
+            p.AddonData.HasValue && !Field(p.AddonData.Value, 4, p.Size))
+            throw new InvalidDataException("Invalid AddonData field layout");
         if (!Field(s.LocalMicPositionX, 4, 256) || !Field(s.LocalMicPositionY, 4, 256) ||
             !Field(s.PlayersLength, 4, 256) || !Field(s.Players, PointerSize, 256) ||
             s.LocalIsPseudocide.HasValue && !Field(s.LocalIsPseudocide.Value, 1, 256) ||
@@ -417,6 +422,7 @@ internal sealed class NosLayout
 
 internal sealed class NosSnapshotLayout
 {
+    public int? AddonData { get; set; }
     public int LocalMicPositionX { get; set; }
     public int LocalMicPositionY { get; set; }
     public int PlayersLength { get; set; }
@@ -428,6 +434,7 @@ internal sealed class NosSnapshotLayout
 
 internal sealed class NosPlayerLayout
 {
+    public int? AddonData { get; set; }
     public int Size { get; set; }
     public int PlayerId { get; set; }
     public int IsKiller { get; set; }

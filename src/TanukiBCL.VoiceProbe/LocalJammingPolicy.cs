@@ -9,7 +9,8 @@ internal static class LocalJammingPolicy
         state?.Mod == AmongUsModType.NebulaOnTheShip &&
         state.Players.Any(player => player.IsLocal &&
             (settings.NosFixerJammingVoiceBlock && player.NosPlayer?.IsJammed == true ||
-             VoiceJammingPolicy.For(state, player.Id)?.Muted == true));
+             VoiceJammingPolicy.For(state, player.Id)?.Muted == true ||
+             state.GameState is GameState.Tasks or GameState.Discussion && state.NosLimitSpeechMuted.Contains(player.Id)));
 }
 
 internal static class LocalVadVisibilityPolicy

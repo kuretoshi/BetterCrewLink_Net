@@ -15,7 +15,7 @@ namespace TanukiBCL.VoiceProbe;
 internal sealed class NosHeroSpeech : IDisposable
 {
     internal sealed record PlayerRequest(int PlayerId, string Kind, int Request, long Expires, string[] Words);
-    internal sealed record Descriptor(int Protocol, int Pid, int Port, string Token, long Updated, PlayerRequest[] Players);
+    internal sealed record Descriptor(int Protocol, int Pid, int Port, string Token, long Updated, PlayerRequest[] Players, bool Unified = false);
     private sealed record Chunk(int Player, string Signature, long Time, short[] Samples, int Channels);
     private sealed class Capture(PlayerRequest[] jobs, string signature, VoskRecognizer recognizer) : IDisposable
     {
@@ -90,9 +90,7 @@ internal sealed class NosHeroSpeech : IDisposable
     {
         int currentPid = Volatile.Read(ref pid);
         if (currentPid <= 0) { Clear(); return; }
-        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TanukiBCL", "NoS", $"hero-speech-{currentPid}.json");
-        if (!File.Exists(path) || new FileInfo(path).Length > 32768) { Clear(); return; }
-        var current = JsonSerializer.Deserialize<Descriptor>(File.ReadAllText(path), JsonOptions);
+        var current = ReadDescriptor(currentPid, now);
         if (!Valid(current, currentPid, now)) { Clear(); return; }
         if (descriptor?.Token != current!.Token) Clear();
         descriptor = current;
@@ -100,7 +98,7 @@ internal sealed class NosHeroSpeech : IDisposable
         var jobs = current.Players.Where(p => selected.Contains(p.PlayerId)).ToArray();
         if (jobs.Length > 0 && model == null && now >= retryAt) LoadModel();
         if (model != null)
-            foreach (int id in jobs.Select(p => p.PlayerId).Distinct()) Send($"TBCLHS2|{current.Token}|ready|{Now}|{id}|1");
+            foreach (int id in jobs.Select(p => p.PlayerId).Distinct()) SendReady(id);
         Reconcile(jobs, now);
     }
     private void LoadModel()
@@ -159,7 +157,7 @@ internal sealed class NosHeroSpeech : IDisposable
         if (!final && capture.PartialAt == 0) { capture.PartialAt = Now; return; }
         if (!final && Now - capture.PartialAt < 180) return;
         handled.Add(Key(job));
-        Send($"TBCLHS2|{descriptor!.Token}|word|{Now}|{job.PlayerId}|{job.Request}|{(job.Kind == "ng" ? "ng" : "henshin")}");
+        SendWord(job);
     }
     internal static bool RecogniseHere(bool local, bool host, string? platform) => local || host && platform is "web" or "mobile";
     private static string Normalise(string text) => new(Regex.Replace(text.Normalize(NormalizationForm.FormKC).ToLowerInvariant(), @"[\s、。！!？?・]", "")
@@ -192,6 +190,27 @@ internal sealed class NosHeroSpeech : IDisposable
             result[i * 2] = (byte)sample; result[i * 2 + 1] = (byte)(sample >> 8);
         }
         return result;
+    }
+    private static Descriptor? ReadDescriptor(int currentPid, long now)
+    {
+        var linked = NosAddonLink.Shared.Current(currentPid);
+        if (linked != null) return new(2, currentPid, NosAddonLink.Shared.Port, linked.Session, linked.UnixMs,
+            linked.Read<PlayerRequest>("speech").Where(p => p.Request == 0 || p.Expires > now).ToArray(), true);
+        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TanukiBCL", "NoS", $"hero-speech-{currentPid}.json");
+        return File.Exists(path) && new FileInfo(path).Length <= 32768 ? JsonSerializer.Deserialize<Descriptor>(File.ReadAllText(path), JsonOptions) : null;
+    }
+    private void SendReady(int player)
+    {
+        if (descriptor == null) return;
+        if (descriptor.Unified) { NosAddonLink.Shared.Send(descriptor.Pid, "ready", new() { ["players"] = new[] { player } }); return; }
+        Send($"TBCLHS2|{descriptor.Token}|ready|{Now}|{player}|1");
+    }
+    private void SendWord(PlayerRequest job)
+    {
+        if (descriptor == null) return;
+        if (descriptor.Unified) { NosAddonLink.Shared.Send(descriptor.Pid, "word", new() { ["playerId"] = job.PlayerId, ["request"] = job.Request, ["speechKind"] = job.Kind }); return; }
+        string payload = job.Kind == "ng" ? "ng" : "henshin";
+        Send($"TBCLHS2|{descriptor.Token}|word|{Now}|{job.PlayerId}|{job.Request}|{payload}");
     }
     private void Send(string text)
     {

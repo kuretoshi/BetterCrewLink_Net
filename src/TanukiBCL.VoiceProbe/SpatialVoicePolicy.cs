@@ -77,6 +77,8 @@ internal static class SpatialVoicePolicy
             return new PeerVoiceMix(0d, 0d, 0d, "nos-gluttony-swallowed");
         var mix = CalculateCore(state, voiceMe, voiceOther, settings, otherUsingImpostorRadio,
             nosJackalRadioHearable, airshipSpawnFallback, rokuroBodyOrigin);
+        if (state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState is GameState.Tasks or GameState.Discussion && state.NosLimitSpeechMuted.Contains(other.Id))
+            return mix with { Gain = 0d, Reason = "limit-speech" };
         var jamming = VoiceJammingPolicy.For(state, other.Id);
         if (jamming?.Muted == true) return mix with { Gain = 0d, Reason = "voice-jamminger" };
         if (jamming?.Lowpass == true) mix = mix with { FixerLowpass = true, Muffled = false, CameraMuffled = false };

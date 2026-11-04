@@ -120,6 +120,8 @@ internal sealed class NosHostVoiceRelay : IDisposable
             state.Players is not { } players ||
             !players.Any(player => player.Id == sample.PlayerId &&
                 !player.IsDead && !player.Disconnected)) return;
+        if (!double.IsFinite(sample.Rms) || sample.Rms is < 0 or > 1) return;
+        if (NosAddonLink.Shared.Send(pid, "sample", new() { ["playerId"] = sample.PlayerId, ["rms"] = sample.Rms, ["active"] = sample.Active, ["version"] = appVersion, ["host"] = true })) return;
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (pid != knownPid || now - lastRead >= 250)
         {

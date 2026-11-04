@@ -115,6 +115,7 @@ internal static class NosSnapshotSelfTest
         header[40] = 0;
         layout.Snapshot.LocalIsPseudocide = null;
         layout.SchemaVersion = 20261009;
+        VerifyAddonData();
         BitConverter.GetBytes(float.NaN).CopyTo(player, 164);
         try
         {
@@ -170,6 +171,63 @@ internal static class NosSnapshotSelfTest
         VerifyRetrySchedule();
         Console.WriteLine("[PASS] 64-bit NoS player/radio pointers, 20261005 costumes, 20261009 body, publication and torn-read rejection");
         return 0;
+    }
+
+    private static void VerifyAddonData()
+    {
+        var layout = new NosLayout
+        {
+            Pid = 42, PointerSize = 8, SchemaVersion = 20260918, LatestSlotAddress = 0x40000,
+            Snapshot = new() { LocalMicPositionX = 0, LocalMicPositionY = 4, PlayersLength = 8, Players = 16, AddonData = 24 },
+            PlayerData = new() { Size = 96, PlayerId = 0, IsKiller = 1, IsImpostor = 2, IsCrewmate = 3, IsNeutral = 4,
+                IsImpostorlike = 5, NameLength = 6, Name = 8, SpeakerPositionX = 72, SpeakerPositionY = 76,
+                ColorR = 80, ColorG = 84, ColorB = 88, AddonData = 92 }
+        };
+        layout.Validate(42);
+        var header = new byte[28];
+        var player = new byte[96];
+        BitConverter.GetBytes(1).CopyTo(header, 8);
+        BitConverter.GetBytes((ulong)0x60000).CopyTo(header, 16);
+        BitConverter.GetBytes(0x544B0001).CopyTo(header, 24);
+        player[0] = 7;
+        byte[] Read(long address, int size) => address switch
+        {
+            0x40000 => BitConverter.GetBytes((ulong)0x50000),
+            0x50000 => header.ToArray(),
+            0x60000 => player.ToArray(),
+            _ => throw new InvalidOperationException("Unexpected addon fixture address")
+        };
+        for (int hero = 0; hero <= 2; hero++)
+            for (int half = -1; half <= 60; half++)
+            {
+                int data = 0x544B0000 | hero | (half < 0 ? 0 : 0x100 | (half << 2));
+                BitConverter.GetBytes(data).CopyTo(player, 92);
+                var result = TanukiAddonData.Read(NosSnapshotReader.ReadSnapshot(layout, Read));
+                if (result == null || result.Heroes.Count != (hero == 0 ? 0 : 1) ||
+                    result.Portable.Count != (half < 0 ? 0 : 1) || half >= 0 && result.Portable[0].ExtraRange != half / 2d)
+                    throw new InvalidOperationException("AddonData round trip failed");
+                BitConverter.GetBytes(0x54420000 | 12345).CopyTo(header, 24);
+                BitConverter.GetBytes(0x544CFE00 | (data & 511)).CopyTo(player, 92);
+                var v2 = TanukiAddonData.Read(NosSnapshotReader.ReadSnapshot(layout, Read));
+                if (v2 == null || v2.Heroes.Count != result.Heroes.Count || v2.Portable.Count != result.Portable.Count ||
+                    half >= 0 && v2.Portable[0].ExtraRange != half / 2d)
+                    throw new InvalidOperationException("AddonData v2 flags failed");
+                BitConverter.GetBytes(0x544B0001).CopyTo(header, 24);
+            }
+        foreach (int data in new[] { 0, -1, 0x544B0200, 0x544B0003, 0x544B00F4, 0x544B0004 })
+        {
+            BitConverter.GetBytes(data).CopyTo(player, 92);
+            if (TanukiAddonData.Read(NosSnapshotReader.ReadSnapshot(layout, Read)) != null)
+                throw new InvalidOperationException("Unknown/reserved AddonData accepted");
+        }
+        layout.Snapshot.AddonData = null;
+        try { layout.Validate(42); throw new Exception("Unpaired AddonData accepted"); }
+        catch (InvalidDataException) { }
+        layout.PlayerData.AddonData = null;
+        layout.Validate(42);
+        if (TanukiAddonData.Read(NosSnapshotReader.ReadSnapshot(layout, Read)) != null)
+            throw new InvalidOperationException("Legacy NoS should use file bridges");
+        Console.WriteLine("[PASS] NoS AddonData: 186 states, optional offsets, legacy fallback and invalid tags/bits");
     }
 
     private static void VerifyRetrySchedule()

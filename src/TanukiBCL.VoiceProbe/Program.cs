@@ -12,6 +12,7 @@ internal static class Program
 
         try
         {
+            if (args.Contains("--addon-link-self-test")) return await NosAddonLinkSelfTest.Run(args[Array.IndexOf(args, "--addon-link-self-test") + 1]);
             if (args.Contains("--distributed-speech-self-test")) return DistributedSpeechSelfTest.Run();
             if (args.Contains("--dtls-trace"))
                 SIPSorcery.LogFactory.Set(new DtlsTraceLoggerFactory());

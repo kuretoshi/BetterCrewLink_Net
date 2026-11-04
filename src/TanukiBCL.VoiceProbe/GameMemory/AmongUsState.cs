@@ -130,6 +130,7 @@ public sealed class Player
 
 public sealed class NosPlayerData
 {
+    public int? AddonData { get; set; }
     public int PlayerId { get; set; }
 
     public string Name { get; set; } = string.Empty;
@@ -249,6 +250,7 @@ public sealed class AmongUsState
     public List<NosRadioData> NosRadios { get; set; } = [];
 
     public List<NosMegaphoneState> NosMegaphones { get; set; } = [];
+    public List<int> NosLimitSpeechMuted { get; set; } = [];
     public List<NosInterviewState> NosInterviews { get; set; } = [];
     public List<NosVoiceJammingState> NosVoiceJamming { get; set; } = [];
     public List<NosHeroTransformState> NosHeroTransforms { get; set; } = [];

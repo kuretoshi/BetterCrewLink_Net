@@ -65,6 +65,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             currentMod = nextProcessInfo?.InstalledMod.Id ?? AmongUsModType.None;
             nextModCheck = DateTimeOffset.UtcNow.AddSeconds(2);
             nosReader.Reset();
+            NosAddonLink.Shared.Dispose();
             nosRoleReader.Reset();
             nextNosAddonCheck = default;
             nosAddonIds = [];
@@ -98,6 +99,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
     public void Stop()
     {
         cancellationTokenSource?.Cancel();
+        NosAddonLink.Shared.Dispose();
     }
 
     public void Dispose()
@@ -190,6 +192,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         var innerNetClient = currentContext.ReadPointer(currentContext.GameAssemblyBase, currentContext.Offsets.InnerNetClientBase);
         if (!currentContext.IsReadableAddress(innerNetClient, 4))
         {
+            NosAddonLink.Shared.Dispose();
             ReportDiagnostic($"waiting for readable InnerNetClient: 0x{innerNetClient:X}");
             return new AmongUsState { Mod = mod, GameState = GameState.Menu,
                 OldGameState = previousGameState, LobbyCode = "MENU" };
@@ -316,6 +319,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         else if (mod != AmongUsModType.NebulaOnTheShip || gameState == GameState.Menu)
         {
             nosReader.Reset();
+            NosAddonLink.Shared.Dispose();
         }
         if (mod == AmongUsModType.NebulaOnTheShip && gameState is GameState.Tasks or GameState.Discussion)
         {
@@ -324,7 +328,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             foreach (var player in players)
             {
                 if (player.Disconnected || !roles.TryGetValue(player.Id, out var role)) continue;
-                var bodyType = nosReader.SchemaVersion == 20261009 ? player.NosPlayer?.BodyType : role.BodyType;
+                var bodyType = nosReader.SchemaVersion >= 20261009 ? player.NosPlayer?.BodyType : role.BodyType;
                 player.NosRole = role with
                 {
                     BodyType = bodyType,
@@ -425,6 +429,11 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         var tanukiAddonDetected = mod == AmongUsModType.NebulaOnTheShip &&
             nosAddonIds.Contains("tanuki.bcl.roles", StringComparer.Ordinal);
 
+        bool linkActive = tanukiAddonDetected && gameState is GameState.Lobby or GameState.Tasks or GameState.Discussion;
+        var linked = NosAddonLink.Shared.Update(linkActive ? currentProcess.ProcessId : 0,
+            $"{lobbyCode}:{nosRound}:{(gameState == GameState.Lobby ? "lobby" : "game")}", nos?.AddonData,
+            gameState == GameState.Lobby ? "lobby" : gameState == GameState.Discussion ? "meeting" : "tasks", localPlayer?.Id);
+        var addonData = linked == null ? TanukiAddonData.Read(nos) : null;
         return new AmongUsState
         {
             GameExecutablePath = currentProcess.ProcessPath,
@@ -460,25 +469,26 @@ public sealed class AmongUsMemoryReaderService : IDisposable
                 ? tohReader.RoleCatalog.ToList() : [],
             NosLocalMicPosition = nos?.LocalMicPosition,
             NosLocalIsPseudocide = nos?.LocalIsPseudocide,
+            NosLimitSpeechMuted = NosLimitSpeechState.Read(currentProcess.ProcessId, linkActive && gameState != GameState.Lobby, linked),
             NosInterviews = tanukiAddonDetected && gameState is GameState.Tasks or GameState.Discussion
-                ? NosVoiceRoleStateReader.ReadInterviews(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
+                ? linked?.Read<NosInterviewState>("interviews") ?? NosVoiceRoleStateReader.ReadInterviews(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosVoiceJamming = tanukiAddonDetected && gameState == GameState.Discussion
-                ? NosVoiceRoleStateReader.ReadVoiceJamming(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
+                ? linked?.Read<NosVoiceJammingState>("jamming") ?? NosVoiceRoleStateReader.ReadVoiceJamming(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosHeroTransforms = tanukiAddonDetected && gameState == GameState.Tasks
-                ? NosVoiceRoleStateReader.ReadHeroTransforms(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
+                ? addonData?.Heroes ?? linked?.Read<NosHeroTransformState>("heroes") ?? NosVoiceRoleStateReader.ReadHeroTransforms(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosDyingVoices = tanukiAddonDetected && gameState is GameState.Tasks or GameState.Discussion
-                ? NosVoiceRoleStateReader.ReadDyingVoices(currentProcess.ProcessId,
+                ? linked?.Read<NosDyingVoiceState>("dying") ?? NosVoiceRoleStateReader.ReadDyingVoices(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosRadios = nos?.Radios ?? [],
             NosMegaphones = tanukiAddonDetected && gameState == GameState.Tasks
-                ? NosVoiceRoleStateReader.ReadMegaphones(currentProcess.ProcessId,
+                ? linked?.Read<NosMegaphoneState>("megaphones") ?? NosVoiceRoleStateReader.ReadMegaphones(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosPortableMegaphones = tanukiAddonDetected && gameState == GameState.Tasks
-                ? NosVoiceRoleStateReader.ReadPortable(currentProcess.ProcessId,
+                ? addonData?.Portable ?? linked?.Read<NosPortableMegaphoneState>("portable") ?? NosVoiceRoleStateReader.ReadPortable(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             NosBibiriEchoes = tanukiAddonDetected &&
                 gameState is GameState.Tasks or GameState.Discussion
-                ? NosVoiceRoleStateReader.ReadBibiri(currentProcess.ProcessId,
+                ? linked?.Read<NosBibiriEchoState>("echoes").Where(entry => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - entry.UnixMs <= 3000).ToList() ?? NosVoiceRoleStateReader.ReadBibiri(currentProcess.ProcessId,
                     DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
             CommsSabotaged = taskEnvironment.CommsSabotaged,
             CurrentCamera = taskEnvironment.CurrentCamera,

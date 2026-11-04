@@ -48,6 +48,7 @@ internal sealed class NosVoiceRoleSender : IDisposable
             state.Players is not { } players) return;
         var player = players.FirstOrDefault(item => item.IsLocal);
         if (player is null || player.IsDead || player.Disconnected) return;
+        if (NosAddonLink.Shared.Send(pid, "sample", new() { ["playerId"] = player.Id, ["rms"] = rms, ["active"] = active, ["version"] = appVersion, ["host"] = false })) return;
         lock (gate) SendCore(rms, active, pid, player.Id, state.GameState, appVersion);
     }
 
