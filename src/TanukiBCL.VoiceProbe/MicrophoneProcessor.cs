@@ -1,4 +1,5 @@
 using SpeexDSPSharp.Core;
+using System.Runtime.InteropServices;
 
 namespace TanukiBCL.VoiceProbe;
 
@@ -9,16 +10,29 @@ public sealed class MicrophoneProcessor : IDisposable
 {
     public const int SamplesPerFrame = 960;
     public const int BytesPerFrame = SamplesPerFrame * sizeof(short);
+    private const int PlaybackDelayFrames = 2;
+    private const int MaxQueuedPlaybackFrames = 10;
     private readonly object gate = new();
     private readonly SpeexDSPEchoCanceler? echoCanceler;
     private readonly SpeexDSPPreprocessor? preprocessor;
     private readonly short[] playbackFrame = new short[SamplesPerFrame];
+    private readonly short[] playbackReferences;
+    private readonly byte[] silentPlaybackFrame;
     private readonly byte[] echoOutput = new byte[BytesPerFrame];
     private int playbackFrameLength;
+    private int playbackReferenceHead;
+    private int playbackReferenceCount;
     private bool disposed;
+
+    internal int PendingPlaybackReferenceFrames
+    {
+        get { lock (gate) return playbackReferenceCount; }
+    }
 
     public MicrophoneProcessor(bool echoCancellation, bool noiseSuppression, bool autoGainControl)
     {
+        playbackReferences = echoCancellation ? new short[SamplesPerFrame * MaxQueuedPlaybackFrames] : [];
+        silentPlaybackFrame = echoCancellation ? new byte[BytesPerFrame] : [];
         try
         {
             if (echoCancellation)
@@ -51,8 +65,9 @@ public sealed class MicrophoneProcessor : IDisposable
     }
 
     // Called by the render device, after mixing and master/deafen volume.
-    // Speex's EchoPlayback/EchoCapture pair assumes a two-frame render delay;
-    // it does not measure the actual output-device latency.
+    // WinMM capture and render callbacks are not synchronized. Keep Speex's
+    // two-frame reference delay, but bound the queue ourselves so one callback
+    // cannot make Speex's internal playback buffer underflow or overflow.
     public void SubmitPlayback(float[] stereo, int offset, int count)
     {
         if (echoCanceler is null) return;
@@ -65,10 +80,32 @@ public sealed class MicrophoneProcessor : IDisposable
                 playbackFrame[playbackFrameLength++] = (short)Math.Clamp(
                     (int)Math.Round(mono * short.MaxValue), short.MinValue, short.MaxValue);
                 if (playbackFrameLength != SamplesPerFrame) continue;
-                echoCanceler.EchoPlayback(playbackFrame);
+                QueuePlaybackFrame();
                 playbackFrameLength = 0;
             }
         }
+    }
+
+    private void QueuePlaybackFrame()
+    {
+        if (playbackReferenceCount == MaxQueuedPlaybackFrames)
+        {
+            playbackReferenceHead = (playbackReferenceHead + 1) % MaxQueuedPlaybackFrames;
+            playbackReferenceCount--;
+        }
+        var tail = (playbackReferenceHead + playbackReferenceCount) % MaxQueuedPlaybackFrames;
+        playbackFrame.CopyTo(playbackReferences.AsSpan(tail * SamplesPerFrame, SamplesPerFrame));
+        playbackReferenceCount++;
+    }
+
+    private Span<byte> NextPlaybackReference()
+    {
+        if (playbackReferenceCount <= PlaybackDelayFrames) return silentPlaybackFrame;
+        var reference = MemoryMarshal.AsBytes(playbackReferences.AsSpan(
+            playbackReferenceHead * SamplesPerFrame, SamplesPerFrame));
+        playbackReferenceHead = (playbackReferenceHead + 1) % MaxQueuedPlaybackFrames;
+        playbackReferenceCount--;
+        return reference;
     }
 
     public void ProcessCapture(byte[] pcm16)
@@ -82,7 +119,7 @@ public sealed class MicrophoneProcessor : IDisposable
                 var frame = pcm16.AsSpan(offset, BytesPerFrame);
                 if (echoCanceler is not null)
                 {
-                    echoCanceler.EchoCapture(frame, echoOutput);
+                    echoCanceler.EchoCancel(frame, NextPlaybackReference(), echoOutput);
                     echoOutput.CopyTo(frame);
                 }
                 preprocessor?.Run(frame);

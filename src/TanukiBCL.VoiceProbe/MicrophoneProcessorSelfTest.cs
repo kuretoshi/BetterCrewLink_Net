@@ -14,6 +14,7 @@ public static class MicrophoneProcessorSelfTest
             VerifyCaptureRateConversion();
             VerifyPlaybackBufferReuse();
             VerifyEchoCancellation();
+            VerifyUnbalancedEchoCallbacks();
             VerifyNoiseSuppression();
             VerifyAutomaticGain();
             Console.WriteLine("[PASS] Synthetic input-processing outcomes (not hardware/acoustic or Chromium parity)");
@@ -87,6 +88,37 @@ public static class MicrophoneProcessorSelfTest
         return;
 
         short FarEndAt(int index) => index < 0 ? (short)0 : farEnd[index];
+    }
+
+    private static void VerifyUnbalancedEchoCallbacks()
+    {
+        using var processor = new MicrophoneProcessor(true, false, false);
+        double inputEnergy = 0, outputEnergy = 0;
+        for (var frame = 0; frame < 100; frame++)
+        {
+            var capture = CreateFrame(sample => Math.Sin(2 * Math.PI * 440 *
+                (sample + frame * MicrophoneProcessor.SamplesPerFrame) / 48_000) * 4_000);
+            if (frame >= 50) inputEnergy += Energy(capture);
+            processor.ProcessCapture(capture);
+            if (frame >= 50) outputEnergy += Energy(capture);
+        }
+        var nearEndRatio = Math.Sqrt(outputEnergy / inputEnergy);
+        Require(nearEndRatio is > 0.8 and < 1.2,
+            $"capture-only AEC damaged microphone input: RMS ratio {nearEndRatio:F3}");
+        Require(processor.PendingPlaybackReferenceFrames == 0,
+            "capture-only AEC queued a render reference");
+
+        var playback = new float[MicrophoneProcessor.SamplesPerFrame * 2];
+        Array.Fill(playback, 0.25f);
+        for (var frame = 0; frame < 30; frame++)
+            processor.SubmitPlayback(playback, 0, playback.Length);
+        Require(processor.PendingPlaybackReferenceFrames == 10,
+            "render burst exceeded or lost the bounded reference queue");
+        for (var frame = 0; frame < 30; frame++)
+            processor.ProcessCapture(new byte[MicrophoneProcessor.BytesPerFrame]);
+        Require(processor.PendingPlaybackReferenceFrames == 2,
+            "capture did not drain the render queue to its two-frame delay");
+        Console.WriteLine("[PASS] AEC tolerates capture-only and bursty render callbacks with bounded references");
     }
 
     private static void VerifyCaptureFraming()
