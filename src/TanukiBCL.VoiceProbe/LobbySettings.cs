@@ -25,7 +25,7 @@ internal sealed record LobbySettings
     public bool SidekickTalkInVents { get; init; }
     public bool NosNeutralKillerHaunting { get; init; }
     public bool NosBuskerReviveHideVoice { get; init; }
-    public bool NosVoicePositions { get; init; }
+    public bool NosVoicePositions { get; init; } = true;
     public string NosGluttonySwallowVoice { get; init; } = "mute";
     public bool NosSizeVoiceEffect { get; init; } = true;
     public int NosSizeVoiceEffectStrength { get; init; } = 100;
@@ -108,7 +108,7 @@ internal sealed record LobbySettings
         JackalRadioEnabled = false,
         SidekickHearOutsideVents = false,
         SidekickTalkInVents = false,
-        NosVoicePositions = false
+        NosVoicePositions = true
     };
 
     public LobbySettings DisableImpostorRadioOnlyMode(LobbySettings? backup) => backup is null
@@ -133,7 +133,7 @@ internal sealed record LobbySettings
             JackalRadioEnabled = backup.JackalRadioEnabled,
             SidekickHearOutsideVents = backup.SidekickHearOutsideVents,
             SidekickTalkInVents = backup.SidekickTalkInVents,
-            NosVoicePositions = backup.NosVoicePositions
+            NosVoicePositions = true
         };
 
     public string ToWireJson() => JsonSerializer.Serialize(Normalize(), WireJsonOptions);

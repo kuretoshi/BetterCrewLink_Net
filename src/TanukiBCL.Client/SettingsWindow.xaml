@@ -723,7 +723,7 @@
                                       Content="第三陣営のキルできる役職が幽霊の声も聞こえる"
                                       Style="{StaticResource LobbySwitchStyle}" />
                             <CheckBox x:Name="NosBuskerReviveHideVoiceCheck" Content="偽装死中のバスカーの声をインポスターに聞かせない" Style="{StaticResource LobbySwitchStyle}" />
-                            <CheckBox x:Name="NosVoicePositionsCheck" Style="{StaticResource LobbySwitchStyle}">
+                            <CheckBox x:Name="NosVoicePositionsCheck" Visibility="Collapsed" Style="{StaticResource LobbySwitchStyle}">
                                 <TextBlock Text="プレイヤーらのスピーカー位置(話している位置)と、自身のマイク位置(収音する位置)をNoSのデータに含まれている座標に変更" TextWrapping="Wrap" />
                             </CheckBox>
                             <CheckBox x:Name="NosSizeVoiceEffectCheck" Content="大きさが変化した場合にエフェクトをかける"

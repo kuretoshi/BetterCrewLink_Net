@@ -18,7 +18,7 @@ internal static class NosRoleAudioSelfTest
         me.NosPlayer = new NosPlayerData { BodyType = 3 };
         if (!Near(1)) return false;
         me.NosPlayer = null;
-        if (!Near(21)) return false;
+        if (!Near(1)) return false;
         me.X = 20;
         other.X = 60;
         other.NosRole = role;
@@ -34,13 +34,13 @@ internal static class NosRoleAudioSelfTest
         }
         other.NosPlayer.SpeakerPositionX = 21;
         other.Disconnected = true;
-        if (!Near(40) || SpatialVoicePolicy.Calculate(state, me, other, settings).Audible) return false;
+        if (!Near(1) || SpatialVoicePolicy.Calculate(state, me, other, settings).Audible) return false;
         other.Disconnected = false;
         other.IsDead = true;
-        if (!Near(40) || SpatialVoicePolicy.Calculate(state, me, other, settings).Audible) return false;
+        if (!Near(1) || SpatialVoicePolicy.Calculate(state, me, other, settings).Audible) return false;
         other.IsDead = false;
         state.GameState = GameState.Discussion;
-        if (!Near(40)) return false;
+        if (!Near(1)) return false;
         state.GameState = GameState.Tasks;
         state.Mod = AmongUsModType.None;
         if (!Near(40)) return false;

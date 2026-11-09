@@ -956,7 +956,7 @@ public partial class SettingsWindow : Window
         TohNeutralKillerHaunting = TohNeutralKillerHauntingCheck.IsChecked == true,
         NosNeutralKillerHaunting = NosNeutralKillerHauntingCheck.IsChecked == true,
         NosBuskerReviveHideVoice = NosBuskerReviveHideVoiceCheck.IsChecked == true,
-        NosVoicePositions = NosVoicePositionsCheck.IsChecked == true,
+        NosVoicePositions = true,
         NosGluttonySwallowVoice = (NosGluttonySwallowVoiceCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "mute",
         NosSizeVoiceEffect = NosSizeVoiceEffectCheck.IsChecked == true,
         NosRokurokubiVoiceEffect = NosRokurokubiVoiceEffectCheck.IsChecked == true,
@@ -1000,7 +1000,7 @@ public partial class SettingsWindow : Window
         JackalRadioCheck.IsChecked = value.JackalRadioEnabled;
         NosNeutralKillerHauntingCheck.IsChecked = value.NosNeutralKillerHaunting;
         NosBuskerReviveHideVoiceCheck.IsChecked = value.NosBuskerReviveHideVoice;
-        NosVoicePositionsCheck.IsChecked = value.NosVoicePositions;
+        NosVoicePositionsCheck.IsChecked = true;
         NosGluttonySwallowVoiceCombo.SelectedIndex = value.NosGluttonySwallowVoice switch
         {
             "quiet" => 1,
