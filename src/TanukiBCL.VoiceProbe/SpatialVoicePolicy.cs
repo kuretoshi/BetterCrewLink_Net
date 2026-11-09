@@ -20,7 +20,7 @@ internal sealed record SpatialVoiceSettings(
     double CrewVolumeAsGhost = 1d,
     bool DeadOnly = false,
     bool MeetingGhostOnly = false,
-    bool NosVoicePositions = false,
+    bool NosVoicePositions = true,
     string NosGluttonySwallowVoice = "mute",
     bool NosFixerJammingVoiceBlock = true,
     bool NosFixerJammingLowpass = false,
@@ -73,8 +73,6 @@ internal static class SpatialVoicePolicy
         var voiceMe = SNRVoicePlayer(state, me);
         var voiceOther = SNRVoicePlayer(state, other);
         var swallowed = IsGluttonySwallowed(state, other);
-        if (swallowed && settings.NosGluttonySwallowVoice == "mute")
-            return new PeerVoiceMix(0d, 0d, 0d, "nos-gluttony-swallowed");
         var mix = CalculateCore(state, voiceMe, voiceOther, settings, otherUsingImpostorRadio,
             nosJackalRadioHearable, airshipSpawnFallback, rokuroBodyOrigin);
         if (state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState is GameState.Tasks or GameState.Discussion && state.NosLimitSpeechMuted.Contains(other.Id))
@@ -99,7 +97,7 @@ internal static class SpatialVoicePolicy
         state.GameState == GameState.Tasks &&
         state.NosAddonIds.Contains("UchuAddon", StringComparer.Ordinal) &&
         !other.IsDead && !other.Disconnected && !other.IsDummy &&
-        other.NosPlayer is { SpeakerPositionX: 1000d, SpeakerPositionY: 1000d };
+        other.NosPlayer is { AddonData: 100 };
 
     private static Player SNRVoicePlayer(AmongUsState state, Player player)
     {
@@ -158,20 +156,20 @@ internal static class SpatialVoicePolicy
         var airshipMeetingFallback = state.Map == MapType.Airship && state.AirshipMeetingByOutfit;
         var postMeetingSpawnFallback = state.Map == MapType.Airship &&
             state.GameState == GameState.Tasks && airshipSpawnFallback;
-        // UchuAddon publishes the swallow marker as a voice position, not an
-        // actual map coordinate. Use the player's game position for normal/quiet.
-        var useNosPositions = isNos && settings.NosVoicePositions;
-        var swallowMarker = state.NosAddonIds.Contains("UchuAddon", StringComparer.Ordinal) &&
-            other.NosPlayer is { SpeakerPositionX: 1000d, SpeakerPositionY: 1000d };
-        var (meX, meY) = ResolveNosPosition(state, me, useNosPositions, local: true);
+        var (meX, meY) = ResolveNosPosition(state, me, local: true);
         var (otherX, otherY) = rokuroBodyOrigin ? (other.X, other.Y) : ResolveNosPosition(state, other,
-            useNosPositions && !swallowMarker, local: false);
+            local: false);
         var maxDistance = ResolveMaxDistance(state, me, settings) +
             (me.IsDead ? 0d : NosMegaphoneVoice.PortableExtraRange(state, other));
         var deltaX = otherX - meX;
         var deltaY = otherY - meY;
         var distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
         var pan = CalculatePan(deltaX, settings.SpatialAudio, maxDistance);
+
+        // NoS keeps the victim audible to its swallower and hides it from other listeners.
+        // Preserve that range even for radio/megaphone; never blanket-mute the swallower.
+        if (settings.NosGluttonySwallowVoice == "mute" && IsGluttonySwallowed(state, other) && distance > maxDistance)
+            return Muted(pan, distance, "nos-gluttony-swallowed");
 
         if (other.Disconnected || other.IsDummy)
         {
@@ -393,12 +391,9 @@ internal static class SpatialVoicePolicy
         return maxDistance;
     }
 
-    private static (double X, double Y) ResolveNosPosition(AmongUsState state, Player player, bool enabled, bool local)
+    private static (double X, double Y) ResolveNosPosition(AmongUsState state, Player player, bool local)
     {
-        var rokuro = state.Mod == AmongUsModType.NebulaOnTheShip && state.GameState == GameState.Tasks &&
-            !player.IsDead && !player.Disconnected &&
-            (player.NosRole?.RoleName == "rokurokubi" || player.NosPlayer?.BodyType == 3);
-        if (!enabled && !rokuro) return (player.X, player.Y);
+        if (state.Mod != AmongUsModType.NebulaOnTheShip) return (player.X, player.Y);
         var x = local ? state.NosLocalMicPosition?.X : player.NosPlayer?.SpeakerPositionX;
         var y = local ? state.NosLocalMicPosition?.Y : player.NosPlayer?.SpeakerPositionY;
         return x is double px && y is double py && double.IsFinite(px) && double.IsFinite(py)

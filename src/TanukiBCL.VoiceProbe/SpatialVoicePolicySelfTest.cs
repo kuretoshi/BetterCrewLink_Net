@@ -437,7 +437,7 @@ internal static class SpatialVoicePolicySelfTest
         var nosPolicy = new SpatialVoiceSettings(NosVoicePositions: true);
         Check("NoS: published microphone and speaker positions determine proximity", true,
             SpatialVoicePolicy.Calculate(nosTasks, new Player(), nosSpeaker, nosPolicy).Audible);
-        Check("NoS: disabled position option uses vanilla coordinates", false,
+        Check("NoS: saved OFF option cannot disable published coordinates", true,
             SpatialVoicePolicy.Calculate(nosTasks, new Player(), nosSpeaker,
                 nosPolicy with { NosVoicePositions = false }).Audible);
         Check("NoS: published position places speaker out of range", false,
@@ -450,23 +450,74 @@ internal static class SpatialVoicePolicySelfTest
         var gluttonyState = new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
             GameState = GameState.Tasks, NosAddonIds = ["UchuAddon"] };
         var swallowedSpeaker = new Player { X = 1d, NosPlayer = new NosPlayerData
-            { SpeakerPositionX = 1000d, SpeakerPositionY = 1000d } };
+            { SpeakerPositionX = 1000d, SpeakerPositionY = 1000d, AddonData = 100 } };
         var gluttonySettings = new SpatialVoiceSettings();
+        var nearbySwallowed = new Player { X = 1d,
+            NosPlayer = new NosPlayerData { SpeakerPositionX = 1d, AddonData = 100 } };
+        foreach (var usePositions in new[] { false, true })
+        {
+            var muteSettings = gluttonySettings with { NosVoicePositions = usePositions };
+            Check("Uchu Gluttony: mute preserves swallower hearing its own victim", true,
+                SpatialVoicePolicy.Calculate(gluttonyState, new Player(), nearbySwallowed, muteSettings).Audible);
+            Check("Uchu Gluttony: mute hides victim from nearby bystander", false,
+                SpatialVoicePolicy.Calculate(gluttonyState, new Player(), swallowedSpeaker, muteSettings).Audible);
+            var swallowRadioSettings = muteSettings with { ImpostorRadioEnabled = true };
+            Check("Uchu Gluttony: swallower retains authorized radio", true,
+                SpatialVoicePolicy.Calculate(gluttonyState, new Player(), nearbySwallowed, swallowRadioSettings,
+                    otherUsingImpostorRadio: true, nosJackalRadioHearable: true).Audible);
+            Check("Uchu Gluttony: radio must not leak hidden victim to bystander", false,
+                SpatialVoicePolicy.Calculate(gluttonyState, new Player(), swallowedSpeaker, swallowRadioSettings,
+                    otherUsingImpostorRadio: true, nosJackalRadioHearable: true).Audible);
+        }
+        Check("Uchu Gluttony: explicit data keeps an allowed NoS endpoint audible", true,
+            SpatialVoicePolicy.Calculate(gluttonyState, new Player(), nearbySwallowed, gluttonySettings).Audible);
+        var nearbyQuiet = SpatialVoicePolicy.Calculate(gluttonyState, new Player(), nearbySwallowed,
+            gluttonySettings with { NosGluttonySwallowVoice = "quiet" });
+        var nearbyNormal = SpatialVoicePolicy.Calculate(gluttonyState, new Player(), nearbySwallowed,
+            gluttonySettings with { NosGluttonySwallowVoice = "normal" });
+        Check("Uchu Gluttony: explicit data applies quiet and low-pass", true,
+            nearbyQuiet.Audible && nearbyQuiet.GluttonyLowpass && Math.Abs(nearbyQuiet.Gain - nearbyNormal.Gain * 0.1d) < 0.000001d);
+        Check("Uchu Gluttony: explicit data allows normal mode", true,
+            SpatialVoicePolicy.Calculate(gluttonyState, new Player(), nearbySwallowed,
+                gluttonySettings with { NosGluttonySwallowVoice = "normal" }).Audible);
+        foreach (int? addonData in new int?[] { null, 0, 1, 36, 64, 99, 101, 128, 164, -100 })
+        {
+            var unmarked = new Player { NosPlayer = new NosPlayerData
+                { SpeakerPositionX = 1000d, SpeakerPositionY = 1000d, AddonData = addonData } };
+            Check($"NoS: coordinates never identify swallowing ({addonData})", false,
+                SpatialVoicePolicy.IsGluttonySwallowed(gluttonyState, unmarked));
+            Check($"NoS: hidden-position role keeps radio ({addonData})", true,
+                SpatialVoicePolicy.Calculate(gluttonyState, new Player(), unmarked,
+                    gluttonySettings with { ImpostorRadioEnabled = true },
+                    otherUsingImpostorRadio: true, nosJackalRadioHearable: true).Audible);
+        }
+        foreach (var addonData in new[] { 0, 100, 0 })
+        {
+            nearbySwallowed.NosPlayer!.AddonData = addonData;
+            Check($"Uchu Gluttony: immediate lifecycle value {addonData}", addonData == 100,
+                SpatialVoicePolicy.IsGluttonySwallowed(gluttonyState, nearbySwallowed));
+        }
+        nearbySwallowed.NosPlayer!.AddonData = 100;
+        Check("Uchu Gluttony: value ignored without UchuAddon", false,
+            SpatialVoicePolicy.IsGluttonySwallowed(new AmongUsState
+                { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Tasks }, nearbySwallowed));
+        Check("Uchu Gluttony: value ignored outside NoS", false,
+            SpatialVoicePolicy.IsGluttonySwallowed(new AmongUsState
+                { GameState = GameState.Tasks, NosAddonIds = ["UchuAddon"] }, nearbySwallowed));
         Check("Uchu Gluttony: default mutes swallowed voice", false,
             SpatialVoicePolicy.Calculate(gluttonyState, new Player(), swallowedSpeaker, gluttonySettings).Audible);
         var normalSwallowedMix = SpatialVoicePolicy.Calculate(gluttonyState, new Player(),
             swallowedSpeaker, gluttonySettings with { NosGluttonySwallowVoice = "normal" });
         var quietSwallowedMix = SpatialVoicePolicy.Calculate(gluttonyState, new Player(),
             swallowedSpeaker, gluttonySettings with { NosGluttonySwallowVoice = "quiet" });
-        Check("Uchu Gluttony: quiet is one tenth of normal with low-pass", true,
-            normalSwallowedMix.Audible && quietSwallowedMix.Audible && quietSwallowedMix.GluttonyLowpass &&
-            Math.Abs(quietSwallowedMix.Gain - normalSwallowedMix.Gain * 0.1d) < 0.000001d);
-        Check("Uchu Gluttony: sentinel is not a map coordinate when NoS positions enabled", true,
+        Check("Uchu Gluttony: legacy quiet/normal cannot bypass published hidden position", true,
+            !normalSwallowedMix.Audible && !quietSwallowedMix.Audible);
+        Check("Uchu Gluttony: published position remains authoritative", false,
             SpatialVoicePolicy.Calculate(gluttonyState, new Player(), swallowedSpeaker,
                 gluttonySettings with { NosVoicePositions = true, NosGluttonySwallowVoice = "normal" }).Audible);
         Check("Uchu Gluttony: other speaker unaffected", true,
             SpatialVoicePolicy.Calculate(gluttonyState, new Player(), new Player { X = 1d }, gluttonySettings).Audible);
-        Check("Uchu Gluttony: no addon does not mute", true,
+        Check("NoS: hidden position applies with no matching addon", false,
             SpatialVoicePolicy.Calculate(new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
                 GameState = GameState.Tasks }, new Player(),
                 swallowedSpeaker, gluttonySettings).Audible);
@@ -474,7 +525,7 @@ internal static class SpatialVoicePolicySelfTest
             SpatialVoicePolicy.Calculate(new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip,
                 GameState = GameState.Discussion, NosAddonIds = ["UchuAddon"] },
                 new Player(), swallowedSpeaker, gluttonySettings).Audible);
-        Check("Uchu Gluttony: dead speaker does not mute", true,
+        Check("NoS: dead speaker still follows published position", false,
             SpatialVoicePolicy.Calculate(gluttonyState, new Player { IsDead = true },
                 new Player { X = 1d, IsDead = true, NosPlayer = swallowedSpeaker.NosPlayer },
                 gluttonySettings).Audible);
@@ -484,6 +535,7 @@ internal static class SpatialVoicePolicySelfTest
                 otherUsingImpostorRadio: true).Audible);
         Check("Uchu Gluttony DSP: 450 Hz low-pass attenuates 4 kHz", true,
             MeasureGluttonyFilteredRms(4000d) < MeasureGluttonyFilteredRms(400d) * 0.15d);
+        var nosEffectsTasks = new AmongUsState { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Tasks };
         var jammedSpeaker = new Player { NosPlayer = new NosPlayerData { IsJammed = true } };
         var jammedListener = new Player { NosPlayer = new NosPlayerData { IsJammed = true } };
         Check("NoS: jammed speaker is silent in meeting", false,
@@ -495,16 +547,16 @@ internal static class SpatialVoicePolicySelfTest
                 { Mod = AmongUsModType.NebulaOnTheShip, GameState = GameState.Lobby },
                 jammedListener, new Player(), nosPolicy).Audible);
         Check("NoS: disabled fixer block restores speech", true,
-            SpatialVoicePolicy.Calculate(nosTasks, new Player(), jammedSpeaker,
+            SpatialVoicePolicy.Calculate(nosEffectsTasks, new Player(), jammedSpeaker,
                 nosPolicy with { NosVoicePositions = false, NosFixerJammingVoiceBlock = false }).Audible);
         var lowpassPolicy = nosPolicy with { NosVoicePositions = false,
             NosFixerJammingVoiceBlock = false, NosFixerJammingLowpass = true };
         Check("NoS: jammed speaker gets 1200 Hz low-pass", true,
-            SpatialVoicePolicy.Calculate(nosTasks, new Player(), jammedSpeaker, lowpassPolicy).FixerLowpass);
+            SpatialVoicePolicy.Calculate(nosEffectsTasks, new Player(), jammedSpeaker, lowpassPolicy).FixerLowpass);
         Check("NoS: jammed listener gets 1200 Hz low-pass", true,
-            SpatialVoicePolicy.Calculate(nosTasks, jammedListener, new Player(), lowpassPolicy).FixerLowpass);
+            SpatialVoicePolicy.Calculate(nosEffectsTasks, jammedListener, new Player(), lowpassPolicy).FixerLowpass);
         Check("NoS: blocker takes priority over low-pass", false,
-            SpatialVoicePolicy.Calculate(nosTasks, new Player(), jammedSpeaker,
+            SpatialVoicePolicy.Calculate(nosEffectsTasks, new Player(), jammedSpeaker,
                 lowpassPolicy with { NosFixerJammingVoiceBlock = true }).Audible);
         Check("NoS DSP: Fixer low-pass attenuates 4 kHz more than 400 Hz", true,
             MeasureFixerFilteredRms(4000d) < MeasureFixerFilteredRms(400d) * 0.3d);
@@ -514,21 +566,21 @@ internal static class SpatialVoicePolicySelfTest
         var nosNeutralKiller = new Player { NosPlayer = new NosPlayerData
             { IsNeutral = true, IsKiller = true, IsImpostor = false } };
         Check("NoS haunting: neutral killer hears ghosts when enabled", true,
-            SpatialVoicePolicy.Calculate(nosTasks, nosNeutralKiller,
+            SpatialVoicePolicy.Calculate(nosEffectsTasks, nosNeutralKiller,
                 new Player { IsDead = true },
                 new SpatialVoiceSettings(NosNeutralKillerHaunting: true)).Audible);
         Check("NoS haunting: neutral non-killer cannot hear ghosts", false,
-            SpatialVoicePolicy.Calculate(nosTasks, new Player { NosPlayer = new NosPlayerData
+            SpatialVoicePolicy.Calculate(nosEffectsTasks, new Player { NosPlayer = new NosPlayerData
                 { IsNeutral = true, IsKiller = false } }, new Player { IsDead = true },
                 new SpatialVoiceSettings(NosNeutralKillerHaunting: true)).Audible);
         var noSRadioOnlyHaunting = new SpatialVoiceSettings(
             NosNeutralKillerHaunting: true, ImpostorRadioOnlyMode: true,
             MeetingGhostOnly: true);
         Check("NoS radio-only: neutral killer still hears ghost", true,
-            SpatialVoicePolicy.Calculate(nosTasks, nosNeutralKiller,
+            SpatialVoicePolicy.Calculate(nosEffectsTasks, nosNeutralKiller,
                 new Player { IsDead = true }, noSRadioOnlyHaunting).Audible);
         Check("NoS radio-only: neutral killer does not hear living proximity", false,
-            SpatialVoicePolicy.Calculate(nosTasks, nosNeutralKiller,
+            SpatialVoicePolicy.Calculate(nosEffectsTasks, nosNeutralKiller,
                 new Player(), noSRadioOnlyHaunting).Audible);
         var nosRadioPolicy = new SpatialVoiceSettings(JackalRadioEnabled: true);
         var distantNosSender = new Player { X = 20d };
