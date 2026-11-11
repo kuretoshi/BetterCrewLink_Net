@@ -12,6 +12,9 @@ internal static class Program
 
         try
         {
+            if (args.Contains("--clone-self-test")) return CloneSelfTest.Run();
+            if (args.Contains("--parrot-self-test")) return ParrotSelfTest.Run();
+            if (args.Contains("--wall-ear-self-test")) return WallEarSelfTest.Run();
             if (args.Contains("--addon-link-self-test")) return await NosAddonLinkSelfTest.Run(args[Array.IndexOf(args, "--addon-link-self-test") + 1]);
             if (args.Contains("--distributed-speech-self-test")) return DistributedSpeechSelfTest.Run();
             if (args.Contains("--dtls-trace"))

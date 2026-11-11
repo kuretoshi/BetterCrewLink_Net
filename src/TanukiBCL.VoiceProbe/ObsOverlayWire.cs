@@ -5,7 +5,7 @@ using TanukiBCL.VoiceProbe.GameMemory;
 
 namespace TanukiBCL.VoiceProbe;
 
-internal readonly record struct ObsPeerState(bool Connected, bool Talking, bool UsingRadio);
+internal readonly record struct ObsPeerState(bool Connected, bool Talking, bool UsingRadio, bool CloneTalking = false);
 
 internal static class ObsOverlayWire
 {
@@ -62,7 +62,7 @@ internal static class ObsOverlayWire
         writer.WriteStartObject();
         writer.WriteNumber("id", player.Id);
         writer.WriteNumber("clientId", player.ClientId);
-        writer.WriteBoolean("inVent", player.InVent);
+        writer.WriteBoolean("inVent", player.InVent && !(hasPeer && peer.CloneTalking));
         writer.WriteBoolean("isDead", player.IsDead);
         writer.WriteString("name", player.Name);
         writer.WriteString("hatId", appearance?.HatId ?? player.HatId);
@@ -150,7 +150,7 @@ internal static class ObsOverlayWire
             {
                 ["id"] = player.Id,
                 ["clientId"] = player.ClientId,
-                ["inVent"] = player.InVent,
+                ["inVent"] = player.InVent && !(hasPeer && peer.CloneTalking),
                 ["isDead"] = player.IsDead,
                 ["name"] = player.Name,
                 ["hatId"] = appearance?.HatId ?? player.HatId,

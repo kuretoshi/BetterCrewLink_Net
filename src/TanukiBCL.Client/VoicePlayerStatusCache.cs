@@ -14,13 +14,13 @@ internal sealed class VoicePlayerStatusCache
     internal void Begin() => seenIds.Clear();
 
     internal void Set(int clientId, string connectionState, bool talking, bool usingRadio,
-        ConnectionQuality? quality)
+        ConnectionQuality? quality, bool cloneTalking = false)
     {
         seenIds.Add(clientId);
         if (statuses.TryGetValue(clientId, out var previous) &&
             previous.ConnectionState == connectionState && previous.Talking == talking &&
-            previous.UsingRadio == usingRadio && Equals(previous.Quality, quality)) return;
-        statuses[clientId] = new VoicePlayerStatus(connectionState, talking, usingRadio, quality);
+            previous.UsingRadio == usingRadio && previous.CloneTalking == cloneTalking && Equals(previous.Quality, quality)) return;
+        statuses[clientId] = new VoicePlayerStatus(connectionState, talking, usingRadio, quality, cloneTalking);
     }
 
     internal IReadOnlyDictionary<int, VoicePlayerStatus> End()

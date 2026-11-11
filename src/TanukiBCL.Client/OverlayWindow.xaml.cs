@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -34,7 +34,7 @@ public partial class OverlayWindow : Window
     private AmongUsState? game;
     private IReadOnlyDictionary<int, OverlayPeerStatus> peers =
         new Dictionary<int, OverlayPeerStatus>();
-    private bool localTalking;
+    private bool localTalking, localCloneTalking;
     private bool localUsingRadio;
     private bool microphoneMuted;
     private bool deafened;
@@ -136,11 +136,11 @@ public partial class OverlayWindow : Window
     internal void Update(AmongUsState? gameState,
         IReadOnlyDictionary<int, OverlayPeerStatus> peerStatuses,
         bool isLocalTalking, bool isMicrophoneMuted, bool isDeafened, bool isLocalUsingRadio = false,
-        IReadOnlyDictionary<int, bool>? remoteDeathDisplay = null)
+        IReadOnlyDictionary<int, bool>? remoteDeathDisplay = null, bool isLocalCloneTalking = false)
     {
         game = gameState;
         peers = peerStatuses;
-        localTalking = isLocalTalking;
+        localTalking = isLocalTalking; localCloneTalking = isLocalCloneTalking;
         localUsingRadio = isLocalUsingRadio;
         microphoneMuted = isMicrophoneMuted;
         deafened = isDeafened;
@@ -283,7 +283,7 @@ public partial class OverlayWindow : Window
     {
         var position = settings.OverlayPosition;
         var selected = OverlaySelection.Select(state, peers, localTalking,
-            microphoneMuted, settings.CompactOverlay, localUsingRadio, remoteDeadForDisplay);
+            microphoneMuted, settings.CompactOverlay, localUsingRadio, remoteDeadForDisplay, localCloneTalking);
         if (position == "hidden" || selected.Count == 0)
         {
             AvatarPanel.Children.Clear();
@@ -350,7 +350,7 @@ public partial class OverlayWindow : Window
             avatar.SetVisualState(entry.Talking,
                 player.IsLocal && microphoneMuted,
                 player.IsLocal && deafened, "connected", entry.UsingRadio,
-                grayTalking: player.IsLocal && player.ShiftedColor != -1 && state.GameState != GameState.Discussion);
+                grayTalking: player.IsLocal && !entry.CloneTalking && player.ShiftedColor != -1 && state.GameState != GameState.Discussion);
             if (showName)
             {
                 item.Name.Text = string.IsNullOrWhiteSpace(player.AppearanceName)

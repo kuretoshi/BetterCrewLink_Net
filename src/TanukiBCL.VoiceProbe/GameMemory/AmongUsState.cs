@@ -252,6 +252,8 @@ public sealed class AmongUsState
     public List<NosMegaphoneState> NosMegaphones { get; set; } = [];
     public List<int> NosLimitSpeechMuted { get; set; } = [];
     public List<NosInterviewState> NosInterviews { get; set; } = [];
+    public List<NosParrotState> NosParrots { get; set; } = [];
+    public List<NosWallEarState> NosWallEars { get; set; } = [];
     public List<NosVoiceJammingState> NosVoiceJamming { get; set; } = [];
     public List<NosHeroTransformState> NosHeroTransforms { get; set; } = [];
     public List<NosDyingVoiceState> NosDyingVoices { get; set; } = [];

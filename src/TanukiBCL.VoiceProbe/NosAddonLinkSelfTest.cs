@@ -28,7 +28,7 @@ internal static class NosAddonLinkSelfTest
     {
         long now = Now;
         object[] heroes = empty ? [] : [new { playerId = 1, kind }];
-        return new { heroes, portable = new[] { new { playerId = 1, extraRange = 4.5 } },
+        return new { heroes, parrots = new[] { new { ownerId = 1, birdId = 9, x = 0, y = 0, range = 4, seconds = 3, recordId = 0, sourceId = 2, started = 0L, clips = Array.Empty<int>(), playId = 0, playClip = 0, playStarted = 0L } }, ears = new[] { new { playerId = 1, x = 0, y = 0, range = 4 } }, portable = new[] { new { playerId = 1, extraRange = 4.5 } },
             megaphones = new[] { new { playerId = 2, energy = .5, range = 7, shotId = 3, phase = "charging" } },
             dying = new[] { new { playerId = 3, started = now - 1000, seconds = 5, range = 3, x = -2, y = 4, loop = true } },
             interviews = new[] { new { playerId = 4, started = now - 1000, seconds = 10, stopped = 0, visible = new[] { 1, 4 }, playStarted = 0 } },
@@ -50,6 +50,9 @@ internal static class NosAddonLinkSelfTest
         await Until(() => first.Current(a.Pid)?.Read<NosHeroTransformState>("heroes").Count == 1 && second.Current(b.Pid)?.Read<NosHeroTransformState>("heroes").Count == 1, Tick);
         Check(first.Current(a.Pid)!.Read<NosHeroTransformState>("heroes")[0].Kind == "super", "first PID data");
         Check(second.Current(b.Pid)!.Read<NosHeroTransformState>("heroes")[0].Kind == "evil", "second PID data");
+        Check(first.Current(a.Pid)!.Read<NosWallEarState>("ears")[0].Range == 4, "ear state crosses actual addon TCP link");
+        Check(first.Current(a.Pid)!.Read<NosParrotState>("parrots")[0].BirdId == 9, "parrot state crosses actual addon TCP");
+        Check(first.Current(a.Pid)!.Read<NosParrotState>("parrots")[0].Seconds == 3, "recording duration crosses actual addon TCP");
         long firstSequence = first.Current(a.Pid)!.Sequence;
         await Task.Delay(550);
         Check(first.Current(a.Pid)?.Sequence > firstSequence, "TCP updates independently of the 500ms memory-reader cadence");
@@ -61,7 +64,8 @@ internal static class NosAddonLinkSelfTest
         Check(first.Send(a.Pid, "sample", new() { ["playerId"] = 1, ["rms"] = .5, ["active"] = true, ["host"] = false }), "sample sent");
         Check(first.Send(a.Pid, "ready", new() { ["players"] = new[] { 1 } }), "ready sent");
         Check(first.Send(a.Pid, "word", new() { ["playerId"] = 1, ["request"] = 7, ["speechKind"] = "hero" }), "word sent");
-        foreach (string expected in new[] { "sample", "ready", "word" })
+        Check(first.Send(a.Pid, "parrot", new() { ["ownerId"] = 1, ["birdId"] = 9, ["sourceId"] = 2 }), "parrot command sent");
+        foreach (string expected in new[] { "sample", "ready", "word", "parrot" })
         {
             string? line = await a.Process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(2));
             using var command = JsonDocument.Parse(line!);
@@ -70,6 +74,8 @@ internal static class NosAddonLinkSelfTest
         var empty = new[] { "heroes", "portable", "megaphones", "dying", "interviews", "jamming", "echoes", "muted", "speech" }.ToDictionary(k => k, _ => Array.Empty<object>());
         a.Set(empty);
         await Until(() => first.Current(a.Pid)?.Read<NosHeroTransformState>("heroes").Count == 0, Tick);
+        Check(first.Current(a.Pid)!.Read<NosParrotState>("parrots").Count == 0, "older snapshot clears parrot state");
+        Check(first.Current(a.Pid)!.Read<NosWallEarState>("ears").Count == 0, "older snapshot without ears clears ear state");
         Check(first.Current(a.Pid)!.Read<NosHeroTransformState>("heroes").Count == 0 && first.Current(a.Pid)!.Read<NosInterviewState>("interviews").Count == 0, "empty snapshot clears without file fallback");
         a.Set(new { heroes = Array.Empty<object>() });
         await Until(() => first.Current(a.Pid) == null, Tick);

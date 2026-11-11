@@ -159,8 +159,10 @@ internal static class SpatialVoicePolicy
         var (meX, meY) = ResolveNosPosition(state, me, local: true);
         var (otherX, otherY) = rokuroBodyOrigin ? (other.X, other.Y) : ResolveNosPosition(state, other,
             local: false);
-        var maxDistance = ResolveMaxDistance(state, me, settings) +
-            (me.IsDead ? 0d : NosMegaphoneVoice.PortableExtraRange(state, other));
+        var ear = NosWallEarState.For(state, me);
+        if (ear != null) { meX = ear.X; meY = ear.Y; }
+        var maxDistance = ear?.Range ?? (ResolveMaxDistance(state, me, settings) +
+            (me.IsDead ? 0d : NosMegaphoneVoice.PortableExtraRange(state, other)));
         var deltaX = otherX - meX;
         var deltaY = otherY - meY;
         var distance = Math.Sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -186,7 +188,7 @@ internal static class SpatialVoicePolicy
         {
             return Muted(0, distance, "dead-only");
         }
-        if (NosMegaphoneVoice.Charging(state, other) is { } megaphone && !me.IsDead && !settings.DeadOnly)
+        if (ear == null && NosMegaphoneVoice.Charging(state, other) is { } megaphone && !me.IsDead && !settings.DeadOnly)
         {
             if (settings.CommsSabotage && state.CommsSabotaged && !meImpostor)
                 return Muted(pan, distance, "comms-sabotage");
@@ -238,7 +240,7 @@ internal static class SpatialVoicePolicy
 
         // During the post-meeting spawn window upstream still applies wall
         // occlusion before its usual distance bypass (including for radio).
-        if (postMeetingSpawnFallback && settings.WallsBlockAudio && !me.IsDead &&
+        if (ear == null && postMeetingSpawnFallback && settings.WallsBlockAudio && !me.IsDead &&
             WallCollision.Intersects(new Player { X = meX, Y = meY },
                 new Player { X = otherX, Y = otherY }, state.Map, state.ClosedDoors))
             return Muted(pan, distance, "airship-spawn-wall");
@@ -302,7 +304,7 @@ internal static class SpatialVoicePolicy
         // selected camera instead. Camera reception uses that camera's position
         // for both attenuation and panning.
         var cameraMuffle = false;
-        if (!airshipMeetingFallback && !(postMeetingSpawnFallback && !me.IsDead) &&
+        if (ear == null && !airshipMeetingFallback && !(postMeetingSpawnFallback && !me.IsDead) &&
             distance > maxDistance && settings.HearThroughCameras &&
             state.CurrentCamera != CameraLocation.None &&
             CameraGeometry.TryRelativePosition(state.Map, state.CurrentCamera,
@@ -346,7 +348,7 @@ internal static class SpatialVoicePolicy
         // removes both stereo placement and distance attenuation inside range.
         var distanceGain = settings.SpatialAudio ? LinearDistanceGain(distance, maxDistance) : 1d;
 
-        if (!cameraMuffle && settings.WallsBlockAudio && !me.IsDead &&
+        if (ear == null && !cameraMuffle && settings.WallsBlockAudio && !me.IsDead &&
             WallCollision.Intersects(new Player { X = meX, Y = meY },
                 new Player { X = otherX, Y = otherY }, state.Map, state.ClosedDoors))
         {

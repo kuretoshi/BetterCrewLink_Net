@@ -3,10 +3,10 @@ using TanukiBCL.VoiceProbe.GameMemory;
 namespace TanukiBCL.VoiceProbe;
 
 internal sealed record OverlayPeerStatus(bool Connected, bool VoiceActive, bool UsingRadio,
-    bool Audible = true);
+    bool Audible = true, bool CloneTalking = false);
 
 internal sealed record OverlayPlayer(Player Player, bool VoiceActive, bool Talking,
-    bool UsingRadio);
+    bool UsingRadio, bool CloneTalking = false);
 
 internal static class OverlaySelection
 {
@@ -16,7 +16,7 @@ internal static class OverlaySelection
     public static IReadOnlyList<OverlayPlayer> Select(AmongUsState state,
         IReadOnlyDictionary<int, OverlayPeerStatus> peers, bool localTalking,
         bool microphoneMuted, bool compact, bool localUsingRadio = false,
-        IReadOnlyDictionary<int, bool>? remoteDeadForDisplay = null)
+        IReadOnlyDictionary<int, bool>? remoteDeadForDisplay = null, bool localCloneTalking = false)
     {
         var localAlive = state.Players.FirstOrDefault(player => player.IsLocal)?.IsDead == false;
         bool DisplayDead(Player player) => remoteDeadForDisplay is null
@@ -31,12 +31,13 @@ internal static class OverlaySelection
             peers.TryGetValue(player.ClientId, out var peer);
             if (!player.IsLocal && peer?.Connected != true) continue;
             var vadHidden = player.ShiftedColor >= 0 && state.GameState != GameState.Discussion;
-            var active = (!vadHidden || player.IsLocal) &&
+            var cloneTalking = player.IsLocal ? localCloneTalking : peer?.CloneTalking == true;
+            var active = cloneTalking || (!vadHidden || player.IsLocal) &&
                 (player.IsLocal ? localTalking && !microphoneMuted : peer?.VoiceActive == true &&
                     (state.GameState != GameState.Tasks || peer.Audible));
             if (compact && !active) continue;
-            result.Add(new OverlayPlayer(player, active, active && !player.InVent,
-                player.IsLocal ? localUsingRadio : peer?.UsingRadio == true));
+            result.Add(new OverlayPlayer(player, active, cloneTalking || (active && !player.InVent),
+                player.IsLocal ? localUsingRadio : peer?.UsingRadio == true, cloneTalking));
         }
         return result;
     }

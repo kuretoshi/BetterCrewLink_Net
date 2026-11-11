@@ -1136,7 +1136,7 @@ public partial class MainWindow : Window
             sentAudioFrames += count;
             SentText.Text = $"Opus送信: {sentAudioFrames} frame / {peerCount} peer";
         });
-        if (refreshCompact) UpdateCompactView();
+        if (refreshCompact || currentState?.NosParrots.Any(p => p.Mode == "clone") == true || cloneTalkingVisible) UpdateCompactView();
     }
 
     private void SelectProcessFromCommandLine()
@@ -1156,19 +1156,25 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool cloneTalkingVisible;
+    private bool CloneTalking(int clientId) => currentState?.Players.Any(p =>
+        p.ClientId == clientId && !p.Disconnected && probe?.IsCloneTalking(p.Id) == true) == true;
+
     private void UpdateCompactView()
     {
+        var localCloneTalking = currentState?.Players.Any(p => p.IsLocal && !p.Disconnected && probe?.IsCloneTalking(p.Id) == true) == true;
+        cloneTalkingVisible = localCloneTalking || peers.Any(row => CloneTalking(row.ClientId));
         compactPeerStatuses.Begin();
         foreach (var row in peers)
             compactPeerStatuses.Set(row.ClientId,
                 row.Connection is "data-ready" or "接続済み"
                     ? row.HasReceivedFrames ? "connected" : "novoice"
                     : "disconnected",
-                row.Talking, row.Radio == "送信中", row.Quality);
+                row.Talking, row.Radio == "送信中", row.Quality, CloneTalking(row.ClientId));
         var statuses = compactPeerStatuses.End();
         CompactVoiceView.Update(currentState, voiceServerConnected, localTalking && !microphoneMuted,
             microphoneMuted, deafened, statuses, hideCode: settings.HideCode, localUsingRadio: radioTransmitting,
-            playerConfigs: settings.PlayerConfigMap, serverQuality: serverQuality);
+            playerConfigs: settings.PlayerConfigMap, serverQuality: serverQuality, localCloneTalking: localCloneTalking);
         var mod = currentState?.Mod ?? AmongUsModType.None;
         CompactVoiceView.SetDetectedMod(mod == AmongUsModType.None ? null : AmongUsMod.For(mod).Label,
             mod == AmongUsModType.NebulaOnTheShip ? currentState?.NosReadStatus : null);
@@ -1184,12 +1190,14 @@ public partial class MainWindow : Window
             obsPeerStatuses.Clear();
             foreach (var row in peers)
                 obsPeerStatuses[row.ClientId] = new ObsPeerState(
-                    activeProbe.IsPeerPresent(row.ClientId), row.VadActive, row.Radio == "送信中");
+                    activeProbe.IsPeerPresent(row.ClientId), row.VadActive || CloneTalking(row.ClientId), row.Radio == "送信中", CloneTalking(row.ClientId));
+            if (localCloneTalking && state.Players.FirstOrDefault(p => p.IsLocal) is { } localCloneOwner)
+                obsPeerStatuses[localCloneOwner.ClientId] = new ObsPeerState(true, true, false, true);
             var appearances = state.GameState is GameState.Menu or GameState.Unknown
                 ? null : obsSkinAssets?.Update(state);
             if (appearances is null) obsSkinAssets?.Reset();
             activeProbe.PublishObsOverlay(settings.ObsSecret, state, obsPeerStatuses,
-                localTalking && !microphoneMuted, radioTransmitting, appearances,
+                (localTalking && !microphoneMuted) || localCloneTalking, radioTransmitting, appearances,
                 obsSkinAssets?.AssetSession);
         }
         UpdateOverlayWindow();
@@ -1223,9 +1231,10 @@ public partial class MainWindow : Window
         overlayWindow ??= new OverlayWindow(pid, settings);
         var peerStatuses = peers.ToDictionary(row => row.ClientId, row => new OverlayPeerStatus(
             row.Connection is "data-ready" or "接続済み",
-            row.VadActive, row.Radio == "送信中", row.Audible));
+            row.VadActive, row.Radio == "送信中", row.Audible, CloneTalking(row.ClientId)));
         overlayWindow.Update(currentState, peerStatuses, localTalking, microphoneMuted, deafened,
-            radioTransmitting, CompactVoiceView.RemoteDeadForDisplay);
+            radioTransmitting, CompactVoiceView.RemoteDeadForDisplay,
+            currentState?.Players.Any(p => p.IsLocal && probe.IsCloneTalking(p.Id)) == true);
     }
 
     internal static void VerifyPeerConnectionRecovery()

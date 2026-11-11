@@ -62,6 +62,10 @@ internal static class NosVoiceRoleStateReader
         Read<NosInterviewState>(pid, now, path ?? DefaultPath($"interviews-{pid}.json"),
             item => item.IsValid(now), item => item.PlayerId, maxAgeMs: 1000, maxBytes: 65536, maxPlayers: 32);
 
+    public static List<NosWallEarState> ReadWallEars(int pid, long now, string? path = null) =>
+        Read<NosWallEarState>(pid, now, path ?? DefaultPath($"ears-{pid}.json"),
+            item => item.IsValid, item => item.PlayerId, maxAgeMs: 1000, maxBytes: 8192, maxPlayers: 24);
+
     public static List<NosVoiceJammingState> ReadVoiceJamming(int pid, long now, string? path = null) =>
         Read<NosVoiceJammingState>(pid, now, path ?? DefaultPath($"voice-jamming-{pid}.json"),
             item => item.IsValid, item => item.PlayerId, maxAgeMs: 1000, maxBytes: 65536);

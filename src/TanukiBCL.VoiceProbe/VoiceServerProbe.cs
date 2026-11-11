@@ -264,6 +264,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
 
     internal event Action<int, ReadOnlyMemory<byte>>? PeerEncodedAudioPacketReceived;
 
+    public bool IsCloneTalking(int playerId) => audioSession?.IsCloneTalking(playerId) == true;
     public event Action<bool>? LocalVadChanged;
 
     public event Action<int, bool>? PeerVadChanged;
@@ -536,6 +537,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             nosHostVoiceRelay.Dispose();
         }
         audioSession?.UpdateInterviews(state);
+        audioSession?.UpdateParrots(options.GameProcessId ?? 0, state, spatialVoiceSettings.CommsSabotage && state.CommsSabotaged && state.Players.FirstOrDefault(p => p.IsLocal)?.IsImpostor != true);
         audioSession?.UpdateHeroSpeech(options.GameProcessId ?? 0, state);
         if (state.Mod != AmongUsModType.NebulaOnTheShip || state.GameState is not (GameState.Tasks or GameState.Discussion))
             audioSession?.ClearDyingVoiceRecordings();
@@ -939,6 +941,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             if (currentGameState is { } initialState)
             {
                 audioSession.UpdateInterviews(initialState);
+                audioSession.UpdateParrots(options.GameProcessId ?? 0, initialState, spatialVoiceSettings.CommsSabotage && initialState.CommsSabotaged && initialState.Players.FirstOrDefault(p => p.IsLocal)?.IsImpostor != true);
                 audioSession.UpdateHeroSpeech(options.GameProcessId ?? 0, initialState);
                 var local = initialState.Players.FirstOrDefault(player => player.IsLocal);
                 audioSession.UpdateLocalMegaphoneRecording(
@@ -2125,6 +2128,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
     private void RefreshPeerMix(string socketId, int clientId)
     {
         audioSession?.SetInterviewPeer(socketId, -1, false);
+        audioSession?.SetParrotPeer(socketId, -1, false, 0);
         audioSession?.SetHeroPeer(socketId, -1, false);
         if (currentGameState is null)
         {
@@ -2163,6 +2167,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
             localVoiceEffectStrengths.RokuroVoice, activeLobbySettings.NosRokurokubiVoiceEffect,
             IsImpostorRadioActive(clientId), airshipSpawnFallback.IsActive(currentGameState, DateTimeOffset.UtcNow));
         audioSession?.SetInterviewPeer(socketId, other.Id, !other.Disconnected && !playerConfig.IsMuted && playerConfig.Volume > 0d);
+        audioSession?.SetParrotPeer(socketId, other.Id, !other.Disconnected && !other.IsDead && !playerConfig.IsMuted && playerConfig.Volume > 0d && !IsImpostorRadioActive(clientId), playerConfig.IsMuted ? 0d : playerConfig.Volume);
         bool webSpeech = peerSpeechPlatforms.TryGetValue(socketId, out var speechPeer) && speechPeer.Lobby == currentGameState.LobbyCode &&
             speechPeer.Until > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() && NosHeroSpeech.RecogniseHere(false, currentGameState.IsHost, speechPeer.Platform);
         audioSession?.SetHeroPeer(socketId, other.Id, webSpeech && !other.Disconnected && !other.IsDead);

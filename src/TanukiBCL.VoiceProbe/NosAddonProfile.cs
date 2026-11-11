@@ -23,13 +23,24 @@ internal sealed record NosAddonProfile(int Pid, string Session, long Sequence, l
         foreach (string name in new[] { "heroes", "portable", "megaphones", "dying", "interviews", "jamming", "echoes", "muted", "speech" })
         {
             var rows = source.GetProperty(name);
-            if (rows.ValueKind != JsonValueKind.Array || rows.GetArrayLength() > (name == "speech" ? 48 : 24)) return null;
+            if (rows.ValueKind != JsonValueKind.Array || rows.GetArrayLength() > (name == "speech" ? 72 : 24)) return null;
             channels[name] = rows.Clone();
         }
+        channels["ears"] = source.TryGetProperty("ears", out var ears) ? ears.Clone() : JsonSerializer.SerializeToElement(Array.Empty<int>());
+        if (channels["ears"].ValueKind != JsonValueKind.Array || channels["ears"].GetArrayLength() > 24) return null;
+        channels["parrots"] = source.TryGetProperty("parrots", out var parrots) ? parrots.Clone() : JsonSerializer.SerializeToElement(Array.Empty<int>());
+        if (channels["parrots"].ValueKind != JsonValueKind.Array || channels["parrots"].GetArrayLength() > 120) return null;
         var profile = new NosAddonProfile(pid, token, sequence, time, phase, local, host, channels);
         return profile.Valid(now) ? profile : null;
     }
+    private bool ParrotsValid(long now)
+    {
+        var rows = Read<NosParrotState>("parrots"); var seen = new HashSet<(int, int)>();
+        return rows.All(p => p != null && p.IsValid(now) && seen.Add((p.OwnerId, p.BirdId)));
+    }
     private bool Valid(long now) =>
+        ParrotsValid(now) &&
+        ValidRows<NosWallEarState>("ears", p => p.PlayerId, p => p.IsValid) &&
         ValidRows<NosHeroTransformState>("heroes", p => p.PlayerId, p => p.IsValid) &&
         ValidRows<NosPortableMegaphoneState>("portable", p => p.PlayerId, p => Range(p.ExtraRange, 0, 30)) &&
         ValidRows<NosMegaphoneState>("megaphones", p => p.PlayerId, p => Range(p.Energy, 0, 1) && Range(p.Range, 2, 40) &&
@@ -55,10 +66,11 @@ internal sealed record NosAddonProfile(int Pid, string Session, long Sequence, l
     {
         if (!Channels["speech"].EnumerateArray().All(HasSpeechFields)) return false;
         var rows = Read<NosHeroSpeech.PlayerRequest>("speech"); var keys = new HashSet<string>();
-        return rows.All(p => p != null && p.PlayerId is >= 0 and <= 255 && p.Kind is "hero" or "ng" &&
+        return rows.All(p => p != null && p.PlayerId is >= 0 and <= 255 && p.Kind is "hero" or "ng" or "stone" &&
             keys.Add($"{p.PlayerId}|{p.Kind}") && p.Request >= 0 && p.Expires >= 0 && p.Expires <= now + 16000 &&
             p.Words is { Length: <= 3 } && p.Words.All(w => w is { Length: >= 2 and <= 32 }) &&
-            (p.Kind != "ng" || p.Request > 0 && p.Words.Length > 0));
+            (p.Kind != "ng" || p.Request > 0 && p.Words.Length > 0) &&
+            (p.Kind != "stone" || p.Words.Length == 0 && p.MaxCharacters is >= 1 and <= 12));
     }
     private static bool HasSpeechFields(JsonElement row) => row.ValueKind == JsonValueKind.Object &&
         row.TryGetProperty("playerId", out _) && row.TryGetProperty("kind", out _) && row.TryGetProperty("request", out _) &&

@@ -18,6 +18,14 @@ internal sealed class AudioDeviceSession : IDisposable
     private readonly NosInterviewerRecording interviews = new();
     private NosHeroSpeech? heroSpeech;
     private volatile bool tanukiAddonEnabled;
+    private readonly NosParrotRecording parrots = new();
+    internal bool IsCloneTalking(int playerId) => parrots.IsCloneTalking(playerId);
+    private readonly object parrotGate = new();
+    private Timer? parrotTimer;
+    private AmongUsState? parrotState;
+    private int parrotPid;
+    private bool parrotCommsBlocked;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> parrotInputs = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> heroInputs = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> interviewInputs = new();
     private int interviewLocalId = -1;
@@ -155,6 +163,7 @@ internal sealed class AudioDeviceSession : IDisposable
     {
         deafened = value;
         interviews.SetAudible(!value && masterVolume > 0);
+        parrots.SetAudible(!value && masterVolume > 0 && !parrotCommsBlocked);
         if (value)
         {
             pushToTalkPressed = false;
@@ -192,6 +201,7 @@ internal sealed class AudioDeviceSession : IDisposable
         masterVolume = (float)Math.Clamp(volumePercent / 100d, 0d, 2d);
         masterMix.Volume = deafened ? 0f : masterVolume;
         interviews.SetAudible(!deafened && masterVolume > 0);
+        parrots.SetAudible(!deafened && masterVolume > 0 && !parrotCommsBlocked);
     }
 
     public void SetMicrophoneGain(double gainPercent)
@@ -232,6 +242,7 @@ internal sealed class AudioDeviceSession : IDisposable
         {
             if (heroInputs.TryGetValue(peerId, out var heroId)) heroSpeech?.Record(heroId, stereoPcm, 2);
             if (!deafened && interviewInputs.TryGetValue(peerId, out var interviewId)) interviews.Record(interviewId, stereoPcm, 2);
+            if (!deafened && parrotInputs.TryGetValue(peerId, out var parrotId)) parrots.Record(parrotId, stereoPcm, 2);
             peer.MegaphoneRecording.RecordStereoPcm16(stereoPcm);
             peer.DyingVoiceRecording.RecordStereoPcm16(stereoPcm);
         }
@@ -320,6 +331,7 @@ internal sealed class AudioDeviceSession : IDisposable
             {
                 playbackMixer.AddMixerInput(localMegaphoneRecording);
                 playbackMixer.AddMixerInput(interviews);
+                playbackMixer.AddMixerInput(parrots);
             }
             else
             {
@@ -328,6 +340,8 @@ internal sealed class AudioDeviceSession : IDisposable
                 ClearDyingVoiceRecordings();
                 playbackMixer.RemoveMixerInput(localMegaphoneRecording);
                 playbackMixer.RemoveMixerInput(interviews);
+                playbackMixer.RemoveMixerInput(parrots);
+                parrots.Clear();
             }
         }
         if (!enabled) return;
@@ -337,6 +351,43 @@ internal sealed class AudioDeviceSession : IDisposable
             state.GameState is GameState.Tasks or GameState.Discussion,
             state.GameState == GameState.Discussion, !deafened && masterVolume > 0,
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
+    public void UpdateParrots(int pid, AmongUsState state, bool commsBlocked)
+    {
+        lock (parrotGate)
+        {
+            if (disposed) return;
+            parrotState = state; parrotPid = pid; parrotCommsBlocked = commsBlocked;
+            bool active = TanukiAddon.IsEnabled(state) && state.GameState is GameState.Tasks or GameState.Discussion;
+            parrotTimer ??= new Timer(_ => TickParrots(), null, Timeout.Infinite, Timeout.Infinite);
+            parrotTimer.Change(active ? 100 : Timeout.Infinite, active ? 100 : Timeout.Infinite);
+            if (!active) { parrots.Clear(); return; }
+            TickParrotsCore();
+        }
+    }
+    private void TickParrots()
+    {
+        lock (parrotGate) if (!disposed) TickParrotsCore();
+    }
+    private void TickParrotsCore()
+    {
+        var state = parrotState;
+        if (state == null) return;
+        var profile = NosAddonLink.Shared.Current(parrotPid);
+        if (profile == null) { parrots.SetAudible(false); parrots.DrainRequests(); return; }
+        var local = state.Players.FirstOrDefault(p => p.IsLocal);
+        if (local != null) parrots.SetSource(local.Id, !microphoneMuted && !deafened && !jammed && !radioPending, 1);
+        parrots.Update(state, !deafened && masterVolume > 0 && !parrotCommsBlocked,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), profile.Read<NosParrotState>("parrots"));
+        if (!state.IsHost || !profile.Host) { parrots.DrainRequests(); return; }
+        foreach (var request in parrots.DrainRequests())
+            NosAddonLink.Shared.Send(parrotPid, "parrot", new() { ["ownerId"] = request.Owner, ["birdId"] = request.Bird, ["sourceId"] = request.Source });
+    }
+    public void SetParrotPeer(string peer, int id, bool allowed, double volume)
+    {
+        if (parrotInputs.TryGetValue(peer, out var previous) && previous != id) parrots.SetSource(previous, false, 0);
+        if (id < 0) { parrotInputs.TryRemove(peer, out _); return; }
+        parrotInputs[peer] = id; parrots.SetSource(id, allowed, volume);
     }
     public void UpdateHeroSpeech(int pid, AmongUsState state)
     {
@@ -362,6 +413,7 @@ internal sealed class AudioDeviceSession : IDisposable
     {
         heroInputs.TryRemove(peerId, out _);
         interviewInputs.TryRemove(peerId, out _);
+        if (parrotInputs.TryRemove(peerId, out var parrotId)) parrots.SetSource(parrotId, false, 0);
         lock (playbackGate)
         {
             if (peerPlayback.Remove(peerId, out var peer))
@@ -468,6 +520,7 @@ internal sealed class AudioDeviceSession : IDisposable
         if (tanukiAddonEnabled)
         {
             interviews.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1);
+            parrots.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1, audioAllowed && !radioPending);
             heroSpeech?.Record(Volatile.Read(ref interviewLocalId), MemoryMarshal.Cast<byte, short>(buffer), 1, audioAllowed);
             localMegaphoneRecording.RecordMonoPcm16(buffer);
         }
@@ -571,6 +624,9 @@ internal sealed class AudioDeviceSession : IDisposable
         heroSpeech?.Dispose();
         heroInputs.Clear();
         interviews.Clear();
+        parrotTimer?.Dispose();
+        lock (parrotGate) { parrotState = null; parrots.Clear(); }
+        parrotInputs.Clear();
         interviewInputs.Clear();
         lock (playbackGate)
             foreach (var peer in peerPlayback.Values) peer.DyingVoiceRecording.Cancel();

@@ -379,7 +379,7 @@ public partial class VoiceView : UserControl
     public void Update(AmongUsState? game, bool connected, bool localTalking, bool muted,
         bool deafened, IReadOnlyDictionary<int, VoicePlayerStatus> peers, bool hideCode = false,
         bool localUsingRadio = false, IReadOnlyDictionary<int, PlayerAudioConfig>? playerConfigs = null,
-        ConnectionQuality? serverQuality = null)
+        ConnectionQuality? serverQuality = null, bool localCloneTalking = false)
     {
         this.playerConfigs = playerConfigs ?? new Dictionary<int, PlayerAudioConfig>();
         var local = game?.Players.FirstOrDefault(player => player.IsLocal);
@@ -436,9 +436,9 @@ public partial class VoiceView : UserControl
         var hideAppearance = game.GameState == GameState.Tasks;
         LocalName.Text = CollapseNoWrapWhitespace(
             string.IsNullOrWhiteSpace(local.AppearanceName) ? local.Name : local.AppearanceName);
-        LocalAvatar.SetPlayer(local, game.PlayerColors, hideAppearance, game.Mod, game.GameExecutablePath,
+        LocalAvatar.SetPlayer(local, game.PlayerColors, hideAppearance && !localCloneTalking, game.Mod, game.GameExecutablePath,
             gameState: game.GameState);
-        LocalAvatar.SetVisualState(localTalking && (local.ShiftedColor < 0 || game.GameState == GameState.Discussion), muted, deafened,
+        LocalAvatar.SetVisualState(localCloneTalking || (localTalking && (local.ShiftedColor < 0 || game.GameState == GameState.Discussion)), muted, deafened,
             connected ? "connected" : "disconnected", localUsingRadio, serverQuality);
 
         var others = game.Players.Where(player => !player.IsLocal).ToArray();
@@ -485,15 +485,15 @@ public partial class VoiceView : UserControl
                 OtherPlayersPanel.Children.Add(avatar);
             }
 
-            avatar.SetPlayer(player, game.PlayerColors, hideAppearance, game.Mod, game.GameExecutablePath,
+            avatar.SetPlayer(player, game.PlayerColors, hideAppearance && !(peers.TryGetValue(player.ClientId, out var cloneStatus) && cloneStatus.CloneTalking), game.Mod, game.GameExecutablePath,
                 remoteDeadForDisplay.TryGetValue(player.ClientId, out var displayDead) && displayDead,
                 game.GameState);
             var status = !player.Disconnected && peers.TryGetValue(player.ClientId, out var snapshot)
                 ? snapshot
                 : VoicePlayerStatus.Disconnected;
             var config = PlayerAudioConfig.For(player, this.playerConfigs);
-            avatar.SetVisualState(status.Talking && !player.InVent &&
-                (player.ShiftedColor < 0 || game.GameState == GameState.Discussion), false,
+            avatar.SetVisualState(status.CloneTalking || (status.Talking && !player.InVent &&
+                (player.ShiftedColor < 0 || game.GameState == GameState.Discussion)), false,
                 config.IsMuted || config.Volume == 0d, status.ConnectionState,
                 status.UsingRadio && !player.Disconnected && !player.Bugged,
                 ResolvePeerQuality(status.Quality, serverQuality), bugged: player.Bugged);
@@ -989,7 +989,7 @@ public sealed record VoicePlayerStatus(
     string ConnectionState,
     bool Talking,
     bool UsingRadio,
-    ConnectionQuality? Quality = null)
+    ConnectionQuality? Quality = null, bool CloneTalking = false)
 {
     public static readonly VoicePlayerStatus Disconnected = new("disconnected", false, false);
 }

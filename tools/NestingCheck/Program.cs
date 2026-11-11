@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 // Check every hand-written C# function, including tests and release tools.
 const int limit = 3;
 var root = FindRoot(Environment.CurrentDirectory);
-var files = new[] { "src", "tools", "tests" }
+var files = args.Length > 0 ? args.Select(Path.GetFullPath).ToArray() : new[] { "src", "tools", "tests" }
     .SelectMany(directory => Directory.EnumerateFiles(Path.Combine(root, directory), "*.cs", SearchOption.AllDirectories))
     .Where(path => !path.Split(Path.DirectorySeparatorChar).Any(part => part is "obj" or "bin"))
     .ToArray();

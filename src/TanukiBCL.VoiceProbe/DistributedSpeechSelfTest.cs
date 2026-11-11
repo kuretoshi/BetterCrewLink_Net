@@ -31,7 +31,24 @@ internal static class DistributedSpeechSelfTest
         Check(!NosHeroSpeech.Valid(descriptor with { Players = [hero, hero] }, 99, 10000), "Duplicate jobs rejected");
         Check(!NosHeroSpeech.Valid(descriptor, 98, 10000), "Different PID rejected");
         Check(!NosHeroSpeech.Valid(descriptor, 99, 12000), "Stale file rejected");
+        CheckVoiceStone();
         Console.WriteLine("PASS distributed speech routing, NG matching and protocol validation");
         return 0;
+    }
+    private static void CheckVoiceStone()
+    {
+        void Check(bool ok, string name) { if (!ok) throw new InvalidOperationException(name); }
+        using var tokens = System.Text.Json.JsonDocument.Parse("""[{"word":"えっと","conf":0.9},{"word":"猫","conf":0.95},{"word":"です","conf":1}]""");
+        Check(VoiceStoneSpeech.Extract(tokens.RootElement, true, 8) == "猫", "One token, not the whole sentence");
+        Check(VoiceStoneSpeech.Extract(tokens.RootElement, false, 8) == null, "Partial speech never petrifies");
+        Check(VoiceStoneSpeech.Extract(null, true, 8) == null, "No fallback to transcript");
+        Check(!VoiceStoneSpeech.ValidWord("猫 犬", 8) && !VoiceStoneSpeech.ValidWord("<猫>", 8), "No multiword or markup");
+        Check(VoiceStoneSpeech.ValidWord("インポスター", 6) && !VoiceStoneSpeech.ValidWord("インポスター", 5), "Word length bounds");
+        using var bad = System.Text.Json.JsonDocument.Parse("""[{"word":"猫","conf":"bad"},{"word":"犬","conf":0.1}]""");
+        Check(VoiceStoneSpeech.Extract(bad.RootElement, true, 8) == null, "Malformed and low-confidence results ignored");
+        var stone = new NosHeroSpeech.PlayerRequest(1, "stone", 9, 11000, [], 8);
+        var descriptor = new NosHeroSpeech.Descriptor(2, 99, 12345, new string('a', 32), 10000, [stone]);
+        Check(NosHeroSpeech.Valid(descriptor, 99, 10000), "Stone protocol accepted");
+        Check(!NosHeroSpeech.Valid(descriptor with { Players = [stone with { MaxCharacters = 13 }] }, 99, 10000), "Unsafe size rejected");
     }
 }

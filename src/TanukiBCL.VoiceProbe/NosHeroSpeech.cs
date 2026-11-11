@@ -14,7 +14,7 @@ namespace TanukiBCL.VoiceProbe;
 // the host additionally selects positively identified Web/mobile input streams.
 internal sealed class NosHeroSpeech : IDisposable
 {
-    internal sealed record PlayerRequest(int PlayerId, string Kind, int Request, long Expires, string[] Words);
+    internal sealed record PlayerRequest(int PlayerId, string Kind, int Request, long Expires, string[] Words, int MaxCharacters = 0);
     internal sealed record Descriptor(int Protocol, int Pid, int Port, string Token, long Updated, PlayerRequest[] Players, bool Unified = false);
     private sealed record Chunk(int Player, string Signature, long Time, short[] Samples, int Channels);
     private sealed class Capture(PlayerRequest[] jobs, string signature, VoskRecognizer recognizer) : IDisposable
@@ -111,16 +111,17 @@ internal sealed class NosHeroSpeech : IDisposable
     {
         if (value is null || value.Protocol != 2 || value.Pid != pid || value.Port is < 1 or > 65535 ||
             value.Token is null || !Regex.IsMatch(value.Token, "^[a-f0-9]{32}$") ||
-            now - value.Updated > 1500 || value.Updated - now > 100 || value.Players is not { Length: > 0 and <= 48 }) return false;
+            now - value.Updated > 1500 || value.Updated - now > 100 || value.Players is not { Length: > 0 and <= 72 }) return false;
         var ids = new HashSet<string>();
         return value.Players.All(p => p is not null && p.PlayerId is >= 0 and <= 255 &&
-            p.Kind is "hero" or "ng" && ids.Add($"{p.PlayerId}|{p.Kind}") && p.Request >= 0 &&
+            p.Kind is "hero" or "ng" or "stone" && ids.Add($"{p.PlayerId}|{p.Kind}") && p.Request >= 0 &&
             p.Words is { Length: <= 3 } && p.Words.All(w => w is { Length: >= 2 and <= 32 }) &&
             (p.Kind != "ng" || p.Request > 0 && p.Words.Length > 0) &&
+            (p.Kind != "stone" || p.Words.Length == 0 && p.MaxCharacters is >= 1 and <= 12) &&
             (p.Request == 0 || p.Expires > now - 100 && p.Expires <= now + 16000));
     }
     private static string Key(PlayerRequest job) => $"{job.PlayerId}|{job.Kind}|{job.Request}";
-    private static string Signature(PlayerRequest[] jobs) => string.Join(';', jobs.Select(p => Key(p) + "|" + string.Join('|', p.Words)).Order());
+    private static string Signature(PlayerRequest[] jobs) => string.Join(';', jobs.Select(p => Key(p) + "|" + string.Join('|', p.Words) + "|" + p.MaxCharacters).Order());
     private void Reconcile(PlayerRequest[] jobs, long now)
     {
         var groups = jobs.Where(p => p.Request > 0 && p.Expires > now && !handled.Contains(Key(p)) && !mutedPlayers.ContainsKey(p.PlayerId))
@@ -136,6 +137,7 @@ internal sealed class NosHeroSpeech : IDisposable
             if (captures.ContainsKey(id)) continue;
             string signature = Signature(entries);
             captures[id] = new(entries, signature, new VoskRecognizer(model, 16000));
+            if (entries.Any(p => p.Kind == "stone")) captures[id].Recognizer.SetWords(true);
             armed[id] = captures[id].InputKey;
         }
     }
@@ -147,17 +149,26 @@ internal sealed class NosHeroSpeech : IDisposable
         bool final = capture.Recognizer.AcceptWaveform(bytes, bytes.Length);
         using var result = JsonDocument.Parse(final ? capture.Recognizer.Result() : capture.Recognizer.PartialResult());
         string text = result.RootElement.GetProperty(final ? "text" : "partial").GetString() ?? "";
-        foreach (var job in capture.Jobs) Accept(capture, job, text, final);
+        JsonElement? tokens = result.RootElement.TryGetProperty("result", out var words) ? words : null;
+        foreach (var job in capture.Jobs) Accept(capture, job, text, final, tokens);
     }
-    private void Accept(Capture capture, PlayerRequest job, string text, bool final)
+    private void Accept(Capture capture, PlayerRequest job, string text, bool final, JsonElement? tokens)
     {
         if (job.Expires <= Now || handled.Contains(Key(job))) return;
+        if (job.Kind == "stone") { AcceptStone(job, tokens, final); return; }
         bool matched = job.Kind == "ng" ? HeardForbiddenWord(text, job.Words, final) : HeardTransformation(text, job.Words, final);
         if (!matched) { if (job.Kind == "hero") capture.PartialAt = 0; return; }
         if (!final && capture.PartialAt == 0) { capture.PartialAt = Now; return; }
         if (!final && Now - capture.PartialAt < 180) return;
         handled.Add(Key(job));
         SendWord(job);
+    }
+    private void AcceptStone(PlayerRequest job, JsonElement? tokens, bool final)
+    {
+        string? word = VoiceStoneSpeech.Extract(tokens, final, job.MaxCharacters);
+        if (word == null) return;
+        handled.Add(Key(job));
+        SendWord(job, word);
     }
     internal static bool RecogniseHere(bool local, bool host, string? platform) => local || host && platform is "web" or "mobile";
     private static string Normalise(string text) => new(Regex.Replace(text.Normalize(NormalizationForm.FormKC).ToLowerInvariant(), @"[\s、。！!？?・]", "")
@@ -205,11 +216,11 @@ internal sealed class NosHeroSpeech : IDisposable
         if (descriptor.Unified) { NosAddonLink.Shared.Send(descriptor.Pid, "ready", new() { ["players"] = new[] { player } }); return; }
         Send($"TBCLHS2|{descriptor.Token}|ready|{Now}|{player}|1");
     }
-    private void SendWord(PlayerRequest job)
+    private void SendWord(PlayerRequest job, string? word = null)
     {
         if (descriptor == null) return;
-        if (descriptor.Unified) { NosAddonLink.Shared.Send(descriptor.Pid, "word", new() { ["playerId"] = job.PlayerId, ["request"] = job.Request, ["speechKind"] = job.Kind }); return; }
-        string payload = job.Kind == "ng" ? "ng" : "henshin";
+        if (descriptor.Unified) { NosAddonLink.Shared.Send(descriptor.Pid, "word", new() { ["playerId"] = job.PlayerId, ["request"] = job.Request, ["speechKind"] = job.Kind, ["word"] = word }); return; }
+        string payload = job.Kind == "stone" ? "stone|" + Convert.ToBase64String(Encoding.UTF8.GetBytes(word!)) : job.Kind == "ng" ? "ng" : "henshin";
         Send($"TBCLHS2|{descriptor.Token}|word|{Now}|{job.PlayerId}|{job.Request}|{payload}");
     }
     private void Send(string text)
