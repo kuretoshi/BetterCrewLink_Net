@@ -76,18 +76,21 @@ internal static class ObsOverlayWire
         writer.WriteBoolean("bugged", player.Bugged);
         writer.WriteBoolean("usingRadio", player.IsLocal ? localUsingRadio : hasPeer && peer.UsingRadio);
         writer.WriteBoolean("connected", hasPeer && peer.Connected);
+        WritePlayerColor(writer, state, player);
         if (state.Mod == AmongUsModType.NebulaOnTheShip)
         {
             if (NosColor.For(player) is { } nosColor) writer.WriteString("nosColor", nosColor);
         }
-        else WritePlayerColor(writer, state, player);
         writer.WriteEndObject();
     }
 
     private static void WritePlayerColor(Utf8JsonWriter writer, AmongUsState state, Player player)
     {
-        writer.WriteNumber("colorId", player.ColorId);
-        writer.WriteNumber("shiftedColor", player.ShiftedColor);
+        if (state.Mod != AmongUsModType.NebulaOnTheShip)
+        {
+            writer.WriteNumber("colorId", player.ColorId);
+            writer.WriteNumber("shiftedColor", player.ShiftedColor);
+        }
         if (player.ColorId >= 0 && player.ColorId < state.PlayerColors.Count)
         {
             var colors = state.PlayerColors[player.ColorId];
@@ -96,10 +99,10 @@ internal static class ObsOverlayWire
             writer.WriteStringValue(ColorHex(colors.Shadow));
             writer.WriteEndArray();
         }
-        else if (player.ColorId >= 0 && player.ColorId < DefaultPlayerColors.Length)
+        else
         {
             writer.WriteStartArray("realColor");
-            foreach (var color in DefaultPlayerColors[player.ColorId]) writer.WriteStringValue(color);
+            foreach (var color in FallbackPlayerColors(player.ColorId)) writer.WriteStringValue(color);
             writer.WriteEndArray();
         }
     }
@@ -165,23 +168,21 @@ internal static class ObsOverlayWire
             data["bugged"] = player.Bugged;
             data["usingRadio"] = player.IsLocal ? localUsingRadio : hasPeer && peer.UsingRadio;
             data["connected"] = hasPeer && peer.Connected;
-            if (state.Mod == AmongUsModType.NebulaOnTheShip)
-            {
-                if (NosColor.For(player) is { } nosColor) data["nosColor"] = nosColor;
-            }
-            else
+            if (state.Mod != AmongUsModType.NebulaOnTheShip)
             {
                 data["colorId"] = player.ColorId;
                 data["shiftedColor"] = player.ShiftedColor;
-                if (player.ColorId >= 0 && player.ColorId < state.PlayerColors.Count)
-                {
-                    var colors = state.PlayerColors[player.ColorId];
-                    data["realColor"] = new[] { ColorHex(colors.Main), ColorHex(colors.Shadow) };
-                }
-                else if (player.ColorId >= 0 && player.ColorId < DefaultPlayerColors.Length)
-                {
-                    data["realColor"] = DefaultPlayerColors[player.ColorId];
-                }
+            }
+            // NoS snapshots can disappear between rounds; OBS still needs both fallback colors.
+            if (player.ColorId >= 0 && player.ColorId < state.PlayerColors.Count)
+            {
+                var colors = state.PlayerColors[player.ColorId];
+                data["realColor"] = new[] { ColorHex(colors.Main), ColorHex(colors.Shadow) };
+            }
+            else data["realColor"] = FallbackPlayerColors(player.ColorId);
+            if (state.Mod == AmongUsModType.NebulaOnTheShip)
+            {
+                if (NosColor.For(player) is { } nosColor) data["nosColor"] = nosColor;
             }
             return data;
         }).ToArray();
@@ -204,6 +205,9 @@ internal static class ObsOverlayWire
         };
         return payload;
     }
+
+    private static string[] FallbackPlayerColors(int colorId) =>
+        DefaultPlayerColors[colorId >= 0 && colorId < DefaultPlayerColors.Length ? colorId : 0];
 
     private static string ColorHex(uint packed) =>
         $"#{(byte)packed:x2}{(byte)(packed >> 8):x2}{(byte)(packed >> 16):x2}";

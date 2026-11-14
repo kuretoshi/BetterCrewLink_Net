@@ -12,6 +12,7 @@ internal static class Program
 
         try
         {
+            if (args.Contains("--obs-overlay-self-test")) return ObsOverlaySelfTest.Run();
             if (args.Contains("--clone-self-test")) return CloneSelfTest.Run();
             if (args.Contains("--parrot-self-test")) return ParrotSelfTest.Run();
             if (args.Contains("--wall-ear-self-test")) return WallEarSelfTest.Run();
@@ -240,6 +241,7 @@ internal static class Program
               --active-sctp-answer  CLI比較試験中だけanswer側もデータチャネルを作る（旧方式）
               --dtls-trace       CLI試験中のDTLSイベントとヘッダー順序を匿名表示
               --policy-self-test  3.2.7の音声ポリシーをローカルで検証
+              --obs-overlay-self-test  OBSの試合終了・色データ欠落時の送信をローカルで検証
               --vad-self-test     3.2.7の周波数帯VADとマイク操作モードを検証
               --audio-processing-self-test  エコーキャンセル・ノイズ抑制・自動ゲイン処理を検証
               --capture-device-self-test  選択マイクの既定/強制48 kHz録音を各750msローカル検証

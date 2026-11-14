@@ -13,6 +13,7 @@ internal static class SpatialVoicePolicySelfTest
         PublicLobbyAnnouncement.Verify();
         RokuroVoiceSelfTest.Verify();
         SnrMeetingSelfTest.Verify();
+        ObsOverlaySelfTest.Verify();
         var failures = 0;
         Check("Voice tuning:11effects, signed pitch, independent axes, normalization and persistence", true,
             VoiceEffectTuningSelfTest.Verify());
@@ -272,7 +273,8 @@ internal static class SpatialVoicePolicySelfTest
             obs.GetProperty("overlayState").GetProperty("gameState").GetInt32() == (int)GameState.Tasks &&
             obs.GetProperty("mod").GetString() == "NoS" &&
             obs.GetProperty("oldMeetingHud").GetBoolean() &&
-            !obs.GetProperty("overlayState").GetProperty("players")[1].TryGetProperty("realColor", out _) &&
+            obs.GetProperty("overlayState").GetProperty("players")[1]
+                .GetProperty("realColor")[0].GetString() == "#112233" &&
             obs.GetProperty("overlayState").GetProperty("players")[1]
                 .GetProperty("nosColor").GetString() == "#ff8000");
         Check("OBS: peer activity, death and radio", true,
