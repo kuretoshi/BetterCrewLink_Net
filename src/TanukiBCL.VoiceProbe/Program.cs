@@ -13,6 +13,7 @@ internal static class Program
         try
         {
             if (args.Contains("--obs-overlay-self-test")) return ObsOverlaySelfTest.Run();
+            if (args.Contains("--bit-character-self-test")) return BitCharacterSelfTest.Run(args.SkipWhile(p => p != "--bit-character-self-test").Skip(1).FirstOrDefault());
             if (args.Contains("--clone-self-test")) return CloneSelfTest.Run();
             if (args.Contains("--parrot-self-test")) return ParrotSelfTest.Run();
             if (args.Contains("--wall-ear-self-test")) return WallEarSelfTest.Run();

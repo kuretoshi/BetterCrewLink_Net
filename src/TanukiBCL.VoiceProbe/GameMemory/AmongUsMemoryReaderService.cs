@@ -472,6 +472,8 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             NosLimitSpeechMuted = NosLimitSpeechState.Read(currentProcess.ProcessId, linkActive && gameState != GameState.Lobby, linked),
             NosInterviews = tanukiAddonDetected && gameState is GameState.Tasks or GameState.Discussion
                 ? linked?.Read<NosInterviewState>("interviews") ?? NosVoiceRoleStateReader.ReadInterviews(currentProcess.ProcessId, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) : [],
+            NosBitCharacters = tanukiAddonDetected && gameState is GameState.Tasks or GameState.Discussion
+                ? linked?.Read<NosBitCharacterState>("bits") ?? [] : [],
             NosParrots = tanukiAddonDetected && gameState is GameState.Tasks or GameState.Discussion
                 ? linked?.Read<NosParrotState>("parrots") ?? [] : [],
             NosWallEars = tanukiAddonDetected && gameState == GameState.Tasks

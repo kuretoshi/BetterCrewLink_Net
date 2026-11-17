@@ -279,9 +279,10 @@ internal sealed class AudioDeviceSession : IDisposable
 
     public void SetPeerMix(string peerId, PeerVoiceMix mix, VoiceEffectTuning? tuning = null,
         double grit = 0, bool deathEchoActive = false, bool peerDead = false,
-        long? deathEchoEvent = null, VoiceEffectTuning? deathEchoTuning = null)
+        long? deathEchoEvent = null, VoiceEffectTuning? deathEchoTuning = null, int bitStage = -1)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
+        peer.BitVoice.SetStage(mix.Audible ? bitStage : -1);
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
         peer.Panning.Pan = (float)Math.Clamp(mix.Pan, -1d, 1d);
         peer.RokuroVoice.SetMix(mix.RokuroBody);
@@ -447,7 +448,8 @@ internal sealed class AudioDeviceSession : IDisposable
                 LeftVolume = 0.5f,
                 RightVolume = 0.5f
             };
-            var tap = new RokuroVoiceTap(mono);
+            var bitVoice = new BitVoiceSampleProvider(mono);
+            var tap = new RokuroVoiceTap(bitVoice);
             var tone = new TunedVoiceSampleProvider(tap);
             var muffle = new VentMuffleSampleProvider(tone);
             var fixerLowpass = new FixerLowpassSampleProvider(muffle);
@@ -464,7 +466,7 @@ internal sealed class AudioDeviceSession : IDisposable
             var dyingVoiceRecording = new NosDyingVoiceRecording();
             var created = new PeerPlayback(buffer, effects, muffle, fixerLowpass, gluttonyLowpass, radioHighPass,
                 cameraMuffle, panning, volume, deathEcho, output, radioEcho,
-                megaphoneRecording, dyingVoiceRecording, output);
+                megaphoneRecording, dyingVoiceRecording, output, bitVoice);
             peerPlayback[peerId] = created;
             playbackMixer.AddMixerInput(output);
             playbackMixer.AddMixerInput(megaphoneRecording);
@@ -679,7 +681,8 @@ internal sealed class AudioDeviceSession : IDisposable
         RadioEchoSampleProvider RadioEcho,
         NosMegaphoneRecording MegaphoneRecording,
         NosDyingVoiceRecording DyingVoiceRecording,
-        RokuroVoiceSampleProvider RokuroVoice)
+        RokuroVoiceSampleProvider RokuroVoice,
+        BitVoiceSampleProvider BitVoice)
     {
         internal readonly object PlaybackWriteGate = new();
         internal byte[]? PlaybackScratch;

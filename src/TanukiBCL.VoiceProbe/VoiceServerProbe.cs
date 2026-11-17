@@ -2183,7 +2183,7 @@ internal sealed class VoiceServerProbe : IAsyncDisposable
         var deathEchoEvent = currentGameState.NosBibiriEchoes
             .FirstOrDefault(item => item.PlayerId == other.Id)?.UnixMs;
         audioSession?.SetPeerMix(socketId, mix, effect.Tuning, effect.Grit,
-            deathEchoActive, other.IsDead, deathEchoEvent, effect.BibiriTuning);
+            deathEchoActive, other.IsDead, deathEchoEvent, effect.BibiriTuning, NosBitCharacterState.For(currentGameState, other));
         audioSession?.UpdatePeerMegaphoneRecording(socketId,
             currentGameState.NosMegaphones.FirstOrDefault(entry => entry.PlayerId == other.Id),
             currentGameState.Mod == AmongUsModType.NebulaOnTheShip &&

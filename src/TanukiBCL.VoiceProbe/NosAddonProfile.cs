@@ -30,6 +30,8 @@ internal sealed record NosAddonProfile(int Pid, string Session, long Sequence, l
         if (channels["ears"].ValueKind != JsonValueKind.Array || channels["ears"].GetArrayLength() > 24) return null;
         channels["parrots"] = source.TryGetProperty("parrots", out var parrots) ? parrots.Clone() : JsonSerializer.SerializeToElement(Array.Empty<int>());
         if (channels["parrots"].ValueKind != JsonValueKind.Array || channels["parrots"].GetArrayLength() > 120) return null;
+        channels["bits"] = source.TryGetProperty("bits", out var bits) ? bits.Clone() : JsonSerializer.SerializeToElement(Array.Empty<int>());
+        if (channels["bits"].ValueKind != JsonValueKind.Array || channels["bits"].GetArrayLength() > 24) return null;
         var profile = new NosAddonProfile(pid, token, sequence, time, phase, local, host, channels);
         return profile.Valid(now) ? profile : null;
     }
@@ -39,6 +41,8 @@ internal sealed record NosAddonProfile(int Pid, string Session, long Sequence, l
         return rows.All(p => p != null && p.IsValid(now) && seen.Add((p.OwnerId, p.BirdId)));
     }
     private bool Valid(long now) =>
+        BitsValid() &&
+        ValidRows<NosBitCharacterState>("bits", p => p.PlayerId, p => p.IsValid) &&
         ParrotsValid(now) &&
         ValidRows<NosWallEarState>("ears", p => p.PlayerId, p => p.IsValid) &&
         ValidRows<NosHeroTransformState>("heroes", p => p.PlayerId, p => p.IsValid) &&
@@ -51,6 +55,9 @@ internal sealed record NosAddonProfile(int Pid, string Session, long Sequence, l
         ValidRows<NosVoiceJammingState>("jamming", p => p.PlayerId, p => p.IsValid) &&
         ValidRows<NosBibiriEchoState>("echoes", p => p.PlayerId, p => p.UnixMs >= 0 && p.UnixMs <= now + 100) &&
         MutedValid() && SpeechValid(now);
+    private bool BitsValid() => Channels["bits"].EnumerateArray().All(p =>
+        p.ValueKind == JsonValueKind.Object && p.TryGetProperty("playerId", out var id) && id.ValueKind == JsonValueKind.Number && id.TryGetInt32(out _) &&
+        p.TryGetProperty("stage", out var stage) && stage.ValueKind == JsonValueKind.Number && stage.TryGetInt32(out _));
     private static bool Range(double value, double min, double max) => double.IsFinite(value) && value >= min && value <= max;
     private bool ValidRows<T>(string name, Func<T, int> id, Func<T, bool> valid)
     {
