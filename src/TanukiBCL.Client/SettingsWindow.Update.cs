@@ -48,7 +48,7 @@ public partial class SettingsWindow
         }
         catch (OperationCanceledException) when (updateCancellation.IsCancellationRequested) { }
         catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
-            System.Text.Json.JsonException or TaskCanceledException or InvalidOperationException)
+            System.Text.Json.JsonException or System.Xml.XmlException or TaskCanceledException or InvalidOperationException)
         {
             ShowUpdateError($"アップデートを確認できませんでした。{error.Message}");
         }
