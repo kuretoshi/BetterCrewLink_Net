@@ -4,6 +4,8 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace TanukiBCL.Client;
 
@@ -17,6 +19,8 @@ internal static partial class UpdateCatalog
         "https://api.github.com/repos/kuretoshi/BetterCrewLink_Net/releases?per_page=20");
     internal static readonly Uri ReleasesPage = new(
         "https://github.com/kuretoshi/BetterCrewLink_Net/releases");
+    internal static readonly Uri ReleasesAtom = new(
+        "https://github.com/kuretoshi/BetterCrewLink_Net/releases.atom");
     private const string AssetName = "TanukiBCL.Net-win-x64.zip";
 
     internal static string CurrentVersion => typeof(App).Assembly
@@ -26,6 +30,11 @@ internal static partial class UpdateCatalog
     internal static async Task<UpdateCandidate?> CheckAsync(HttpClient client, string currentVersion,
         Uri? feed = null, CancellationToken cancellationToken = default)
     {
+        // The public REST API has a shared unauthenticated rate limit. GitHub's
+        // release feed and release assets can be read without consuming it.
+        if (feed is null)
+            return await CheckAtomAsync(client, currentVersion, cancellationToken);
+
         using var request = new HttpRequestMessage(HttpMethod.Get, feed ?? ReleasesApi);
         request.Headers.UserAgent.ParseAdd("TanukiBCL.Net-Updater/1.0");
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
@@ -76,6 +85,83 @@ internal static partial class UpdateCatalog
             }
         }
         return newest;
+    }
+
+    private static async Task<UpdateCandidate?> CheckAtomAsync(HttpClient client, string currentVersion,
+        CancellationToken cancellationToken)
+    {
+        using var feedRequest = new HttpRequestMessage(HttpMethod.Get, ReleasesAtom);
+        feedRequest.Headers.UserAgent.ParseAdd("TanukiBCL.Net-Updater/1.0");
+        using var feedResponse = await client.SendAsync(feedRequest, cancellationToken);
+        feedResponse.EnsureSuccessStatusCode();
+        await using var feedStream = await feedResponse.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = XmlReader.Create(feedStream, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = 1_000_000
+        });
+        var document = XDocument.Load(reader);
+        XNamespace atom = "http://www.w3.org/2005/Atom";
+        if (document.Root?.Name != atom + "feed")
+            throw new InvalidDataException("GitHub Releaseフィードの形式が不正です。");
+
+        string? newestTag = null;
+        foreach (var entry in document.Root.Elements(atom + "entry"))
+        {
+            var link = (string?)entry.Elements(atom + "link")
+                .FirstOrDefault(element => (string?)element.Attribute("rel") == "alternate")?.Attribute("href");
+            if (!Uri.TryCreate(link, UriKind.Absolute, out var page) ||
+                page.Scheme != Uri.UriSchemeHttps || page.Host != "github.com" ||
+                page.Query.Length != 0 || page.Fragment.Length != 0)
+                continue;
+            const string prefix = "/kuretoshi/BetterCrewLink_Net/releases/tag/";
+            if (!page.AbsolutePath.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            var tag = Uri.UnescapeDataString(page.AbsolutePath[prefix.Length..]);
+            if (tag.Contains('/') || !VersionPattern().IsMatch(tag) ||
+                page.AbsolutePath != prefix + Uri.EscapeDataString(tag) ||
+                CompareVersions(tag, currentVersion) <= 0)
+                continue;
+            if (newestTag is null || CompareVersions(tag, newestTag) > 0)
+                newestTag = tag;
+        }
+        if (newestTag is null) return null;
+
+        var releaseBase = "https://github.com/kuretoshi/BetterCrewLink_Net/releases/";
+        var encodedTag = Uri.EscapeDataString(newestTag);
+        var checksumsUrl = new Uri(releaseBase + "download/" + encodedTag + "/SHA256SUMS.txt");
+        using var checksumRequest = new HttpRequestMessage(HttpMethod.Get, checksumsUrl);
+        checksumRequest.Headers.UserAgent.ParseAdd("TanukiBCL.Net-Updater/1.0");
+        using var checksumResponse = await client.SendAsync(checksumRequest, cancellationToken);
+        checksumResponse.EnsureSuccessStatusCode();
+        await checksumResponse.Content.LoadIntoBufferAsync(8 * 1024);
+        cancellationToken.ThrowIfCancellationRequested();
+        var checksums = await checksumResponse.Content.ReadAsStringAsync(cancellationToken);
+        string? sha256 = null;
+        foreach (var line in checksums.Split('\n'))
+        {
+            var value = line.TrimEnd('\r');
+            if (value.Length != 66 + AssetName.Length ||
+                value[64] != ' ' || value[65] is not (' ' or '*') ||
+                value[66..] != AssetName || !HexSha256().IsMatch(value[..64]))
+                continue;
+            if (sha256 is not null)
+                throw new InvalidDataException("更新ファイルのSHA-256が重複しています。");
+            sha256 = value[..64].ToLowerInvariant();
+        }
+        if (sha256 is null)
+            throw new InvalidDataException("更新ファイルのSHA-256を確認できませんでした。");
+
+        var downloadUrl = new Uri(releaseBase + "download/" + encodedTag + "/" + AssetName);
+        using var sizeRequest = new HttpRequestMessage(HttpMethod.Head, downloadUrl);
+        sizeRequest.Headers.UserAgent.ParseAdd("TanukiBCL.Net-Updater/1.0");
+        using var sizeResponse = await client.SendAsync(sizeRequest,
+            HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        sizeResponse.EnsureSuccessStatusCode();
+        if (sizeResponse.Content.Headers.ContentLength is not { } size || size <= 0)
+            throw new InvalidDataException("更新ファイルのサイズを確認できませんでした。");
+        return new UpdateCandidate(newestTag, downloadUrl, sha256, size,
+            new Uri(releaseBase + "tag/" + encodedTag));
     }
 
     internal static int CompareVersions(string left, string right)
@@ -166,7 +252,36 @@ internal static partial class UpdateCatalog
         handler.Status = HttpStatusCode.NotFound;
         if (await CheckAsync(client, "3.2.7-net.1", new Uri("https://example.invalid/releases")) is not null)
             throw new InvalidOperationException("Missing release was reported as an update");
+        await VerifyAtomAsync();
         Console.WriteLine("[PASS] .NET release updater selects a newer verified asset and rejects invalid/missing releases");
+    }
+
+    private static async Task VerifyAtomAsync()
+    {
+        const string digest = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        using var handler = new AtomHandler(digest + "  " + AssetName + "\r\n");
+        using var client = new HttpClient(handler);
+        var candidate = await CheckAsync(client, "3.2.7-net.1");
+        if (candidate?.Version != "v3.2.8-net-beta.1" || candidate.Size != 123 ||
+            candidate.Sha256 != digest || handler.Requests != 3)
+            throw new InvalidOperationException("Public release feed did not select the verified x64 package");
+        if (await CheckAsync(client, "3.2.8-net-beta.1") is not null)
+            throw new InvalidOperationException("Public release feed offered the installed version");
+        handler.Checksums = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  other.zip\r\n";
+        try
+        {
+            await CheckAsync(client, "3.2.7-net.1");
+            throw new InvalidOperationException("Public release feed accepted a missing x64 checksum");
+        }
+        catch (InvalidDataException) { }
+        handler.Checksums = digest + "  " + AssetName + "\r\n";
+        handler.Size = 0;
+        try
+        {
+            await CheckAsync(client, "3.2.7-net.1");
+            throw new InvalidOperationException("Public release feed accepted a missing x64 size");
+        }
+        catch (InvalidDataException) { }
     }
 
     internal static async Task VerifyLiveAsync(string currentVersion, string expectedTag)
@@ -194,6 +309,35 @@ internal static partial class UpdateCatalog
             Requests++;
             HasUserAgent = request.Headers.UserAgent.Count > 0;
             return Task.FromResult(new HttpResponseMessage(Status) { Content = new StringContent(Body) });
+        }
+    }
+
+    private sealed class AtomHandler(string checksums) : HttpMessageHandler
+    {
+        internal string Checksums = checksums;
+        internal int Size = 123;
+        internal int Requests;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests++;
+            var response = request.RequestUri?.AbsoluteUri switch
+            {
+                "https://github.com/kuretoshi/BetterCrewLink_Net/releases.atom" =>
+                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""
+                        <feed xmlns="http://www.w3.org/2005/Atom">
+                          <entry><link rel="alternate" href="https://github.com/other/repo/releases/tag/v99.0.0"/></entry>
+                          <entry><link rel="alternate" href="https://github.com/kuretoshi/BetterCrewLink_Net/releases/tag/v3.2.7-net.2"/></entry>
+                          <entry><link rel="alternate" href="https://github.com/kuretoshi/BetterCrewLink_Net/releases/tag/v3.2.8-net-beta.1"/></entry>
+                        </feed>
+                        """) },
+                "https://github.com/kuretoshi/BetterCrewLink_Net/releases/download/v3.2.8-net-beta.1/SHA256SUMS.txt" =>
+                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Checksums) },
+                "https://github.com/kuretoshi/BetterCrewLink_Net/releases/download/v3.2.8-net-beta.1/TanukiBCL.Net-win-x64.zip"
+                    when request.Method == HttpMethod.Head =>
+                    new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[Size]) },
+                _ => throw new InvalidOperationException("Unexpected release feed request: " + request.RequestUri)
+            };
+            return Task.FromResult(response);
         }
     }
 }
