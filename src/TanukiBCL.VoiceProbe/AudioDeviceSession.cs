@@ -19,7 +19,7 @@ internal sealed class AudioDeviceSession : IDisposable
     private NosHeroSpeech? heroSpeech;
     private volatile bool tanukiAddonEnabled;
     private readonly NosParrotRecording parrots = new();
-    internal bool IsCloneTalking(int playerId) => parrots.IsCloneTalking(playerId);
+    internal bool IsCloneTalking(int playerId) => tanukiAddonEnabled && parrots.IsCloneTalking(playerId);
     private readonly object parrotGate = new();
     private Timer? parrotTimer;
     private AmongUsState? parrotState;
@@ -282,7 +282,7 @@ internal sealed class AudioDeviceSession : IDisposable
         long? deathEchoEvent = null, VoiceEffectTuning? deathEchoTuning = null, int bitStage = -1)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
-        peer.BitVoice.SetStage(mix.Audible ? bitStage : -1);
+        peer.BitVoice.SetStage(tanukiAddonEnabled && mix.Audible ? bitStage : -1);
         peer.Volume.Volume = (float)Math.Clamp(mix.Gain, 0d, 2d);
         peer.Panning.Pan = (float)Math.Clamp(mix.Pan, -1d, 1d);
         peer.RokuroVoice.SetMix(mix.RokuroBody);
@@ -300,12 +300,12 @@ internal sealed class AudioDeviceSession : IDisposable
     }
 
     public void UpdateLocalMegaphoneRecording(NosMegaphoneState? entry, bool active) =>
-        localMegaphoneRecording.Update(entry, active && !deafened, 1d);
+        localMegaphoneRecording.Update(entry, tanukiAddonEnabled && active && !deafened, 1d);
 
     public void UpdatePeerDyingVoice(string peerId, NosDyingVoiceState? entry, bool active, bool near, double volume)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
-        peer.DyingVoiceRecording.Update(entry, active && !deafened, near, deafened ? 0d : volume,
+        peer.DyingVoiceRecording.Update(entry, tanukiAddonEnabled && active && !deafened, near, deafened ? 0d : volume,
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
 
@@ -319,7 +319,7 @@ internal sealed class AudioDeviceSession : IDisposable
         bool active, double volume, bool gluttonyLowpass = false)
     {
         var peer = GetOrCreatePeerPlayback(peerId);
-        peer.MegaphoneRecording.Update(entry, active && !deafened, volume, gluttonyLowpass);
+        peer.MegaphoneRecording.Update(entry, tanukiAddonEnabled && active && !deafened, volume, gluttonyLowpass);
     }
 
     public void UpdateInterviews(AmongUsState state)
@@ -343,6 +343,16 @@ internal sealed class AudioDeviceSession : IDisposable
                 playbackMixer.RemoveMixerInput(interviews);
                 playbackMixer.RemoveMixerInput(parrots);
                 parrots.Clear();
+                parrotInputs.Clear();
+                heroInputs.Clear();
+                interviewInputs.Clear();
+                Interlocked.Exchange(ref heroSpeech, null)?.Dispose();
+                lock (playbackGate)
+                    foreach (var peer in peerPlayback.Values)
+                    {
+                        peer.BitVoice.SetStage(-1);
+                        peer.MegaphoneRecording.Cancel();
+                    }
             }
         }
         if (!enabled) return;
@@ -358,11 +368,23 @@ internal sealed class AudioDeviceSession : IDisposable
         lock (parrotGate)
         {
             if (disposed) return;
-            parrotState = state; parrotPid = pid; parrotCommsBlocked = commsBlocked;
             bool active = TanukiAddon.IsEnabled(state) && state.GameState is GameState.Tasks or GameState.Discussion;
+            if (!active)
+            {
+                // Inactive snapshots must not allocate timers or rebuild source histories.
+                if (parrotState is not null)
+                {
+                    parrotTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    parrots.Clear();
+                    parrotInputs.Clear();
+                }
+                parrotState = null;
+                parrotPid = 0;
+                return;
+            }
+            parrotState = state; parrotPid = pid; parrotCommsBlocked = commsBlocked;
             parrotTimer ??= new Timer(_ => TickParrots(), null, Timeout.Infinite, Timeout.Infinite);
-            parrotTimer.Change(active ? 100 : Timeout.Infinite, active ? 100 : Timeout.Infinite);
-            if (!active) { parrots.Clear(); return; }
+            parrotTimer.Change(100, 100);
             TickParrotsCore();
         }
     }
@@ -386,6 +408,11 @@ internal sealed class AudioDeviceSession : IDisposable
     }
     public void SetParrotPeer(string peer, int id, bool allowed, double volume)
     {
+        if (!tanukiAddonEnabled)
+        {
+            parrotInputs.TryRemove(peer, out _);
+            return;
+        }
         if (parrotInputs.TryGetValue(peer, out var previous) && previous != id) parrots.SetSource(previous, false, 0);
         if (id < 0) { parrotInputs.TryRemove(peer, out _); return; }
         parrotInputs[peer] = id; parrots.SetSource(id, allowed, volume);
@@ -401,12 +428,12 @@ internal sealed class AudioDeviceSession : IDisposable
     }
     public void SetHeroPeer(string peerId, int id, bool alive)
     {
-        if (alive) heroInputs[peerId] = id;
+        if (tanukiAddonEnabled && alive) heroInputs[peerId] = id;
         else heroInputs.TryRemove(peerId, out _);
     }
     public void SetInterviewPeer(string peerId, int id, bool enabled)
     {
-        if (enabled) interviewInputs[peerId] = id;
+        if (tanukiAddonEnabled && enabled) interviewInputs[peerId] = id;
         else interviewInputs.TryRemove(peerId, out _);
     }
 

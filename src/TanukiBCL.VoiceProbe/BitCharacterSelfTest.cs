@@ -37,6 +37,8 @@ internal static class BitCharacterSelfTest
         }
         var speaker=new Player { Id=1,IsLocal=true };
         var state=new AmongUsState {Mod=AmongUsModType.NebulaOnTheShip,GameState=GameState.Tasks,Players=[speaker],NosBitCharacters=[new(){PlayerId=1,Stage=0}]};
+        Check(NosBitCharacterState.For(state,speaker)==-1,"absent addon ignores stale bit stage");
+        state.NosAddonIds=["tanuki.bcl.roles"];
         Check(NosBitCharacterState.For(state,speaker)==0,"active bit stage");
         state.GameState=GameState.Discussion;Check(NosBitCharacterState.For(state,speaker)==-1,"meeting bypass");
         state.GameState=GameState.Tasks;state.NosBitCharacters[0].Stage=5;Check(NosBitCharacterState.For(state,speaker)==5,"64bit remains active");
