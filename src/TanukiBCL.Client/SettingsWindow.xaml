@@ -1192,6 +1192,13 @@
                         </Border>
                     </StackPanel>
                     <StackPanel x:Name="AdvancedPanel" Visibility="Collapsed">
+                        <Border Background="#2A2630" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="ボイスストーンの音声認識" FontWeight="Bold" />
+                                <CheckBox x:Name="LocalStoneNeuralCheck" Content="共有モデルで認識する（Silero VAD＋SenseVoice）" Checked="ChangeLocalStoneNeural" Unchecked="ChangeLocalStoneNeural" Margin="0,8" />
+                                <TextBlock x:Name="LocalStoneNeuralStatus" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
                         <TextBlock Text="詳細設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />
                         <Border Background="#2A2630" BorderBrush="#3F3944" BorderThickness="1" CornerRadius="8">
                             <StackPanel>

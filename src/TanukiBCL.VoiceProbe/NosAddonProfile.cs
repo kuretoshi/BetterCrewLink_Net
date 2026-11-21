@@ -74,7 +74,8 @@ internal sealed record NosAddonProfile(int Pid, string Session, long Sequence, l
         if (!Channels["speech"].EnumerateArray().All(HasSpeechFields)) return false;
         var rows = Read<NosHeroSpeech.PlayerRequest>("speech"); var keys = new HashSet<string>();
         return rows.All(p => p != null && p.PlayerId is >= 0 and <= 255 && p.Kind is "hero" or "ng" or "stone" &&
-            keys.Add($"{p.PlayerId}|{p.Kind}") && p.Request >= 0 && p.Expires >= 0 && p.Expires <= now + 16000 &&
+            keys.Add($"{p.PlayerId}|{p.Kind}") && p.Request >= 0 && p.Expires >= 0 && p.Expires <= now + (p.Recognizer == "local-neural" ? 31000 : 16000) &&
+            (p.Recognizer is null or "local" || p.Kind == "stone" && p.Recognizer == "local-neural" && p.RecordUntil >= 0 && p.RecordUntil <= now + 11000 && (p.Request == 0 || p.RecordUntil - p.RecordStarted is >= 1000 and <= 10000 && p.Expires - p.RecordUntil == 20000)) &&
             p.Words is { Length: <= 3 } && p.Words.All(w => w is { Length: >= 2 and <= 32 }) &&
             (p.Kind != "ng" || p.Request > 0 && p.Words.Length > 0) &&
             (p.Kind != "stone" || p.Words.Length == 0 && p.MaxCharacters is >= 1 and <= 12));

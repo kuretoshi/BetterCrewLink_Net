@@ -14,17 +14,19 @@ namespace TanukiBCL.VoiceProbe;
 // the host additionally selects positively identified Web/mobile input streams.
 internal sealed class NosHeroSpeech : IDisposable
 {
-    internal sealed record PlayerRequest(int PlayerId, string Kind, int Request, long Expires, string[] Words, int MaxCharacters = 0);
+    internal sealed record PlayerRequest(int PlayerId, string Kind, int Request, long Expires, string[] Words, int MaxCharacters = 0, string? Recognizer = null, long RecordUntil = 0, long RecordStarted = 0);
     internal sealed record Descriptor(int Protocol, int Pid, int Port, string Token, long Updated, PlayerRequest[] Players, bool Unified = false);
     private sealed record Chunk(int Player, string Signature, long Time, short[] Samples, int Channels);
-    private sealed class Capture(PlayerRequest[] jobs, string signature, VoskRecognizer recognizer) : IDisposable
+    private sealed class Capture(PlayerRequest[] jobs, string signature, VoskRecognizer? recognizer) : IDisposable
     {
         public PlayerRequest[] Jobs = jobs;
         public readonly string Signature = signature;
         public readonly string InputKey = Guid.NewGuid().ToString("N");
-        public readonly VoskRecognizer Recognizer = recognizer;
+        public readonly VoskRecognizer? Recognizer = recognizer;
         public long PartialAt;
-        public void Dispose() => Recognizer.Dispose();
+        public readonly MemoryStream RecordedPcm = new();
+        public bool Submitted;
+        public void Dispose() { Recognizer?.Dispose(); RecordedPcm.Dispose(); }
     }
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly Channel<Chunk> chunks = Channel.CreateBounded<Chunk>(new BoundedChannelOptions(128)
@@ -33,6 +35,7 @@ internal sealed class NosHeroSpeech : IDisposable
     private readonly ConcurrentDictionary<int, string> armed = new();
     private readonly ConcurrentDictionary<int, byte> mutedPlayers = new();
     private readonly Dictionary<int, Capture> captures = [];
+    private readonly Dictionary<int, Queue<(long At, byte[] Bytes)>> warm = [];
     private readonly HashSet<string> handled = [];
     private readonly UdpClient udp = new();
     private readonly Task worker;
@@ -40,12 +43,16 @@ internal sealed class NosHeroSpeech : IDisposable
     private Descriptor? descriptor;
     private int pid;
     private int[] selectedPlayers = [];
+    private bool host;
+    private readonly Dictionary<string, CancellationTokenSource> pending = [];
+    private readonly ConcurrentQueue<(string Session, PlayerRequest Job, string? Word)> results = new();
     private long nextPoll, retryAt;
     private bool disposed;
     private static long Now => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     public NosHeroSpeech() => worker = Task.Run(Work);
     public void Update(int gamePid, AmongUsState state, IEnumerable<int> webPlayers)
     {
+        host = state.IsHost;
         var local = state.Players.FirstOrDefault(p => p.IsLocal && !p.IsDead && !p.Disconnected);
         bool enabled = TanukiAddon.IsEnabled(state) && state.GameState is GameState.Tasks or GameState.Discussion;
         var selected = local is null ? Array.Empty<int>() : new[] { local.Id };
@@ -86,19 +93,33 @@ internal sealed class NosHeroSpeech : IDisposable
             DllNotFoundException or TypeInitializationException or InvalidOperationException or SocketException)
         { Clear(); retryAt = now + 10000; Console.WriteLine($"[HeroSpeech] 日本語認識を準備できません: {ex.GetType().Name}"); }
     }
+    private static bool Buffered(PlayerRequest p) => p.Recognizer == "local-neural";
+    private static bool BufferedOrWarm(PlayerRequest p) => Buffered(p) || p.Kind == "stone" && p.Request == 0 && LocalStoneSpeech.Enabled;
+    private static bool EnabledFor(PlayerRequest p) => p.Recognizer == "local-neural" && LocalStoneSpeech.Enabled;
     private void PollCore(long now)
     {
+        LocalStoneSpeech.Idle();
         int currentPid = Volatile.Read(ref pid);
-        if (currentPid <= 0) { Clear(); return; }
+        if (currentPid <= 0) { Clear(); LocalStoneSpeech.Close(); return; }
         var current = ReadDescriptor(currentPid, now);
         if (!Valid(current, currentPid, now)) { Clear(); return; }
         if (descriptor?.Token != current!.Token) Clear();
         descriptor = current;
         var selected = Volatile.Read(ref selectedPlayers);
         var jobs = current.Players.Where(p => selected.Contains(p.PlayerId)).ToArray();
-        if (jobs.Length > 0 && model == null && now >= retryAt) LoadModel();
-        if (model != null)
-            foreach (int id in jobs.Select(p => p.PlayerId).Distinct()) SendReady(id);
+        foreach (var (key, token) in pending.ToArray())
+            if (!jobs.Any(j => Key(j) == key && j.Expires > now && EnabledFor(j))) { token.Cancel(); token.Dispose(); pending.Remove(key); }
+        while (results.TryDequeue(out var result))
+        {
+            if (pending.Remove(Key(result.Job), out var token)) token.Dispose();
+            if (result.Word != null && result.Session == current.Token && EnabledFor(result.Job) && jobs.Any(j => Key(j) == Key(result.Job) && j.Expires > now)) SendWord(result.Job, result.Word);
+        }
+        if (jobs.Any(p => !BufferedOrWarm(p)) && model == null && now >= retryAt) {
+            try { LoadModel(); }
+            catch (Exception ex) when (ex is IOException or DllNotFoundException or TypeInitializationException or InvalidOperationException) { retryAt = now + 10000; }
+        }
+        foreach (int id in jobs.Where(p => model != null || BufferedOrWarm(p)).Select(p => p.PlayerId).Distinct())
+            SendReady(id, LocalStoneSpeech.Enabled && jobs.Any(p => p.PlayerId == id && p.Kind == "stone"));
         Reconcile(jobs, now);
     }
     private void LoadModel()
@@ -118,27 +139,47 @@ internal sealed class NosHeroSpeech : IDisposable
             p.Words is { Length: <= 3 } && p.Words.All(w => w is { Length: >= 2 and <= 32 }) &&
             (p.Kind != "ng" || p.Request > 0 && p.Words.Length > 0) &&
             (p.Kind != "stone" || p.Words.Length == 0 && p.MaxCharacters is >= 1 and <= 12) &&
-            (p.Request == 0 || p.Expires > now - 100 && p.Expires <= now + 16000));
+            (p.Recognizer is null or "local" || p.Kind == "stone" && Buffered(p) && p.RecordUntil >= 0 && p.RecordUntil <= now + 11000 && (p.Request == 0 || p.RecordUntil - p.RecordStarted is >= 1000 and <= 10000 && p.Expires - p.RecordUntil == 20000)) &&
+            (p.Request == 0 || p.Expires > now - 100 && p.Expires <= now + (Buffered(p) ? 31000 : 16000)));
     }
     private static string Key(PlayerRequest job) => $"{job.PlayerId}|{job.Kind}|{job.Request}";
-    private static string Signature(PlayerRequest[] jobs) => string.Join(';', jobs.Select(p => Key(p) + "|" + string.Join('|', p.Words) + "|" + p.MaxCharacters).Order());
+    private static string Signature(PlayerRequest[] jobs) => string.Join(';', jobs.Select(p => Key(p) + "|" + string.Join('|', p.Words) + "|" + p.MaxCharacters + "|" + p.Recognizer).Order());
     private void Reconcile(PlayerRequest[] jobs, long now)
     {
-        var groups = jobs.Where(p => p.Request > 0 && p.Expires > now && !handled.Contains(Key(p)) && !mutedPlayers.ContainsKey(p.PlayerId))
+        var groups = jobs.Where(p => (BufferedOrWarm(p) || p.Request > 0 && p.Expires > now && !handled.Contains(Key(p))) && !mutedPlayers.ContainsKey(p.PlayerId))
             .GroupBy(p => p.PlayerId).ToDictionary(g => g.Key, g => g.ToArray());
         foreach (var (id, capture) in captures.ToArray())
         {
             if (!groups.TryGetValue(id, out var current) || Signature(current) != capture.Signature) Stop(id);
             else capture.Jobs = current;
         }
-        if (model == null) return;
         foreach (var (id, entries) in groups)
         {
             if (captures.ContainsKey(id)) continue;
             string signature = Signature(entries);
-            captures[id] = new(entries, signature, new VoskRecognizer(model, 16000));
-            if (entries.Any(p => p.Kind == "stone")) captures[id].Recognizer.SetWords(true);
+            if (model == null && !entries.Any(BufferedOrWarm)) continue;
+            captures[id] = new(entries, signature, model != null && entries.Any(p => !BufferedOrWarm(p)) ? new VoskRecognizer(model, 16000) : null);
+            if (entries.Any(p => p.Kind == "stone" && !BufferedOrWarm(p))) captures[id].Recognizer?.SetWords(true);
+            if (warm.TryGetValue(id, out var buffered)) foreach (var part in buffered) AppendRecording(captures[id], part.Bytes, part.At);
             armed[id] = captures[id].InputKey;
+        }
+        foreach (var capture in captures.Values)
+        {
+            var job = capture.Jobs.FirstOrDefault(j => Buffered(j) && j.Request > 0);
+            if (job == null || capture.Submitted || job.RecordUntil > now || descriptor == null) continue;
+            capture.Submitted = true; handled.Add(Key(job));
+            if (pending.Count >= 4) continue;
+            var token = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+            token.CancelAfter(TimeSpan.FromMilliseconds(Math.Max(1, Math.Min(18000, job.Expires - now))));
+            pending[Key(job)] = token;
+            byte[] pcm = capture.RecordedPcm.ToArray(); string session = descriptor.Token; var stopToken = token.Token;
+            _ = Task.Run(async () => {
+                string? word = null;
+                try { word = await LocalStoneSpeech.Transcribe(pcm, job.MaxCharacters, stopToken); }
+                catch (OperationCanceledException) when (stopToken.IsCancellationRequested) { }
+                catch (Exception ex) when (ex is OperationCanceledException or JsonException or IOException) { Console.WriteLine("[VoiceStone] ローカル認識を完了できませんでした。"); }
+                if (!stopToken.IsCancellationRequested) results.Enqueue((session, job, word));
+            });
         }
     }
     private void Process(Chunk chunk)
@@ -146,15 +187,30 @@ internal sealed class NosHeroSpeech : IDisposable
         if (Volatile.Read(ref pid) <= 0 || mutedPlayers.ContainsKey(chunk.Player) || !Volatile.Read(ref selectedPlayers).Contains(chunk.Player) ||
             !captures.TryGetValue(chunk.Player, out var capture) || chunk.Signature != capture.InputKey || Now - chunk.Time > 250) return;
         var bytes = Downsample(chunk.Samples, chunk.Channels);
+        long at = chunk.Time - bytes.Length / 32;
+        if (capture.Jobs.Any(BufferedOrWarm)) {
+            if (!warm.TryGetValue(chunk.Player, out var buffer)) warm[chunk.Player] = buffer = new();
+            buffer.Enqueue((at, bytes)); while (buffer.Count > 0 && buffer.Peek().At < at - 1000) buffer.Dequeue();
+            AppendRecording(capture, bytes, at);
+        }
+        if (capture.Recognizer == null) return;
         bool final = capture.Recognizer.AcceptWaveform(bytes, bytes.Length);
         using var result = JsonDocument.Parse(final ? capture.Recognizer.Result() : capture.Recognizer.PartialResult());
         string text = result.RootElement.GetProperty(final ? "text" : "partial").GetString() ?? "";
         JsonElement? tokens = result.RootElement.TryGetProperty("result", out var words) ? words : null;
         foreach (var job in capture.Jobs) Accept(capture, job, text, final, tokens);
     }
+    private static void AppendRecording(Capture capture, byte[] bytes, long at)
+    {
+        var job = capture.Jobs.FirstOrDefault(j => Buffered(j) && j.Request > 0);
+        if (job == null || capture.Submitted) return;
+        var window = VoiceStoneAudio.Window(bytes, at, job.RecordStarted, job.RecordUntil);
+        int length = (int)Math.Min(window.Length, 320000 - capture.RecordedPcm.Length);
+        if (length > 0) capture.RecordedPcm.Write(window[..length]);
+    }
     private void Accept(Capture capture, PlayerRequest job, string text, bool final, JsonElement? tokens)
     {
-        if (job.Expires <= Now || handled.Contains(Key(job))) return;
+        if (Buffered(job) || job.Expires <= Now || handled.Contains(Key(job))) return;
         if (job.Kind == "stone") { AcceptStone(job, tokens, final); return; }
         bool matched = job.Kind == "ng" ? HeardForbiddenWord(text, job.Words, final) : HeardTransformation(text, job.Words, final);
         if (!matched) { if (job.Kind == "hero") capture.PartialAt = 0; return; }
@@ -210,10 +266,10 @@ internal sealed class NosHeroSpeech : IDisposable
         var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TanukiBCL", "NoS", $"hero-speech-{currentPid}.json");
         return File.Exists(path) && new FileInfo(path).Length <= 32768 ? JsonSerializer.Deserialize<Descriptor>(File.ReadAllText(path), JsonOptions) : null;
     }
-    private void SendReady(int player)
+    private void SendReady(int player, bool neural = false)
     {
         if (descriptor == null) return;
-        if (descriptor.Unified) { NosAddonLink.Shared.Send(descriptor.Pid, "ready", new() { ["players"] = new[] { player } }); return; }
+        if (descriptor.Unified) { NosAddonLink.Shared.Send(descriptor.Pid, "ready", new() { ["players"] = new[] { player }, ["neural"] = neural ? new[] { player } : Array.Empty<int>() }); return; }
         Send($"TBCLHS2|{descriptor.Token}|ready|{Now}|{player}|1");
     }
     private void SendWord(PlayerRequest job, string? word = null)
@@ -230,10 +286,10 @@ internal sealed class NosHeroSpeech : IDisposable
         udp.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, descriptor.Port));
     }
     private void Stop(int id) { armed.TryRemove(id, out _); if (captures.Remove(id, out var capture)) capture.Dispose(); }
-    private void Clear() { armed.Clear(); foreach (var capture in captures.Values) capture.Dispose(); captures.Clear(); handled.Clear(); descriptor = null; }
+    private void Clear() { warm.Clear(); foreach (var token in pending.Values) { token.Cancel(); token.Dispose(); } pending.Clear(); while (results.TryDequeue(out _)) { } armed.Clear(); foreach (var capture in captures.Values) capture.Dispose(); captures.Clear(); handled.Clear(); descriptor = null; }
     public void Dispose()
     {
         if (disposed) return;
-        disposed = true; armed.Clear(); cancellation.Cancel(); chunks.Writer.TryComplete();
+        disposed = true; armed.Clear(); cancellation.Cancel(); LocalStoneSpeech.Close(); chunks.Writer.TryComplete();
     }
 }

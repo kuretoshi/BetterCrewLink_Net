@@ -18,6 +18,11 @@ namespace TanukiBCL.Client;
 
 public partial class SettingsWindow : Window
 {
+    private void ChangeLocalStoneNeural(object sender, RoutedEventArgs e)
+    {
+        if (LocalStoneNeuralCheck == null || LocalStoneNeuralStatus == null) return;
+        LocalStoneNeuralStatus.Text = LocalStoneSpeech.Save(LocalStoneNeuralCheck.IsChecked == true) ? "ローカル認識の設定を保存しました。次の録音から反映します。" : "設定を保存できませんでした。モデルを確認してください。";
+    }
     private readonly ClientSettings settings;
     private readonly ObservableCollection<string> serverUrlDrafts = [];
     private bool lobbySettingsEditable;
@@ -60,6 +65,9 @@ public partial class SettingsWindow : Window
         Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged, Action<ClientSettings>? persistSettings = null)
     {
         InitializeComponent();
+        LocalStoneNeuralCheck.IsEnabled = LocalStoneSpeech.Available;
+        LocalStoneNeuralCheck.IsChecked = LocalStoneSpeech.Enabled;
+        LocalStoneNeuralStatus.Text = LocalStoneSpeech.Available ? "通常は共有モデルで端末内の認識を行います。設定された録音時間の終了後に判定します。PCは各自、Web・モバイル参加者の分はホストが認識します。" : "試験用の認識モデルが未準備のため、軽量ローカル認識を使用します。";
         PreviewKeyDown += DebugAuthPreviewKeyDown;
         InitializeUpdatePanel();
         this.settings = settings;
