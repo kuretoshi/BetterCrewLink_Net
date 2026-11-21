@@ -1197,6 +1197,8 @@
                                 <TextBlock Text="ボイスストーンの音声認識" FontWeight="Bold" />
                                 <CheckBox x:Name="LocalStoneNeuralCheck" Content="共有モデルで認識する（Silero VAD＋SenseVoice）" Checked="ChangeLocalStoneNeural" Unchecked="ChangeLocalStoneNeural" Margin="0,8" />
                                 <TextBlock x:Name="LocalStoneNeuralStatus" TextWrapping="Wrap" />
+                                <Button Content="共有モデルをダウンロード" Click="DownloadSharedSpeech" Margin="0,8" />
+                                <TextBlock Text="初回のみインストーラーを実行後、ベタクルを再起動してください。タヌキ丼未検出時はモデルを読み込みません。" TextWrapping="Wrap" />
                             </StackPanel>
                         </Border>
                         <TextBlock Text="詳細設定" FontSize="12" Foreground="#B7AABD" Margin="4,0,0,14" />

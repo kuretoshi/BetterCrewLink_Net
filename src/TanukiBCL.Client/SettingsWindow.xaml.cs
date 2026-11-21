@@ -18,6 +18,10 @@ namespace TanukiBCL.Client;
 
 public partial class SettingsWindow : Window
 {
+    private void DownloadSharedSpeech(object sender, RoutedEventArgs e)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://github.com/kuretoshi/TanukiBCL/releases/download/v3.2.69/TanukiBCL-SharedSpeech-Setup-2.0.2.1.exe") { UseShellExecute = true });
+    }
     private void ChangeLocalStoneNeural(object sender, RoutedEventArgs e)
     {
         if (LocalStoneNeuralCheck == null || LocalStoneNeuralStatus == null) return;
@@ -67,7 +71,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         LocalStoneNeuralCheck.IsEnabled = LocalStoneSpeech.Available;
         LocalStoneNeuralCheck.IsChecked = LocalStoneSpeech.Enabled;
-        LocalStoneNeuralStatus.Text = LocalStoneSpeech.Available ? "通常は共有モデルで端末内の認識を行います。設定された録音時間の終了後に判定します。PCは各自、Web・モバイル参加者の分はホストが認識します。" : "試験用の認識モデルが未準備のため、軽量ローカル認識を使用します。";
+        LocalStoneNeuralStatus.Text = LocalStoneSpeech.Available ? "通常は共有モデルで端末内の認識を行います。設定された録音時間の終了後に判定します。PCは各自、Web・モバイル参加者の分はホストが認識します。" : "共有モデルが未準備のため、軽量ローカル認識を使用します。";
         PreviewKeyDown += DebugAuthPreviewKeyDown;
         InitializeUpdatePanel();
         this.settings = settings;
