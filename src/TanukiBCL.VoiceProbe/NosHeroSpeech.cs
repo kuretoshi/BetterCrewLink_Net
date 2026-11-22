@@ -26,6 +26,7 @@ internal sealed class NosHeroSpeech : IDisposable
         public long PartialAt;
         public readonly MemoryStream RecordedPcm = new();
         public bool Submitted;
+        public readonly LiveSpeechAudio Live = new();
         public void Dispose() { Recognizer?.Dispose(); RecordedPcm.Dispose(); }
     }
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -46,6 +47,8 @@ internal sealed class NosHeroSpeech : IDisposable
     private bool host;
     private readonly Dictionary<string, CancellationTokenSource> pending = [];
     private readonly ConcurrentQueue<(string Session, PlayerRequest Job, string? Word)> results = new();
+    private readonly Dictionary<int, (CancellationTokenSource Token, PlayerRequest[] Jobs, string InputKey)> livePending = [];
+    private readonly ConcurrentQueue<(string Session, PlayerRequest[] Jobs, string InputKey, long At, string? Text)> liveResults = new();
     private long nextPoll, retryAt;
     private bool disposed;
     private static long Now => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -94,7 +97,8 @@ internal sealed class NosHeroSpeech : IDisposable
         { Clear(); retryAt = now + 10000; Console.WriteLine($"[HeroSpeech] 日本語認識を準備できません: {ex.GetType().Name}"); }
     }
     private static bool Buffered(PlayerRequest p) => p.Recognizer == "local-neural";
-    private static bool BufferedOrWarm(PlayerRequest p) => Buffered(p) || p.Kind == "stone" && p.Request == 0 && LocalStoneSpeech.Enabled;
+    private static bool SharedLive(PlayerRequest p) => p.Kind != "stone" && LocalStoneSpeech.Enabled;
+    private static bool BufferedOrWarm(PlayerRequest p) => Buffered(p) || SharedLive(p) || p.Kind == "stone" && p.Request == 0 && LocalStoneSpeech.Enabled;
     private static bool EnabledFor(PlayerRequest p) => p.Recognizer == "local-neural" && LocalStoneSpeech.Enabled;
     private void PollCore(long now)
     {
@@ -107,6 +111,21 @@ internal sealed class NosHeroSpeech : IDisposable
         descriptor = current;
         var selected = Volatile.Read(ref selectedPlayers);
         var jobs = current.Players.Where(p => selected.Contains(p.PlayerId)).ToArray();
+        foreach (var (id, entry) in livePending.ToArray())
+            if (!LocalStoneSpeech.Enabled || mutedPlayers.ContainsKey(id) || !captures.TryGetValue(id, out var capture) || capture.InputKey != entry.InputKey || !entry.Jobs.Any(j => jobs.Any(p => SameLive(j, p, now))))
+            { entry.Token.Cancel(); entry.Token.Dispose(); livePending.Remove(id); }
+        while (liveResults.TryDequeue(out var result))
+        {
+            if (livePending.TryGetValue(result.Jobs[0].PlayerId, out var entry) && entry.InputKey == result.InputKey)
+            { livePending.Remove(result.Jobs[0].PlayerId); entry.Token.Dispose(); }
+            if (result.Text == null || result.Session != current.Token || now - result.At > 5000 || !LocalStoneSpeech.Enabled ||
+                !captures.TryGetValue(result.Jobs[0].PlayerId, out var capture) || capture.InputKey != result.InputKey || mutedPlayers.ContainsKey(result.Jobs[0].PlayerId)) continue;
+            foreach (var job in result.Jobs)
+                if (!handled.Contains(Key(job)) && jobs.Any(p => SameLive(job, p, now)) &&
+                    (job.Kind == "ng" ? HeardForbiddenWord(result.Text, job.Words, true) : HeardTransformation(result.Text, job.Words, true)))
+                { handled.Add(Key(job)); SendWord(job); }
+        }
+        if (model != null && !jobs.Any(p => !BufferedOrWarm(p))) { foreach (int id in captures.Keys.ToArray()) Stop(id); model.Dispose(); model = null; }
         foreach (var (key, token) in pending.ToArray())
             if (!jobs.Any(j => Key(j) == key && j.Expires > now && EnabledFor(j))) { token.Cancel(); token.Dispose(); pending.Remove(key); }
         while (results.TryDequeue(out var result))
@@ -122,6 +141,7 @@ internal sealed class NosHeroSpeech : IDisposable
             SendReady(id, LocalStoneSpeech.Enabled && jobs.Any(p => p.PlayerId == id && p.Kind == "stone"));
         Reconcile(jobs, now);
     }
+    internal static bool SameLive(PlayerRequest a, PlayerRequest b, long now) => Key(a) == Key(b) && a.Words.SequenceEqual(b.Words) && b.Request > 0 && b.Expires > now;
     private void LoadModel()
     {
         string path = Path.Combine(AppContext.BaseDirectory, "Speech", "model");
@@ -165,6 +185,25 @@ internal sealed class NosHeroSpeech : IDisposable
         }
         foreach (var capture in captures.Values)
         {
+            var liveJobs = capture.Jobs.Where(j => SharedLive(j) && j.Request > 0 && j.Expires > now && !handled.Contains(Key(j))).ToArray();
+            if (liveJobs.Length > 0 && !livePending.ContainsKey(liveJobs[0].PlayerId) && pending.Count + livePending.Count < 4 && descriptor != null)
+            {
+                var livePcm = capture.Live.Take(now);
+                if (livePcm != null)
+                {
+                    var liveToken = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+                    liveToken.CancelAfter(18000);
+                    string liveSession = descriptor.Token, inputKey = capture.InputKey; var liveStopToken = liveToken.Token;
+                    livePending[liveJobs[0].PlayerId] = (liveToken, liveJobs, inputKey);
+                    _ = Task.Run(async () => {
+                        string? text = null;
+                        try { text = await LocalStoneSpeech.TranscribeText(livePcm, liveStopToken); }
+                        catch (OperationCanceledException) when (liveStopToken.IsCancellationRequested) { }
+                        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException) { Console.WriteLine("[HeroSpeech] 共有モデルの認識を完了できませんでした。"); }
+                        if (!liveStopToken.IsCancellationRequested) liveResults.Enqueue((liveSession, liveJobs, inputKey, now, text));
+                    });
+                }
+            }
             var job = capture.Jobs.FirstOrDefault(j => Buffered(j) && j.Request > 0);
             if (job == null || capture.Submitted || job.RecordUntil > now || descriptor == null) continue;
             capture.Submitted = true; handled.Add(Key(job));
@@ -188,7 +227,8 @@ internal sealed class NosHeroSpeech : IDisposable
             !captures.TryGetValue(chunk.Player, out var capture) || chunk.Signature != capture.InputKey || Now - chunk.Time > 250) return;
         var bytes = Downsample(chunk.Samples, chunk.Channels);
         long at = chunk.Time - bytes.Length / 32;
-        if (capture.Jobs.Any(BufferedOrWarm)) {
+        if (capture.Jobs.Any(j => SharedLive(j) && j.Request > 0)) capture.Live.Append(bytes, at);
+        if (capture.Jobs.Any(j => j.Kind == "stone" && BufferedOrWarm(j))) {
             if (!warm.TryGetValue(chunk.Player, out var buffer)) warm[chunk.Player] = buffer = new();
             buffer.Enqueue((at, bytes)); while (buffer.Count > 0 && buffer.Peek().At < at - 1000) buffer.Dequeue();
             AppendRecording(capture, bytes, at);
@@ -210,7 +250,7 @@ internal sealed class NosHeroSpeech : IDisposable
     }
     private void Accept(Capture capture, PlayerRequest job, string text, bool final, JsonElement? tokens)
     {
-        if (Buffered(job) || job.Expires <= Now || handled.Contains(Key(job))) return;
+        if (BufferedOrWarm(job) || job.Expires <= Now || handled.Contains(Key(job))) return;
         if (job.Kind == "stone") { AcceptStone(job, tokens, final); return; }
         bool matched = job.Kind == "ng" ? HeardForbiddenWord(text, job.Words, final) : HeardTransformation(text, job.Words, final);
         if (!matched) { if (job.Kind == "hero") capture.PartialAt = 0; return; }
@@ -234,7 +274,7 @@ internal sealed class NosHeroSpeech : IDisposable
     internal static bool HeardHenshin(string text, bool final = true)
     {
         string normalized = Regex.Replace(text.Normalize(NormalizationForm.FormKC), @"[\s、。！!？?・]", "");
-        return normalized.Contains("変身") || normalized.Contains("へんしん") || normalized.Contains("ヘンシン") || final && normalized == "返信";
+        return normalized.Contains("変身") || normalized.Contains("へんしん") || normalized.Contains("ヘンシン") || final && normalized is "返信" or "変信" or "返身";
     }
     internal static bool HeardTransformation(string text, string[] words, bool final = true)
     {
@@ -286,7 +326,7 @@ internal sealed class NosHeroSpeech : IDisposable
         udp.Send(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, descriptor.Port));
     }
     private void Stop(int id) { armed.TryRemove(id, out _); if (captures.Remove(id, out var capture)) capture.Dispose(); }
-    private void Clear() { warm.Clear(); foreach (var token in pending.Values) { token.Cancel(); token.Dispose(); } pending.Clear(); while (results.TryDequeue(out _)) { } armed.Clear(); foreach (var capture in captures.Values) capture.Dispose(); captures.Clear(); handled.Clear(); descriptor = null; }
+    private void Clear() { foreach (var entry in livePending.Values) { entry.Token.Cancel(); entry.Token.Dispose(); } livePending.Clear(); while (liveResults.TryDequeue(out _)) { } warm.Clear(); foreach (var token in pending.Values) { token.Cancel(); token.Dispose(); } pending.Clear(); while (results.TryDequeue(out _)) { } armed.Clear(); foreach (var capture in captures.Values) capture.Dispose(); captures.Clear(); model?.Dispose(); model = null; handled.Clear(); descriptor = null; }
     public void Dispose()
     {
         if (disposed) return;

@@ -24,6 +24,22 @@ public partial class InquiryForm : UserControl
         RefreshFieldLabels();
     }
 
+    private void FormScrollViewer_Loaded(object sender, RoutedEventArgs e) => ApplyScrollBarStyle();
+
+    internal void ApplyScrollBarStyle()
+    {
+        BodyBox.ApplyTemplate();
+        var bodyScrollViewer = BodyBox.Template.FindName("PART_ContentHost", BodyBox) as ScrollViewer;
+        foreach (var viewer in new[] { FormScrollViewer, bodyScrollViewer })
+        {
+            if (viewer is null) continue;
+            viewer.ApplyTemplate();
+            if (viewer.Template.FindName("PART_VerticalScrollBar", viewer)
+                is System.Windows.Controls.Primitives.ScrollBar scrollBar)
+                scrollBar.Style = (Style)FindResource("ThinAppScrollBarStyle");
+        }
+    }
+
     private void Input_Changed(object sender, TextChangedEventArgs e)
     {
         UpdateSendAvailability();
@@ -188,28 +204,61 @@ public partial class InquiryForm : UserControl
 
     private static void VerifyResponsiveLayout()
     {
-        foreach (var width in new[] { 500d, 1800d })
+        foreach (var size in new[] { new Size(500, 558), new Size(370, 428), new Size(1800, 630) })
         {
             var form = new InquiryForm();
-            var size = new Size(width, 630);
             form.Measure(size);
             form.Arrange(new Rect(size));
             form.UpdateLayout();
-            var expectedWidth = Math.Min(width, 752d);
-            var expectedLeft = (width - expectedWidth) / 2;
+            form.ApplyScrollBarStyle();
+            form.UpdateLayout();
+            var expectedWidth = Math.Min(size.Width, 752d);
+            var expectedLeft = (size.Width - expectedWidth) / 2;
             var actualLeft = form.InquiryLayout.TransformToAncestor(form).Transform(new Point()).X;
             if (Math.Abs(form.InquiryLayout.ActualWidth - expectedWidth) > 1 ||
                 Math.Abs(actualLeft - expectedLeft) > 1)
                 throw new InvalidOperationException("Inquiry form does not stay centered and width-limited when resized.");
+            var consentTop = form.PublicIssueConsentBox.TransformToAncestor(form).Transform(new Point()).Y;
+            var sendTop = form.SendButton.TransformToAncestor(form).Transform(new Point()).Y;
+            if (consentTop < 0 || consentTop + form.PublicIssueConsentBox.ActualHeight > sendTop ||
+                sendTop + form.SendButton.ActualHeight > size.Height)
+                throw new InvalidOperationException("Public inquiry consent and Send must stay visible below the scrolling form.");
+            if (size.Width == 500)
+            {
+                var attachmentBottom = form.SelectFilesButton.TransformToAncestor(form.FormScrollViewer)
+                    .Transform(new Point(0, form.SelectFilesButton.ActualHeight)).Y;
+                if (attachmentBottom > form.FormScrollViewer.ActualHeight)
+                    throw new InvalidOperationException("The standard settings window clips the inquiry fields or attachment button.");
+            }
+            form.SubjectBox.Text = new string('件', 100);
+            form.BodyBox.Text = string.Join(Environment.NewLine, Enumerable.Repeat("本文の表示確認です。", 30));
+            form.UpdateLayout();
+            if (form.SubjectBox.Template.FindName("PART_ContentHost", form.SubjectBox) is not ScrollViewer subjectViewport ||
+                subjectViewport.ViewportHeight < form.SubjectBox.FontSize * 1.25)
+                throw new InvalidOperationException("Inquiry subject padding clips the entered text.");
+            form.FormScrollViewer.ScrollToEnd();
+            form.UpdateLayout();
+            var scrolledConsentTop = form.PublicIssueConsentBox.TransformToAncestor(form).Transform(new Point()).Y;
+            if (Math.Abs(scrolledConsentTop - consentTop) > 0.1 ||
+                form.BodyBox.ActualHeight > form.FormScrollViewer.ActualHeight)
+                throw new InvalidOperationException("Long inquiry text moved the footer or expanded beyond the form viewport.");
         }
     }
 
-    internal static void RenderPreview(string outputPath)
+    internal static void RenderPreview(string outputPath, bool filled = false)
     {
         var form = new InquiryForm();
+        if (filled)
+        {
+            form.SubjectBox.Text = "問い合わせ画面の表示確認";
+            form.BodyBox.Text = string.Join(Environment.NewLine, Enumerable.Repeat("長文入力時の表示とスクロールを確認します。", 20));
+            form.PublicIssueConsentBox.IsChecked = true;
+        }
         var size = new Size(500, 640);
         form.Measure(size);
         form.Arrange(new Rect(size));
+        form.UpdateLayout();
+        form.ApplyScrollBarStyle();
         form.UpdateLayout();
         var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(form);

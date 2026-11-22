@@ -10,14 +10,18 @@ public static class LocalStoneSpeech
     public static string Error { get; private set; } = "";
     private static readonly object StatusGate = new();
     private static long nextCheck;
-    private static bool available, enabled;
-    private static void Refresh()
+    private static bool available, enabled, runtimeInstalled;
+    public static bool RuntimeInstalled { get { Refresh(); return runtimeInstalled; } }
+    public static void RefreshStatus() => Refresh(true);
+    private static void Refresh(bool force = false)
     {
         lock (StatusGate)
         {
-            if (Environment.TickCount64 < nextCheck) return;
+            if (!force && Environment.TickCount64 < nextCheck) return;
             nextCheck = Environment.TickCount64 + 500;
             available = new[] { "runtime/TanukiSpeechWorker.exe", "runtime/sherpa-onnx-c-api.dll", "runtime/onnxruntime.dll", "sensevoice/model.int8.onnx", "sensevoice/tokens.txt", "silero_vad.onnx" }.All(p => File.Exists(Path.Combine(Root, p)));
+            runtimeInstalled = VcRuntime.Installed(force);
+            available = available && runtimeInstalled;
             try { using var json=JsonDocument.Parse(File.ReadAllText(Path.Combine(Root,"preferences.json"))); enabled=available&&json.RootElement.GetProperty("enabled").GetBoolean(); } catch { enabled=available; }
         }
     }
@@ -31,7 +35,8 @@ public static class LocalStoneSpeech
     private static readonly SemaphoreSlim Gate = new(1, 1);
     private static Process? process;
     private static long lastUsed;
-    internal static async Task<string?> Transcribe(byte[] pcm, int maximum, CancellationToken token)
+    internal static Task<string?> TranscribeText(byte[] pcm, CancellationToken token) => Transcribe(pcm, 12, token, true);
+    internal static async Task<string?> Transcribe(byte[] pcm, int maximum, CancellationToken token, bool text = false)
     {
         if (!Enabled || pcm.Length is < 3200 or > 320000) return null;
         await Gate.WaitAsync(token);
@@ -53,7 +58,9 @@ public static class LocalStoneSpeech
             if (line == null || line.Length > 32768) throw new IOException("Speech worker response unavailable");
             using var result = JsonDocument.Parse(line);
             if (result.RootElement.GetProperty("id").GetString() != id || result.RootElement.TryGetProperty("error", out _)) throw new IOException("Speech worker inference failed");
-            string? word = result.RootElement.GetProperty("word").GetString(); Error = "";
+            Error = "";
+            if (text) { string? transcript = result.RootElement.GetProperty("text").GetString(); return transcript is { Length: <= 4096 } ? transcript : null; }
+            string? word = result.RootElement.GetProperty("word").GetString();
             return VoiceStoneSpeech.ValidWord(word, maximum) ? word : null;
         }
         catch (OperationCanceledException) { Stop(); return null; }

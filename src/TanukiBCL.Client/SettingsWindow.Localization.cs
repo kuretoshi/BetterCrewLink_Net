@@ -171,7 +171,7 @@ public partial class SettingsWindow
         SetShortcutRecording(window.PushToTalkShortcutBox, false);
         if (prompt.Visibility != System.Windows.Visibility.Collapsed)
             throw new InvalidOperationException("Shortcut recording prompt did not close");
-        if (window.AdvancedPanel.Children.OfType<Border>().Count() != 3 ||
+        if (window.AdvancedPanel.Children.OfType<Border>().Count() != 4 ||
             window.NatFixCheck.Style != window.GeneralAlwaysOnTopCheck.Style ||
             window.OpenDebugButton.Style != window.Resources["DebugOutlinedButtonStyle"] ||
             window.OpenDebugButton.Width != 145 || window.OpenDebugButton.Height != 60 ||

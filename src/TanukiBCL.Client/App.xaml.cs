@@ -113,6 +113,12 @@ public partial class App : Application
                     var previewIndex = Array.IndexOf(e.Args, "--server-dialog-preview");
                     if (previewIndex >= 0 && previewIndex + 1 < e.Args.Length)
                         SettingsWindow.RenderServerDialogPreview(e.Args[previewIndex + 1]);
+                    var effectsPreviewIndex = Array.IndexOf(e.Args, "--voice-effects-preview");
+                    if (effectsPreviewIndex >= 0 && effectsPreviewIndex + 1 < e.Args.Length)
+                        SettingsWindow.RenderVoiceEffectsPreview(e.Args[effectsPreviewIndex + 1]);
+                    var parityPreviewIndex = Array.IndexOf(e.Args, "--settings-parity-preview");
+                    if (parityPreviewIndex >= 0 && parityPreviewIndex + 1 < e.Args.Length)
+                        SettingsWindow.RenderSettingsParityPreviews(e.Args[parityPreviewIndex + 1]);
                 }
                 if (e.Args.Contains("--session-lifecycle-self-test")) ClientSessionLifecycleSelfTest.Run();
                 if (e.Args.Contains("--player-ban-self-test")) PlayerHistoryWindow.VerifyBanModes();
@@ -133,7 +139,7 @@ public partial class App : Application
                 {
                     if (inquiryPreviewIndex + 1 >= e.Args.Length)
                         throw new ArgumentException("--inquiry-preview needs a PNG path");
-                    InquiryForm.RenderPreview(e.Args[inquiryPreviewIndex + 1]);
+                    InquiryForm.RenderPreview(e.Args[inquiryPreviewIndex + 1], e.Args.Contains("--inquiry-filled-preview"));
                 }
                 if (e.Args.Contains("--support-log-self-test")) SupportLog.Verify();
                 if (e.Args.Contains("--update-catalog-self-test"))

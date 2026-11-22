@@ -143,12 +143,18 @@ internal static partial class DeveloperDebugAuth
         catch (UnauthorizedAccessException) { return null; }
     }
 
-    private static string? ResolveConfiguration(string? baseDirectory = null,
-        string? environmentConfiguration = null) =>
-        ReadBundledConfiguration(baseDirectory) ?? environmentConfiguration ??
-        (Environment.GetEnvironmentVariable("TANUKI_DEBUG_AUTH_URL") is { Length: > 0 } url
-            ? JsonSerializer.Serialize(new { url }) : null) ??
-        Environment.GetEnvironmentVariable("TANUKI_DEBUG_AUTH");
+    private static string ResolveConfiguration(string? baseDirectory = null,
+        string? environmentConfiguration = null, Func<string, string?>? readEnvironment = null)
+    {
+        readEnvironment ??= Environment.GetEnvironmentVariable;
+        // Plain development builds do not have the configuration written by package-release.
+        // Use the same authoritative HTTPS service as the regular edition in that case.
+        return ReadBundledConfiguration(baseDirectory) ?? environmentConfiguration ??
+            (readEnvironment("TANUKI_DEBUG_AUTH_URL") is { Length: > 0 } url
+                ? JsonSerializer.Serialize(new { url }) : null) ??
+            (readEnvironment("TANUKI_DEBUG_AUTH") is { Length: > 0 } local ? local : null) ??
+            JsonSerializer.Serialize(new { url = DefaultEndpoint });
+    }
 
     internal static void VerifyParity()
     {
@@ -170,6 +176,18 @@ internal static partial class DeveloperDebugAuth
         Directory.CreateDirectory(directory);
         try
         {
+            var defaultConfiguration = ResolveConfiguration(directory, readEnvironment: _ => null);
+            var usedDefaultEndpoint = false;
+            var defaultResult = VerifyAsync("test-pass", defaultConfiguration, request =>
+            {
+                usedDefaultEndpoint = request.RequestUri?.AbsoluteUri == DefaultEndpoint;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    { Content = new StringContent("{\"authorized\":true}") });
+            }).GetAwaiter().GetResult();
+            if (!usedDefaultEndpoint || defaultResult != DebugAuthResult.Authorized ||
+                VerifyAsync("test-pass", defaultConfiguration, _ => Task.FromResult(
+                    new HttpResponseMessage(HttpStatusCode.Unauthorized))).GetAwaiter().GetResult() != DebugAuthResult.Denied)
+                throw new InvalidOperationException("Unconfigured builds did not use authoritative remote debug authentication");
             var path = Path.Combine(directory, "debug-auth.json");
             File.WriteAllText(path, config);
             if (!Verify("test-pass", ResolveConfiguration(directory, "{}")))

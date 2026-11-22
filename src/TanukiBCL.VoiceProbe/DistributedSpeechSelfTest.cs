@@ -32,8 +32,32 @@ internal static class DistributedSpeechSelfTest
         Check(!NosHeroSpeech.Valid(descriptor, 98, 10000), "Different PID rejected");
         Check(!NosHeroSpeech.Valid(descriptor, 99, 12000), "Stale file rejected");
         CheckVoiceStone();
+        CheckLiveSpeech();
         Console.WriteLine("PASS distributed speech routing, NG matching and protocol validation");
         return 0;
+    }
+    private static void CheckLiveSpeech()
+    {
+        void Check(bool ok, string name) { if (!ok) throw new InvalidOperationException(name); }
+        byte[] tone = new byte[3200];
+        for (int i = 0; i < tone.Length; i += 2) { tone[i] = 208; tone[i + 1] = 7; }
+        var audio = new LiveSpeechAudio();
+        for (int i = 0; i < 20; i++) audio.Append(new byte[3200], 1000 + i * 100);
+        Check(audio.Take(3500) == null, "Silence never submits");
+        for (int i = 0; i < 12; i++) audio.Append(tone, 4000 + i * 100);
+        Check(audio.Take(5200) != null && audio.Take(5201) == null, "Bounded intermediate utterance");
+        audio.Append(tone, 5200);
+        Check(audio.Take(5650)!.Length > 40000 && audio.Take(5800) == null, "Overlapping word and single final flush");
+        for (int i = 0; i < 300; i++) audio.Append(tone, 6000 + i * 100);
+        Check(audio.Take(36000)!.Length <= 16000 * 8 * 2, "Continuous speech memory bound");
+        audio.Append(tone, 37000); audio.Reset(); Check(audio.Take(38000) == null, "Mute drops PCM");
+        var ng = new NosHeroSpeech.PlayerRequest(1, "ng", 1, 1400, ["タスク"]);
+        Check(NosHeroSpeech.SameLive(ng, ng with { Expires = 5000 }, 3000), "NG heartbeat renewals preserve request identity");
+        Check(!NosHeroSpeech.SameLive(ng, ng with { Expires = 5000, Words = ["会議"] }, 3000), "Changed word rejects stale result");
+        Check(!NosHeroSpeech.SameLive(ng, ng with { Expires = 5000, Request = 2 }, 3000), "Changed request rejects stale result");
+        Check(NosHeroSpeech.HeardTransformation("変信", ["変身"], true), "SenseVoice default homophone");
+        Check(!NosHeroSpeech.HeardTransformation("Hey Siri", ["変身"], true), "Unrelated phrase cannot transform");
+        Check(!NosHeroSpeech.HeardForbiddenWord("変信", ["変身"], true), "No fuzzy correction for NG deaths");
     }
     private static void CheckVoiceStone()
     {

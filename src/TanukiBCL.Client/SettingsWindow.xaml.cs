@@ -18,14 +18,41 @@ namespace TanukiBCL.Client;
 
 public partial class SettingsWindow : Window
 {
+    private bool refreshingLocalSpeech;
+    private void RefreshSharedSpeech(object sender, RoutedEventArgs e) => RefreshSharedSpeech();
+    private void RefreshSharedSpeech()
+    {
+        LocalStoneSpeech.RefreshStatus();
+        refreshingLocalSpeech = true;
+        try
+        {
+            LocalStoneNeuralCheck.IsEnabled = LocalStoneSpeech.Available;
+            LocalStoneNeuralCheck.IsChecked = LocalStoneSpeech.Enabled;
+            SharedSpeechDownloadButton.Content = LocalStoneSpeech.RuntimeInstalled ? "共有モデルをダウンロード" : "Visual C++の公式ダウンロードページ";
+            LocalStoneNeuralStatus.Text = !LocalStoneSpeech.RuntimeInstalled
+                ? "Microsoft Visual C++ v14 Redistributable（x64）が未導入、または必要なファイルが不足しています。公式ページからx64版を導入後、「再確認」を押してください。"
+                : LocalStoneSpeech.Available ? "PCは各自の端末、Web・モバイル参加者の分はホストが認識します。オフにすると従来の軽量方式を使います。" : "共有モデルが未準備のため、従来の軽量ローカル認識を使用します。";
+            LocalStoneNeuralError.Text = LocalStoneSpeech.Error;
+            LocalStoneNeuralError.Visibility = string.IsNullOrWhiteSpace(LocalStoneSpeech.Error)
+                ? Visibility.Collapsed : Visibility.Visible;
+        }
+        finally { refreshingLocalSpeech = false; }
+    }
     private void DownloadSharedSpeech(object sender, RoutedEventArgs e)
     {
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://github.com/kuretoshi/TanukiBCL/releases/download/v3.2.69/TanukiBCL-SharedSpeech-Setup-2.0.2.1.exe") { UseShellExecute = true });
+        RefreshSharedSpeech();
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(VcRuntime.SetupUrl(LocalStoneSpeech.RuntimeInstalled)) { UseShellExecute = true });
     }
     private void ChangeLocalStoneNeural(object sender, RoutedEventArgs e)
     {
-        if (LocalStoneNeuralCheck == null || LocalStoneNeuralStatus == null) return;
-        LocalStoneNeuralStatus.Text = LocalStoneSpeech.Save(LocalStoneNeuralCheck.IsChecked == true) ? "ローカル認識の設定を保存しました。次の録音から反映します。" : "設定を保存できませんでした。モデルを確認してください。";
+        if (refreshingLocalSpeech || LocalStoneNeuralCheck == null || LocalStoneNeuralStatus == null) return;
+        var saved = LocalStoneSpeech.Save(LocalStoneNeuralCheck.IsChecked == true);
+        RefreshSharedSpeech();
+        if (!saved)
+        {
+            LocalStoneNeuralError.Text = "設定を保存できませんでした。モデルを確認してください。";
+            LocalStoneNeuralError.Visibility = Visibility.Visible;
+        }
     }
     private readonly ClientSettings settings;
     private readonly ObservableCollection<string> serverUrlDrafts = [];
@@ -69,9 +96,7 @@ public partial class SettingsWindow : Window
         Action<int, PlayerAudioConfig, bool> onPlayerConfigChanged, Action<ClientSettings>? persistSettings = null)
     {
         InitializeComponent();
-        LocalStoneNeuralCheck.IsEnabled = LocalStoneSpeech.Available;
-        LocalStoneNeuralCheck.IsChecked = LocalStoneSpeech.Enabled;
-        LocalStoneNeuralStatus.Text = LocalStoneSpeech.Available ? "通常は共有モデルで端末内の認識を行います。設定された録音時間の終了後に判定します。PCは各自、Web・モバイル参加者の分はホストが認識します。" : "共有モデルが未準備のため、軽量ローカル認識を使用します。";
+        RefreshSharedSpeech();
         PreviewKeyDown += DebugAuthPreviewKeyDown;
         InitializeUpdatePanel();
         this.settings = settings;
@@ -1262,27 +1287,47 @@ public partial class SettingsWindow : Window
     private void CloseSettingsButton_Click(object sender, RoutedEventArgs e) => Close();
 
     internal static void RenderServerDialogPreview(string directory)
+        => RenderSettingsPreview(directory, "server-dialog");
+
+    internal static void RenderVoiceEffectsPreview(string directory)
+        => RenderSettingsPreview(directory, "voice-effects");
+
+    internal static void RenderSettingsParityPreviews(string directory)
+    {
+        foreach (var page in new[] { "lobby", "advanced", "inquiry" })
+            RenderSettingsPreview(directory, page);
+    }
+
+    private static void RenderSettingsPreview(string directory, string page)
     {
         // Render our own WPF visual tree offscreen; no desktop capture or live settings are used.
         Directory.CreateDirectory(directory);
         var window = new SettingsWindow(new ClientSettings(), true, null, false, null, (_, _, _) => { }, _ => { });
         try
         {
-            window.CategoryList.SelectedIndex = 7;
-            window.ChangeServerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.CategoryList.SelectedIndex = page switch { "lobby" => 1, "voice-effects" => 4, "inquiry" => 10, _ => 7 };
+            if (page == "server-dialog")
+                window.ChangeServerButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var root = (FrameworkElement)window.Content;
-            foreach (var size in new[] { new Size(760, 620), new Size(650, 500) })
+            foreach (var size in new[] { new Size(750, 630), new Size(620, 500) })
             {
                 root.Measure(size);
                 root.Arrange(new Rect(size));
                 root.UpdateLayout();
+                window.ApplySettingsPageScrollBarStyle();
+                window.InquiryPanel.ApplyScrollBarStyle();
+                root.UpdateLayout();
                 var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
                     (int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
+                var background = new DrawingVisual();
+                using (var drawing = background.RenderOpen())
+                    drawing.DrawRectangle(window.Background, null, new Rect(size));
+                bitmap.Render(background);
                 bitmap.Render(root);
                 var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
                 encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
                 using var output = File.Create(System.IO.Path.Combine(directory,
-                    $"server-dialog-{size.Width:0}x{size.Height:0}.png"));
+                    $"{page}-{size.Width:0}x{size.Height:0}.png"));
                 encoder.Save(output);
             }
         }
