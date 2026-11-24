@@ -174,6 +174,7 @@ internal sealed class MobileCosmetics
             {
                 var local = await SnrNativeImages.GetAsync(executable, id, part) ?? throw new InvalidDataException("SNR image missing");
                 var image = CosmeticImages.DecodeBytes(local.Png);
+                var untintedImage = image;
                 var adaptive = local.Adaptive ?? (part is CosmeticPart.Hat or CosmeticPart.HatBack && id.StartsWith("Modded_Multiverse Costume SEL_", StringComparison.Ordinal));
                 Task<SnrCosmeticCatalog>? definitions = null;
                 var refreshDefinitions = false;
@@ -193,9 +194,13 @@ internal sealed class MobileCosmetics
                     {
                         if (done.IsFaulted) _ = done.Exception;
                         if (!done.IsCompletedSuccessfully) return;
-                        lock (gate)
-                            if (token == generation && cache.Remove(source, out var old))
-                            { bytes -= old.Png.Length * sizeof(char); snrLayout.Remove(source); }
+                        var nextAdaptive = ResolveSnrFlags(id, part, local.Adaptive, local.SnrVisorLayout, done.Result).Adaptive;
+                        try
+                        {
+                            RefreshSnrAsset(source, token, adaptive, nextAdaptive,
+                                () => SnrNativeImages.Tint(untintedImage, nextAdaptive, colors.Main, colors.Shadow));
+                        }
+                        catch (Exception error) { System.Diagnostics.Trace.TraceWarning($"SNR image metadata refresh failed: {error.Message}"); }
                     }, TaskScheduler.Default);
             }
             catch (Exception error) when (error is IOException or InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException or OverflowException or System.ComponentModel.Win32Exception or OperationCanceledException or System.Text.Json.JsonException)
@@ -204,6 +209,13 @@ internal sealed class MobileCosmetics
             }
             finally { lock (gate) if (token == generation) pending.Remove(source); }
         });
+    }
+    private void RefreshSnrAsset(string source, int token, bool previousAdaptive, bool nextAdaptive, Func<BitmapSource> prepare)
+    {
+        if (previousAdaptive == nextAdaptive) return;
+        var refreshed = Encode(prepare());
+        lock (gate)
+            if (token == generation && cache.ContainsKey(source)) CacheAsset(source, refreshed);
     }
     private static (bool Adaptive, bool Layout) ResolveSnrFlags(string id, CosmeticPart part,
         bool? localAdaptive, bool? localLayout, SnrCosmeticCatalog? definitions)
@@ -262,6 +274,11 @@ internal sealed class MobileCosmetics
     // Caller holds gate; bytes tracks retained UTF-16 PNG text, not character count.
     private void CacheAsset(string source, (string Id, string Png) asset)
     {
+        if (cache.Remove(source, out var previous))
+        {
+            bytes -= checked(previous.Png.Length * sizeof(char));
+            if (previous.Id != asset.Id) sent.Remove(previous.Id);
+        }
         var assetBytes = checked(asset.Png.Length * sizeof(char));
         while (bytes + assetBytes > MaxCacheBytes && cache.Count > 0)
         {
@@ -306,6 +323,21 @@ internal sealed class MobileCosmetics
             !png.StartsWith("data:image/png;base64,", StringComparison.Ordinal))
             throw new InvalidOperationException("Mobile NoS PNG hash and data URL differ from 3.2.14");
         var cacheTest = new MobileCosmetics();
+        var initial = Encode(bitmap);
+        cacheTest.CacheAsset("metadata-warmup", initial);
+        cacheTest.RefreshSnrAsset("metadata-warmup", cacheTest.generation, false, false,
+            () => throw new InvalidOperationException("Unchanged metadata unnecessarily replaced a cached PNG"));
+        cacheTest.RefreshSnrAsset("metadata-warmup", cacheTest.generation, false, true, () =>
+        {
+            if (cacheTest.cache.GetValueOrDefault("metadata-warmup") != initial)
+                throw new InvalidOperationException("Metadata warmup removed PNG before replacement was ready");
+            cacheTest.Resend([initial.Id]);
+            return bitmap;
+        });
+        if (cacheTest.cache.GetValueOrDefault("metadata-warmup") != initial ||
+            cacheTest.bytes != initial.Png.Length * sizeof(char))
+            throw new InvalidOperationException("Metadata refresh broke cached PNG resend or byte accounting");
+        cacheTest.Reset();
         for (var index = 0; index < 40; index++)
             cacheTest.CacheAsset($"source-{index}", ($"id-{index}", new string((char)('A' + index), 300_000)));
         if (cacheTest.bytes > MaxCacheBytes ||
