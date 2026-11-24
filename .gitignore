@@ -8,5 +8,8 @@ release-debug-auth.json
 *.suo
 .vs/
 /.cache/
+/artifacts/
+/tools/SnrCosmeticsReader/target/
+/.tools/
 /resources/speech/model/
 /*.log

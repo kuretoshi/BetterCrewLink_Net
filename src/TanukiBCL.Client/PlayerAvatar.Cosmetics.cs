@@ -59,8 +59,10 @@ public partial class PlayerAvatar
         var nosColor = nosPlayer is null ? "" : $"{nosPlayer.ColorR},{nosPlayer.ColorG},{nosPlayer.ColorB}";
         var nosKeys = nos is null ? "" : string.Join(",", nos.OrderBy(pair => pair.Key).Select(pair => pair.Value));
         var secondary = mod == AmongUsModType.SuperNewRoles && !player.Disconnected ? player.SnrRole : null;
-        var hat2 = secondary?.Hat2Id is { } secondHat && secondHat != "hat_NoHat" ? secondHat : "";
-        var visor2 = secondary?.Visor2Id is { } secondVisor && secondVisor != "visor_EmptyVisor" ? secondVisor : "";
+        var secondHat = mod == AmongUsModType.SuperNewRoles && !player.Disconnected ? player.SnrHat2Id ?? secondary?.Hat2Id : null;
+        var secondVisor = mod == AmongUsModType.SuperNewRoles && !player.Disconnected ? player.SnrVisor2Id ?? secondary?.Visor2Id : null;
+        var hat2 = secondHat is not null and not "hat_NoHat" ? secondHat : "";
+        var visor2 = secondVisor is not null and not "visor_EmptyVisor" ? secondVisor : "";
         var key = $"{gameExecutable}|{player.IsDead}|{mod}|{gameState}|{hat}|{skin}|{visor}|{hat2}|{visor2}|{colors}|{nosKeys}|{nosColor}";
         if (key == cosmeticKey && (cosmeticRetryAt == default || DateTimeOffset.UtcNow < cosmeticRetryAt)) return;
         cosmeticKey = key;
@@ -177,30 +179,60 @@ public partial class PlayerAvatar
         var customSnr = mod == AmongUsModType.SuperNewRoles && id.StartsWith("Modded_", StringComparison.Ordinal);
         var asset = customSnr ? SnrLocalCosmetics.Resolve(gameExecutable, id, part)
             : catalog?.Resolve(id, modName, part);
+        SnrNativeImages.Image? bundled = null;
+        if (customSnr && asset is null)
+        {
+            try { bundled = await SnrNativeImages.GetAsync(gameExecutable, id, part); }
+            catch (Exception error) { System.Diagnostics.Trace.TraceWarning($"Local SNR image unavailable: {error.Message}"); }
+            if (generation != cosmeticGeneration) return false;
+            if (bundled is not null) asset = new CosmeticAsset(new Uri("snr-local://image/" + Uri.EscapeDataString(id)),
+                bundled.Adaptive == true, "-52%", "-18px", "140%");
+            else cosmeticRetryAt = DateTimeOffset.UtcNow.AddSeconds(2);
+        }
         if (customSnr && asset is not null && snr is not null)
             asset = snr.ApplyLocalMetadata(id, part, asset);
+        if (bundled?.Adaptive is { } localAdaptive && asset is not null)
+            asset = asset with { Adaptive = localAdaptive };
+        if (bundled?.SnrVisorLayout is { } localLayout && asset is not null)
+            asset = asset with { SnrVisorLayout = part == CosmeticPart.Visor && localLayout };
         if (customSnr && asset is not null && catalog?.Dimensions(id, modName) is { } shared)
             asset = asset with { Top = shared.Top, Left = shared.Left, Width = shared.Width, SnrVisorLayout = false };
         if (asset is null) return true;
         try
         {
-            var bitmap = await imageLoader(asset.Url);
+            var bitmap = bundled is not null ? CosmeticImages.DecodeBytes(bundled.Png)
+                : await LoadCosmeticImageWithRetryAsync(asset.Url, customSnr, generation);
+            if (bitmap is null) return false;
             if (generation != cosmeticGeneration) return false;
             var originalSize = CosmeticImages.OriginalSize(bitmap);
             asset = SnrCosmeticCatalog.WithImageSize(asset, originalSize.Width, originalSize.Height);
             CosmeticCatalog.ResolveLength(asset.Top, 80);
             CosmeticCatalog.ResolveLength(asset.Left, 80);
             CosmeticCatalog.ResolveLength(asset.Width, 80);
-            if (asset.Adaptive) bitmap = AvatarImageFactory.Recolor(bitmap, colors.Main, colors.Shadow);
+            bitmap = SnrNativeImages.Tint(bitmap, asset.Adaptive, colors.Main, colors.Shadow);
             target.Children.Add(new Image { Source = bitmap, Tag = asset, Stretch = Stretch.Uniform,
                 IsHitTestVisible = false });
             LayoutCosmetics();
         }
         catch (Exception error)
         {
+            if (customSnr && generation == cosmeticGeneration)
+                cosmeticRetryAt = DateTimeOffset.UtcNow.AddSeconds(2);
             System.Diagnostics.Trace.TraceWarning($"Cosmetic image unavailable: {error.Message}");
         }
         return true;
+    }
+    private async Task<System.Windows.Media.Imaging.BitmapSource?> LoadCosmeticImageWithRetryAsync(Uri uri, bool retry, long generation)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try { return await imageLoader(uri); }
+            catch when (retry && attempt < 2)
+            {
+                await Task.Delay(attempt == 0 ? 250 : 1000);
+                if (generation != cosmeticGeneration) return null;
+            }
+        }
     }
 
     private void LayoutCosmetics()
@@ -526,6 +558,19 @@ public partial class PlayerAvatar
             new Action(() => frame.Continue = false));
         System.Windows.Threading.Dispatcher.PushFrame(frame);
         Require(Names(avatar.CosmeticFront).SequenceEqual(new[] { "hat.png", "visor.png" }), "Late secondary image survived metadata removal");
+        var attempts = 0;
+        avatar.imageLoader = _ => ++attempts == 1 ? Task.FromException<System.Windows.Media.Imaging.BitmapSource>(new System.IO.IOException("transient")) : Task.FromResult(bitmap);
+        var recovered = avatar.LoadCosmeticImageWithRetryAsync(new Uri("https://example.invalid/retry.png"), true, avatar.cosmeticGeneration);
+        var until = DateTime.UtcNow.AddSeconds(3);
+        while (!recovered.IsCompleted && DateTime.UtcNow < until)
+        {
+            var wait = new System.Windows.Threading.DispatcherFrame();
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() => wait.Continue = false));
+            System.Windows.Threading.Dispatcher.PushFrame(wait); Thread.Sleep(10);
+        }
+        Require(recovered.IsCompletedSuccessfully && ReferenceEquals(recovered.Result, bitmap) && attempts == 2,
+            "Transient SNR image did not recover on the bounded retry");
+        avatar.imageLoader = _ => Task.FromResult(bitmap);
         var fixture = System.IO.Directory.CreateTempSubdirectory("tanuki-snr-secondary-");
         try
         {

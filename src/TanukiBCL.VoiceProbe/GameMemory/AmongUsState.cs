@@ -107,6 +107,10 @@ public sealed class Player
     public string? NosLobbyColor { get; set; }
 
     public SnrRoleData? SnrRole { get; set; }
+    public string? SnrHat2Id { get; set; }
+    public string? SnrVisor2Id { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long NativeControlAddress { get; set; }
 
     public bool SnrPushedFalling { get; set; }
 

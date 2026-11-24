@@ -4,6 +4,7 @@ internal static class SnrLiveRoleReaderSelfTest
 {
     public static (bool Role, bool Jumbo, bool TornSampleRejected, bool Busker) Verify()
     {
+        SnrSecondaryLayout.Verify();
         const ulong baseAddress = 0x1_0000_0000;
         const ulong arraySlot = baseAddress + 0x10000, array = baseAddress + 0x20000,
             arrayType = baseAddress + 0x30000;

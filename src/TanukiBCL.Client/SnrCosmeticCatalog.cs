@@ -72,6 +72,7 @@ internal sealed class SnrCosmeticCatalog
         return definition ?? definitions.FirstOrDefault(x => Normalize(x.Resource) is { Length: > 0 } resource &&
             normalized.EndsWith(resource, StringComparison.Ordinal));
     }
+    internal bool IsSnrVisor(string id) => FindDefinition(id, CosmeticPart.Visor)?.SnrLayout == true;
 
     internal static CosmeticAsset WithImageSize(CosmeticAsset asset, int width, int height)
     {

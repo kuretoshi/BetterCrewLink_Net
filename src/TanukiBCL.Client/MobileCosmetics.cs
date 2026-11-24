@@ -20,6 +20,7 @@ internal sealed class MobileCosmetics
     private readonly HashSet<string> pending = [];
     private readonly Dictionary<string, DateTimeOffset> retryAt = [];
     private readonly HashSet<string> sent = [];
+    private readonly Dictionary<string, bool?> snrLayout = [];
     private string session = string.Empty;
     private int generation;
     private int bytes;
@@ -41,6 +42,7 @@ internal sealed class MobileCosmetics
         pending.Clear();
         retryAt.Clear();
         sent.Clear();
+        snrLayout.Clear();
         bytes = 0;
         lastSentAt = default;
     }
@@ -64,6 +66,8 @@ internal sealed class MobileCosmetics
                 session = nextSession;
             }
         var partsByPlayer = new Dictionary<int, IReadOnlyDictionary<string, string>>();
+        var snrPartsByPlayer = new Dictionary<int, IReadOnlyDictionary<string, string>>();
+        var snrScaleByPlayer = new Dictionary<int, IReadOnlyDictionary<string, bool>>();
         var active = new HashSet<string>();
         if (state.Mod == AmongUsModType.NebulaOnTheShip &&
             state.GameState is not (GameState.Menu or GameState.Unknown) &&
@@ -97,6 +101,48 @@ internal sealed class MobileCosmetics
                 if (parts.Count > 0) partsByPlayer[player.Id] = parts;
             }
         }
+        if (state.Mod == AmongUsModType.SuperNewRoles && state.GameState is not (GameState.Menu or GameState.Unknown))
+            foreach (var player in state.Players)
+            {
+                if (player.Disconnected) continue;
+                var changed = player.CurrentOutfit is > 0 and <= 10;
+                string Select(string appearance, string normal) => changed || appearance.StartsWith("Modded_", StringComparison.Ordinal) ? appearance : normal;
+                var hat = Select(player.AppearanceHatId, player.HatId);
+                var visor = Select(player.AppearanceVisorId, player.VisorId);
+                var skin = Select(player.AppearanceSkinId, player.SkinId);
+                var colors = AvatarImageFactory.GetSwatchColors(player.AppearanceColorId >= 0 ? player.AppearanceColorId : player.ColorId, state.PlayerColors);
+                var parts = new Dictionary<string, string>();
+                var scale = new Dictionary<string, bool>();
+                foreach (var (name, id, part) in new (string, string?, CosmeticPart)[] {
+                    ("hat",hat,CosmeticPart.Hat),("hatBack",hat,CosmeticPart.HatBack),("skin",skin,CosmeticPart.Skin),("visor",visor,CosmeticPart.Visor),
+                    ("hat2",player.SnrHat2Id ?? player.SnrRole?.Hat2Id,CosmeticPart.Hat),
+                    ("hat2Back",player.SnrHat2Id ?? player.SnrRole?.Hat2Id,CosmeticPart.HatBack),
+                    ("visor2",player.SnrVisor2Id ?? player.SnrRole?.Visor2Id,CosmeticPart.Visor) })
+                {
+                    if (id is null || !id.StartsWith("Modded_", StringComparison.Ordinal)) continue;
+                    var source = $"snr:{state.GameExecutablePath}:{name}:{id}:{colors}";
+                    active.Add(source);
+                    LoadSnr(source, state.GameExecutablePath, id, part, colors);
+                    string? assetId;
+                    lock (gate) assetId = cache.GetValueOrDefault(source).Id;
+                    parts[name] = $"nos-web://{assetId ?? "pending"}";
+                    if (part == CosmeticPart.Visor)
+                    {
+                        bool? localScale;
+                        bool ready;
+                        lock (gate) ready = snrLayout.TryGetValue(source, out localScale);
+                        if (ready && localScale is null)
+                        {
+                            var definitions = CosmeticImages.GetSnrCatalogAsync();
+                            if (definitions.IsCompletedSuccessfully && definitions.Result.IsSnrVisor(id)) scale[name] = true;
+                            if (definitions.IsFaulted) _ = definitions.Exception;
+                        }
+                        else if (localScale == true) scale[name] = true;
+                    }
+                }
+                if (parts.Count > 0) snrPartsByPlayer[player.Id] = parts;
+                if (scale.Count > 0) snrScaleByPlayer[player.Id] = scale;
+            }
         Dictionary<string, string>? assets = null;
         lock (gate)
         {
@@ -111,7 +157,61 @@ internal sealed class MobileCosmetics
                     break;
                 }
         }
-        return new MobileCosmeticFrame(partsByPlayer, assets);
+        return new MobileCosmeticFrame(partsByPlayer, assets, snrPartsByPlayer, snrScaleByPlayer);
+    }
+
+    private void LoadSnr(string source, string executable, string id, CosmeticPart part, (Color Main, Color Shadow) colors)
+    {
+        int token;
+        lock (gate)
+        {
+            if (cache.ContainsKey(source) || pending.Contains(source) || pending.Count >= 3 || DateTimeOffset.UtcNow < retryAt.GetValueOrDefault(source)) return;
+            pending.Add(source); token = generation;
+        }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var local = await SnrNativeImages.GetAsync(executable, id, part) ?? throw new InvalidDataException("SNR image missing");
+                var image = CosmeticImages.DecodeBytes(local.Png);
+                var adaptive = local.Adaptive ?? (part is CosmeticPart.Hat or CosmeticPart.HatBack && id.StartsWith("Modded_Multiverse Costume SEL_", StringComparison.Ordinal));
+                Task<SnrCosmeticCatalog>? definitions = null;
+                var refreshDefinitions = false;
+                if (local.Adaptive is null)
+                {
+                    definitions = CosmeticImages.GetSnrCatalogAsync();
+                    if (definitions.IsCompletedSuccessfully)
+                        adaptive = ResolveSnrFlags(id, part, local.Adaptive, local.SnrVisorLayout, definitions.Result).Adaptive;
+                    else refreshDefinitions = true;
+                    if (definitions.IsFaulted) _ = definitions.Exception;
+                }
+                image = SnrNativeImages.Tint(image, adaptive, colors.Main, colors.Shadow);
+                var encoded = Encode(image);
+                lock (gate) if (token == generation) { CacheAsset(source, encoded); snrLayout[source] = local.SnrVisorLayout; }
+                if (refreshDefinitions && definitions is not null)
+                    _ = definitions.ContinueWith(done =>
+                    {
+                        if (done.IsFaulted) _ = done.Exception;
+                        if (!done.IsCompletedSuccessfully) return;
+                        lock (gate)
+                            if (token == generation && cache.Remove(source, out var old))
+                            { bytes -= old.Png.Length * sizeof(char); snrLayout.Remove(source); }
+                    }, TaskScheduler.Default);
+            }
+            catch (Exception error) when (error is IOException or InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException or OverflowException or System.ComponentModel.Win32Exception or OperationCanceledException or System.Text.Json.JsonException)
+            {
+                lock (gate) if (token == generation) retryAt[source] = DateTimeOffset.UtcNow.AddSeconds(2);
+            }
+            finally { lock (gate) if (token == generation) pending.Remove(source); }
+        });
+    }
+    private static (bool Adaptive, bool Layout) ResolveSnrFlags(string id, CosmeticPart part,
+        bool? localAdaptive, bool? localLayout, SnrCosmeticCatalog? definitions)
+    {
+        var hint = part is CosmeticPart.Hat or CosmeticPart.HatBack && id.StartsWith("Modded_Multiverse Costume SEL_", StringComparison.Ordinal);
+        var fallback = new CosmeticAsset(new Uri("snr-local://image/local"), hint, "-52%", "-18px", "140%");
+        if (definitions is not null) fallback = definitions.ApplyLocalMetadata(id, part, fallback);
+        return (localAdaptive ?? fallback.Adaptive, localLayout ?? fallback.SnrVisorLayout);
     }
 
     // Caller holds gate; keep only failures for costumes still on screen.
@@ -169,6 +269,7 @@ internal sealed class MobileCosmetics
             bytes -= checked(oldest.Value.Png.Length * sizeof(char));
             sent.Remove(oldest.Value.Id);
             cache.Remove(oldest.Key);
+            snrLayout.Remove(oldest.Key);
         }
         cache[source] = asset;
         bytes += assetBytes;
@@ -190,6 +291,12 @@ internal sealed class MobileCosmetics
 
     internal static void VerifyEncoding()
     {
+        var snr = SnrCosmeticCatalog.Parse("""{"hats":[{"name":"H","package":"Pack","resource":"h.png","adaptive":true}]}""",
+            """{"Visors":[{"name":"V","package":"Pack","resource":"v.png","adaptive":true,"IsSNR":true}]}""");
+        if (ResolveSnrFlags("Modded_Pack_H", CosmeticPart.Hat, null, null, snr).Adaptive != true ||
+            ResolveSnrFlags("Modded_Pack_V", CosmeticPart.Visor, null, null, snr) != (true, true) ||
+            ResolveSnrFlags("Modded_Pack_V", CosmeticPart.Visor, false, false, snr) != (false, false))
+            throw new InvalidOperationException("Mobile folder metadata fallback or local fixed/IsSNR precedence differs from WPF");
         var bitmap = BitmapSource.Create(1, 1, 96, 96, PixelFormats.Bgra32, null,
             new byte[] { 1, 2, 3, 255 }, 4);
         bitmap.Freeze();
@@ -211,6 +318,37 @@ internal sealed class MobileCosmetics
         if (!cacheTest.retryAt.ContainsKey("active") || cacheTest.retryAt.ContainsKey("stale"))
             throw new InvalidOperationException("Inactive NoS image retry state was retained");
         Console.WriteLine("[PASS] 3.2.14 mobile NoS processed PNG hash and data URL");
+    }
+
+    internal static void VerifySnrTransfer(string executable)
+    {
+        var transfer = new MobileCosmetics();
+        var state = new AmongUsState { LobbyCode = "SNRPNG", Mod = AmongUsModType.SuperNewRoles,
+            GameState = GameState.Lobby, GameExecutablePath = executable,
+            Players = [new Player { Id = 7, HatId = "Modded_Pack_Name", SkinId = "Modded_Pack_Name", VisorId = "Modded_Pack_Name",
+                SnrHat2Id = "Modded_Pack_Name", SnrVisor2Id = "Modded_Pack_Name" }] };
+        var received = new Dictionary<string, string>();
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        MobileCosmeticFrame? frame = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            frame = transfer.Frame(state);
+            if (frame.Assets is not null) foreach (var (id, png) in frame.Assets) received[id] = png;
+            if (frame.SnrPlayerParts?.GetValueOrDefault(7) is { Count: 7 } parts &&
+                parts.Values.All(value => value.Length == "nos-web://".Length + 64) && received.Count > 0) break;
+            Thread.Sleep(25);
+        }
+        if (frame?.SnrPlayerParts?.GetValueOrDefault(7) is not { Count: 7 } ready ||
+            ready.Values.Any(value => value.EndsWith("pending", StringComparison.Ordinal)) || received.Count == 0 ||
+            frame.PlayerParts.Count != 0 || state.Players[0].SnrRole is not null)
+            throw new InvalidOperationException("Role-free SNR lobby PNG transfer failed");
+        var first = received.First(); transfer.Resend([first.Key]); Thread.Sleep(110);
+        if (transfer.Frame(state).Assets?.GetValueOrDefault(first.Key) != first.Value)
+            throw new InvalidOperationException("SNR missing-image resend failed");
+        state.Players[0].Disconnected = true;
+        if (transfer.Frame(state).SnrPlayerParts?.Count != 0) throw new InvalidOperationException("Disconnected SNR PNGs leaked");
+        transfer.Reset();
+        Console.WriteLine("[PASS] SNR lobby seven-slot finished PNG transfer, SHA deduplication and requested resend without role permissions");
     }
 
     internal static void VerifyTransfer(NosCosmeticContents contents, string gameDirectory, NosPlayerData costume)

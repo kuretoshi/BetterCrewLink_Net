@@ -62,6 +62,7 @@ internal static class SnrLocalCosmetics
 
     internal static void Verify()
     {
+        SnrNativeImages.VerifyTint();
         static void Require(bool value, string message) { if (!value) throw new InvalidOperationException(message); }
         var fixture = Directory.CreateTempSubdirectory("tanuki-snr-local-test-");
         try
@@ -97,6 +98,8 @@ internal static class SnrLocalCosmetics
             var decoded = Task.Run(() => CosmeticImages.GetImageAsync(front.Url)).GetAwaiter().GetResult();
             Require(decoded.IsFrozen && decoded.PixelWidth == 1, "Local image decoding failed");
             PlayerAvatar.VerifyLocalCosmetics(executable);
+            MobileCosmetics.VerifySnrTransfer(executable);
+            Task.Run(() => SnrNativeImages.VerifySlowWorkerAsync(executable)).GetAwaiter().GetResult();
             Console.WriteLine("[PASS] SNR local root isolation, tags, suffix priority, adaptive scope, sanitization and PNG decode");
         }
         finally { fixture.Delete(recursive: true); }

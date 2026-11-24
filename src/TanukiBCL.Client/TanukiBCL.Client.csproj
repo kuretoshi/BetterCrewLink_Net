@@ -6,7 +6,7 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>3.2.70-net-beta.1</Version>
+    <Version>3.2.71-net-beta.1</Version>
     <ApplicationIcon>..\..\tools\installer-icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
@@ -26,9 +26,17 @@
     <Content Include="..\..\licenses\OpusSharp.Natives.LICENSE.txt"
              Link="Licenses\OpusSharp.Natives.LICENSE.txt"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\licenses\snr-native\**\*" Link="Licenses\SNR\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\OFL-LICENSE.md" Link="Licenses\SourceCodePro-OFL.md"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="BuildSnrCosmeticsDecoder" BeforeTargets="BeforeBuild">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\tools\build-snr-cosmetics.ps1&quot;" />
+    <ItemGroup>
+      <Content Include="$(MSBuildProjectDirectory)\..\..\artifacts\snr-cosmetics\tbcl-snr-cosmetics.exe" Link="RoleReaders\tbcl-snr-cosmetics.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 
   <Target Name="BundleNosSnapshotReader" BeforeTargets="ComputeFilesToPublish">
     <MSBuild Projects="..\..\tools\TbclSnapshotReader\TbclSnapshotReader.csproj"

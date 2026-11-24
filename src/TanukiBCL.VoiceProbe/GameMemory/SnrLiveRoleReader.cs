@@ -27,6 +27,7 @@ internal sealed class SnrLiveRoleReader
     private int pid = -1;
     private string session = string.Empty;
     private SnrLiveLayout? layout;
+    private SnrSecondaryLayout? secondaryCosmetics;
     private Task<SnrDiscovery>? discoveryTask;
     private DateTimeOffset nextDiscoveryAt;
     private Dictionary<int, SnrHelperPlayer> metadata = [];
@@ -40,6 +41,7 @@ internal sealed class SnrLiveRoleReader
         pid = -1;
         session = string.Empty;
         layout = null;
+        secondaryCosmetics = null;
         discoveryTask = null;
         nextDiscoveryAt = default;
         metadata = [];
@@ -61,8 +63,10 @@ internal sealed class SnrLiveRoleReader
             try
             {
                 var discovery = discoveryTask.GetAwaiter().GetResult();
-                discovery.LiveLayout.Validate(processId);
+                discovery.LiveLayout?.Validate(processId);
+                discovery.SecondaryCosmetics?.Validate(processId);
                 layout = discovery.LiveLayout;
+                secondaryCosmetics = discovery.SecondaryCosmetics;
                 metadata = discovery.Players.Where(player => player.PlayerId is >= 0 and < 256 &&
                         player.Role?.Value is >= 0 and <= int.MaxValue)
                     .ToDictionary(player => player.PlayerId, player => player);
@@ -130,6 +134,22 @@ internal sealed class SnrLiveRoleReader
         }
     }
 
+    internal void ApplySecondaryCosmetics(IEnumerable<Player> players, Func<long, int, byte[]> read)
+    {
+        foreach (var player in players)
+        {
+            player.SnrHat2Id = player.SnrVisor2Id = null;
+            if (player.Disconnected) continue;
+            if (secondaryCosmetics is null)
+            {
+                player.SnrHat2Id = player.SnrRole?.Hat2Id;
+                player.SnrVisor2Id = player.SnrRole?.Visor2Id;
+                continue;
+            }
+            secondaryCosmetics.Apply(player, read);
+        }
+    }
+
     private static async Task<SnrDiscovery> DiscoverAsync(int processId)
     {
         var helper = FindHelper() ?? throw new FileNotFoundException("SNR役職読み取りツールが見つかりません");
@@ -156,7 +176,7 @@ internal sealed class SnrLiveRoleReader
             var error = await errorTask;
             var response = JsonSerializer.Deserialize<SnrDiscovery>(output, JsonOptions);
             if (process.ExitCode != 0 || response?.Status != "ok" || response.Pid != processId ||
-                response.LiveLayout is null)
+                response.LiveLayout is null && response.SecondaryCosmetics is null)
                 throw new InvalidOperationException(response?.Message ?? error.Trim());
             return response;
         }
@@ -353,7 +373,8 @@ internal sealed class SnrLiveRoleReader
         public string Status { get; set; } = string.Empty;
         public int Pid { get; set; }
         public string? Message { get; set; }
-        public SnrLiveLayout LiveLayout { get; set; } = new();
+        public SnrLiveLayout? LiveLayout { get; set; }
+        public SnrSecondaryLayout? SecondaryCosmetics { get; set; }
         public List<SnrHelperPlayer> Players { get; set; } = [];
     }
 

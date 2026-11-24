@@ -1,0 +1,18 @@
+[package]
+name = "tbcl-snr-cosmetics"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "Bounded local SNR bundle image decoder for TanukiBCL.NET"
+
+[dependencies]
+serde_json = "1"
+base64 = "0.22"
+png = "0.18"
+unity-bundle-assets = "=0.1.1"
+texture2ddecoder = "=0.1.2"
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1

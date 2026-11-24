@@ -6,7 +6,9 @@ namespace TanukiBCL.VoiceProbe;
 
 internal sealed record MobileCosmeticFrame(
     IReadOnlyDictionary<int, IReadOnlyDictionary<string, string>> PlayerParts,
-    IReadOnlyDictionary<string, string>? Assets = null);
+    IReadOnlyDictionary<string, string>? Assets = null,
+    IReadOnlyDictionary<int, IReadOnlyDictionary<string, string>>? SnrPlayerParts = null,
+    IReadOnlyDictionary<int, IReadOnlyDictionary<string, bool>>? SnrPlayerScale = null);
 
 internal static class MobileGameStateWire
 {
@@ -32,9 +34,15 @@ internal static class MobileGameStateWire
         game["comsSabotaged"] = state.CommsSabotaged;
         if (game["players"] is JsonArray players && cosmetics is not null)
             for (var index = 0; index < players.Count && index < state.Players.Count; index++)
-                if (cosmetics.PlayerParts.TryGetValue(state.Players[index].Id, out var parts) &&
-                    players[index] is JsonObject player)
-                    player["nosCosmetics"] = JsonSerializer.SerializeToNode(parts, Options);
+                if (players[index] is JsonObject player)
+                {
+                    if (cosmetics.PlayerParts.TryGetValue(state.Players[index].Id, out var parts))
+                        player["nosCosmetics"] = JsonSerializer.SerializeToNode(parts, Options);
+                    if (cosmetics.SnrPlayerParts?.TryGetValue(state.Players[index].Id, out var snrParts) == true)
+                        player["snrCosmetics"] = JsonSerializer.SerializeToNode(snrParts, Options);
+                    if (cosmetics.SnrPlayerScale?.TryGetValue(state.Players[index].Id, out var scale) == true)
+                        player["snrCosmeticScale"] = JsonSerializer.SerializeToNode(scale, Options);
+                }
 
         return new
         {

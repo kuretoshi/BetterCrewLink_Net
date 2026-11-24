@@ -61,6 +61,19 @@ internal static class MobileHostBeaconSelfTest
                 .GetProperty("hatBack").GetString() != "nos-web://" + id ||
             wire.GetProperty("nosCosmeticAssets").GetProperty(id).GetString() != "data:image/png;base64,aGVsbG8=")
             return Fail("3.2.14 Web NoS cosmetic frame differs");
+        state.Mod = AmongUsModType.SuperNewRoles;
+        state.Players[0].SnrHat2Id = "Modded_SecondHat";
+        state.Players[0].NativeControlAddress = 0x10000;
+        var snrFrame = MobileGameStateWire.Create(state, new LobbySettings(), new MobileCosmeticFrame(
+            new Dictionary<int, IReadOnlyDictionary<string, string>>(),
+            new Dictionary<string, string> { [id] = "data:image/png;base64,aGVsbG8=" },
+            new Dictionary<int, IReadOnlyDictionary<string, string>> { [4] = new Dictionary<string, string> { ["hat2"] = "nos-web://" + id } },
+            new Dictionary<int, IReadOnlyDictionary<string, bool>> { [4] = new Dictionary<string, bool> { ["visor2"] = true } }));
+        var snrWire = JsonSerializer.SerializeToElement(snrFrame).GetProperty("gameState").GetProperty("players")[0];
+        if (snrWire.GetProperty("snrCosmetics").GetProperty("hat2").GetString() != "nos-web://" + id ||
+            !snrWire.GetProperty("snrCosmeticScale").GetProperty("visor2").GetBoolean() ||
+            snrWire.GetProperty("snrHat2Id").GetString() != "Modded_SecondHat" || snrWire.TryGetProperty("nativeControlAddress", out _))
+            return Fail("SNR finished PNG, scale or native-address isolation differs");
         var request = JsonSerializer.SerializeToElement(new
         {
             mobilePlayerInfo = new { code = "ABCDEF", nosCosmeticIds = new[] { id, "invalid" } }

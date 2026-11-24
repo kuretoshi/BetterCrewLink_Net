@@ -352,9 +352,9 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         }
 
         if (mod == AmongUsModType.SuperNewRoles &&
-            gameState is GameState.Tasks or GameState.Discussion)
+            gameState is GameState.Tasks or GameState.Discussion or GameState.Lobby)
         {
-            if (previousGameState is GameState.Menu or GameState.Lobby or GameState.Unknown)
+            if (gameState != GameState.Lobby && previousGameState is GameState.Menu or GameState.Lobby or GameState.Unknown)
                 snrRound++;
             var snrRoles = snrReader.Update(currentProcess.ProcessId,
                 $"{lobbyCode}:{snrRound}", currentContext.ReadBytes);
@@ -368,10 +368,11 @@ public sealed class AmongUsMemoryReaderService : IDisposable
             foreach (var player in players)
             {
                 ApplySnrPushState(player, falling);
-                player.SnrRole = !player.Disconnected && snrRoles.TryGetValue(player.Id, out var role)
+                player.SnrRole = gameState != GameState.Lobby && !player.Disconnected && snrRoles.TryGetValue(player.Id, out var role)
                     ? role : null;
                 player.IsThirdParty = player.SnrRole?.IsNeutral == true;
             }
+            snrReader.ApplySecondaryCosmetics(players, currentContext.ReadBytes);
         }
         else if (mod != AmongUsModType.SuperNewRoles || gameState == GameState.Menu)
         {
@@ -700,6 +701,7 @@ public sealed class AmongUsMemoryReaderService : IDisposable
         return new Player
         {
             Id = unchecked((int)data.Id),
+            NativeControlAddress = data.ObjectPtr,
             ClientId = clientId,
             Name = cleanName,
             PlayerUid = playerUid,

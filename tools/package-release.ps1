@@ -83,7 +83,8 @@ if ($resolvedDebugAuthFile) {
 $required = @(
     'TanukiBCL.Net.exe', 'TanukiBCL.Net.deps.json', 'update-manifest.json',
     'Updater/TanukiBCL.Updater.exe', 'NoSReader/TbclSnapshotReader.exe',
-    'RoleReaders/SnrRoleReader.exe', 'README.md', 'LICENSE',
+    'RoleReaders/SnrRoleReader.exe', 'RoleReaders/tbcl-snr-cosmetics.exe', 'README.md', 'LICENSE',
+    'Licenses/SNR/NOTICE.json',
     'Licenses/SourceCodePro-OFL.md', 'Licenses/OpusSharp.Natives.LICENSE.txt',
     'opus.dll', 'speexdsp.dll', 'libvosk.dll', 'Speech/model/am/final.mdl',
     'Speech/model/graph/HCLr.fst', 'Speech/THIRD-PARTY-NOTICES.md', 'Licenses/Vosk-Apache-2.0.txt'

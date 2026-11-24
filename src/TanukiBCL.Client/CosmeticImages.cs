@@ -30,6 +30,7 @@ internal static class CosmeticImages
     }
 
     public static Task<BitmapSource> GetImageAsync(Uri uri) => Images.GetAsync(uri);
+    internal static BitmapSource DecodeBytes(byte[] bytes) => Decode(bytes);
 
     internal static (int Width, int Height) OriginalSize(BitmapSource image) =>
         OriginalSizes.TryGetValue(image, out var size)
